@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kinematics Visualizer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+        
+        #container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        #controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover:not(:disabled) {
+            background-color: #45a049;
+        }
+        
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        #emojiSelector {
+            padding: 6px;
+            font-size: 16px;
+        }
+        
+        #animationBox {
+            width: 100%;
+            height: 80px;
+            border: 2px solid #333;
+            margin-bottom: 20px;
+            position: relative;
+            background-color: #f9f9f9;
+            overflow: hidden;
+        }
+        
+        #originMarker {
+            position: absolute;
+            left: 20px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background-color: #333;
+            z-index: 1;
+        }
+        
+        #originLabel {
+            position: absolute;
+            left: 5px;
+            top: 5px;
+            font-size: 10px;
+            color: #666;
+        }
+        
+        #movingObject {
+            position: absolute;
+            font-size: 30px;
+            transition: none;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .graph-container {
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+        }
+        
+        .graph-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        canvas {
+            border: 1px solid #ccc;
+            cursor: crosshair;
+            display: block;
+        }
+        
+        #tooltip {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+            font-family: monospace;
+            white-space: pre-line;
+        }
+        
+        .graph-container.displacement .graph-label { color: green; }
+        .graph-container.velocity .graph-label { color: blue; }
+        .graph-container.acceleration .graph-label { color: red; }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h1>Interactive Kinematics Visualizer</h1>
+        
+        <div id="controls">
+            <button id="playBtn">▶️ Play</button>
+            <button id="resetBtn">Reset</button>
+            <button id="undoBtn">↶ Undo</button>
+            <button id="redoBtn">↷ Redo</button>
+            <label for="emojiSelector">Object:</label>
+            <select id="emojiSelector">
+                <option value="🚗">🚗 Car</option>
+                <option value="⚽">⚽ Ball</option>
+                <option value="🚀">🚀 Rocket</option>
+                <option value="✈️">✈️ Plane</option>
+                <option value="🏃">🏃 Runner</option>
+                <option value="🐎">🐎 Horse</option>
+                <option value="🚴">🚴 Cyclist</option>
+                <option value="🛸">🛸 UFO</option>
+                <option value="🎾">🎾 Tennis Ball</option>
+                <option value="🏀">🏀 Basketball</option>
+                <option value="🦅">🦅 Eagle</option>
+                <option value="🚁">🚁 Helicopter</option>
+                <option value="🛹">🛹 Skateboard</option>
+                <option value="🎯">🎯 Dart</option>
+                <option value="📦">📦 Box</option>
+            </select>
+        </div>
+        
+        <div id="animationBox">
+            <div id="originMarker"></div>
+            <div id="originLabel">Origin</div>
+            <div id="movingObject">🚗</div>
+        </div>
+        
+        <div class="graph-container displacement">
+            <div class="graph-label">Displacement (m) - Green</div>
+            <canvas id="displacementCanvas" width="760" height="200"></canvas>
+        </div>
+        
+        <div class="graph-container velocity">
+            <div class="graph-label">Velocity (m/s) - Blue</div>
+            <canvas id="velocityCanvas" width="760" height="200"></canvas>
+        </div>
+        
+        <div class="graph-container acceleration">
+            <div class="graph-label">Acceleration (m/s²) - Red</div>
+            <canvas id="accelerationCanvas" width="760" height="200"></canvas>
+        </div>
+        
+        <div id="tooltip"></div>
+    </div>
+
+    <script>
+        // Constants
+        const NUM_POINTS = 17;
+        const NUM_SEGMENTS = NUM_POINTS - 1;
+        const GRAPH_PADDING = 40;
+        const POINT_RADIUS = 4;
+        const GRID_DIVISIONS = 10;
+        const TOOLTIP_DELAY = 3000; // 3 seconds
+        
+        // Graph colors
+        const COLORS = {
+            displacement: '#00aa00',
+            velocity: '#0066cc',
+            acceleration: '#cc0000'
+        };
+        
+        // State
+        let points = {
+            displacement: [],
+            velocity: [],
+            acceleration: []
+        };
+        
+        let history = [];
+        let historyIndex = -1;
+        let isDragging = false;
+        let draggedPoint = null;
+        let draggedGraph = null;
+        let animationFrame = null;
+        let animationStartTime = null;
+        let isPlaying = false;
+        let tooltipTimeout = null;
+        let currentAnimationTime = 0;
+        let lastMousePosition = { x: 0, y: 0 };
+        
+        // Canvas elements
+        const canvases = {
+            displacement: document.getElementById('displacementCanvas'),
+            velocity: document.getElementById('velocityCanvas'),
+            acceleration: document.getElementById('accelerationCanvas')
+        };
+        
+        const contexts = {};
+        for (let key in canvases) {
+            contexts[key] = canvases[key].getContext('2d');
+        }
+        
+        // UI elements
+        const playBtn = document.getElementById('playBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const undoBtn = document.getElementById('undoBtn');
+        const redoBtn = document.getElementById('redoBtn');
+        const emojiSelector = document.getElementById('emojiSelector');
+        const movingObject = document.getElementById('movingObject');
+        const tooltip = document.getElementById('tooltip');
+        const animationBox = document.getElementById('animationBox');
+        
+        // Initialize points
+        function initializePoints() {
+            const defaultTime = 16; // Total time span
+            
+            for (let i = 0; i < NUM_POINTS; i++) {
+                const t = (i / NUM_SEGMENTS) * defaultTime;
+                
+                points.displacement[i] = { x: t, y: 0 };
+                points.velocity[i] = { x: t, y: 0 };
+                points.acceleration[i] = { x: t, y: 0 };
+            }
+            
+            saveState();
+            updateAllGraphs();
+        }
+        
+        // Save state for undo/redo
+        function saveState() {
+            const state = JSON.parse(JSON.stringify(points));
+            
+            // Remove any states after current index
+            history = history.slice(0, historyIndex + 1);
+            
+            history.push(state);
+            historyIndex++;
+            
+            // Limit history size
+            if (history.length > 100) {
+                history.shift();
+                historyIndex--;
+            }
+            
+            updateUndoRedoButtons();
+        }
+        
+        // Update undo/redo button states
+        function updateUndoRedoButtons() {
+            undoBtn.disabled = historyIndex <= 0;
+            redoBtn.disabled = historyIndex >= history.length - 1;
+        }
+        
+        // Undo
+        function undo() {
+            if (historyIndex > 0) {
+                historyIndex--;
+                points = JSON.parse(JSON.stringify(history[historyIndex]));
+                updateAllGraphs();
+                updateUndoRedoButtons();
+            }
+        }
+        
+        // Redo
+        function redo() {
+            if (historyIndex < history.length - 1) {
+                historyIndex++;
+                points = JSON.parse(JSON.stringify(history[historyIndex]));
+                updateAllGraphs();
+                updateUndoRedoButtons();
+            }
+        }
+        
+        // Get graph bounds
+        function getGraphBounds(graphType) {
+            const pts = points[graphType];
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+            
+            for (let pt of pts) {
+                minX = Math.min(minX, pt.x);
+                maxX = Math.max(maxX, pt.x);
+                minY = Math.min(minY, pt.y);
+                maxY = Math.max(maxY, pt.y);
+            }
+            
+            // Add padding
+            const xRange = maxX - minX || 1;
+            const yRange = maxY - minY || 1;
+            
+            minX -= xRange * 0.1;
+            maxX += xRange * 0.1;
+            minY -= yRange * 0.1;
+            maxY += yRange * 0.1;
+            
+            // Ensure minimum range
+            if (maxX - minX < 1) {
+                const center = (minX + maxX) / 2;
+                minX = center - 0.5;
+                maxX = center + 0.5;
+            }
+            
+            if (maxY - minY < 1) {
+                const center = (minY + maxY) / 2;
+                minY = center - 0.5;
+                maxY = center + 0.5;
+            }
+            
+            return { minX, maxX, minY, maxY };
+        }
+        
+        // Convert graph coordinates to canvas coordinates
+        function graphToCanvas(x, y, graphType, canvas) {
+            const bounds = getGraphBounds(graphType);
+            const canvasWidth = canvas.width - 2 * GRAPH_PADDING;
+            const canvasHeight = canvas.height - 2 * GRAPH_PADDING;
+            
+            const canvasX = GRAPH_PADDING + ((x - bounds.minX) / (bounds.maxX - bounds.minX)) * canvasWidth;
+            const canvasY = GRAPH_PADDING + ((bounds.maxY - y) / (bounds.maxY - bounds.minY)) * canvasHeight;
+            
+            return { x: canvasX, y: canvasY };
+        }
+        
+        // Convert canvas coordinates to graph coordinates
+        function canvasToGraph(canvasX, canvasY, graphType, canvas) {
+            const bounds = getGraphBounds(graphType);
+            const canvasWidth = canvas.width - 2 * GRAPH_PADDING;
+            const canvasHeight = canvas.height - 2 * GRAPH_PADDING;
+            
+            const x = bounds.minX + ((canvasX - GRAPH_PADDING) / canvasWidth) * (bounds.maxX - bounds.minX);
+            const y = bounds.maxY - ((canvasY - GRAPH_PADDING) / canvasHeight) * (bounds.maxY - bounds.minY);
+            
+            return { x, y };
+        }
+        
+        // Draw grid and axes
+        function drawGrid(ctx, graphType, canvas) {
+            const bounds = getGraphBounds(graphType);
+            
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 1;
+            
+            // Vertical grid lines
+            for (let i = 0; i <= GRID_DIVISIONS; i++) {
+                const x = bounds.minX + (i / GRID_DIVISIONS) * (bounds.maxX - bounds.minX);
+                const canvasPos = graphToCanvas(x, 0, graphType, canvas);
+                
+                ctx.beginPath();
+                ctx.moveTo(canvasPos.x, GRAPH_PADDING);
+                ctx.lineTo(canvasPos.x, canvas.height - GRAPH_PADDING);
+                ctx.stroke();
+            }
+            
+            // Horizontal grid lines
+            for (let i = 0; i <= GRID_DIVISIONS; i++) {
+                const y = bounds.minY + (i / GRID_DIVISIONS) * (bounds.maxY - bounds.minY);
+                const canvasPos = graphToCanvas(0, y, graphType, canvas);
+                
+                ctx.beginPath();
+                ctx.moveTo(GRAPH_PADDING, canvasPos.y);
+                ctx.lineTo(canvas.width - GRAPH_PADDING, canvasPos.y);
+                ctx.stroke();
+            }
+            
+            // Draw axes
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            
+            // X-axis (if 0 is in view)
+            if (bounds.minY <= 0 && bounds.maxY >= 0) {
+                const yPos = graphToCanvas(0, 0, graphType, canvas).y;
+                ctx.beginPath();
+                ctx.moveTo(GRAPH_PADDING, yPos);
+                ctx.lineTo(canvas.width - GRAPH_PADDING, yPos);
+                ctx.stroke();
+            }
+            
+            // Y-axis (if 0 is in view)
+            if (bounds.minX <= 0 && bounds.maxX >= 0) {
+                const xPos = graphToCanvas(0, 0, graphType, canvas).x;
+                ctx.beginPath();
+                ctx.moveTo(xPos, GRAPH_PADDING);
+                ctx.lineTo(xPos, canvas.height - GRAPH_PADDING);
+                ctx.stroke();
+            }
+            
+            // Labels
+            ctx.fillStyle = '#333';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            
+            // X-axis labels
+            for (let i = 0; i <= GRID_DIVISIONS; i++) {
+                const x = bounds.minX + (i / GRID_DIVISIONS) * (bounds.maxX - bounds.minX);
+                const canvasPos = graphToCanvas(x, 0, graphType, canvas);
+                ctx.fillText(x.toFixed(1), canvasPos.x, canvas.height - GRAPH_PADDING + 5);
+            }
+            
+            // Y-axis labels
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            for (let i = 0; i <= GRID_DIVISIONS; i++) {
+                const y = bounds.minY + (i / GRID_DIVISIONS) * (bounds.maxY - bounds.minY);
+                const canvasPos = graphToCanvas(0, y, graphType, canvas);
+                ctx.fillText(y.toFixed(1), GRAPH_PADDING - 5, canvasPos.y);
+            }
+        }
+        
+        // Draw graph
+        function drawGraph(graphType) {
+            const canvas = canvases[graphType];
+            const ctx = contexts[graphType];
+            const pts = points[graphType];
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid
+            drawGrid(ctx, graphType, canvas);
+            
+            // Draw lines
+            ctx.strokeStyle = COLORS[graphType];
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            
+            for (let i = 0; i < pts.length; i++) {
+                const canvasPos = graphToCanvas(pts[i].x, pts[i].y, graphType, canvas);
+                
+                if (i === 0) {
+                    ctx.moveTo(canvasPos.x, canvasPos.y);
+                } else {
+                    // For acceleration, draw step function
+                    if (graphType === 'acceleration') {
+                        const prevCanvasPos = graphToCanvas(pts[i-1].x, pts[i-1].y, graphType, canvas);
+                        ctx.lineTo(canvasPos.x, prevCanvasPos.y);
+                        ctx.lineTo(canvasPos.x, canvasPos.y);
+                    } else {
+                        ctx.lineTo(canvasPos.x, canvasPos.y);
+                    }
+                }
+            }
+            
+            ctx.stroke();
+            
+            // Draw playhead if animating
+            if (isPlaying && currentAnimationTime >= 0) {
+                const playheadCanvas = graphToCanvas(currentAnimationTime, 0, graphType, canvas);
+                ctx.strokeStyle = '#cccccc';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(playheadCanvas.x, GRAPH_PADDING);
+                ctx.lineTo(playheadCanvas.x, canvas.height - GRAPH_PADDING);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+            
+            // Draw points
+            for (let i = 0; i < pts.length; i++) {
+                const canvasPos = graphToCanvas(pts[i].x, pts[i].y, graphType, canvas);
+                
+                ctx.fillStyle = COLORS[graphType];
+                ctx.beginPath();
+                ctx.arc(canvasPos.x, canvasPos.y, POINT_RADIUS, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // Point border
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+        }
+        
+        // Calculate kinematics for a segment
+        function calculateSegmentKinematics(segmentIndex) {
+            if (segmentIndex < 0 || segmentIndex >= NUM_SEGMENTS) return null;
+            
+            const t1 = points.acceleration[segmentIndex].x;
+            const t2 = points.acceleration[segmentIndex + 1].x;
+            const dt = t2 - t1;
+            
+            const a = points.acceleration[segmentIndex].y;
+            const u = points.velocity[segmentIndex].y;
+            const v = points.velocity[segmentIndex + 1].y;
+            const s1 = points.displacement[segmentIndex].y;
+            const s2 = points.displacement[segmentIndex + 1].y;
+            const s = s2 - s1;
+            
+            return {
+                u: u,           // Initial velocity
+                v: v,           // Final velocity
+                s: s,           // Displacement
+                a: a,           // Acceleration
+                t: dt,          // Time duration
+                t1: t1,         // Start time
+                t2: t2          // End time
+            };
+        }
+        
+        // Update velocity from acceleration
+        function updateVelocityFromAcceleration() {
+            // Sort points by x coordinate
+            const sortedIndices = [...Array(NUM_POINTS).keys()].sort((a, b) => 
+                points.acceleration[a].x - points.acceleration[b].x
+            );
+            
+            for (let i = 1; i < NUM_POINTS; i++) {
+                const prevIdx = sortedIndices[i - 1];
+                const currIdx = sortedIndices[i];
+                
+                const dt = points.acceleration[currIdx].x - points.acceleration[prevIdx].x;
+                const a = points.acceleration[prevIdx].y;
+                
+                // v = u + at
+                points.velocity[currIdx].y = points.velocity[prevIdx].y + a * dt;
+                points.velocity[currIdx].x = points.acceleration[currIdx].x;
+            }
+        }
+        
+        // Update displacement from velocity
+        function updateDisplacementFromVelocity() {
+            // Sort points by x coordinate
+            const sortedIndices = [...Array(NUM_POINTS).keys()].sort((a, b) => 
+                points.velocity[a].x - points.velocity[b].x
+            );
+            
+            for (let i = 1; i < NUM_POINTS; i++) {
+                const prevIdx = sortedIndices[i - 1];
+                const currIdx = sortedIndices[i];
+                
+                const dt = points.velocity[currIdx].x - points.velocity[prevIdx].x;
+                const u = points.velocity[prevIdx].y;
+                const v = points.velocity[currIdx].y;
+                
+                // For constant acceleration: s = ut + 0.5at² = (u + v)/2 * t
+                const avgVelocity = (u + v) / 2;
+                points.displacement[currIdx].y = points.displacement[prevIdx].y + avgVelocity * dt;
+                points.displacement[currIdx].x = points.velocity[currIdx].x;
+            }
+        }
+        
+        // Update acceleration from velocity
+        function updateAccelerationFromVelocity() {
+            // Sort points by x coordinate
+            const sortedIndices = [...Array(NUM_POINTS).keys()].sort((a, b) => 
+                points.velocity[a].x - points.velocity[b].x
+            );
+            
+            for (let i = 0; i < NUM_SEGMENTS; i++) {
+                const currIdx = sortedIndices[i];
+                const nextIdx = sortedIndices[i + 1];
+                
+                const dt = points.velocity[nextIdx].x - points.velocity[currIdx].x;
+                const dv = points.velocity[nextIdx].y - points.velocity[currIdx].y;
+                
+                // a = dv/dt
+                points.acceleration[currIdx].y = dt > 0 ? dv / dt : 0;
+                points.acceleration[currIdx].x = points.velocity[currIdx].x;
+            }
+            
+            // Last acceleration point matches x coordinate
+            points.acceleration[sortedIndices[NUM_SEGMENTS]].x = points.velocity[sortedIndices[NUM_SEGMENTS]].x;
+        }
+        
+        // Update velocity from displacement
+        function updateVelocityFromDisplacement() {
+            // Sort points by x coordinate
+            const sortedIndices = [...Array(NUM_POINTS).keys()].sort((a, b) => 
+                points.displacement[a].x - points.displacement[b].x
+            );
+            
+            // First pass: calculate average velocities
+            for (let i = 0; i < NUM_SEGMENTS; i++) {
+                const currIdx = sortedIndices[i];
+                const nextIdx = sortedIndices[i + 1];
+                
+                const dt = points.displacement[nextIdx].x - points.displacement[currIdx].x;
+                const ds = points.displacement[nextIdx].y - points.displacement[currIdx].y;
+                
+                // Average velocity for the segment
+                const avgVelocity = dt > 0 ? ds / dt : 0;
+                
+                // For constant acceleration, we need to solve for initial and final velocities
+                // We'll use the constraint that acceleration is constant in each segment
+                if (i === 0) {
+                    points.velocity[currIdx].y = avgVelocity;
+                }
+                
+                points.velocity[currIdx].x = points.displacement[currIdx].x;
+            }
+            
+            // Last point
+            points.velocity[sortedIndices[NUM_SEGMENTS]].x = points.displacement[sortedIndices[NUM_SEGMENTS]].x;
+            
+            // Second pass: adjust velocities to maintain constant acceleration
+            for (let i = 1; i < NUM_SEGMENTS; i++) {
+                const prevIdx = sortedIndices[i - 1];
+                const currIdx = sortedIndices[i];
+                const nextIdx = sortedIndices[i + 1];
+                
+                const dt1 = points.displacement[currIdx].x - points.displacement[prevIdx].x;
+                const dt2 = points.displacement[nextIdx].x - points.displacement[currIdx].x;
+                const ds1 = points.displacement[currIdx].y - points.displacement[prevIdx].y;
+                const ds2 = points.displacement[nextIdx].y - points.displacement[currIdx].y;
+                
+                if (dt1 > 0 && dt2 > 0) {
+                    // Calculate velocities that maintain constant acceleration
+                    const avgV1 = ds1 / dt1;
+                    const avgV2 = ds2 / dt2;
+                    
+                    // The velocity at the middle point should be such that
+                    // the acceleration is continuous
+                    points.velocity[currIdx].y = (avgV1 + avgV2) / 2;
+                }
+            }
+            
+            // Final velocity
+            const lastSegmentIdx = NUM_SEGMENTS - 1;
+            const prevIdx = sortedIndices[lastSegmentIdx];
+            const lastIdx = sortedIndices[NUM_SEGMENTS];
+            
+            const dt = points.displacement[lastIdx].x - points.displacement[prevIdx].x;
+            const ds = points.displacement[lastIdx].y - points.displacement[prevIdx].y;
+            
+            if (dt > 0) {
+                const avgV = ds / dt;
+                points.velocity[lastIdx].y = 2 * avgV - points.velocity[prevIdx].y;
+            }
+        }
+        
+        // Update all graphs based on which one was modified
+        function updateGraphsFrom(sourceGraph) {
+            if (sourceGraph === 'acceleration') {
+                updateVelocityFromAcceleration();
+                updateDisplacementFromVelocity();
+            } else if (sourceGraph === 'velocity') {
+                updateAccelerationFromVelocity();
+                updateDisplacementFromVelocity();
+            } else if (sourceGraph === 'displacement') {
+                updateVelocityFromDisplacement();
+                updateAccelerationFromVelocity();
+            }
+            
+            updateAllGraphs();
+        }
+        
+        // Update all graph displays
+        function updateAllGraphs() {
+            drawGraph('displacement');
+            drawGraph('velocity');
+            drawGraph('acceleration');
+        }
+        
+        // Find nearest point
+        function findNearestPoint(canvasX, canvasY, graphType, canvas) {
+            const pts = points[graphType];
+            let minDist = Infinity;
+            let nearestIdx = -1;
+            
+            for (let i = 0; i < pts.length; i++) {
+                const canvasPos = graphToCanvas(pts[i].x, pts[i].y, graphType, canvas);
+                const dist = Math.sqrt(
+                    Math.pow(canvasX - canvasPos.x, 2) + 
+                    Math.pow(canvasY - canvasPos.y, 2)
+                );
+                
+                if (dist < minDist && dist < POINT_RADIUS * 3) {
+                    minDist = dist;
+                    nearestIdx = i;
+                }
+            }
+            
+            return nearestIdx;
+        }
+        
+        // Find segment at x position
+        function findSegmentAtX(x, graphType) {
+            const pts = points[graphType];
+            
+            // Sort indices by x coordinate
+            const sortedIndices = [...Array(NUM_POINTS).keys()].sort((a, b) => 
+                pts[a].x - pts[b].x
+            );
+            
+            for (let i = 0; i < NUM_SEGMENTS; i++) {
+                const idx1 = sortedIndices[i];
+                const idx2 = sortedIndices[i + 1];
+                
+                if (x >= pts[idx1].x && x <= pts[idx2].x) {
+                    return i;
+                }
+            }
+            
+            return -1;
+        }
+        
+        // Mouse event handlers
+        function handleMouseDown(e, graphType) {
+            const canvas = canvases[graphType];
+            const rect = canvas.getBoundingClientRect();
+            const canvasX = e.clientX - rect.left;
+            const canvasY = e.clientY - rect.top;
+            
+            const pointIdx = findNearestPoint(canvasX, canvasY, graphType, canvas);
+            
+            if (pointIdx !== -1) {
+                isDragging = true;
+                draggedPoint = pointIdx;
+                draggedGraph = graphType;
+                canvas.style.cursor = 'grabbing';
+                
+                // Clear tooltip timeout when starting to drag
+                if (tooltipTimeout) {
+                    clearTimeout(tooltipTimeout);
+                    tooltipTimeout = null;
+                }
+                tooltip.style.display = 'none';
+            }
+        }
+        
+        function handleMouseMove(e, graphType) {
+            const canvas = canvases[graphType];
+            const rect = canvas.getBoundingClientRect();
+            const canvasX = e.clientX - rect.left;
+            const canvasY = e.clientY - rect.top;
+            
+            // Check if mouse has moved significantly
+            const mouseMoved = Math.abs(e.clientX - lastMousePosition.x) > 5 || 
+                             Math.abs(e.clientY - lastMousePosition.y) > 5;
+            
+            if (mouseMoved) {
+                lastMousePosition = { x: e.clientX, y: e.clientY };
+                // Clear any existing tooltip timeout and hide tooltip
+                if (tooltipTimeout) {
+                    clearTimeout(tooltipTimeout);
+                    tooltipTimeout = null;
+                }
+                tooltip.style.display = 'none';
+            }
+            
+            // Handle dragging
+            if (isDragging && draggedGraph === graphType) {
+                // Stop animation when dragging
+                if (isPlaying) {
+                    stopAnimation();
+                }
+                
+                const graphPos = canvasToGraph(canvasX, canvasY, graphType, canvas);
+                
+                // Update point position
+                points[graphType][draggedPoint].x = Math.max(0, graphPos.x);
+                points[graphType][draggedPoint].y = graphPos.y;
+                
+                // Ensure x coordinates don't cross
+                if (draggedPoint > 0) {
+                    points[graphType][draggedPoint].x = Math.max(
+                        points[graphType][draggedPoint].x,
+                        points[graphType][draggedPoint - 1].x + 0.1
+                    );
+                }
+                if (draggedPoint < NUM_POINTS - 1) {
+                    points[graphType][draggedPoint].x = Math.min(
+                        points[graphType][draggedPoint].x,
+                        points[graphType][draggedPoint + 1].x - 0.1
+                    );
+                }
+                
+                updateGraphsFrom(graphType);
+            }
+            
+            // Show tooltip for segments after delay
+            if (!isDragging && mouseMoved) {
+                tooltipTimeout = setTimeout(() => {
+                    const graphPos = canvasToGraph(canvasX, canvasY, graphType, canvas);
+                    const segmentIdx = findSegmentAtX(graphPos.x, graphType);
+                    
+                    if (segmentIdx !== -1) {
+                        const kinematics = calculateSegmentKinematics(segmentIdx);
+                        if (kinematics) {
+                            const tooltipText = `Segment ${segmentIdx + 1} (t: ${kinematics.t1.toFixed(2)} → ${kinematics.t2.toFixed(2)} s)\n` +
+                                              `───────────────────────\n` +
+                                              `u = ${kinematics.u.toFixed(3)} m/s\n` +
+                                              `v = ${kinematics.v.toFixed(3)} m/s\n` +
+                                              `s = ${kinematics.s.toFixed(3)} m\n` +
+                                              `a = ${kinematics.a.toFixed(3)} m/s²\n` +
+                                              `t = ${kinematics.t.toFixed(3)} s`;
+                            
+                            tooltip.textContent = tooltipText;
+                            tooltip.style.display = 'block';
+                            tooltip.style.left = (e.clientX + 10) + 'px';
+                            tooltip.style.top = (e.clientY - 10) + 'px';
+                        }
+                    }
+                }, TOOLTIP_DELAY);
+            }
+            
+            // Update cursor
+            const pointIdx = findNearestPoint(canvasX, canvasY, graphType, canvas);
+            canvas.style.cursor = pointIdx !== -1 ? 'grab' : 'crosshair';
+        }
+        
+        function handleMouseUp(e, graphType) {
+            if (isDragging) {
+                isDragging = false;
+                draggedPoint = null;
+                draggedGraph = null;
+                canvases[graphType].style.cursor = 'crosshair';
+                saveState();
+            }
+        }
+        
+        function handleMouseLeave(e, graphType) {
+            tooltip.style.display = 'none';
+            if (tooltipTimeout) {
+                clearTimeout(tooltipTimeout);
+                tooltipTimeout = null;
+            }
+            if (!isDragging) {
+                canvases[graphType].style.cursor = 'crosshair';
+            }
+        }
+        
+        // Animation functions
+        function calculateDisplacementAtTime(t) {
+            // Sort points by time
+            const sortedPoints = [...Array(NUM_POINTS).keys()].sort((a, b) => 
+                points.displacement[a].x - points.displacement[b].x
+            );
+            
+            // Handle edge cases
+            if (t <= points.displacement[sortedPoints[0]].x) {
+                return points.displacement[sortedPoints[0]].y;
+            }
+            if (t >= points.displacement[sortedPoints[NUM_POINTS - 1]].x) {
+                return points.displacement[sortedPoints[NUM_POINTS - 1]].y;
+            }
+            
+            // Find the segment containing time t
+            for (let i = 0; i < NUM_SEGMENTS; i++) {
+                const idx1 = sortedPoints[i];
+                const idx2 = sortedPoints[i + 1];
+                
+                const t1 = points.displacement[idx1].x;
+                const t2 = points.displacement[idx2].x;
+                
+                if (t >= t1 && t < t2) {
+                    // Get kinematic values at start of segment
+                    const s0 = points.displacement[idx1].y;
+                    const v0 = points.velocity[idx1].y;
+                    const a = points.acceleration[idx1].y; // Constant for this segment
+                    
+                    // Time within segment
+                    const dt = t - t1;
+                    
+                    // Calculate displacement using kinematic equation
+                    // s = s0 + v0*t + 0.5*a*t²
+                    return s0 + v0 * dt + 0.5 * a * dt * dt;
+                }
+            }
+            
+            return points.displacement[sortedPoints[NUM_SEGMENTS]].y;
+        }
+        
+        function startAnimation() {
+            if (isPlaying) return;
+            
+            isPlaying = true;
+            playBtn.textContent = '⏸ Pause';
+            animationStartTime = performance.now();
+            
+            // Get displacement range
+            const displacements = points.displacement.map(p => p.y);
+            const minDisplacement = Math.min(...displacements);
+            const maxDisplacement = Math.max(...displacements);
+            const displacementRange = maxDisplacement - minDisplacement;
+            
+            // Calculate origin position and scaling
+            let originPixel;
+            let pixelsPerUnit;
+            const boxWidth = animationBox.offsetWidth;
+            const usableWidth = boxWidth - 60; // Leave margin for object
+            
+            if (minDisplacement >= 0) {
+                // All positive: origin on left
+                originPixel = 20;
+                pixelsPerUnit = displacementRange > 0 ? usableWidth / displacementRange : 50;
+            } else if (maxDisplacement <= 0) {
+                // All negative: origin on right
+                originPixel = boxWidth - 20;
+                pixelsPerUnit = displacementRange > 0 ? usableWidth / displacementRange : 50;
+            } else {
+                // Mixed: position proportionally
+                const negativeRange = Math.abs(minDisplacement);
+                const positiveRange = maxDisplacement;
+                const totalRange = negativeRange + positiveRange;
+                
+                // Origin position based on proportion
+                originPixel = 20 + (negativeRange / totalRange) * usableWidth;
+                pixelsPerUnit = usableWidth / totalRange;
+            }
+            
+            // Update origin marker position
+            const originMarker = document.getElementById('originMarker');
+            const originLabel = document.getElementById('originLabel');
+            originMarker.style.left = originPixel + 'px';
+            originLabel.style.left = (originPixel - 15) + 'px';
+            
+            // Get time range
+            const times = points.displacement.map(p => p.x);
+            const maxTime = Math.max(...times);
+            const totalDuration = maxTime * 1000; // Convert to milliseconds
+            
+            animate();
+            
+            function animate() {
+                if (!isPlaying) return;
+                
+                const elapsed = performance.now() - animationStartTime;
+                const currentTime = (elapsed % totalDuration) / 1000; // Loop and convert to seconds
+                
+                currentAnimationTime = currentTime;
+                
+                // Calculate current displacement
+                const currentDisplacement = calculateDisplacementAtTime(currentTime);
+                
+                // Convert displacement to pixel position
+                const pixelOffset = currentDisplacement * pixelsPerUnit;
+                const pixelPosition = originPixel + pixelOffset;
+                
+                // Update object position
+                movingObject.style.left = pixelPosition + 'px';
+                
+                // Redraw graphs to show playhead
+                updateAllGraphs();
+                
+                animationFrame = requestAnimationFrame(animate);
+            }
+        }
+        
+        function stopAnimation() {
+            isPlaying = false;
+            playBtn.textContent = '▶️ Play';
+            currentAnimationTime = 0;
+            if (animationFrame) {
+                cancelAnimationFrame(animationFrame);
+                animationFrame = null;
+            }
+            updateAllGraphs(); // Redraw without playhead
+        }
+        
+        // Event listeners
+        for (let graphType in canvases) {
+            const canvas = canvases[graphType];
+            
+            canvas.addEventListener('mousedown', (e) => handleMouseDown(e, graphType));
+            canvas.addEventListener('mousemove', (e) => handleMouseMove(e, graphType));
+            canvas.addEventListener('mouseup', (e) => handleMouseUp(e, graphType));
+            canvas.addEventListener('mouseleave', (e) => handleMouseLeave(e, graphType));
+        }
+        
+        // Global mouse up (in case mouse leaves canvas while dragging)
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                draggedPoint = null;
+                draggedGraph = null;
+                saveState();
+                for (let canvas of Object.values(canvases)) {
+                    canvas.style.cursor = 'crosshair';
+                }
+            }
+        });
+        
+        // Button event listeners
+        playBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                stopAnimation();
+            } else {
+                startAnimation();
+            }
+        });
+        
+        resetBtn.addEventListener('click', () => {
+            stopAnimation();
+            initializePoints();
+        });
+        
+        undoBtn.addEventListener('click', undo);
+        redoBtn.addEventListener('click', redo);
+        
+        emojiSelector.addEventListener('change', (e) => {
+            movingObject.textContent = e.target.value;
+        });
+        
+        // Initialize
+        initializePoints();
+    </script>
+</body>
+</html>
