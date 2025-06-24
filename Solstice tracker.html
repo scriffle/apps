@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daylight Hours Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: white;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #ffd700, #ffed4e);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .location-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .location-text {
+            font-size: 1.2em;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 10px 20px;
+            border-radius: 10px;
+        }
+        
+        .world-map {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 10px;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 15px;
+            padding: 25px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .card h2 {
+            margin-bottom: 20px;
+            color: #ffd700;
+            font-size: 1.4em;
+        }
+        
+        .daylight-visual {
+            width: 100%;
+            height: 60px;
+            background: linear-gradient(90deg, #1a1a2e 0%, #ffd700 30%, #ffd700 70%, #1a1a2e 100%);
+            border-radius: 30px;
+            position: relative;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+        
+        .sun-icon {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle, #ffed4e, #ffd700);
+            border-radius: 50%;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes glow {
+            from { box-shadow: 0 0 20px #ffd700; }
+            to { box-shadow: 0 0 30px #ffed4e, 0 0 40px #ffd700; }
+        }
+        
+        .time-display {
+            font-size: 2em;
+            font-weight: bold;
+            text-align: center;
+            margin: 15px 0;
+        }
+        
+        .change-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            font-size: 0.9em;
+        }
+        
+        .change-value {
+            font-weight: bold;
+        }
+        
+        .positive { color: #4ade80; }
+        .negative { color: #f87171; }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 10px;
+            transition: width 0.5s ease;
+        }
+        
+        .ratio-display {
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .ratio-item {
+            flex: 1;
+        }
+        
+        .ratio-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .update-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: transform 0.2s ease;
+        }
+        
+        .update-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .loading {
+            text-align: center;
+            font-size: 1.2em;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌅 Daylight Hours Tracker</h1>
+            <div id="currentDate"></div>
+        </div>
+        
+        <div class="location-info">
+            <div class="location-text" id="locationDisplay">
+                📍 Getting your location...
+            </div>
+            <div class="world-map">
+                <svg width="240" height="120" viewBox="0 0 360 180">
+                    <!-- Ocean background -->
+                    <rect width="360" height="180" fill="#1e40af" opacity="0.7"/>
+                    
+                    <!-- World map outline -->
+                    <!-- North America -->
+                    <path d="M50,40 L60,30 L80,35 L100,30 L110,40 L105,60 L95,70 L80,75 L70,80 L60,75 L45,70 L40,50 Z" fill="#059669" opacity="0.9"/>
+                    
+                    <!-- South America -->
+                    <path d="M70,85 L80,80 L85,90 L90,110 L85,130 L80,140 L75,145 L65,140 L60,120 L65,100 L70,85 Z" fill="#059669" opacity="0.9"/>
+                    
+                    <!-- Europe -->
+                    <path d="M165,35 L175,30 L185,35 L190,45 L185,55 L175,60 L165,55 L160,45 Z" fill="#059669" opacity="0.9"/>
+                    
+                    <!-- Africa -->
+                    <path d="M160,60 L170,55 L180,60 L185,80 L180,100 L175,120 L165,125 L155,120 L150,100 L155,80 L160,60 Z" fill="#059669" opacity="0.9"/>
+                    
+                    <!-- Asia -->
+                    <path d="M190,25 L220,20 L250,25 L270,30 L285,40 L290,55 L285,70 L270,75 L250,70 L220,65 L200,60 L185,50 L190,35 Z" fill="#059669" opacity="0.9"/>
+                    
+                    <!-- Australia -->
+                    <path d="M260,115 L285,110 L300,115 L305,125 L300,135 L285,140 L260,135 L255,125 Z" fill="#059669" opacity="0.9"/>
+                    
+                    <!-- Greenland -->
+                    <path d="M110,15 L125,10 L135,15 L130,30 L120,35 L110,30 Z" fill="#059669" opacity="0.9"/>
+                    
+                    <!-- Location marker -->
+                    <circle id="locationMarker" cx="180" cy="90" r="3" fill="#ef4444" stroke="white" stroke-width="1.5" style="display: none;">
+                        <animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite"/>
+                    </circle>
+                </svg>
+            </div>
+        </div>
+        
+        <div id="loading" class="loading">
+            🌍 Calculating daylight hours for your location...
+        </div>
+        
+        <div id="mainContent" class="main-content" style="display: none;">
+            <div class="card">
+                <h2>☀️ Today's Daylight</h2>
+                <div class="daylight-visual" id="daylightBar">
+                    <div class="sun-icon" id="sunPosition"></div>
+                </div>
+                <div class="time-display" id="daylightDuration"></div>
+                <div class="ratio-display">
+                    <div class="ratio-item">
+                        <div class="ratio-value" id="daylightRatio"></div>
+                        <div>Daylight</div>
+                    </div>
+                    <div class="ratio-item">
+                        <div class="ratio-value" id="nightRatio"></div>
+                        <div>Night</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>📊 Day-to-Day Changes</h2>
+                <div class="change-indicator">
+                    <span>Yesterday → Today:</span>
+                    <span class="change-value" id="yesterdayChange"></span>
+                </div>
+                <div class="change-indicator">
+                    <span>Today → Tomorrow:</span>
+                    <span class="change-value" id="tomorrowChange"></span>
+                </div>
+                <div style="margin-top: 20px;">
+                    <div>🌅 Sunrise: <span id="sunriseTime"></span></div>
+                    <div>🌇 Sunset: <span id="sunsetTime"></span></div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>🔄 Solstice Progress</h2>
+                <div id="solsticeInfo"></div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="solsticeProgress"></div>
+                </div>
+                <div id="solsticePercentage" style="text-align: center; margin-top: 10px;"></div>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 20px;">
+            <button class="update-btn" onclick="updateLocation()">📍 Update Location</button>
+        </div>
+    </div>
+
+    <script>
+        let currentLat = -37.8136; // Default to Melbourne
+        let currentLon = 144.9631;
+        let currentLocation = "Melbourne, Victoria, Australia";
+
+        // Initialize with current date
+        document.getElementById('currentDate').textContent = new Date().toLocaleDateString('en-AU', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+
+        function getLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        currentLat = position.coords.latitude;
+                        currentLon = position.coords.longitude;
+                        reverseGeocode(currentLat, currentLon);
+                    },
+                    () => {
+                        // Use default location (Melbourne)
+                        updateDisplay();
+                    }
+                );
+            } else {
+                updateDisplay();
+            }
+        }
+
+        async function reverseGeocode(lat, lon) {
+            try {
+                // For demo purposes, we'll use a simple geocoding approach
+                // In a real app, you'd use a proper geocoding service
+                currentLocation = `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
+                updateDisplay();
+            } catch (error) {
+                updateDisplay();
+            }
+        }
+
+        function calculateSunTimes(lat, lon, date) {
+            // Accurate sunrise/sunset calculation for Southern Hemisphere
+            const rad = Math.PI / 180;
+            
+            // Calculate day of year
+            const start = new Date(date.getFullYear(), 0, 1);
+            const dayOfYear = Math.floor((date - start) / (24 * 60 * 60 * 1000)) + 1;
+            
+            // Solar declination (degrees) - corrected for Southern Hemisphere
+            const declination = -23.45 * Math.cos(2 * Math.PI * (dayOfYear + 10) / 365.25);
+            
+            // Convert to radians
+            const latRad = lat * rad;
+            const declRad = declination * rad;
+            
+            // Hour angle at sunrise/sunset
+            const cosHourAngle = -Math.tan(latRad) * Math.tan(declRad);
+            
+            // Check for polar day/night
+            if (cosHourAngle > 1) {
+                return { sunrise: 12, sunset: 12, declination }; // No sunrise (polar night)
+            }
+            if (cosHourAngle < -1) {
+                return { sunrise: 0, sunset: 24, declination }; // No sunset (polar day)
+            }
+            
+            const hourAngle = Math.acos(cosHourAngle) / rad;
+            
+            // Solar time of sunrise/sunset
+            const sunriseSolar = 12 - hourAngle / 15;
+            const sunsetSolar = 12 + hourAngle / 15;
+            
+            // Equation of time (minutes) - more accurate
+            const B = 2 * Math.PI * (dayOfYear - 81) / 365;
+            const E = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
+            
+            // Apply equation of time correction
+            const sunriseEoT = sunriseSolar - E / 60;
+            const sunsetEoT = sunsetSolar - E / 60;
+            
+            // Longitude correction (4 minutes per degree from standard meridian)
+            // Melbourne standard meridian is 150°E (UTC+10)
+            const standardMeridian = 150; // For AEST/AEDT
+            const lonCorrection = (lon - standardMeridian) * 4 / 60; // hours
+            
+            // Apply longitude correction
+            const sunriseLocal = sunriseEoT - lonCorrection;
+            const sunsetLocal = sunsetEoT - lonCorrection;
+            
+            // Melbourne timezone: UTC+10 in winter (Apr-Oct), UTC+11 in summer (Oct-Apr)
+            // June is definitely winter in Melbourne, so UTC+10
+            const isWinter = date.getMonth() >= 3 && date.getMonth() <= 9; // Apr-Oct
+            const utcOffset = isWinter ? 10 : 11;
+            
+            // Convert to Melbourne local time
+            let sunrise = (sunriseLocal + 24) % 24;
+            let sunset = (sunsetLocal + 24) % 24;
+            
+            // Ensure times are in valid 24-hour format
+            if (sunrise < 0) sunrise += 24;
+            if (sunset < 0) sunset += 24;
+            
+            return {
+                sunrise: sunrise,
+                sunset: sunset,
+                declination: declination
+            };
+        }
+
+        function formatTime(hours) {
+            const h = Math.floor(hours);
+            const m = Math.floor((hours - h) * 60);
+            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+        }
+
+        function formatDuration(hours) {
+            const h = Math.floor(hours);
+            const m = Math.floor((hours - h) * 60);
+            const s = Math.floor(((hours - h) * 60 - m) * 60);
+            return `${h}h ${m}m ${s}s`;
+        }
+
+        function formatChange(minutes) {
+            const m = Math.floor(Math.abs(minutes));
+            const s = Math.floor((Math.abs(minutes) - m) * 60);
+            const sign = minutes >= 0 ? '+' : '-';
+            return `${sign}${m}m ${s}s`;
+        }
+
+        function getNextSolstice(date) {
+            const year = date.getFullYear();
+            
+            // In Southern Hemisphere:
+            // June 21st ≈ Winter Solstice (shortest day)
+            // December 21st ≈ Summer Solstice (longest day)
+            const winterSolstice = new Date(year, 5, 21);  // June 21
+            const summerSolstice = new Date(year, 11, 21); // December 21
+            
+            let nextSolstice, solsticeType;
+            
+            if (currentLat < 0) {
+                // Southern Hemisphere (like Melbourne)
+                if (date < winterSolstice) {
+                    nextSolstice = winterSolstice;
+                    solsticeType = "Winter Solstice (Shortest Day)";
+                } else if (date < summerSolstice) {
+                    nextSolstice = summerSolstice;
+                    solsticeType = "Summer Solstice (Longest Day)";
+                } else {
+                    nextSolstice = new Date(year + 1, 5, 21);
+                    solsticeType = "Winter Solstice (Shortest Day)";
+                }
+            } else {
+                // Northern Hemisphere - opposite seasons
+                if (date < winterSolstice) {
+                    nextSolstice = winterSolstice;
+                    solsticeType = "Summer Solstice (Longest Day)";
+                } else if (date < summerSolstice) {
+                    nextSolstice = summerSolstice;
+                    solsticeType = "Winter Solstice (Shortest Day)";
+                } else {
+                    nextSolstice = new Date(year + 1, 5, 21);
+                    solsticeType = "Summer Solstice (Longest Day)";
+                }
+            }
+            
+            return { date: nextSolstice, type: solsticeType };
+        }
+
+        function updateDisplay() {
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+
+            // Calculate sun times
+            const todaySun = calculateSunTimes(currentLat, currentLon, today);
+            const yesterdaSun = calculateSunTimes(currentLat, currentLon, yesterday);
+            const tomorrowSun = calculateSunTimes(currentLat, currentLon, tomorrow);
+
+            // Daylight duration in hours
+            const todayDaylight = todaySun.sunset - todaySun.sunrise;
+            const yesterdayDaylight = yesterdaSun.sunset - yesterdaSun.sunrise;
+            const tomorrowDaylight = tomorrowSun.sunset - tomorrowSun.sunrise;
+
+            // Changes in minutes
+            const yesterdayChange = (todayDaylight - yesterdayDaylight) * 60;
+            const tomorrowChange = (tomorrowDaylight - todayDaylight) * 60;
+
+            // Update location display
+            document.getElementById('locationDisplay').textContent = `📍 ${currentLocation}`;
+            
+            // Update world map marker
+            const marker = document.getElementById('locationMarker');
+            const mapX = ((currentLon + 180) / 360) * 360;
+            const mapY = ((90 - currentLat) / 180) * 180;
+            marker.setAttribute('cx', mapX);
+            marker.setAttribute('cy', mapY);
+            marker.style.display = 'block';
+
+            // Update main content
+            document.getElementById('daylightDuration').textContent = formatDuration(todayDaylight);
+            
+            // Update ratios
+            const daylightPercentage = (todayDaylight / 24 * 100).toFixed(1);
+            const nightPercentage = (100 - daylightPercentage).toFixed(1);
+            document.getElementById('daylightRatio').textContent = `${daylightPercentage}%`;
+            document.getElementById('nightRatio').textContent = `${nightPercentage}%`;
+
+            // Update sun position in daylight bar
+            const now = new Date();
+            const currentHour = now.getHours() + now.getMinutes() / 60;
+            let sunPosition = 0;
+            
+            if (currentHour >= todaySun.sunrise && currentHour <= todaySun.sunset) {
+                sunPosition = ((currentHour - todaySun.sunrise) / todayDaylight) * 100;
+            } else if (currentHour < todaySun.sunrise) {
+                sunPosition = 0;
+            } else {
+                sunPosition = 100;
+            }
+            
+            document.getElementById('sunPosition').style.left = `calc(${sunPosition}% - 20px)`;
+
+            // Update times
+            document.getElementById('sunriseTime').textContent = formatTime(todaySun.sunrise);
+            document.getElementById('sunsetTime').textContent = formatTime(todaySun.sunset);
+
+            // Update changes
+            const yesterdayEl = document.getElementById('yesterdayChange');
+            yesterdayEl.textContent = formatChange(yesterdayChange);
+            yesterdayEl.className = `change-value ${yesterdayChange >= 0 ? 'positive' : 'negative'}`;
+            
+            const tomorrowEl = document.getElementById('tomorrowChange');
+            tomorrowEl.textContent = formatChange(tomorrowChange);
+            tomorrowEl.className = `change-value ${tomorrowChange >= 0 ? 'positive' : 'negative'}`;
+
+            // Update solstice progress
+            const nextSolstice = getNextSolstice(today);
+            
+            // Calculate the previous solstice (6 months before next)
+            const prevSolstice = new Date(nextSolstice.date);
+            prevSolstice.setMonth(prevSolstice.getMonth() - 6);
+            
+            // If the previous solstice would be in the future, go back a full year
+            if (prevSolstice > today) {
+                prevSolstice.setFullYear(prevSolstice.getFullYear() - 1);
+            }
+            
+            const totalDays = (nextSolstice.date - prevSolstice) / (1000 * 60 * 60 * 24);
+            const daysPassed = (today - prevSolstice) / (1000 * 60 * 60 * 24);
+            const progressPercentage = Math.max(0, Math.min(100, (daysPassed / totalDays * 100))).toFixed(1);
+            
+            document.getElementById('solsticeInfo').textContent = `Next: ${nextSolstice.type} (${nextSolstice.date.toLocaleDateString()})`;
+            document.getElementById('solsticeProgress').style.width = `${progressPercentage}%`;
+            document.getElementById('solsticePercentage').textContent = `${progressPercentage}% complete`;
+
+            // Show main content
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'grid';
+        }
+
+        function updateLocation() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('mainContent').style.display = 'none';
+            getLocation();
+        }
+
+        // Initialize the app
+        getLocation();
+    </script>
+</body>
+</html>
