@@ -175,7 +175,6 @@
         
         .moving-pauli {
             position: absolute;
-            left: 20px;
             top: 50%;
             transform: translateY(-50%);
             font-size: 3em;
@@ -288,7 +287,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            font-family: monospace;
         }
         
         /* Acceleration Race Styles */
@@ -419,9 +418,9 @@
         <h1>Pauli's Acceleration Adventure <span class="pauli">👀</span></h1>
         
         <nav class="navigation">
-            <button class="nav-btn active" onclick="showPanel('sandbox')">🏎️ Acceleration Sandbox</button>
-            <button class="nav-btn" onclick="showPanel('equations')">🔧 Equation Builder</button>
-            <button class="nav-btn" onclick="showPanel('race')">🏁 Acceleration Race</button>
+            <button class="nav-btn active" onclick="showPanel('sandbox', this)">🏎️ Acceleration Sandbox</button>
+            <button class="nav-btn" onclick="showPanel('equations', this)">🔧 Equation Builder</button>
+            <button class="nav-btn" onclick="showPanel('race', this)">🏁 Acceleration Race</button>
         </nav>
         
         <!-- Panel 1: Acceleration Sandbox -->
@@ -469,10 +468,10 @@
             </div>
             
             <div class="formula-options">
-                <button class="formula-btn" onclick="selectFormula('a')">Build: a</button>
-                <button class="formula-btn" onclick="selectFormula('v')">Build: v</button>
-                <button class="formula-btn" onclick="selectFormula('u')">Build: u</button>
-                <button class="formula-btn" onclick="selectFormula('t')">Build: t</button>
+                <button class="formula-btn" onclick="selectFormula('a', this)">Build: a</button>
+                <button class="formula-btn" onclick="selectFormula('v', this)">Build: v</button>
+                <button class="formula-btn" onclick="selectFormula('u', this)">Build: u</button>
+                <button class="formula-btn" onclick="selectFormula('t', this)">Build: t</button>
             </div>
             
             <div class="equation-builder" id="equationBuilder">
@@ -588,10 +587,16 @@
         let currentEquation = [];
         
         // Panel switching
-        function showPanel(panel) {
+        function showPanel(panel, button) {
             // Stop any running animations
-            if (sandboxAnimation) cancelAnimationFrame(sandboxAnimation);
-            if (raceAnimation) cancelAnimationFrame(raceAnimation);
+            if (sandboxAnimation) {
+                cancelAnimationFrame(sandboxAnimation);
+                sandboxAnimation = null;
+            }
+            if (raceAnimation) {
+                cancelAnimationFrame(raceAnimation);
+                raceAnimation = null;
+            }
             
             // Hide all panels
             document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -599,7 +604,12 @@
             
             // Show selected panel
             document.getElementById(panel + 'Panel').classList.add('active');
-            event.target.classList.add('active');
+            
+            // Activate the button that was clicked
+            if (button) {
+                button.classList.add('active');
+            }
+            
             currentPanel = panel;
         }
         
@@ -622,45 +632,67 @@
         function startSandbox() {
             if (sandboxAnimation) return;
             
+            // Reset any previous animation states
+            sandboxPauli.style.transition = 'none';
+            sandboxPauli.style.opacity = '1';
+            
             const initialVel = parseFloat(initialVelSlider.value);
             const acceleration = parseFloat(accelSlider.value);
             const sandboxArea = document.querySelector('.sandbox-area');
             const areaWidth = sandboxArea.clientWidth;
-            const centerX = areaWidth / 2 - 30; // Center position minus half of Pauli's width
+            const centerX = areaWidth / 2 - 30; // Center minus half Pauli width
             
-            let velocity = initialVel;
-            let position = 0; // Start at 0 for calculations
-            let startTime = performance.now();
+            let startTime = null;
+            let animationPhase = 'moving'; // 'moving', 'waiting', 'returning'
             
-            function animate(currentTime) {
-                const elapsed = (currentTime - startTime) / 1000; // Convert to seconds
+            function animate(timestamp) {
+                if (!startTime) startTime = timestamp;
+                const elapsed = (timestamp - startTime) / 1000; // seconds
                 
-                // Update velocity: v = u + at
-                velocity = initialVel + acceleration * elapsed;
-                
-                // Update position: s = ut + 0.5at²
-                position = initialVel * elapsed + 0.5 * acceleration * elapsed * elapsed;
-                
-                // Scale position for visibility and add to center
-                let pixelPosition = centerX + position * 10; // Scale by 10 pixels per meter
-                
-                // Horizontal wrapping
-                if (pixelPosition > areaWidth) {
-                    pixelPosition = pixelPosition % areaWidth;
-                }
-                while (pixelPosition < 0) {
-                    pixelPosition += areaWidth;
-                }
-                
-                // Update displays
-                velocityMeter.textContent = velocity.toFixed(1) + ' m/s';
-                sandboxPauli.style.left = pixelPosition + 'px';
-                
-                // Continue animation for 10 seconds
-                if (elapsed < 10) {
+                if (animationPhase === 'moving' && elapsed < 10) {
+                    // Calculate physics
+                    const velocity = initialVel + acceleration * elapsed;
+                    const distance = initialVel * elapsed + 0.5 * acceleration * elapsed * elapsed;
+                    
+                    // Convert to pixels (10 pixels per meter)
+                    let pixelPosition = centerX + distance * 10;
+                    
+                    // Handle wrapping
+                    while (pixelPosition > areaWidth) {
+                        pixelPosition -= areaWidth;
+                    }
+                    while (pixelPosition < -60) {
+                        pixelPosition += areaWidth;
+                    }
+                    
+                    // Update position and velocity display
+                    sandboxPauli.style.left = pixelPosition + 'px';
+                    velocityMeter.textContent = velocity.toFixed(1) + ' m/s';
+                    
                     sandboxAnimation = requestAnimationFrame(animate);
-                } else {
-                    sandboxAnimation = null;
+                    
+                } else if (animationPhase === 'moving' && elapsed >= 10) {
+                    // Switch to waiting phase
+                    animationPhase = 'waiting';
+                    sandboxAnimation = requestAnimationFrame(animate);
+                    
+                } else if (animationPhase === 'waiting' && elapsed < 12) {
+                    // Just wait
+                    sandboxAnimation = requestAnimationFrame(animate);
+                    
+                } else if (animationPhase === 'waiting' && elapsed >= 12) {
+                    // Start return animation
+                    animationPhase = 'returning';
+                    sandboxPauli.style.transition = 'left 1s ease, opacity 0.3s ease';
+                    sandboxPauli.style.opacity = '0.25';
+                    sandboxPauli.style.left = centerX + 'px';
+                    
+                    // Clean up after return animation
+                    setTimeout(() => {
+                        sandboxPauli.style.transition = 'none';
+                        sandboxPauli.style.opacity = '1';
+                        sandboxAnimation = null;
+                    }, 1000);
                 }
             }
             
@@ -672,19 +704,20 @@
                 cancelAnimationFrame(sandboxAnimation);
                 sandboxAnimation = null;
             }
+            
             const sandboxArea = document.querySelector('.sandbox-area');
             const centerX = sandboxArea.clientWidth / 2 - 30;
+            
+            sandboxPauli.style.transition = 'none';
+            sandboxPauli.style.opacity = '1';
             sandboxPauli.style.left = centerX + 'px';
             velocityMeter.textContent = '0 m/s';
         }
         
         function randomizeSandbox() {
-            // Random initial velocity between -20 and 20
             const randomVel = Math.floor(Math.random() * 41) - 20;
-            // Random acceleration between -10 and 10
             const randomAccel = ((Math.random() * 20) - 10).toFixed(1);
             
-            // Update sliders and displays
             initialVelSlider.value = randomVel;
             accelSlider.value = randomAccel;
             document.getElementById('initialVelValue').textContent = randomVel;
@@ -695,37 +728,44 @@
         // Equation Builder Functions
         const equations = {
             'a': { 
-                correct: ['(', 'v', '-', 'u', ')', '÷', 't'],
+                correct: ['(v-u)÷t'],
                 hint: 'Acceleration equals change in velocity divided by time'
             },
             'v': { 
-                correct: ['u', '+', 'a', '×', 't'],
+                correct: ['u+a×t', 'u+(a×t)', 'a×t+u', '(a×t)+u'],
                 hint: 'Final velocity equals initial velocity plus acceleration times time'
             },
             'u': { 
-                correct: ['v', '-', 'a', '×', 't'],
+                correct: ['v-a×t', 'v-(a×t)'],
                 hint: 'Initial velocity equals final velocity minus acceleration times time'
             },
             't': { 
-                correct: ['(', 'v', '-', 'u', ')', '÷', 'a'],
+                correct: ['(v-u)÷a'],
                 hint: 'Time equals change in velocity divided by acceleration'
             }
         };
         
-        function selectFormula(formula) {
+        function selectFormula(formula, button) {
+            // Clear previous selections
             document.querySelectorAll('.formula-btn').forEach(btn => {
                 btn.classList.remove('selected');
             });
-            event.target.classList.add('selected');
+            
+            // Mark this button as selected
+            if (button) {
+                button.classList.add('selected');
+            }
+            
+            // Set the selected formula
             selectedFormula = formula;
             currentEquation = [];
             
-            // Update prompt
-            document.getElementById('buildPrompt').textContent = 'Build: ' + formula;
-            
             // Clear and setup variable bank
             setupVariableBank();
-            clearEquation();
+            
+            // Update the equation builder display
+            const builder = document.getElementById('equationBuilder');
+            builder.textContent = formula + ' = ';
         }
         
         function setupVariableBank() {
@@ -738,6 +778,7 @@
                 const varElement = document.createElement('div');
                 varElement.className = 'variable';
                 varElement.textContent = variable;
+                varElement.setAttribute('data-var', variable);
                 varElement.onclick = () => addToEquation(variable, varElement);
                 bank.appendChild(varElement);
             });
@@ -756,7 +797,7 @@
         
         function updateEquationDisplay() {
             const builder = document.getElementById('equationBuilder');
-            builder.innerHTML = selectedFormula + ' = ' + currentEquation.join(' ');
+            builder.textContent = selectedFormula + ' = ' + currentEquation.join('');
         }
         
         function checkEquation() {
@@ -765,8 +806,16 @@
                 return;
             }
             
-            const correct = equations[selectedFormula].correct;
-            const isCorrect = JSON.stringify(currentEquation) === JSON.stringify(correct);
+            // Join the equation array into a string for comparison
+            const userEquation = currentEquation.join('');
+            const possibleCorrect = equations[selectedFormula].correct;
+            
+            // Debug: Show what we're comparing
+            console.log('User equation:', userEquation);
+            console.log('Possible correct:', possibleCorrect);
+            
+            // Check if user's equation matches any correct form
+            const isCorrect = possibleCorrect.includes(userEquation);
             
             if (isCorrect) {
                 showFeedback('equationFeedback', 'Perfect. Pauli loves your equation building skills 👀', true);
@@ -777,12 +826,16 @@
         
         function clearEquation() {
             currentEquation = [];
+            const builder = document.getElementById('equationBuilder');
+            
             if (selectedFormula) {
-                document.getElementById('equationBuilder').innerHTML = selectedFormula + ' = ';
+                builder.textContent = selectedFormula + ' = ';
             } else {
-                document.getElementById('equationBuilder').innerHTML = '<span id="buildPrompt">Select a formula to build</span>';
+                builder.innerHTML = '<span id="buildPrompt">Select a formula to build</span>';
             }
-            document.querySelectorAll('.variable.used').forEach(v => {
+            
+            // Show all variables again
+            document.querySelectorAll('.variable').forEach(v => {
                 v.classList.remove('used');
             });
         }
@@ -1002,11 +1055,19 @@
             }, 5000);
         }
         
-        // Initialize Pauli position on load
+        // Initialize on load
         window.addEventListener('DOMContentLoaded', () => {
+            // Center Pauli in sandbox
             const sandboxArea = document.querySelector('.sandbox-area');
-            const centerX = sandboxArea.clientWidth / 2 - 30;
-            document.getElementById('sandboxPauli').style.left = centerX + 'px';
+            if (sandboxArea) {
+                const centerX = sandboxArea.clientWidth / 2 - 30;
+                const sandboxPauli = document.getElementById('sandboxPauli');
+                if (sandboxPauli) {
+                    sandboxPauli.style.left = centerX + 'px';
+                    sandboxPauli.style.opacity = '1';
+                    sandboxPauli.style.transition = 'none';
+                }
+            }
         });
     </script>
 </body>
