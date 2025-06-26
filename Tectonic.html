@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>3D Mid-Ocean Ridge Prototype</title>
+  <style>
+    body { margin:0; overflow:hidden; }
+    .label { font-family: sans-serif; background: rgba(255,255,255,0.7); padding:2px 4px; border-radius:4px; }
+  </style>
+</head>
+<body>
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js';
+    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/controls/OrbitControls.js';
+    import { CSS2DRenderer, CSS2DObject } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/renderers/CSS2DRenderer.js';
+
+    // 1. Scene, Camera, Renderers
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 100);
+    camera.position.set(0, 3, 6);
+    const renderer = new THREE.WebGLRenderer({ antialias:true });
+    renderer.setSize(innerWidth, innerHeight);
+    document.body.append(renderer.domElement);
+
+    const labelRenderer = new CSS2DRenderer();
+    labelRenderer.setSize(innerWidth, innerHeight);
+    labelRenderer.domElement.style.position = 'absolute';
+    labelRenderer.domElement.style.top = '0';
+    document.body.append(labelRenderer.domElement);
+
+    // 2. Controls
+    const controls = new OrbitControls(camera, labelRenderer.domElement);
+    controls.minDistance = 3; controls.maxDistance = 12;
+
+    // 3. Lights
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+    dir.position.set(5,10,7);
+    scene.add(dir);
+
+    // 4. Geometry & Materials
+    // Oceanic plates (deep blue)
+    const plateGeom = new THREE.BoxGeometry(1.8, 0.2, 2);
+    const plateMat = new THREE.MeshPhongMaterial({ color: 0x003366 });
+    const leftPlate = new THREE.Mesh(plateGeom, plateMat);
+    const rightPlate = new THREE.Mesh(plateGeom, plateMat);
+    leftPlate.position.x = -0.9;
+    rightPlate.position.x = +0.9;
+    scene.add(leftPlate, rightPlate);
+
+    // Mantle (semi-transparent orange)
+    const mantleGeom = new THREE.BoxGeometry(4, 1.5, 2);
+    const mantleMat = new THREE.MeshLambertMaterial({ color: 0xff9933, transparent:true, opacity:0.5 });
+    const mantle = new THREE.Mesh(mantleGeom, mantleMat);
+    mantle.position.y = -0.6;
+    scene.add(mantle);
+
+    // Magma extrusion (emissive yellow cylinder)
+    const magmaGeom = new THREE.CylinderGeometry(0.2, 0.2, 0.6, 16);
+    const magmaMat = new THREE.MeshPhongMaterial({ color: 0xffff66, emissive: 0xffff33 });
+    const magma = new THREE.Mesh(magmaGeom, magmaMat);
+    magma.position.set(0, 0.5, 0);
+    scene.add(magma);
+
+    // 5. Pointer sticks & labels
+    function makePointer(position, dir, text) {
+      const arrow = new THREE.ArrowHelper(dir.normalize(), position, 1, 0xffffff);
+      scene.add(arrow);
+      const div = document.createElement('div');
+      div.className = 'label';
+      div.textContent = text;
+      const label = new CSS2DObject(div);
+      label.position.copy(position.clone().add(dir.clone().multiplyScalar(1.2)));
+      arrow.add(label);
+    }
+    makePointer(new THREE.Vector3(0,0.7,0), new THREE.Vector3(0,1,0), 'Ridge Crest');
+    makePointer(new THREE.Vector3(-0.9,0.1,0), new THREE.Vector3(-1,0.3,0), 'Oceanic Plate');
+    makePointer(new THREE.Vector3(0,0.2,0), new THREE.Vector3(0,-1,0), 'Upwelling Mantle');
+
+    // 6. Animation loop (divergence + extrusion)
+    const speed = 0.005;  // units per frame
+    let phase = 0;
+    function animate() {
+      requestAnimationFrame(animate);
+      // diverge plates
+      leftPlate.position.x = -0.9 - (phase % 2) * 0.5;
+      rightPlate.position.x = +0.9 + (phase % 2) * 0.5;
+      // magma pulsing
+      magma.scale.y = 0.8 + 0.2 * Math.sin(phase * 3);
+      magma.position.y = 0.5 + 0.1 * Math.sin(phase * 3);
+      phase += speed;
+      controls.update();
+      renderer.render(scene, camera);
+      labelRenderer.render(scene, camera);
+    }
+    animate();
+
+    // 7. Handle resize
+    window.addEventListener('resize', () => {
+      camera.aspect = innerWidth/innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+      labelRenderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+</html>
