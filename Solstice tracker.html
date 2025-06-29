@@ -59,12 +59,6 @@
             border-radius: 10px;
         }
         
-        .world-map {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            padding: 10px;
-        }
-        
         .main-content {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -94,22 +88,6 @@
             position: relative;
             margin: 20px 0;
             overflow: hidden;
-        }
-        
-        .sun-icon {
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 40px;
-            height: 40px;
-            background: radial-gradient(circle, #ffed4e, #ffd700);
-            border-radius: 50%;
-            animation: glow 2s ease-in-out infinite alternate;
-        }
-        
-        @keyframes glow {
-            from { box-shadow: 0 0 20px #ffd700; }
-            to { box-shadow: 0 0 30px #ffed4e, 0 0 40px #ffd700; }
         }
         
         .time-display {
@@ -199,39 +177,6 @@
             <div class="location-text" id="locationDisplay">
                 📍 Getting your location...
             </div>
-            <div class="world-map">
-                <svg width="240" height="120" viewBox="0 0 360 180">
-                    <!-- Ocean background -->
-                    <rect width="360" height="180" fill="#1e40af" opacity="0.7"/>
-                    
-                    <!-- World map outline -->
-                    <!-- North America -->
-                    <path d="M50,40 L60,30 L80,35 L100,30 L110,40 L105,60 L95,70 L80,75 L70,80 L60,75 L45,70 L40,50 Z" fill="#059669" opacity="0.9"/>
-                    
-                    <!-- South America -->
-                    <path d="M70,85 L80,80 L85,90 L90,110 L85,130 L80,140 L75,145 L65,140 L60,120 L65,100 L70,85 Z" fill="#059669" opacity="0.9"/>
-                    
-                    <!-- Europe -->
-                    <path d="M165,35 L175,30 L185,35 L190,45 L185,55 L175,60 L165,55 L160,45 Z" fill="#059669" opacity="0.9"/>
-                    
-                    <!-- Africa -->
-                    <path d="M160,60 L170,55 L180,60 L185,80 L180,100 L175,120 L165,125 L155,120 L150,100 L155,80 L160,60 Z" fill="#059669" opacity="0.9"/>
-                    
-                    <!-- Asia -->
-                    <path d="M190,25 L220,20 L250,25 L270,30 L285,40 L290,55 L285,70 L270,75 L250,70 L220,65 L200,60 L185,50 L190,35 Z" fill="#059669" opacity="0.9"/>
-                    
-                    <!-- Australia -->
-                    <path d="M260,115 L285,110 L300,115 L305,125 L300,135 L285,140 L260,135 L255,125 Z" fill="#059669" opacity="0.9"/>
-                    
-                    <!-- Greenland -->
-                    <path d="M110,15 L125,10 L135,15 L130,30 L120,35 L110,30 Z" fill="#059669" opacity="0.9"/>
-                    
-                    <!-- Location marker -->
-                    <circle id="locationMarker" cx="180" cy="90" r="3" fill="#ef4444" stroke="white" stroke-width="1.5" style="display: none;">
-                        <animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite"/>
-                    </circle>
-                </svg>
-            </div>
         </div>
         
         <div id="loading" class="loading">
@@ -241,9 +186,7 @@
         <div id="mainContent" class="main-content" style="display: none;">
             <div class="card">
                 <h2>☀️ Today's Daylight</h2>
-                <div class="daylight-visual" id="daylightBar">
-                    <div class="sun-icon" id="sunPosition"></div>
-                </div>
+                <div class="daylight-visual" id="daylightBar"></div>
                 <div class="time-display" id="daylightDuration"></div>
                 <div class="ratio-display">
                     <div class="ratio-item">
@@ -300,6 +243,144 @@
             month: 'long',
             day: 'numeric'
         });
+
+        // Initialize world map
+        function initializeWorldMap() {
+            // Check if D3 is available
+            if (typeof d3 === 'undefined') {
+                console.error('D3 library not loaded');
+                createFallbackMap();
+                return;
+            }
+            
+            const width = 400;
+            const height = 200;
+            
+            mapSvg = d3.select("#worldMap")
+                .attr("viewBox", `0 0 ${width} ${height}`);
+            
+            // Ocean background
+            mapSvg.append("rect")
+                .attr("width", width)
+                .attr("height", height)
+                .attr("fill", "#1e40af")
+                .attr("opacity", 0.7);
+            
+            mapProjection = d3.geoMercator()
+                .scale((width/630)*60)
+                .translate([width/2, height/1.4]);
+            
+            const path = d3.geoPath(mapProjection);
+            
+            // Load and render world map
+            d3.json("https://unpkg.com/world-atlas@2/countries-110m.json").then(world => {
+                const countries = topojson.feature(world, world.objects.countries).features;
+                
+                mapSvg.append("g")
+                    .selectAll("path")
+                    .data(countries)
+                    .enter().append("path")
+                    .attr("d", path)
+                    .attr("fill", "#059669")
+                    .attr("opacity", 0.9)
+                    .attr("stroke", "#047857")
+                    .attr("stroke-width", 0.5);
+                
+                // Add location marker
+                locationMarker = mapSvg.append("circle")
+                    .attr("r", 4)
+                    .attr("fill", "#ef4444")
+                    .attr("stroke", "white")
+                    .attr("stroke-width", 2)
+                    .style("display", "none");
+                
+                // Add pulsing animation
+                locationMarker.append("animate")
+                    .attr("attributeName", "r")
+                    .attr("values", "4;8;4")
+                    .attr("dur", "2s")
+                    .attr("repeatCount", "indefinite");
+                
+                // Initial location update
+                updateLocationMarker();
+            }).catch(error => {
+                console.error("Error loading world map:", error);
+                // Fallback to simple map if loading fails
+                createFallbackMap();
+            });
+        }
+        
+        function createFallbackMap() {
+            const width = 400;
+            const height = 200;
+            
+            // Get the SVG element directly
+            const svgElement = document.getElementById('worldMap');
+            svgElement.innerHTML = ''; // Clear any existing content
+            svgElement.setAttribute('viewBox', `0 0 ${width} ${height}`);
+            
+            // Create ocean background
+            const ocean = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            ocean.setAttribute('width', width);
+            ocean.setAttribute('height', height);
+            ocean.setAttribute('fill', '#1e40af');
+            ocean.setAttribute('opacity', '0.7');
+            svgElement.appendChild(ocean);
+            
+            // Simple continent shapes
+            const continents = [
+                {x: 30, y: 50, width: 80, height: 60}, // North America
+                {x: 120, y: 40, width: 100, height: 80}, // South America
+                {x: 230, y: 45, width: 60, height: 70}, // Europe/Africa
+                {x: 300, y: 50, width: 80, height: 90}  // Asia/Australia
+            ];
+            
+            continents.forEach(continent => {
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('x', continent.x);
+                rect.setAttribute('y', continent.y);
+                rect.setAttribute('width', continent.width);
+                rect.setAttribute('height', continent.height);
+                rect.setAttribute('fill', '#059669');
+                rect.setAttribute('opacity', '0.9');
+                svgElement.appendChild(rect);
+            });
+            
+            // Create location marker
+            locationMarker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            locationMarker.setAttribute('r', '4');
+            locationMarker.setAttribute('fill', '#ef4444');
+            locationMarker.setAttribute('stroke', 'white');
+            locationMarker.setAttribute('stroke-width', '2');
+            svgElement.appendChild(locationMarker);
+            
+            // Update marker position using simple coordinate mapping
+            updateLocationMarkerFallback();
+        }
+        
+        function updateLocationMarkerFallback() {
+            if (locationMarker) {
+                // Simple longitude/latitude to x/y mapping for fallback
+                const x = ((currentLon + 180) / 360) * 400;
+                const y = ((90 - currentLat) / 180) * 200;
+                locationMarker.setAttribute('cx', x);
+                locationMarker.setAttribute('cy', y);
+                locationMarker.style.display = 'block';
+            }
+        }
+        
+        function updateLocationMarker() {
+            if (typeof d3 !== 'undefined' && mapProjection && locationMarker) {
+                const [x, y] = mapProjection([currentLon, currentLat]);
+                locationMarker
+                    .attr("cx", x)
+                    .attr("cy", y)
+                    .style("display", "block");
+            } else {
+                // Fallback to simple coordinate mapping
+                updateLocationMarkerFallback();
+            }
+        }
 
         function getLocation() {
             if (navigator.geolocation) {
@@ -482,38 +563,15 @@
 
             // Update location display
             document.getElementById('locationDisplay').textContent = `📍 ${currentLocation}`;
-            
-            // Update world map marker
-            const marker = document.getElementById('locationMarker');
-            const mapX = ((currentLon + 180) / 360) * 360;
-            const mapY = ((90 - currentLat) / 180) * 180;
-            marker.setAttribute('cx', mapX);
-            marker.setAttribute('cy', mapY);
-            marker.style.display = 'block';
 
             // Update main content
             document.getElementById('daylightDuration').textContent = formatDuration(todayDaylight);
             
-            // Update ratios
-            const daylightPercentage = (todayDaylight / 24 * 100).toFixed(1);
-            const nightPercentage = (100 - daylightPercentage).toFixed(1);
+            // Update ratios (rounded to integers)
+            const daylightPercentage = Math.round(todayDaylight / 24 * 100);
+            const nightPercentage = 100 - daylightPercentage;
             document.getElementById('daylightRatio').textContent = `${daylightPercentage}%`;
             document.getElementById('nightRatio').textContent = `${nightPercentage}%`;
-
-            // Update sun position in daylight bar
-            const now = new Date();
-            const currentHour = now.getHours() + now.getMinutes() / 60;
-            let sunPosition = 0;
-            
-            if (currentHour >= todaySun.sunrise && currentHour <= todaySun.sunset) {
-                sunPosition = ((currentHour - todaySun.sunrise) / todayDaylight) * 100;
-            } else if (currentHour < todaySun.sunrise) {
-                sunPosition = 0;
-            } else {
-                sunPosition = 100;
-            }
-            
-            document.getElementById('sunPosition').style.left = `calc(${sunPosition}% - 20px)`;
 
             // Update times
             document.getElementById('sunriseTime').textContent = formatTime(todaySun.sunrise);
@@ -542,7 +600,7 @@
             
             const totalDays = (nextSolstice.date - prevSolstice) / (1000 * 60 * 60 * 24);
             const daysPassed = (today - prevSolstice) / (1000 * 60 * 60 * 24);
-            const progressPercentage = Math.max(0, Math.min(100, (daysPassed / totalDays * 100))).toFixed(1);
+            const progressPercentage = Math.round(Math.max(0, Math.min(100, (daysPassed / totalDays * 100))));
             
             document.getElementById('solsticeInfo').textContent = `Next: ${nextSolstice.type} (${nextSolstice.date.toLocaleDateString()})`;
             document.getElementById('solsticeProgress').style.width = `${progressPercentage}%`;
