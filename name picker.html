@@ -260,6 +260,7 @@
             justify-content: center;
             margin-bottom: 30px;
             width: 100%;
+            position: relative;
         }
 
         .winner-name {
@@ -270,6 +271,8 @@
             transform: scale(0.5);
             transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
             text-shadow: 2px 2px 10px rgba(0,0,0,0.1);
+            position: relative;
+            z-index: 20;
         }
 
         .winner-name.show {
@@ -445,17 +448,29 @@
             margin-top: 10px;
         }
 
-        .animation-names {
+        .animation-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 5;
+            overflow: visible;
+        }
+
+        .animation-name {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
             font-size: 4em;
             font-weight: bold;
-            color: #ff6b6b;
-            opacity: 0.7;
+            opacity: 0;
             pointer-events: none;
-            z-index: 10;
+            z-index: 5;
+            white-space: nowrap;
+            text-shadow: 2px 2px 10px rgba(0,0,0,0.3);
         }
 
         .confirm-delete {
@@ -537,8 +552,8 @@
                 <div class="picker-section">
                     <div class="winner-display">
                         <div class="winner-name" id="winner-name">Ready to Pick!</div>
+                        <div class="animation-container" id="animation-container"></div>
                     </div>
-                    <div class="animation-names" id="animation-names"></div>
                     
                     <div class="picker-controls">
                         <div class="picker-settings">
@@ -605,14 +620,17 @@
         function saveToStorage() {
             try {
                 const data = {
-                    ...currentState,
+                    activeListId: currentState.activeListId,
+                    lists: currentState.lists,
                     pickedNames: Array.from(currentState.pickedNames),
+                    currentPanel: currentState.currentPanel,
                     settings: {
                         timer: document.getElementById('timer-select').value,
                         mode: document.querySelector('input[name="pick-mode"]:checked').value
                     }
                 };
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                console.log('State saved:', data);
             } catch (e) {
                 console.error('Failed to save to storage:', e);
             }
@@ -623,9 +641,12 @@
                 const data = localStorage.getItem(STORAGE_KEY);
                 if (data) {
                     const parsed = JSON.parse(data);
+                    console.log('Loading state:', parsed);
+                    
                     currentState.activeListId = parsed.activeListId;
                     currentState.lists = parsed.lists || {};
                     currentState.pickedNames = new Set(parsed.pickedNames || []);
+                    currentState.currentPanel = parsed.currentPanel || 'classroom';
                     
                     if (parsed.settings) {
                         document.getElementById('timer-select').value = parsed.settings.timer || '3';
@@ -638,6 +659,13 @@
             }
         }
 
+        // Centralized render function to ensure all views are synchronized
+        function renderAllViews() {
+            renderSavedLists();
+            renderCurrentList();
+            renderClassroomView();
+        }
+
         // Panel switching
         function switchPanel(panel) {
             currentState.currentPanel = panel;
@@ -648,13 +676,8 @@
             document.getElementById('management-panel').classList.toggle('active', panel === 'management');
             document.getElementById('classroom-panel').classList.toggle('active', panel === 'classroom');
             
-            if (panel === 'management') {
-                renderSavedLists();
-                renderCurrentList();
-            } else {
-                renderClassroomView();
-            }
-            
+            // Always ensure views are updated when switching panels
+            renderAllViews();
             saveToStorage();
         }
 
@@ -677,25 +700,44 @@
             
             currentState.lists[name] = [];
             currentState.activeListId = name;
+            currentState.pickedNames.clear(); // Clear picked names when switching lists
             nameInput.value = '';
             
-            renderSavedLists();
-            renderCurrentList();
+            renderAllViews();
             saveToStorage();
         }
 
         function selectList(listId) {
+            console.log('Selecting list:', listId);
             currentState.activeListId = listId;
-            currentState.pickedNames.clear();
-            renderSavedLists();
-            renderCurrentList();
+            currentState.pickedNames.clear(); // Always clear picked names when switching lists
+            
+            // Reset winner display
+            const winnerNameEl = document.getElementById('winner-name');
+            winnerNameEl.textContent = 'Ready to Pick!';
+            winnerNameEl.classList.remove('show', 'animate');
+            winnerNameEl.style.color = '#4a90e2';
+            
+            renderAllViews();
             saveToStorage();
         }
 
         function renameList(oldName, newName) {
-            if (!newName || newName === oldName) return;
+            if (!newName || newName === oldName) {
+                // If rename is cancelled, refresh the view to restore the original name
+                renderSavedLists();
+                return;
+            }
+            
+            newName = newName.trim();
+            if (!newName) {
+                renderSavedLists();
+                return;
+            }
+            
             if (currentState.lists[newName]) {
                 alert('List name already exists');
+                renderSavedLists();
                 return;
             }
             
@@ -706,19 +748,24 @@
                 currentState.activeListId = newName;
             }
             
-            renderSavedLists();
-            renderCurrentList();
+            renderAllViews();
             saveToStorage();
         }
 
         function deleteList(listId) {
+            // Remove any existing confirm dialogs
+            const existingConfirm = document.querySelector('.confirm-delete');
+            if (existingConfirm) {
+                existingConfirm.remove();
+            }
+            
             const listItem = document.querySelector(`[data-list-id="${listId}"]`);
             const confirmDiv = document.createElement('div');
             confirmDiv.className = 'confirm-delete';
             confirmDiv.innerHTML = `
                 <p>Delete "${listId}"?</p>
-                <button onclick="confirmDeleteList('${listId}')">Yes</button>
-                <button onclick="cancelDelete('${listId}')">No</button>
+                <button class="btn-danger" onclick="confirmDeleteList('${listId}')">Yes</button>
+                <button class="btn-primary" onclick="cancelDelete('${listId}')">No</button>
             `;
             listItem.appendChild(confirmDiv);
         }
@@ -729,8 +776,7 @@
                 currentState.activeListId = null;
                 currentState.pickedNames.clear();
             }
-            renderSavedLists();
-            renderCurrentList();
+            renderAllViews();
             saveToStorage();
         }
 
@@ -741,28 +787,32 @@
 
         // Name management
         function addNamesFromPaste() {
-            if (!currentState.activeListId) return;
+            if (!currentState.activeListId) {
+                alert('Please select a list first');
+                return;
+            }
             
             const pasteText = document.getElementById('paste-area').value;
-            const names = pasteText.split(/\s+/).filter(name => name.trim());
+            const names = pasteText.split(/[\s,\n\r\t]+/).filter(name => name.trim());
             
             if (names.length === 0) return;
             
             const currentList = currentState.lists[currentState.activeListId];
+            let addedCount = 0;
+            
             names.forEach(name => {
-                if (!currentList.includes(name)) {
-                    currentList.push(name);
+                const trimmedName = name.trim();
+                if (trimmedName && !currentList.includes(trimmedName)) {
+                    currentList.push(trimmedName);
+                    addedCount++;
                 }
             });
             
-            // Check minimum names requirement
-            if (currentList.length < 2) {
-                alert('Each list must contain at least 2 names');
-                return;
+            if (addedCount > 0) {
+                renderAllViews();
+                saveToStorage();
+                console.log(`Added ${addedCount} names to list ${currentState.activeListId}`);
             }
-            
-            renderCurrentList();
-            saveToStorage();
         }
 
         function clearPasteArea() {
@@ -798,16 +848,19 @@
                 }
             });
             
-            renderCurrentList();
+            renderAllViews();
             saveToStorage();
         }
 
-        // Random name picking
+        // Random name picking with burst animation
         function pickRandomName() {
             if (!currentState.activeListId || currentState.isAnimating) return;
             
             const currentList = currentState.lists[currentState.activeListId];
-            if (!currentList || currentList.length === 0) return;
+            if (!currentList || currentList.length === 0) {
+                alert('No names in the current list');
+                return;
+            }
             
             const mode = document.querySelector('input[name="pick-mode"]:checked').value;
             let availableNames = currentList.slice();
@@ -823,86 +876,143 @@
             currentState.isAnimating = true;
             const chooseButton = document.getElementById('choose-button');
             const winnerNameEl = document.getElementById('winner-name');
-            const animationEl = document.getElementById('animation-names');
+            const animationContainer = document.getElementById('animation-container');
             
             chooseButton.disabled = true;
             winnerNameEl.classList.remove('show', 'animate');
             
-            // Animation phase
+            // Clear any existing animations
+            animationContainer.innerHTML = '';
+            
             const animationDuration = parseInt(document.getElementById('timer-select').value) * 1000;
-            const animationSpeed = Math.random() > 0.5 ? 100 : 200; // Fast or slow
-            let animationCount = 0;
-            const maxAnimations = Math.floor(animationDuration / animationSpeed);
+            const burstCount = Math.max(2, Math.floor(animationDuration / 600)); // Fewer, more spaced bursts
+            const burstIntervals = [];
             
-            const animationInterval = setInterval(() => {
-                if (animationCount >= maxAnimations) {
-                    clearInterval(animationInterval);
-                    finalizePick();
-                    return;
-                }
-                
-                const randomName = availableNames[Math.floor(Math.random() * availableNames.length)];
-                animationEl.textContent = randomName;
-                animationEl.style.opacity = '1';
-                
-                setTimeout(() => {
-                    animationEl.style.opacity = '0';
-                }, animationSpeed / 2);
-                
-                animationCount++;
-            }, animationSpeed);
+            // Create burst schedule with more spacing
+            for (let i = 0; i < burstCount; i++) {
+                const burstTime = (i / burstCount) * (animationDuration * 0.7) + Math.random() * 300; // More evenly distributed
+                const burstSize = Math.floor(Math.random() * 3) + 2; // 2-4 names per burst
+                burstIntervals.push({ time: burstTime, size: burstSize });
+            }
             
-            function finalizePick() {
-                const finalName = availableNames[Math.floor(Math.random() * availableNames.length)];
+            // Sort bursts by time
+            burstIntervals.sort((a, b) => a.time - b.time);
+            
+            let burstIndex = 0;
+            const startTime = Date.now();
+            
+            // Animation loop for bursts
+            const animationTimer = setInterval(() => {
+                const elapsed = Date.now() - startTime;
                 
-                // Show winner with animations
-                winnerNameEl.textContent = finalName;
-                winnerNameEl.style.color = getRandomColor();
-                winnerNameEl.classList.add('show');
+                // Check if it's time for next burst
+                if (burstIndex < burstIntervals.length && 
+                    elapsed >= burstIntervals[burstIndex].time) {
+                    
+                    createBurst(availableNames, burstIntervals[burstIndex].size, animationContainer);
+                    burstIndex++;
+                }
                 
+                // End animation
+                if (elapsed >= animationDuration) {
+                    clearInterval(animationTimer);
+                    
+                    // Wait a moment for animations to clear, then show final result
+                    setTimeout(() => {
+                        animationContainer.innerHTML = '';
+                        finalizePick(availableNames, winnerNameEl, chooseButton, mode);
+                    }, 200);
+                }
+            }, 50);
+        }
+        
+        function createBurst(availableNames, burstSize, container) {
+            for (let i = 0; i < burstSize; i++) {
                 setTimeout(() => {
-                    winnerNameEl.classList.add('animate');
-                }, 100);
-                
-                // Handle picked name based on mode
-                if (mode === 'remove') {
-                    currentState.pickedNames.add(finalName);
-                    renderClassroomView();
-                }
-                
-                currentState.isAnimating = false;
-                chooseButton.disabled = false;
-                
-                // Update button text if all names picked
-                if (mode === 'remove') {
-                    const remaining = currentList.filter(name => !currentState.pickedNames.has(name));
-                    if (remaining.length === 0) {
-                        chooseButton.textContent = '🔄 Restore All';
-                    }
-                }
-                
-                saveToStorage();
+                    createAnimatedName(availableNames, container);
+                }, Math.random() * 300); // Longer stagger within 300ms
             }
         }
-
-        function getRandomColor() {
-            const colors = ['#4a90e2', '#51cf66', '#ff6b6b', '#ffa500', '#9c27b0', '#f44336', '#2196f3'];
-            return colors[Math.floor(Math.random() * colors.length)];
+        
+        function createAnimatedName(availableNames, container) {
+            const nameElement = document.createElement('div');
+            nameElement.className = 'animation-name';
+            nameElement.textContent = availableNames[Math.floor(Math.random() * availableNames.length)];
+            nameElement.style.color = getRandomSaturatedColor();
+            
+            // Center exactly at the same position as winner display (no random offset)
+            nameElement.style.transform = `translate(-50%, -50%) scale(0.1)`;
+            
+            container.appendChild(nameElement);
+            
+            // Animation phases - longer duration for full expansion
+            const totalDuration = 1200 + Math.random() * 600; // 1200-1800ms for fuller expansion
+            const growPhase = totalDuration * 0.4; // 40% growing to normal size
+            const expandPhase = totalDuration * 0.6; // 60% expanding to full 5x and fading
+            
+            // Phase 1: Grow and fade in (scale 0.1 → 1, opacity 0 → 1)
+            requestAnimationFrame(() => {
+                nameElement.style.transition = `all ${growPhase}ms cubic-bezier(0.25, 0.46, 0.45, 0.94)`;
+                nameElement.style.opacity = '1';
+                nameElement.style.transform = `translate(-50%, -50%) scale(1)`;
+                
+                // Phase 2: Continue growing to full size and fade out (scale 1 → 5, opacity 1 → 0)
+                setTimeout(() => {
+                    nameElement.style.transition = `all ${expandPhase}ms cubic-bezier(0.25, 0.46, 0.45, 0.94)`;
+                    nameElement.style.opacity = '0';
+                    nameElement.style.transform = `translate(-50%, -50%) scale(5)`;
+                    
+                    // Remove element after animation
+                    setTimeout(() => {
+                        if (nameElement.parentNode) {
+                            nameElement.parentNode.removeChild(nameElement);
+                        }
+                    }, expandPhase + 100);
+                }, growPhase);
+            });
+        }
+        
+        function finalizePick(availableNames, winnerNameEl, chooseButton, mode) {
+            const finalName = availableNames[Math.floor(Math.random() * availableNames.length)];
+            
+            // Show winner with animations
+            winnerNameEl.textContent = finalName;
+            winnerNameEl.style.color = getRandomSaturatedColor();
+            winnerNameEl.classList.add('show');
+            
+            setTimeout(() => {
+                winnerNameEl.classList.add('animate');
+            }, 100);
+            
+            // Handle picked name based on mode
+            if (mode === 'remove') {
+                currentState.pickedNames.add(finalName);
+            }
+            
+            currentState.isAnimating = false;
+            chooseButton.disabled = false;
+            
+            // Update all views to reflect the new state
+            renderClassroomView();
+            saveToStorage();
+        }
+        
+        function getRandomSaturatedColor() {
+            const hue = Math.floor(Math.random() * 360);
+            const saturation = 70 + Math.random() * 30; // 70-100%
+            const lightness = 45 + Math.random() * 20; // 45-65%
+            return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
         }
 
         function resetAllNames() {
             if (!currentState.activeListId) return;
             
             currentState.pickedNames.clear();
-            const chooseButton = document.getElementById('choose-button');
-            const resetSingleButton = document.getElementById('reset-single-button');
             
-            chooseButton.textContent = '🎲 Choose Name';
-            chooseButton.onclick = pickRandomName;
-            resetSingleButton.style.display = 'none';
-            
-            document.getElementById('winner-name').textContent = 'Ready to Pick!';
-            document.getElementById('winner-name').classList.remove('show', 'animate');
+            const winnerNameEl = document.getElementById('winner-name');
+            winnerNameEl.textContent = 'Ready to Pick!';
+            winnerNameEl.classList.remove('show', 'animate');
+            winnerNameEl.style.color = '#4a90e2';
             
             renderClassroomView();
             saveToStorage();
@@ -920,14 +1030,32 @@
                 listDiv.className = `list-item ${currentState.activeListId === listName ? 'active' : ''}`;
                 listDiv.dataset.listId = listName;
                 
-                listDiv.innerHTML = `
-                    <input type="text" value="${listName}" onblur="renameList('${listName}', this.value)" onkeypress="if(event.key==='Enter') this.blur()">
-                    <div class="list-actions">
-                        <button class="btn-primary" onclick="selectList('${listName}')">Select</button>
-                        <button class="btn-danger" onclick="deleteList('${listName}')">Delete</button>
-                    </div>
-                `;
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.value = listName;
+                nameInput.onblur = () => renameList(listName, nameInput.value);
+                nameInput.onkeypress = (e) => {
+                    if (e.key === 'Enter') nameInput.blur();
+                };
                 
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'list-actions';
+                
+                const selectBtn = document.createElement('button');
+                selectBtn.className = 'btn-primary';
+                selectBtn.textContent = 'Select';
+                selectBtn.onclick = () => selectList(listName);
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'btn-danger';
+                deleteBtn.textContent = 'Delete';
+                deleteBtn.onclick = () => deleteList(listName);
+                
+                actionsDiv.appendChild(selectBtn);
+                actionsDiv.appendChild(deleteBtn);
+                
+                listDiv.appendChild(nameInput);
+                listDiv.appendChild(actionsDiv);
                 container.appendChild(listDiv);
             });
             
@@ -938,7 +1066,7 @@
             const titleEl = document.getElementById('current-list-title');
             const listEl = document.getElementById('names-list');
             
-            if (!currentState.activeListId) {
+            if (!currentState.activeListId || !currentState.lists[currentState.activeListId]) {
                 titleEl.textContent = 'None';
                 listEl.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">No list selected</p>';
                 return;
@@ -972,7 +1100,7 @@
             const resetSingleButton = document.getElementById('reset-single-button');
             const mode = document.querySelector('input[name="pick-mode"]:checked').value;
             
-            if (!currentState.activeListId) {
+            if (!currentState.activeListId || !currentState.lists[currentState.activeListId]) {
                 sidebarTitle.textContent = 'No List Selected';
                 namesCount.textContent = '0 remaining';
                 namesList.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">Select a list in management panel</p>';
@@ -1001,24 +1129,18 @@
             namesCount.textContent = `${activeNames.length} remaining`;
             
             // Handle button display logic
-            if (mode === 'remove' && activeNames.length === 1) {
-                // Special case: only 1 name left in remove mode
-                chooseButton.style.display = 'inline-block';
-                resetSingleButton.style.display = 'inline-block';
-                resetButton.style.display = 'none';
-            } else if (mode === 'remove' && activeNames.length === 0) {
+            chooseButton.style.display = 'inline-block';
+            resetSingleButton.style.display = 'none';
+            
+            if (mode === 'remove' && activeNames.length === 0) {
                 // All names picked
                 chooseButton.textContent = '🔄 Restore All';
                 chooseButton.onclick = resetAllNames;
-                chooseButton.style.display = 'inline-block';
-                resetSingleButton.style.display = 'none';
                 resetButton.style.display = 'none';
             } else {
                 // Normal operation
                 chooseButton.textContent = '🎲 Choose Name';
                 chooseButton.onclick = pickRandomName;
-                chooseButton.style.display = 'inline-block';
-                resetSingleButton.style.display = 'none';
                 resetButton.style.display = (mode === 'remove' && pickedNames.length > 0) ? 'block' : 'none';
             }
             
@@ -1059,7 +1181,9 @@
                     case ' ':
                     case 'Enter':
                         e.preventDefault();
-                        pickRandomName();
+                        if (!currentState.isAnimating) {
+                            pickRandomName();
+                        }
                         break;
                     case 'r':
                     case 'R':
@@ -1094,15 +1218,17 @@
             setupModeChangeHandler();
             setupTimerChangeHandler();
             
-            // Render initial view
+            // Render initial view based on loaded state
             if (currentState.currentPanel === 'management') {
                 switchPanel('management');
             } else {
-                renderClassroomView();
+                switchPanel('classroom');
             }
             
             // Auto-save every 30 seconds
             setInterval(saveToStorage, 30000);
+            
+            console.log('App initialized with state:', currentState);
         }
 
         // Start the app when page loads
