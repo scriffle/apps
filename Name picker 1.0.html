@@ -425,6 +425,30 @@
             font-style: italic;
         }
 
+        .classroom-name-item.low-probability {
+            opacity: 0.5;
+        }
+
+        .classroom-name-item.medium-probability {
+            opacity: 0.75;
+        }
+
+        .classroom-name-item.streak-penalty {
+            background: #ffebee;
+        }
+
+        .classroom-name-item.boost-active {
+            background: #e8f5e8;
+            font-weight: 600;
+        }
+
+        .probability-indicator {
+            float: right;
+            font-size: 11px;
+            color: #999;
+            font-weight: normal;
+        }
+
         .reset-button {
             margin-top: 15px;
             padding: 8px 16px;
@@ -439,6 +463,20 @@
 
         .reset-button:hover {
             background: #f57c00;
+        }
+
+        .mode-info {
+            margin-top: 10px;
+            padding: 10px 15px;
+            background: rgba(74, 144, 226, 0.1);
+            border-radius: 10px;
+            font-size: 12px;
+            color: #4a90e2;
+            display: none;
+        }
+
+        .mode-info.show {
+            display: block;
         }
 
         .storage-info {
@@ -574,6 +612,10 @@
                                     Return Name
                                 </label>
                                 <label>
+                                    <input type="radio" name="pick-mode" value="probabilistic">
+                                    Smart Return
+                                </label>
+                                <label>
                                     <input type="radio" name="pick-mode" value="remove">
                                     Remove Name
                                 </label>
@@ -586,6 +628,10 @@
                         <button class="choose-button" id="reset-single-button" onclick="resetAllNames()" style="display: none; background: linear-gradient(45deg, #ff9800, #f57c00);">
                             🔄 Reset All
                         </button>
+                        
+                        <div class="mode-info" id="mode-info">
+                            <strong>Smart Return Mode:</strong> Students who were recently picked have lower chances of being selected again. Probability gradually increases over time, ensuring fair distribution while maintaining randomness.
+                        </div>
                     </div>
                 </div>
 
@@ -610,7 +656,9 @@
             lists: {},
             pickedNames: new Set(),
             isAnimating: false,
-            currentPanel: 'classroom'
+            currentPanel: 'classroom',
+            selectionHistory: {}, // Track when each name was last picked
+            totalPicks: 0 // Track total number of picks for round calculation
         };
 
         // Storage management
@@ -624,6 +672,8 @@
                     lists: currentState.lists,
                     pickedNames: Array.from(currentState.pickedNames),
                     currentPanel: currentState.currentPanel,
+                    selectionHistory: currentState.selectionHistory,
+                    totalPicks: currentState.totalPicks,
                     settings: {
                         timer: document.getElementById('timer-select').value,
                         mode: document.querySelector('input[name="pick-mode"]:checked').value
@@ -647,6 +697,8 @@
                     currentState.lists = parsed.lists || {};
                     currentState.pickedNames = new Set(parsed.pickedNames || []);
                     currentState.currentPanel = parsed.currentPanel || 'classroom';
+                    currentState.selectionHistory = parsed.selectionHistory || {};
+                    currentState.totalPicks = parsed.totalPicks || 0;
                     
                     if (parsed.settings) {
                         document.getElementById('timer-select').value = parsed.settings.timer || '3';
@@ -711,6 +763,8 @@
             console.log('Selecting list:', listId);
             currentState.activeListId = listId;
             currentState.pickedNames.clear(); // Always clear picked names when switching lists
+            currentState.selectionHistory = {}; // Clear selection history
+            currentState.totalPicks = 0; // Reset total picks
             
             // Reset winner display
             const winnerNameEl = document.getElementById('winner-name');
@@ -853,6 +907,110 @@
         }
 
         // Random name picking with burst animation
+        
+        // Probabilistic selection helper functions
+        function calculateNameWeight(name, currentList) {
+            const numStudents = currentList.length;
+            const roundProgress = currentState.totalPicks / numStudents;
+            
+            if (!currentState.selectionHistory[name]) {
+                // Never picked - check if boost should apply
+                if (roundProgress > 0.5) {
+                    return { weight: 2.0, boost: true, neverPicked: true };
+                }
+                return { weight: 1.0, neverPicked: true };
+            }
+            
+            const history = currentState.selectionHistory[name];
+            const lastPickedRound = history.lastPick / numStudents;
+            const roundsSincePicked = roundProgress - lastPickedRound;
+            
+            // Base weight calculation
+            let weight = Math.min(1.0, Math.pow(roundsSincePicked / 0.75, 0.7));
+            
+            // Ensure minimum weight
+            weight = Math.max(0.1, weight);
+            
+            // Check for streaks
+            let streakPenalty = false;
+            if (history.recentPicks) {
+                const recentCount = history.recentPicks.filter(pick => 
+                    (currentState.totalPicks - pick) / numStudents < 0.5
+                ).length;
+                
+                if (recentCount >= 2) {
+                    weight *= 0.3;
+                    streakPenalty = true;
+                }
+                
+                const roundCount = history.recentPicks.filter(pick => 
+                    (currentState.totalPicks - pick) / numStudents < 1.0
+                ).length;
+                
+                if (roundCount >= 3) {
+                    weight *= 0.1;
+                    streakPenalty = true;
+                }
+            }
+            
+            // Boost for long-unpicked
+            let boost = false;
+            if (roundsSincePicked > 1.5) {
+                weight *= 1.5;
+                boost = true;
+            }
+            
+            return { weight, streakPenalty, boost, roundsSincePicked };
+        }
+        
+        function selectWeightedRandom(availableNames, currentList) {
+            const weights = [];
+            let totalWeight = 0;
+            
+            // Calculate weights for all names
+            availableNames.forEach(name => {
+                const { weight } = calculateNameWeight(name, currentList);
+                weights.push({ name, weight });
+                totalWeight += weight;
+            });
+            
+            // Select based on weights
+            let random = Math.random() * totalWeight;
+            for (const item of weights) {
+                random -= item.weight;
+                if (random <= 0) {
+                    return item.name;
+                }
+            }
+            
+            // Fallback (shouldn't happen)
+            return availableNames[0];
+        }
+        
+        function updateSelectionHistory(name) {
+            if (!currentState.selectionHistory[name]) {
+                currentState.selectionHistory[name] = {
+                    lastPick: currentState.totalPicks,
+                    recentPicks: []
+                };
+            }
+            
+            const history = currentState.selectionHistory[name];
+            history.lastPick = currentState.totalPicks;
+            
+            // Keep track of recent picks for streak detection
+            if (!history.recentPicks) {
+                history.recentPicks = [];
+            }
+            history.recentPicks.push(currentState.totalPicks);
+            
+            // Keep only relevant recent picks (within 1.5 rounds)
+            const numStudents = currentState.lists[currentState.activeListId].length;
+            history.recentPicks = history.recentPicks.filter(pick => 
+                (currentState.totalPicks - pick) / numStudents < 1.5
+            );
+        }
+        
         function pickRandomName() {
             if (!currentState.activeListId || currentState.isAnimating) return;
             
@@ -973,7 +1131,18 @@
         }
         
         function finalizePick(availableNames, winnerNameEl, chooseButton, mode) {
-            const finalName = availableNames[Math.floor(Math.random() * availableNames.length)];
+            let finalName;
+            
+            if (mode === 'probabilistic') {
+                // Use weighted selection
+                finalName = selectWeightedRandom(availableNames, currentState.lists[currentState.activeListId]);
+                // Update selection history
+                updateSelectionHistory(finalName);
+                currentState.totalPicks++;
+            } else {
+                // Original random selection
+                finalName = availableNames[Math.floor(Math.random() * availableNames.length)];
+            }
             
             // Show winner with animations
             winnerNameEl.textContent = finalName;
@@ -1008,6 +1177,8 @@
             if (!currentState.activeListId) return;
             
             currentState.pickedNames.clear();
+            currentState.selectionHistory = {};
+            currentState.totalPicks = 0;
             
             const winnerNameEl = document.getElementById('winner-name');
             winnerNameEl.textContent = 'Ready to Pick!';
@@ -1126,7 +1297,11 @@
             });
             
             // Update count
-            namesCount.textContent = `${activeNames.length} remaining`;
+            if (mode === 'remove') {
+                namesCount.textContent = `${activeNames.length} remaining`;
+            } else {
+                namesCount.textContent = `${names.length} names`;
+            }
             
             // Handle button display logic
             chooseButton.style.display = 'inline-block';
@@ -1144,25 +1319,61 @@
                 resetButton.style.display = (mode === 'remove' && pickedNames.length > 0) ? 'block' : 'none';
             }
             
+            // Show reset button for probabilistic mode if there's history
+            if (mode === 'probabilistic' && currentState.totalPicks > 0) {
+                resetButton.style.display = 'block';
+            }
+            
             // Render names list
             namesList.innerHTML = '';
             
-            // Show active names first
-            activeNames.forEach(name => {
-                const nameDiv = document.createElement('div');
-                nameDiv.className = 'classroom-name-item active';
-                nameDiv.textContent = name;
-                namesList.appendChild(nameDiv);
-            });
-            
-            // Show picked names at bottom (only in remove mode)
-            if (mode === 'remove' && pickedNames.length > 0) {
-                pickedNames.forEach(name => {
+            if (mode === 'probabilistic') {
+                // Show all names with probability indicators
+                names.forEach(name => {
                     const nameDiv = document.createElement('div');
-                    nameDiv.className = 'classroom-name-item picked';
+                    nameDiv.className = 'classroom-name-item active';
+                    
+                    const { weight, streakPenalty, boost, neverPicked } = calculateNameWeight(name, names);
+                    const percentage = Math.round(weight * 100);
+                    
+                    // Apply visual classes based on probability
+                    if (percentage < 40) {
+                        nameDiv.classList.add('low-probability');
+                    } else if (percentage < 80) {
+                        nameDiv.classList.add('medium-probability');
+                    }
+                    
+                    if (streakPenalty) {
+                        nameDiv.classList.add('streak-penalty');
+                    }
+                    
+                    if (boost) {
+                        nameDiv.classList.add('boost-active');
+                    }
+                    
+                    // Create content
+                    nameDiv.innerHTML = `${name} <span class="probability-indicator">${percentage}%</span>`;
+                    namesList.appendChild(nameDiv);
+                });
+            } else {
+                // Original rendering for other modes
+                // Show active names first
+                activeNames.forEach(name => {
+                    const nameDiv = document.createElement('div');
+                    nameDiv.className = 'classroom-name-item active';
                     nameDiv.textContent = name;
                     namesList.appendChild(nameDiv);
                 });
+                
+                // Show picked names at bottom (only in remove mode)
+                if (mode === 'remove' && pickedNames.length > 0) {
+                    pickedNames.forEach(name => {
+                        const nameDiv = document.createElement('div');
+                        nameDiv.className = 'classroom-name-item picked';
+                        nameDiv.textContent = name;
+                        namesList.appendChild(nameDiv);
+                    });
+                }
             }
             
             if (names.length === 0) {
@@ -1200,6 +1411,12 @@
             const modeRadios = document.querySelectorAll('input[name="pick-mode"]');
             modeRadios.forEach(radio => {
                 radio.addEventListener('change', () => {
+                    const modeInfo = document.getElementById('mode-info');
+                    if (radio.value === 'probabilistic' && radio.checked) {
+                        modeInfo.classList.add('show');
+                    } else {
+                        modeInfo.classList.remove('show');
+                    }
                     renderClassroomView();
                     saveToStorage();
                 });
@@ -1217,6 +1434,12 @@
             setupKeyboardShortcuts();
             setupModeChangeHandler();
             setupTimerChangeHandler();
+            
+            // Show mode info if probabilistic mode is active
+            const currentMode = document.querySelector('input[name="pick-mode"]:checked').value;
+            if (currentMode === 'probabilistic') {
+                document.getElementById('mode-info').classList.add('show');
+            }
             
             // Render initial view based on loaded state
             if (currentState.currentPanel === 'management') {
