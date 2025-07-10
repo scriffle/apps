@@ -67,9 +67,6 @@
         }
 
         .help-btn {
-            position: absolute;
-            top: 20px;
-            right: 20px;
             background: rgba(255, 255, 255, 0.2);
             border: 2px solid white;
             color: white;
@@ -79,6 +76,7 @@
             font-size: 1.5em;
             cursor: pointer;
             transition: all 0.3s ease;
+            margin-left: 10px;
         }
 
         .help-btn:hover {
@@ -252,7 +250,8 @@
         }
 
         .proverb-option.previously-selected {
-            box-shadow: 0 0 0 3px #3b82f6;
+            border: 3px solid #3b82f6;
+            background: rgba(59, 130, 246, 0.05);
         }
 
         .proverb-option input {
@@ -524,11 +523,11 @@
 <body>
     <div class="container">
         <div class="header">
-            <button class="help-btn" onclick="showHelp()">?</button>
             <h1 id="quizTitle">Glass Half Full or Half Empty</h1>
             <div class="user-info">
                 <label style="color: white; margin-right: 10px;">Your Name (optional):</label>
                 <input type="text" id="userName" placeholder="Enter your name" onchange="saveUserName()">
+                <button class="help-btn" onclick="showHelp()">?</button>
             </div>
         </div>
 
@@ -541,16 +540,18 @@
                 <div class="nav-left">
                     <button class="btn btn-secondary" onclick="previousQuestion()" id="prevBtn">Previous</button>
                     <button class="btn btn-primary" onclick="nextQuestion()" id="nextBtn" disabled>Next</button>
-                    <button class="btn btn-outline" onclick="showAllAnswers()" id="seeAllBtn" style="display: none;">See All Answers</button>
                 </div>
                 <div class="nav-right">
-                    <button class="btn btn-outline" onclick="showResults()" id="seeResultsBtn" disabled>See Results</button>
+                    <button class="btn btn-outline" onclick="showAllAnswers()" id="seeAllBtn" style="display: none;">See All Answers</button>
                 </div>
             </div>
-            <div class="auto-advance-container">
-                <label class="auto-advance-label">
-                    <input type="checkbox" id="autoAdvanceCheckbox" checked onchange="toggleAutoAdvance()">
-                    Auto-advance to next question after selection
+            <div style="text-align: center; margin-top: 15px;">
+                <button class="btn btn-outline" onclick="showResults()" id="seeResultsBtn" disabled>See Results</button>
+            </div>
+            <div style="text-align: center; margin-top: 15px;">
+                <label style="cursor: pointer; color: #6c757d; font-size: 0.9em;">
+                    <input type="checkbox" id="autoAdvanceCheckbox" onchange="toggleAutoAdvance()" style="margin-right: 5px;">
+                    Auto-advance to next question
                 </label>
             </div>
         </div>
@@ -826,7 +827,7 @@
             }
         ];
 
-        // Quiz state - using in-memory storage
+        // Quiz state - using localStorage
         let gameState = {
             selectedPairs: [],
             currentQuestion: 0,
@@ -838,9 +839,36 @@
                 totalOptimistic: 0,
                 totalPessimistic: 0
             },
-            autoAdvanceTimeout: null,
-            autoAdvanceEnabled: true
+            autoAdvanceEnabled: true,
+            autoAdvanceTimeout: null
         };
+
+        // Load state from localStorage
+        function loadState() {
+            const savedState = localStorage.getItem('optimistPessimistQuizState');
+            if (savedState) {
+                const parsed = JSON.parse(savedState);
+                gameState.allAnswers = parsed.allAnswers || {};
+                gameState.userName = parsed.userName || '';
+                gameState.history = parsed.history || {
+                    totalQuizzes: 0,
+                    totalOptimistic: 0,
+                    totalPessimistic: 0
+                };
+                gameState.autoAdvanceEnabled = parsed.autoAdvanceEnabled !== false;
+            }
+        }
+
+        // Save state to localStorage
+        function saveState() {
+            const stateToSave = {
+                allAnswers: gameState.allAnswers,
+                userName: gameState.userName,
+                history: gameState.history,
+                autoAdvanceEnabled: gameState.autoAdvanceEnabled
+            };
+            localStorage.setItem('optimistPessimistQuizState', JSON.stringify(stateToSave));
+        }
 
         // Tooltip handling
         let tooltipTimeout;
@@ -912,19 +940,20 @@
         // User name handling
         function saveUserName() {
             gameState.userName = document.getElementById('userName').value;
+            saveState();
         }
 
         // Initialize quiz
         function initializeQuiz() {
+            // Load saved state
+            loadState();
+            
             // Set random title
             const randomTitle = titleSynonyms[Math.floor(Math.random() * titleSynonyms.length)];
             document.getElementById('quizTitle').textContent = randomTitle;
             
             // Load user name
             document.getElementById('userName').value = gameState.userName || '';
-            
-            // Set auto-advance checkbox state
-            document.getElementById('autoAdvanceCheckbox').checked = gameState.autoAdvanceEnabled;
             
             // Create weighted selection favoring unanswered questions
             const answered = [];
@@ -991,7 +1020,7 @@
                                data-meaning="${isFirstOptimistic ? pair.optimistic.meaning : pair.pessimistic.meaning}">
                             <input type="radio" name="q${gameState.currentQuestion}" value="${isFirstOptimistic ? 'optimistic' : 'pessimistic'}" 
                                 ${gameState.userAnswers[gameState.currentQuestion] === (isFirstOptimistic ? 'optimistic' : 'pessimistic') ? 'checked' : ''}
-                                onchange="selectAnswer('${isFirstOptimistic ? 'optimistic' : 'pessimistic'}', ${pairIndex})">
+                                onchange="selectAnswer(this.value, ${pairIndex})">
                             <div class="proverb-text">${isFirstOptimistic ? pair.optimistic.text : pair.pessimistic.text}</div>
                             <span class="info-icon" onclick="showMeaning(event, '${(isFirstOptimistic ? pair.optimistic.meaning : pair.pessimistic.meaning).replace(/'/g, "\\'")}')">ℹ️</span>
                         </label>
@@ -999,7 +1028,7 @@
                                data-meaning="${!isFirstOptimistic ? pair.optimistic.meaning : pair.pessimistic.meaning}">
                             <input type="radio" name="q${gameState.currentQuestion}" value="${!isFirstOptimistic ? 'optimistic' : 'pessimistic'}"
                                 ${gameState.userAnswers[gameState.currentQuestion] === (!isFirstOptimistic ? 'optimistic' : 'pessimistic') ? 'checked' : ''}
-                                onchange="selectAnswer('${!isFirstOptimistic ? 'optimistic' : 'pessimistic'}', ${pairIndex})">
+                                onchange="selectAnswer(this.value, ${pairIndex})">
                             <div class="proverb-text">${!isFirstOptimistic ? pair.optimistic.text : pair.pessimistic.text}</div>
                             <span class="info-icon" onclick="showMeaning(event, '${(!isFirstOptimistic ? pair.optimistic.meaning : pair.pessimistic.meaning).replace(/'/g, "\\'")}')">ℹ️</span>
                         </label>
@@ -1014,6 +1043,9 @@
             // Check if user has answered at least half of ALL questions (20 out of 40)
             const totalAnswered = Object.keys(gameState.allAnswers).length;
             document.getElementById('seeAllBtn').style.display = totalAnswered >= 20 ? 'block' : 'none';
+            
+            // Update auto-advance checkbox state
+            document.getElementById('autoAdvanceCheckbox').checked = gameState.autoAdvanceEnabled;
             
             setupTooltips();
         }
@@ -1053,6 +1085,7 @@
         // Toggle auto-advance
         function toggleAutoAdvance() {
             gameState.autoAdvanceEnabled = document.getElementById('autoAdvanceCheckbox').checked;
+            saveState();
             
             // If turning off, cancel any pending auto-advance
             if (!gameState.autoAdvanceEnabled && gameState.autoAdvanceTimeout) {
@@ -1063,8 +1096,15 @@
 
         // Handle answer selection
         function selectAnswer(value, pairIndex) {
+            // Cancel any existing timeout
+            if (gameState.autoAdvanceTimeout) {
+                clearTimeout(gameState.autoAdvanceTimeout);
+                gameState.autoAdvanceTimeout = null;
+            }
+            
             gameState.userAnswers[gameState.currentQuestion] = value;
             gameState.allAnswers[pairIndex] = value;
+            saveState();
             updateNavigation();
             
             // Update visual selection
@@ -1077,16 +1117,22 @@
             // Update button visibility
             const answeredCount = gameState.userAnswers.filter(a => a !== null).length;
             document.getElementById('seeResultsBtn').disabled = answeredCount < 10;
-            document.getElementById('seeAllBtn').style.display = answeredCount >= 5 ? 'block' : 'none';
+            
+            // Check if user has answered at least half of ALL questions (20 out of 40)
+            const totalAnswered = Object.keys(gameState.allAnswers).length;
+            document.getElementById('seeAllBtn').style.display = totalAnswered >= 20 ? 'block' : 'none';
+            
+            // Auto-advance if enabled
+            if (gameState.autoAdvanceEnabled && gameState.currentQuestion < gameState.selectedPairs.length - 1) {
+                gameState.autoAdvanceTimeout = setTimeout(() => {
+                    nextQuestion();
+                }, 1000);
+            }
         }
 
         // Navigation functions
         function nextQuestion() {
-            // Clear any auto-advance timeout
-            if (gameState.autoAdvanceTimeout) {
-                clearTimeout(gameState.autoAdvanceTimeout);
-            }
-            
+            hideTooltip(); // Hide any open tooltips
             if (gameState.currentQuestion < gameState.selectedPairs.length - 1) {
                 gameState.currentQuestion++;
                 displayQuestion();
@@ -1098,11 +1144,7 @@
         }
 
         function previousQuestion() {
-            // Clear any auto-advance timeout
-            if (gameState.autoAdvanceTimeout) {
-                clearTimeout(gameState.autoAdvanceTimeout);
-            }
-            
+            hideTooltip(); // Hide any open tooltips
             if (gameState.currentQuestion > 0) {
                 gameState.currentQuestion--;
                 displayQuestion();
@@ -1196,6 +1238,7 @@
             gameState.history.totalQuizzes++;
             gameState.history.totalOptimistic += optimistCount;
             gameState.history.totalPessimistic += pessimistCount;
+            saveState();
             
             let title, description, icon;
             const userName = gameState.userName ? gameState.userName + ', you are' : 'You are';
@@ -1275,6 +1318,7 @@
                     totalPessimistic: 0
                 };
                 gameState.allAnswers = {};
+                saveState();
                 alert('History cleared.');
                 resetQuiz();
             }
