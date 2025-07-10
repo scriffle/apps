@@ -131,6 +131,78 @@
         .info-item {
             margin: 5px 0;
         }
+        .help-button {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .help-button:hover {
+            background-color: #0056b3;
+        }
+        .dialog-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+        .dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .dialog h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        .dialog h3 {
+            color: #555;
+            margin-top: 20px;
+        }
+        .dialog p {
+            line-height: 1.6;
+            color: #666;
+        }
+        .dialog ul {
+            line-height: 1.8;
+            color: #666;
+        }
+        .close-button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        .close-button:hover {
+            background-color: #0056b3;
+        }
         .thermometer-container {
             position: absolute;
             top: 10px;
@@ -151,6 +223,19 @@
             height: 0%;
             transition: height 0.3s;
         }
+        .thermometer-marks {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .thermometer-mark {
+            position: absolute;
+            width: 100%;
+            height: 1px;
+            background-color: #000;
+            opacity: 0.5;
+        }
         .thermometer-label {
             position: absolute;
             top: 220px;
@@ -169,6 +254,44 @@
     </style>
 </head>
 <body>
+    <button class="help-button" id="help-button">?</button>
+    <div class="dialog-overlay" id="dialog-overlay">
+        <div class="dialog">
+            <h2>Special Relativity Simulator</h2>
+            
+            <h3>What is Special Relativity?</h3>
+            <p>Special relativity, developed by Albert Einstein in 1905, describes how space and time are intertwined and how they behave at high speeds. The key insight is that the speed of light (c) is constant for all observers, leading to surprising effects when objects move at significant fractions of light speed.</p>
+            
+            <h3>Key Effects Demonstrated</h3>
+            <ul>
+                <li><strong>Time Dilation:</strong> Moving clocks run slower. The red moving clock ticks more slowly than the blue stationary clock.</li>
+                <li><strong>Length Contraction:</strong> Objects shrink in their direction of motion. The red ruler becomes shorter when moving fast.</li>
+                <li><strong>Lorentz Factor (γ):</strong> Measures the strength of relativistic effects. At everyday speeds, γ ≈ 1. As speed approaches c, γ approaches infinity.</li>
+            </ul>
+            
+            <h3>Using the Simulator</h3>
+            <ul>
+                <li><strong>Speed Slider:</strong> Set the velocity as a percentage of light speed (0-99.999% of c)</li>
+                <li><strong>Direction Slider:</strong> Change the angle of motion (0-360 degrees)</li>
+                <li><strong>Reset Time:</strong> Reset both clocks to 00:00:00</li>
+                <li><strong>Log Scale:</strong> Switch the γ thermometer between linear and logarithmic scales</li>
+            </ul>
+            
+            <h3>Understanding the Display</h3>
+            <ul>
+                <li><strong>Red Ruler & Clock:</strong> Represents a moving reference frame</li>
+                <li><strong>Blue Ruler & Clock:</strong> Represents the stationary (proper) reference frame</li>
+                <li><strong>Thermometer:</strong> Visual representation of the Lorentz factor</li>
+                <li><strong>Distance:</strong> Shows how far away an object would need to be for its actual speed to match the apparent speed on screen</li>
+            </ul>
+            
+            <h3>The Lorentz Equation</h3>
+            <p>γ = 1 / √(1 − v²/c²)</p>
+            <p>This fundamental equation determines all relativistic effects. As v approaches c, the denominator approaches zero, making γ approach infinity.</p>
+            
+            <button class="close-button" onclick="document.getElementById('dialog-overlay').style.display='none'">Close</button>
+        </div>
+    </div>
     <div class="container" id="container">
         <div class="moving-frame" id="moving-frame">
             <div class="digital-clock" id="moving-clock">00:00:00</div>
@@ -204,6 +327,7 @@
         </div>
         <div class="thermometer-container">
             <div class="thermometer-bar" id="thermometer-bar"></div>
+            <div class="thermometer-marks" id="thermometer-marks"></div>
         </div>
         <div class="thermometer-label">Lorentz Factor</div>
         <div class="lorentz-factor-display" id="lorentz-factor-display">γ = 1.000</div>
@@ -214,6 +338,9 @@
         <label for="angle-slider">Direction (degrees):</label>
         <input type="range" id="angle-slider" min="0" max="360" step="1" value="0">
         <button id="reset-button">Reset Time</button>
+        <div style="display: inline-flex; gap: 20px; margin-left: 20px;">
+            <label><input type="checkbox" id="log-scale-checkbox"> Log Scale</label>
+        </div>
     </div>
     <div class="info">
         <div class="lorentz-equation" style="margin-bottom: 15px; font-style: italic; font-size: 1.1rem;">
@@ -254,7 +381,11 @@
         const distanceLY = document.getElementById('distance-ly');
         const resetButton = document.getElementById('reset-button');
         const thermometerBar = document.getElementById('thermometer-bar');
+        const thermometerMarks = document.getElementById('thermometer-marks');
         const lorentzFactorDisplay = document.getElementById('lorentz-factor-display');
+        const logScaleCheckbox = document.getElementById('log-scale-checkbox');
+        const helpButton = document.getElementById('help-button');
+        const dialogOverlay = document.getElementById('dialog-overlay');
 
         let speed = 0;
         let lorentzFactor = 1;
@@ -269,6 +400,33 @@
         const metersPerLightYear = 9.461e15; // meters in one light-year
         const metersPerAU = 1.496e11; // meters in one AU (astronomical unit)
         const rulerBaseWidth = 200; // Base width of ruler
+
+        // Create thermometer marks for log scale
+        function createThermometerMarks() {
+            thermometerMarks.innerHTML = '';
+            if (logScaleCheckbox.checked) {
+                const markValues = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300];
+                markValues.forEach(gamma => {
+                    if (gamma <= 300) {
+                        const position = (Math.log10(gamma) / Math.log10(300)) * 100;
+                        const mark = document.createElement('div');
+                        mark.className = 'thermometer-mark';
+                        mark.style.bottom = `${position}%`;
+                        thermometerMarks.appendChild(mark);
+                    }
+                });
+            }
+        }
+
+        // Initialize position after DOM is ready
+        function initializePosition() {
+            // Hard-coded position: centered both horizontally and vertically
+            currentX = container.clientWidth / 2;
+            currentY = container.clientHeight / 2;
+            movingFrame.style.left = `${currentX}px`;
+            movingFrame.style.top = `${currentY}px`;
+            movingFrame.style.transform = `translate(-50%, -50%)`;
+        }
 
         // Initialize position after DOM is ready
         function initializePosition() {
@@ -285,6 +443,8 @@
             lorentzFactor = 1 / Math.sqrt(1 - Math.pow(speed, 2));
 
             const contractedWidth = rulerBaseWidth / lorentzFactor;
+            
+            // Update ruler
             movingRuler.style.width = `${contractedWidth}px`;
             movingRuler.style.transform = `rotate(${angle}deg)`;
 
@@ -292,15 +452,21 @@
             directionInfo.textContent = `Direction: ${angle}°`;
             speedInfo.textContent = `Speed: ${(speed * 100).toFixed(3)}% of c`;
 
-            // Update thermometer bar with logarithmic scaling from 1 to 300
-            const maxGamma = 300;
+            // Update thermometer bar with logarithmic or linear scaling
             let barHeight;
             
-            if (lorentzFactor > 1) {
-                // Logarithmic scale: log10(1) = 0, log10(300) ≈ 2.477
-                barHeight = (Math.log10(lorentzFactor) / Math.log10(maxGamma)) * 100;
+            if (logScaleCheckbox.checked) {
+                // Logarithmic scale from 1 to 300
+                const maxGamma = 300;
+                if (lorentzFactor > 1) {
+                    barHeight = (Math.log10(lorentzFactor) / Math.log10(maxGamma)) * 100;
+                } else {
+                    barHeight = 0;
+                }
             } else {
-                barHeight = 0;
+                // Linear scale from 1 to 223
+                const maxGamma = 223;
+                barHeight = ((lorentzFactor - 1) / (maxGamma - 1)) * 100;
             }
             
             thermometerBar.style.height = `${Math.min(barHeight, 100)}%`;
@@ -468,6 +634,20 @@
         });
         
         angleSlider.addEventListener('input', updateAngle);
+        logScaleCheckbox.addEventListener('change', () => {
+            createThermometerMarks();
+            updateLorentzFactor();
+        });
+        
+        helpButton.addEventListener('click', () => {
+            dialogOverlay.style.display = 'block';
+        });
+        
+        dialogOverlay.addEventListener('click', (e) => {
+            if (e.target === dialogOverlay) {
+                dialogOverlay.style.display = 'none';
+            }
+        });
 
         // Initialize everything after DOM loads
         window.addEventListener('DOMContentLoaded', function() {
@@ -475,6 +655,7 @@
             updateLorentzFactor();
             updateAngle();
             updateClocks(); // Initial clock update to show 00:00:00
+            createThermometerMarks();
             animateMovingFrame();
         });
 
