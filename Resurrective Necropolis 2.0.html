@@ -1,4 +1,53 @@
-<!DOCTYPE html>
+// Dravidian family
+    dravidian: {
+        metadata: {
+            family: "Dravidian",
+            populationPercentage: 3,
+            writingSystems: ["Tamil", "Telugu", "Kannada", "Malayalam"],
+            nameOrder: "given_first",
+            hasInitials: true,
+            voicePreferences: ["ta-IN", "te-IN", "kn-IN", "ml-IN"]
+        },
+        
+        nameComponents: {
+            given: {
+                male: ["Rajesh", "Kumar", "Vijay", "Ravi", "Anand", "Karthik", "Suresh", "Ganesh",
+                       "Murugan", "Senthil", "Arun", "Bala", "Chandran", "Durai", "Elango", "Gokul",
+                       "Hari", "Ilango", "Jagan", "Kamal", "Lakshman", "Mani", "Nandakumar", "Pandian"],
+                female: ["Priya", "Lakshmi", "Kavitha", "Deepa", "Anitha", "Saranya", "Revathi", "Padma",
+                         "Meera", "Radha", "Shanthi", "Uma", "Vidya", "Yamuna", "Ambika", "Bhavani",
+                         "Chitra", "Durga", "Ezhil", "Gayathri", "Hema", "Indira", "Janaki", "Kala"],
+                neutral: ["Akasha", "Surya", "Chandra", "Tharun", "Nilam", "Madhuram", "Selvam", "Inbam"]
+            },
+            family: ["Reddy", "Naidu", "Iyer", "Nair", "Pillai", "Menon", "Raju", "Rao", "Krishnan",
+                    "Subramanian", "Natarajan", "Raghavan", "Srinivasan", "Venkatesan", "Chandrasekaran",
+                    "Ramachandran", "Balasubramanian", "Venkataraman", "Gopalakrishnan", "Ranganathan"],
+            initials: {
+                format: "father's name as initial",
+                examples: ["K. Rajesh", "S. Priya", "M. Kumar", "R. Lakshmi", "T. Vijay",
+                          "P. Anitha", "N. Suresh", "V. Kavitha", "A. Ganesh", "G. Deepa"]
+            },
+            caste: {
+                brahmin: ["Iyer", "Iyengar", "Sharma", "Sastri", "Dikshitar"],
+                sensitivity: "high - often omitted in modern usage"
+            },
+            titles: {
+                respectful: ["Thiru", "Thirumathi", "Selvi", "Sri", "Srimathi"],
+                professional: ["Dr.", "Er.", "Adv.", "Prof."]
+            }
+        },
+        
+        specialFeatures: {
+            casteMarkers: { sensitivity: "high", usage: "declining" },
+            hijra: { 
+                recognition: "traditional third gender",
+                names: ["Revathi", "Kalki", "Laxmi", "Kamini", "Bharathi", "Vijayalakshmi"]
+            },
+            singleInitial: "Some use only one initial (e.g., 'K. Anand')",
+            villageName: "Sometimes included as identifier",
+            maternalUncle: "Special relationship in naming"
+        }
+    },<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -1513,6 +1562,24 @@ function loadVoices() {
         const loadVoiceList = () => {
             const voices = appState.synth.getVoices();
             if (voices.length > 0) {
+                // List of novelty voices to exclude
+                const EXCLUDED_VOICES = [
+                    'trinoids', 'zarvox', 'albert', 'whisper', 'bahh', 'boing', 
+                    'bubbles', 'deranged', 'hysterical', 'cellos', 'pipe organ', 
+                    'organ', 'good news', 'bad news', 'bells', 'jester', 'princess', 
+                    'superstar', 'junior', 'wobble'
+                ];
+                
+                // Log excluded voices for debugging
+                const excludedVoicesList = voices.filter(voice => {
+                    const voiceNameLower = voice.name.toLowerCase();
+                    return EXCLUDED_VOICES.some(excluded => voiceNameLower.includes(excluded));
+                });
+                
+                if (excludedVoicesList.length > 0) {
+                    console.log('Excluding novelty voices:', excludedVoicesList.map(v => v.name));
+                }
+                
                 resolve(voices);
             }
         };
@@ -2393,14 +2460,32 @@ function selectVoice(nameData) {
         return null;
     }
     
+    // List of novelty voices to exclude
+    const EXCLUDED_VOICES = [
+        'trinoids', 'zarvox', 'albert', 'whisper', 'bahh', 'boing', 
+        'bubbles', 'deranged', 'hysterical', 'cellos', 'pipe organ', 
+        'organ', 'good news', 'bad news', 'bells', 'jester', 'princess', 
+        'superstar', 'junior', 'wobble'
+    ];
+    
+    // Filter out excluded voices
+    const availableVoices = appState.voices.filter(voice => {
+        const voiceNameLower = voice.name.toLowerCase();
+        return !EXCLUDED_VOICES.some(excluded => voiceNameLower.includes(excluded));
+    });
+    
+    if (availableVoices.length === 0) {
+        return null;
+    }
+    
     // Try to match preferred language/locale
     for (const pref of preferredVoices) {
-        const voice = appState.voices.find(v => v.lang === pref || v.lang.startsWith(pref));
+        const voice = availableVoices.find(v => v.lang === pref || v.lang.startsWith(pref));
         if (voice) return voice;
     }
     
-    // Fallback to any voice
-    return appState.voices.find(v => v.default) || appState.voices[0];
+    // Fallback to any non-excluded voice
+    return availableVoices.find(v => v.default) || availableVoices[0];
 }
 
 function getPitchForGender(gender) {
