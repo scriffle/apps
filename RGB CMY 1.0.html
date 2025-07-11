@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Color Matching Game</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background-color: #000;
+            color: #fff;
+            transition: background-color 0.3s, color 0.3s;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        #mainContainer {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        /* Top swatches area */
+        #topSwatches {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        
+        .largeColorDisplay {
+            width: 150px;
+            height: 150px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            position: relative;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+            padding: 10px;
+        }
+        
+        .colorLabel {
+            font-size: 14px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            transition: color 0.3s;
+        }
+        
+        /* Swatches area */
+        #swatchesContainer {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 15px;
+            min-height: 100px;
+        }
+        
+        .swatch {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            width: 60px;
+            height: 100px;
+            cursor: pointer;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+        }
+        
+        .swatch:hover {
+            transform: translateY(-2px);
+        }
+        
+        .swatch:active {
+            transform: translateY(0);
+        }
+        
+        .stripe {
+            flex: 1;
+        }
+        
+        /* Clue area */
+        #clueArea {
+            height: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .sumColor {
+            width: 60px;
+            height: 50px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            display: none;
+        }
+        
+        /* Buttons area */
+        #buttonsArea {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        #newGameButton {
+            background-color: #333;
+            color: white;
+            border: none;
+            padding: 20px 60px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        #newGameButton:hover {
+            background-color: #555;
+            transform: translateY(-2px);
+        }
+        
+        #newGameButton:active {
+            transform: translateY(0);
+        }
+        
+        #clueButton {
+            background-color: #666;
+            color: white;
+            border: none;
+            padding: 10px 30px;
+            font-size: 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        #clueButton:hover {
+            background-color: #888;
+        }
+        
+        /* Stats area */
+        #statsArea {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            text-align: center;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        /* Side panel */
+        #sidePanel {
+            position: fixed;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            background-color: rgba(30, 30, 30, 0.95);
+            border-radius: 12px 0 0 12px;
+            box-shadow: -2px 0 20px rgba(0,0,0,0.3);
+            transition: right 0.3s ease;
+            z-index: 1000;
+            width: 300px;
+        }
+        
+        #sidePanel.collapsed {
+            right: -260px;
+        }
+        
+        #panelToggle {
+            position: absolute;
+            left: -40px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 40px;
+            height: 80px;
+            background-color: rgba(30, 30, 30, 0.95);
+            border-radius: 12px 0 0 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: #fff;
+            font-size: 20px;
+        }
+        
+        #panelContent {
+            padding: 20px;
+        }
+        
+        .panelSection {
+            margin-bottom: 20px;
+        }
+        
+        .panelSection h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            opacity: 0.7;
+        }
+        
+        /* Slider styling */
+        #slider {
+            width: 100%;
+            margin: 10px 0;
+        }
+        
+        #difficultyLabel {
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        #betterThanRandom {
+            text-align: center;
+            font-size: 12px;
+            opacity: 0.7;
+        }
+        
+        /* Button group */
+        .buttonGroup {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .infoButton {
+            background-color: #444;
+            border: 1px solid #666;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .infoButton:hover {
+            background-color: #555;
+        }
+        
+        /* Radio groups */
+        .radioGroup {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .radioGroup label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        
+        /* Vision dropdown */
+        #visionSelect {
+            width: 100%;
+            padding: 8px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        
+        #visionSelect option {
+            background-color: #1e1e1e;
+        }
+        
+        /* Modals */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            backdrop-filter: blur(5px);
+        }
+        
+        .modalContent {
+            background-color: #fff;
+            color: #000;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        
+        .close {
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            opacity: 0.5;
+        }
+        
+        .close:hover {
+            opacity: 1;
+        }
+        
+        /* Light theme adjustments */
+        body.light {
+            background-color: #f5f5f5;
+            color: #000;
+        }
+        
+        body.light #sidePanel {
+            background-color: rgba(255, 255, 255, 0.95);
+            color: #000;
+        }
+        
+        body.light #panelToggle {
+            background-color: rgba(255, 255, 255, 0.95);
+            color: #000;
+        }
+        
+        body.light .infoButton {
+            background-color: #ddd;
+            border-color: #bbb;
+            color: #333;
+        }
+        
+        body.light .infoButton:hover {
+            background-color: #ccc;
+        }
+        
+        body.light #newGameButton {
+            background-color: #666;
+        }
+        
+        body.light #newGameButton:hover {
+            background-color: #555;
+        }
+        
+        body.light #clueButton {
+            background-color: #888;
+        }
+        
+        body.light #clueButton:hover {
+            background-color: #777;
+        }
+        
+        body.light #visionSelect {
+            background-color: rgba(0, 0, 0, 0.05);
+            border-color: rgba(0, 0, 0, 0.2);
+            color: #000;
+        }
+        
+        body.light #visionSelect option {
+            background-color: #fff;
+        }
+        
+        /* Alert message styling */
+        #alertMessage {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            z-index: 3000;
+        }
+        
+        #alertMessage.show {
+            opacity: 1;
+        }
+        
+        body.light #alertMessage {
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            #mainContainer {
+                padding: 10px;
+            }
+            
+            .largeColorDisplay {
+                width: 120px;
+                height: 120px;
+            }
+            
+            #sidePanel {
+                width: 250px;
+            }
+            
+            #sidePanel.collapsed {
+                right: -210px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div id="mainContainer">
+    <div id="topSwatches">
+        <div class="largeColorDisplay" id="targetColor">
+            <span class="colorLabel">Target</span>
+        </div>
+        <div class="largeColorDisplay" id="guessedColor">
+            <span class="colorLabel">Selection</span>
+        </div>
+    </div>
+    
+    <div id="swatchesContainer"></div>
+    
+    <div id="clueArea"></div>
+    
+    <div id="buttonsArea">
+        <button id="newGameButton">New Game</button>
+        <button id="clueButton">Clue</button>
+    </div>
+    
+    <div id="statsArea">
+        <div>Guesses: <span id="guesses">0</span></div>
+        <div>Correct: <span id="correct">0</span></div>
+        <div>Percentage: <span id="percentage">0%</span></div>
+        <div>Avg Time: <span id="avgTime">0.00s</span></div>
+    </div>
+</div>
+
+<div id="sidePanel" class="collapsed">
+    <div id="panelToggle">⚙️</div>
+    <div id="panelContent">
+        <div class="panelSection">
+            <h3>Difficulty</h3>
+            <div id="difficultyLabel">5 - Normal</div>
+            <input type="range" id="slider" min="2" max="13" value="5">
+            <div id="betterThanRandom">Much better than random: 40%</div>
+        </div>
+        
+        <div class="panelSection">
+            <h3>Help</h3>
+            <div class="buttonGroup">
+                <button class="infoButton" id="infoButton">What's Going On?</button>
+                <button class="infoButton" id="colorInfoButton">Color Principles</button>
+            </div>
+            <div style="margin-top: 10px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="learnModeCheckbox" checked>
+                    Learn Mode
+                </label>
+            </div>
+        </div>
+        
+        <div class="panelSection">
+            <h3>Color Mode</h3>
+            <div class="radioGroup">
+                <label><input type="radio" name="mode" value="RGB" checked> Light (RGB)</label>
+                <label><input type="radio" name="mode" value="CMY"> Pigment (CMY)</label>
+            </div>
+        </div>
+        
+        <div class="panelSection">
+            <h3>Theme</h3>
+            <div class="radioGroup">
+                <label><input type="radio" name="theme" value="Classic"> Classic</label>
+                <label><input type="radio" name="theme" value="Dark" checked> Dark</label>
+            </div>
+        </div>
+        
+        <div class="panelSection">
+            <h3>Vision Mode</h3>
+            <select id="visionSelect">
+                <option value="Normal" selected>Normal</option>
+                <option value="RB">Red/Blue (Green Deficiency)</option>
+                <option value="GB">Green/Blue (Red Deficiency)</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
+<div id="infoModal" class="modal">
+    <div class="modalContent">
+        <span class="close">&times;</span>
+        <h2>Color Matching Game</h2>
+        <p>Your goal is to find the swatch that creates the same color as the target shown in the top left.</p>
+        
+        <p>Each swatch displays colored stripes. When combined, these stripes produce a single color. Swatches may show two stripes (dyad) or three stripes (triad) depending on the vision mode you select.</p>
+        
+        <h3>How to Play</h3>
+        <p>Click any swatch to test if it matches the target color. When you find the correct match, the screen will flash briefly.</p>
+        
+        <p>The Clue button reveals the combined color of each swatch for one second. Games where you use clues do not count toward your statistics.</p>
+        
+        <h3>Difficulty</h3>
+        <p>Move the slider to set the number of swatches from 2 to 13. Fewer swatches make the game easier, while more swatches increase the challenge.</p>
+        
+        <h3>Vision Modes</h3>
+        <p>Choose the vision mode that works best for you. The Red/Blue mode removes green components for those with green color deficiency. The Green/Blue mode removes red components for those with red color deficiency.</p>
+    </div>
+</div>
+
+<div id="colorInfoModal" class="modal">
+    <div class="modalContent">
+        <span class="close">&times;</span>
+        <h2>Color Mixing Guide</h2>
+        
+        <h3>RGB Mode (Light)</h3>
+        <p>Colors add together like colored lights:</p>
+        <ul>
+            <li>Red + Green = Yellow</li>
+            <li>Red + Blue = Magenta</li>
+            <li>Green + Blue = Cyan</li>
+            <li>All three = White</li>
+        </ul>
+        
+        <h3>CMY Mode (Paint)</h3>
+        <p>Colors mix like paints or inks:</p>
+        <ul>
+            <li>Cyan + Magenta = Blue</li>
+            <li>Cyan + Yellow = Green</li>
+            <li>Magenta + Yellow = Red</li>
+            <li>All three = Black</li>
+        </ul>
+        
+        <h3>Quick Tips</h3>
+        <p>Look at the stripes to predict the result. In RGB, more colors mean brighter results. In CMY, more colors mean darker results.</p>
+    </div>
+</div>
+
+<div id="alertMessage"></div>
+
+<script>
+    // Game elements
+    const targetColorDiv = document.getElementById('targetColor');
+    const guessedColorDiv = document.getElementById('guessedColor');
+    const swatchesContainer = document.getElementById('swatchesContainer');
+    const clueArea = document.getElementById('clueArea');
+    const slider = document.getElementById('slider');
+    const newGameButton = document.getElementById('newGameButton');
+    const clueButton = document.getElementById('clueButton');
+    const infoButton = document.getElementById('infoButton');
+    const colorInfoButton = document.getElementById('colorInfoButton');
+    const visionSelect = document.getElementById('visionSelect');
+    const modeToggles = document.getElementsByName('mode');
+    const themeToggles = document.getElementsByName('theme');
+    const learnModeCheckbox = document.getElementById('learnModeCheckbox');
+    
+    // Stats elements
+    const guessesSpan = document.getElementById('guesses');
+    const correctSpan = document.getElementById('correct');
+    const percentageSpan = document.getElementById('percentage');
+    const avgTimeSpan = document.getElementById('avgTime');
+    const difficultyLabel = document.getElementById('difficultyLabel');
+    const betterThanRandomSpan = document.getElementById('betterThanRandom');
+    const statsArea = document.getElementById('statsArea');
+    const alertMessage = document.getElementById('alertMessage');
+    
+    // Modal elements
+    const infoModal = document.getElementById('infoModal');
+    const colorInfoModal = document.getElementById('colorInfoModal');
+    const closeButtons = document.querySelectorAll('.close');
+    
+    // Side panel
+    const sidePanel = document.getElementById('sidePanel');
+    const panelToggle = document.getElementById('panelToggle');
+    
+    // Game state
+    let targetColor;
+    let guesses = 0;
+    let correctGuesses = 0;
+    let totalTime = 0;
+    let visionMode = 'Normal';
+    let isRGBMode = true;
+    let isDarkMode = true;
+    let clueUsed = false;
+    let gameEnded = false;
+    let startTime = 0;
+    let swatchColors = [];
+    let isLearnMode = true;
+    let totalGuessesAllTime = 0;
+
+    // Utility functions
+    function randomColor() {
+        return Math.floor(Math.random() * 256);
+    }
+
+    function generateTargetColor() {
+        if (visionMode === 'RB') {
+            targetColor = `rgb(${randomColor()}, 0, ${randomColor()})`;
+        } else if (visionMode === 'GB') {
+            targetColor = `rgb(0, ${randomColor()}, ${randomColor()})`;
+        } else {
+            targetColor = `rgb(${randomColor()}, ${randomColor()}, ${randomColor()})`;
+        }
+        targetColorDiv.style.backgroundColor = targetColor;
+    }
+
+    function rgbToCmy(rgb) {
+        const [r, g, b] = rgb.match(/\d+/g).map(Number);
+        const c = 255 - r;
+        const m = 255 - g;
+        const y = 255 - b;
+        return [c, m, y];
+    }
+
+    function createSwatch(color, index) {
+        const swatch = document.createElement('div');
+        swatch.className = 'swatch';
+        swatch.dataset.index = index;
+
+        let stripes;
+        if (visionMode === 'RB') {
+            const [r, , b] = color.match(/\d+/g).map(Number);
+            stripes = [
+                `rgb(${r}, 0, 0)`,
+                `rgb(0, 0, ${b})`
+            ];
+            if (!isRGBMode) {
+                const [c, , y] = rgbToCmy(color);
+                stripes = [
+                    `rgb(${255 - c}, 255, 255)`,
+                    `rgb(255, 255, ${255 - y})`
+                ];
+            }
+        } else if (visionMode === 'GB') {
+            const [, g, b] = color.match(/\d+/g).map(Number);
+            stripes = [
+                `rgb(0, ${g}, 0)`,
+                `rgb(0, 0, ${b})`
+            ];
+            if (!isRGBMode) {
+                const [, m, y] = rgbToCmy(color);
+                stripes = [
+                    `rgb(255, ${255 - m}, 255)`,
+                    `rgb(255, 255, ${255 - y})`
+                ];
+            }
+        } else {
+            const [r, g, b] = color.match(/\d+/g).map(Number);
+            stripes = [
+                `rgb(${r}, 0, 0)`,
+                `rgb(0, ${g}, 0)`,
+                `rgb(0, 0, ${b})`
+            ];
+            if (!isRGBMode) {
+                const [c, m, y] = rgbToCmy(color);
+                stripes = [
+                    `rgb(${255 - c}, 255, 255)`,
+                    `rgb(255, ${255 - m}, 255)`,
+                    `rgb(255, 255, ${255 - y})`
+                ];
+            }
+        }
+
+        stripes.forEach(stripeColor => {
+            const stripe = document.createElement('div');
+            stripe.className = 'stripe';
+            stripe.style.backgroundColor = stripeColor;
+            swatch.appendChild(stripe);
+        });
+
+        swatch.addEventListener('click', () => handleSwatchClick(color));
+        return swatch;
+    }
+
+    function showAlert(message) {
+        alertMessage.textContent = message;
+        alertMessage.classList.add('show');
+        setTimeout(() => {
+            alertMessage.classList.remove('show');
+        }, 3000);
+    }
+
+    function updateLearnMode() {
+        isLearnMode = learnModeCheckbox.checked;
+        statsArea.style.display = isLearnMode ? 'none' : 'flex';
+    }
+
+    function checkLearnModeLimit() {
+        totalGuessesAllTime++;
+        if (isLearnMode && totalGuessesAllTime >= 20) {
+            isLearnMode = false;
+            learnModeCheckbox.checked = false;
+            updateLearnMode();
+            showAlert('Learn Mode disabled after 20 guesses. You can re-enable it in settings.');
+        }
+    }
+
+    function showLearnModeClues() {
+        if (!isLearnMode) return;
+        
+        clueArea.innerHTML = '';
+        swatchColors.forEach((color) => {
+            const clueDiv = document.createElement('div');
+            clueDiv.className = 'sumColor';
+            clueDiv.style.backgroundColor = color;
+            clueDiv.style.display = 'block';
+            clueArea.appendChild(clueDiv);
+        });
+    }
+
+    function handleSwatchClick(color) {
+        if (gameEnded) return;
+        if (!clueUsed) {
+            guesses++;
+            guessesSpan.textContent = guesses;
+            checkLearnModeLimit();
+        }
+        guessedColorDiv.style.backgroundColor = color;
+        updateLabelColors();
+        
+        if (color === targetColor) {
+            if (!clueUsed) {
+                correctGuesses++;
+                correctSpan.textContent = correctGuesses;
+                const endTime = new Date().getTime();
+                const timeTaken = (endTime - startTime) / 1000;
+                totalTime += timeTaken;
+                const averageTime = (totalTime / correctGuesses).toFixed(2);
+                avgTimeSpan.textContent = `${averageTime}s`;
+            }
+            // Flash effect with correct background color
+            const flashColor = targetColor;
+            const originalBg = isDarkMode ? '#000' : '#f5f5f5';
+            document.body.style.backgroundColor = flashColor;
+            setTimeout(() => {
+                document.body.style.backgroundColor = originalBg;
+                // Show learn mode clues after flash
+                showLearnModeClues();
+            }, 200);
+            gameEnded = true;
+            // Disable swatches
+            const swatches = document.querySelectorAll('.swatch');
+            swatches.forEach(swatch => swatch.style.pointerEvents = 'none');
+        }
+        updatePercentage();
+    }
+
+    function updatePercentage() {
+        const percentage = guesses > 0 ? ((correctGuesses / guesses) * 100).toFixed(1) : 0;
+        percentageSpan.textContent = `${percentage}%`;
+    }
+
+    function showClues() {
+        clueUsed = true;
+        clueArea.innerHTML = '';
+        
+        swatchColors.forEach((color, index) => {
+            const clueDiv = document.createElement('div');
+            clueDiv.className = 'sumColor';
+            clueDiv.style.backgroundColor = color;
+            clueDiv.style.display = 'block';
+            clueArea.appendChild(clueDiv);
+        });
+        
+        setTimeout(() => {
+            clueArea.innerHTML = '';
+        }, 1000);
+    }
+
+    function newGame() {
+        swatchesContainer.innerHTML = '';
+        clueArea.innerHTML = '';
+        guessedColorDiv.style.backgroundColor = isDarkMode ? '#000' : '#f5f5f5';
+        clueUsed = false;
+        gameEnded = false;
+        swatchColors = [];
+        
+        const numberOfSwatches = parseInt(slider.value);
+        const betterThanRandom = Math.floor((2 / numberOfSwatches) * 100);
+        betterThanRandomSpan.textContent = `Much better than random: ${betterThanRandom}%`;
+
+        generateTargetColor();
+        
+        // Create target swatch
+        swatchColors.push(targetColor);
+        
+        // Create random swatches
+        for (let i = 1; i < numberOfSwatches; i++) {
+            let randomSwatchColor;
+            if (visionMode === 'RB') {
+                randomSwatchColor = `rgb(${randomColor()}, 0, ${randomColor()})`;
+            } else if (visionMode === 'GB') {
+                randomSwatchColor = `rgb(0, ${randomColor()}, ${randomColor()})`;
+            } else {
+                randomSwatchColor = `rgb(${randomColor()}, ${randomColor()}, ${randomColor()})`;
+            }
+            swatchColors.push(randomSwatchColor);
+        }
+        
+        // Shuffle colors
+        for (let i = swatchColors.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [swatchColors[i], swatchColors[j]] = [swatchColors[j], swatchColors[i]];
+        }
+        
+        // Create swatches
+        swatchColors.forEach((color, index) => {
+            const swatch = createSwatch(color, index);
+            swatchesContainer.appendChild(swatch);
+        });
+        
+        startTime = new Date().getTime();
+    }
+
+    // Event handlers
+    function toggleVision() {
+        visionMode = visionSelect.value;
+        // Reset stats
+        guesses = 0;
+        correctGuesses = 0;
+        totalTime = 0;
+        guessesSpan.textContent = '0';
+        correctSpan.textContent = '0';
+        avgTimeSpan.textContent = '0.00s';
+        updatePercentage();
+        newGame();
+    }
+
+    function toggleMode() {
+        isRGBMode = document.querySelector('input[name="mode"]:checked').value === 'RGB';
+        
+        // Automatically adjust theme based on mode
+        if (isRGBMode) {
+            // RGB mode - default to dark theme
+            document.querySelector('input[name="theme"][value="Dark"]').checked = true;
+            isDarkMode = true;
+        } else {
+            // CMY mode - default to classic (light) theme
+            document.querySelector('input[name="theme"][value="Classic"]').checked = true;
+            isDarkMode = false;
+        }
+        
+        // Apply theme changes
+        document.body.className = isDarkMode ? '' : 'light';
+        document.body.style.backgroundColor = isDarkMode ? '#000' : '#f5f5f5';
+        guessedColorDiv.style.backgroundColor = isDarkMode ? '#000' : '#f5f5f5';
+        updateLabelColors();
+        
+        newGame();
+    }
+
+    function toggleTheme() {
+        isDarkMode = document.querySelector('input[name="theme"]:checked').value === 'Dark';
+        document.body.className = isDarkMode ? '' : 'light';
+        document.body.style.backgroundColor = isDarkMode ? '#000' : '#f5f5f5';
+        guessedColorDiv.style.backgroundColor = isDarkMode ? '#000' : '#f5f5f5';
+        updateLabelColors();
+    }
+
+    // Event listeners
+    panelToggle.addEventListener('click', () => {
+        sidePanel.classList.toggle('collapsed');
+        panelToggle.textContent = sidePanel.classList.contains('collapsed') ? '⚙️' : '✕';
+    });
+
+    learnModeCheckbox.addEventListener('change', updateLearnMode);
+
+    slider.addEventListener('input', function() {
+        const levelNames = {
+            2: "Potato",
+            3: "Child's Play",
+            4: "Breezy",
+            5: "Normal",
+            6: "Spicy",
+            7: "Edgy",
+            8: "Tricky",
+            9: "Challenging",
+            10: "Beast Mode",
+            11: "Monster",
+            12: "Savage",
+            13: "Insane"
+        };
+        difficultyLabel.textContent = `${slider.value} - ${levelNames[slider.value]}`;
+        // Reset stats
+        guesses = 0;
+        correctGuesses = 0;
+        totalTime = 0;
+        guessesSpan.textContent = '0';
+        correctSpan.textContent = '0';
+        avgTimeSpan.textContent = '0.00s';
+        updatePercentage();
+        newGame();
+    });
+
+    newGameButton.addEventListener('click', newGame);
+    clueButton.addEventListener('click', showClues);
+    
+    infoButton.addEventListener('click', () => {
+        infoModal.style.display = 'block';
+    });
+    
+    colorInfoButton.addEventListener('click', () => {
+        colorInfoModal.style.display = 'block';
+    });
+    
+    closeButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            this.closest('.modal').style.display = 'none';
+        });
+    });
+    
+    window.addEventListener('click', (event) => {
+        if (event.target.classList.contains('modal')) {
+            event.target.style.display = 'none';
+        }
+    });
+    
+    visionSelect.addEventListener('change', toggleVision);
+    modeToggles.forEach(toggle => toggle.addEventListener('change', toggleMode));
+    themeToggles.forEach(toggle => toggle.addEventListener('change', toggleTheme));
+
+    // Function to calculate high contrast color
+    function getContrastColor(bgColor) {
+        const rgb = bgColor.match(/\d+/g);
+        if (!rgb) return '#fff';
+        const luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+        return luminance > 0.5 ? '#000' : '#fff';
+    }
+
+    // Update label colors when background changes
+    function updateLabelColors() {
+        const targetLabel = targetColorDiv.querySelector('.colorLabel');
+        const guessedLabel = guessedColorDiv.querySelector('.colorLabel');
+        
+        if (targetColorDiv.style.backgroundColor) {
+            targetLabel.style.color = getContrastColor(targetColorDiv.style.backgroundColor);
+        }
+        
+        if (guessedColorDiv.style.backgroundColor) {
+            guessedLabel.style.color = getContrastColor(guessedColorDiv.style.backgroundColor);
+        }
+    }
+
+    // Modify generateTargetColor to update label color
+    const originalGenerateTargetColor = generateTargetColor;
+    generateTargetColor = function() {
+        originalGenerateTargetColor();
+        updateLabelColors();
+    };
+
+    // Modify handleSwatchClick to update label color
+    const originalHandleSwatchClick = handleSwatchClick;
+    handleSwatchClick = function(color) {
+        originalHandleSwatchClick(color);
+        updateLabelColors();
+    };
+
+    // Initialize game
+    updateLearnMode();
+    newGame();
+</script>
+
+</body>
+</html>
