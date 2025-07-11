@@ -64,6 +64,7 @@
             gap: 15px;
             margin-bottom: 15px;
             min-height: 100px;
+            position: relative;
         }
         
         .swatch {
@@ -91,22 +92,20 @@
             flex: 1;
         }
         
-        /* Clue area */
-        #clueArea {
-            height: 50px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-        
-        .sumColor {
-            width: 60px;
-            height: 50px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        /* Clue overlay */
+        .clueOverlay {
+            position: absolute;
+            width: 35px;
+            height: 58px;
+            border-radius: 5px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
             display: none;
+            z-index: 10;
+            pointer-events: none;
+            /* Center the overlay within the swatch */
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
         }
         
         /* Buttons area */
@@ -187,8 +186,7 @@
         #panelToggle {
             position: absolute;
             left: -40px;
-            top: 50%;
-            transform: translateY(-50%);
+            bottom: 20px;
             width: 40px;
             height: 80px;
             background-color: rgba(30, 30, 30, 0.95);
@@ -434,8 +432,6 @@
     
     <div id="swatchesContainer"></div>
     
-    <div id="clueArea"></div>
-    
     <div id="buttonsArea">
         <button id="newGameButton">New Game</button>
         <button id="clueButton">Clue</button>
@@ -557,7 +553,6 @@
     const targetColorDiv = document.getElementById('targetColor');
     const guessedColorDiv = document.getElementById('guessedColor');
     const swatchesContainer = document.getElementById('swatchesContainer');
-    const clueArea = document.getElementById('clueArea');
     const slider = document.getElementById('slider');
     const newGameButton = document.getElementById('newGameButton');
     const clueButton = document.getElementById('clueButton');
@@ -682,6 +677,12 @@
             swatch.appendChild(stripe);
         });
 
+        // Create clue overlay as child of swatch
+        const clueOverlay = document.createElement('div');
+        clueOverlay.className = 'clueOverlay';
+        clueOverlay.style.backgroundColor = color;
+        swatch.appendChild(clueOverlay);
+
         swatch.addEventListener('click', () => handleSwatchClick(color));
         return swatch;
     }
@@ -712,13 +713,9 @@
     function showLearnModeClues() {
         if (!isLearnMode) return;
         
-        clueArea.innerHTML = '';
-        swatchColors.forEach((color) => {
-            const clueDiv = document.createElement('div');
-            clueDiv.className = 'sumColor';
-            clueDiv.style.backgroundColor = color;
-            clueDiv.style.display = 'block';
-            clueArea.appendChild(clueDiv);
+        const clueOverlays = document.querySelectorAll('.clueOverlay');
+        clueOverlays.forEach(overlay => {
+            overlay.style.display = 'block';
         });
     }
 
@@ -766,24 +763,21 @@
 
     function showClues() {
         clueUsed = true;
-        clueArea.innerHTML = '';
         
-        swatchColors.forEach((color, index) => {
-            const clueDiv = document.createElement('div');
-            clueDiv.className = 'sumColor';
-            clueDiv.style.backgroundColor = color;
-            clueDiv.style.display = 'block';
-            clueArea.appendChild(clueDiv);
+        const clueOverlays = document.querySelectorAll('.clueOverlay');
+        clueOverlays.forEach(overlay => {
+            overlay.style.display = 'block';
         });
         
         setTimeout(() => {
-            clueArea.innerHTML = '';
+            clueOverlays.forEach(overlay => {
+                overlay.style.display = 'none';
+            });
         }, 1000);
     }
 
     function newGame() {
         swatchesContainer.innerHTML = '';
-        clueArea.innerHTML = '';
         guessedColorDiv.style.backgroundColor = isDarkMode ? '#000' : '#f5f5f5';
         clueUsed = false;
         gameEnded = false;
@@ -817,7 +811,7 @@
             [swatchColors[i], swatchColors[j]] = [swatchColors[j], swatchColors[i]];
         }
         
-        // Create swatches
+        // Create swatches with embedded clue overlays
         swatchColors.forEach((color, index) => {
             const swatch = createSwatch(color, index);
             swatchesContainer.appendChild(swatch);
@@ -968,6 +962,13 @@
         originalHandleSwatchClick(color);
         updateLabelColors();
     };
+
+    // Add window resize listener to reposition overlays
+    window.addEventListener('resize', () => {
+        if (clueOverlays.some(overlay => overlay.style.display === 'block')) {
+            positionClueOverlays();
+        }
+    });
 
     // Initialize game
     updateLearnMode();
