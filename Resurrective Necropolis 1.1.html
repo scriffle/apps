@@ -1008,6 +1008,13 @@ family_names: [
                 // Detect gender from voice names with better heuristics
                 voices.forEach(voice => {
                     const nameLower = voice.name.toLowerCase();
+                    
+                    // Exclude Trinoids voice
+                    if (nameLower.includes('trinoids')) {
+                        voice.excluded = true;
+                        return;
+                    }
+                    
                     voice.gender = (nameLower.includes('female') ||
                                   nameLower.includes('woman') ||
                                   nameLower.includes('samantha') ||
@@ -1040,8 +1047,8 @@ family_names: [
                 testUtterance.rate = 1.0;
                 testUtterance.pitch = 1.0;
                 
-                // Select a default voice if available
-                const defaultVoice = voices.find(v => v.default) || voices[0];
+                // Select a default voice if available (excluding Trinoids)
+                const defaultVoice = voices.find(v => v.default && !v.excluded) || voices.find(v => !v.excluded);
                 if (defaultVoice) {
                     testUtterance.voice = defaultVoice;
                 }
@@ -1251,8 +1258,16 @@ family_names: [
                     const immediateVoices = synth.getVoices();
                     if (immediateVoices && immediateVoices.length > 0) {
                         voices = immediateVoices;
+                        
+                        // Mark Trinoids as excluded
+                        voices.forEach(voice => {
+                            if (voice.name.toLowerCase().includes('trinoids')) {
+                                voice.excluded = true;
+                            }
+                        });
+                        
                         isVoiceInitialized = true;
-                        const defaultVoice = voices.find(v => v.default) || voices[0];
+                        const defaultVoice = voices.find(v => v.default && !v.excluded) || voices.find(v => !v.excluded);
                         const voiceName = defaultVoice ? defaultVoice.name : "Default voice";
                         updateVoiceStatus(`Voice: ${voiceName}`, true);
                         document.getElementById('initVoiceButton').style.display = 'none';
@@ -1421,9 +1436,12 @@ family_names: [
                 return null;
             }
 
+            // Filter out excluded voices (like Trinoids)
+            const availableVoices = voices.filter(v => !v.excluded);
+
             // First try exact language match with gender
             for (const lang of preferredVoices) {
-                const exactMatch = voices.find(v => 
+                const exactMatch = availableVoices.find(v => 
                     v.lang === lang && 
                     v.gender === gender
                 );
@@ -1433,7 +1451,7 @@ family_names: [
             // Then try language family match with gender
             for (const lang of preferredVoices) {
                 const langPrefix = lang.split('-')[0];
-                const familyMatch = voices.find(v => 
+                const familyMatch = availableVoices.find(v => 
                     v.lang.startsWith(langPrefix) && 
                     v.gender === gender
                 );
@@ -1441,11 +1459,11 @@ family_names: [
             }
 
             // Try any voice with matching gender
-            const genderMatch = voices.find(v => v.gender === gender);
+            const genderMatch = availableVoices.find(v => v.gender === gender);
             if (genderMatch) return genderMatch;
 
-            // Fallback to default or first available voice
-            return voices.find(v => v.default) || voices[0];
+            // Fallback to default or first available voice (excluding Trinoids)
+            return availableVoices.find(v => v.default) || availableVoices[0];
         }
 
         function speakNames(text, culture, gender) {
