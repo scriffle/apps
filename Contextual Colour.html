@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contextual Color</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #1a1a2e;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .game-container {
+            text-align: center;
+            padding: 1rem 2rem;
+            position: relative;
+        }
+
+        .help-button {
+            position: absolute;
+            top: 2rem;
+            right: 2rem;
+            width: 40px;
+            height: 40px;
+            background: #4a7c7e;
+            color: white;
+            border: none;
+            font-size: 1.3rem;
+            cursor: pointer;
+            transition: background 0.3s ease, transform 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            outline: none;
+            box-shadow: none;
+            padding: 0;
+        }
+
+        .help-button:hover {
+            background: #5a8c8e;
+            transform: scale(1.1);
+        }
+
+        .help-button:focus {
+            outline: none;
+        }
+
+        .help-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .help-content {
+            background: #2a2a3e;
+            padding: 2.5rem;
+            border-radius: 15px;
+            max-width: 500px;
+            margin: 2rem;
+            color: #eee;
+            position: relative;
+        }
+
+        .help-content h2 {
+            color: #4ade80;
+            margin-bottom: 1.5rem;
+            font-size: 1.8rem;
+        }
+
+        .help-content p {
+            margin-bottom: 1rem;
+            line-height: 1.6;
+            text-align: left;
+        }
+
+        .close-help {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            color: #aaa;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+
+        .help-content a {
+            color: #4ade80;
+            text-decoration: none;
+            border-bottom: 1px solid #4ade80;
+            transition: all 0.3s ease;
+        }
+
+        .help-content a:hover {
+            color: #6aee90;
+            border-bottom-color: #6aee90;
+        }
+
+        h1 {
+            color: #eee;
+            margin-bottom: 0.5rem;
+            font-size: 2rem;
+            font-weight: 300;
+            letter-spacing: 0.1em;
+        }
+
+        .level-selector {
+            margin-bottom: 2rem;
+        }
+
+        .level-btn {
+            padding: 0.8rem 1.5rem;
+            margin: 0 0.5rem;
+            font-size: 1rem;
+            border: 2px solid #4a7c7e;
+            background: transparent;
+            color: #4a7c7e;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .level-btn.active {
+            background: #4a7c7e;
+            color: white;
+        }
+
+        .level-btn:hover {
+            background: #4a7c7e;
+            color: white;
+        }
+
+        .swatches-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 3rem;
+            min-height: 420px;
+            position: relative;
+        }
+
+        .swatches-grid {
+            display: grid;
+            gap: 2rem;
+            position: relative;
+        }
+
+        .swatches-grid.level-2 {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .swatches-grid.level-3 {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .swatches-grid.level-3 .swatch-row {
+            display: flex;
+            gap: 3rem;
+        }
+
+        .swatches-grid.level-4 {
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 2rem;
+        }
+
+        .swatch {
+            width: 180px;
+            height: 180px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            position: relative;
+        }
+
+        .swatch.revealing {
+            transition: background-color 0.8s ease-out;
+        }
+
+        .inner-square {
+            width: 70px;
+            height: 70px;
+            border-radius: 6px;
+            position: absolute;
+        }
+
+        .inner-square.animate {
+            transition: all 0.8s ease;
+        }
+
+        .buttons-container {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+
+        button {
+            padding: 1rem 2.5rem;
+            font-size: 1.1rem;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+        }
+
+        .choice-btn {
+            background: #4a7c7e;
+            color: white;
+        }
+
+        .choice-btn:hover {
+            background: #5a8c8e;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(74, 124, 126, 0.3);
+        }
+
+        .choice-btn:active {
+            transform: translateY(0);
+        }
+
+        .new-game-btn {
+            background: #7e4a7c;
+            color: white;
+            display: none;
+        }
+
+        .new-game-btn:hover {
+            background: #8e5a8c;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(126, 74, 124, 0.3);
+        }
+
+        .result {
+            color: #eee;
+            font-size: 1.5rem;
+            margin-top: 1rem;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            height: 2rem;
+        }
+
+        .result.show {
+            opacity: 1;
+        }
+
+        .result.correct {
+            color: #4ade80;
+        }
+
+        .result.incorrect {
+            color: #f87171;
+        }
+
+        .stats {
+            color: #aaa;
+            font-size: 1rem;
+            margin-top: 0.5rem;
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+        }
+
+        /* Animation styles for different levels */
+        .level-2 .inner-square.revealing {
+            width: 150px;
+            height: 150px;
+        }
+
+        .level-2 #inner0.revealing {
+            transform: translateX(75px);
+        }
+
+        .level-2 #inner1.revealing {
+            transform: translateX(-75px);
+        }
+
+        .level-3 .inner-square.revealing {
+            width: 120px;
+            height: 120px;
+        }
+
+        .level-3 #inner0.revealing {
+            transform: translate(60px, 60px);
+        }
+
+        .level-3 #inner1.revealing {
+            transform: translate(-60px, 60px);
+        }
+
+        .level-3 #inner2.revealing {
+            transform: translateY(-60px);
+        }
+
+        .level-4 .inner-square.revealing {
+            width: 110px;
+            height: 110px;
+        }
+
+        .level-4 #inner0.revealing {
+            transform: translate(55px, 55px);
+        }
+
+        .level-4 #inner1.revealing {
+            transform: translate(-55px, 55px);
+        }
+
+        .level-4 #inner2.revealing {
+            transform: translate(55px, -55px);
+        }
+
+        .level-4 #inner3.revealing {
+            transform: translate(-55px, -55px);
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <button class="help-button" onclick="toggleHelp()">?</button>
+        
+        <h1>Contextual Color</h1>
+        <p style="color: #aaa; margin-top: -0.3rem; margin-bottom: 0.5rem; font-size: 0.9rem;">
+            Are all inner colors the same?
+        </p>
+        
+        <div class="level-selector">
+            <button class="level-btn active" onclick="setLevel(2)">Easy (2)</button>
+            <button class="level-btn" onclick="setLevel(3)">Medium (3)</button>
+            <button class="level-btn" onclick="setLevel(4)">Hard (4)</button>
+        </div>
+
+        <div class="swatches-container">
+            <div class="swatches-grid level-2" id="swatchesGrid"></div>
+        </div>
+
+        <div class="buttons-container" id="choiceButtons">
+            <button class="choice-btn" onclick="makeGuess(true)">Both Same</button>
+            <button class="choice-btn" onclick="makeGuess(false)">Different</button>
+        </div>
+
+        <button class="new-game-btn" id="newGameBtn" onclick="startNewGame()">New Game</button>
+
+        <div class="result" id="result"></div>
+        <div class="stats">
+            <div id="score">Score: 0 / 0</div>
+            <div id="avgTime">Avg Time: --</div>
+        </div>
+    </div>
+
+    <div class="help-modal" id="helpModal" onclick="closeHelpOnBackground(event)">
+        <div class="help-content">
+            <button class="close-help" onclick="toggleHelp()">×</button>
+            <h2>How to Play</h2>
+            <p><strong>Goal:</strong> Determine if all the inner colored squares are the same color or if one is different.</p>
+            <p><strong>Challenge:</strong> The surrounding colors create an optical illusion that affects how you perceive the inner colors. This is called <a href="https://www.google.com/search?q=simultaneous+contrast" target="_blank" rel="noopener">"simultaneous contrast."</a></p>
+            <p><strong>How it works:</strong></p>
+            <p>• Choose your difficulty level (2, 3, or 4 blocks)</p>
+            <p>• Look at the small squares inside the larger colored blocks</p>
+            <p>• Click "Both Same" (or "All Same") if you think they're identical</p>
+            <p>• Click "Different" if you think at least one is different</p>
+            <p>• The outer colors fade to black to reveal the truth!</p>
+            <p><strong>Tip:</strong> Try to ignore the outer colors and focus only on the inner squares. Your response time is being tracked!</p>
+        </div>
+    </div>
+
+    <script>
+        let currentLevel = 2;
+        let currentAnswer = null;
+        let score = 0;
+        let attempts = 0;
+        let startTime = null;
+        let totalTime = 0;
+
+        function updateButtonText() {
+            const sameBtn = document.querySelector('.choice-btn');
+            if (currentLevel === 2) {
+                sameBtn.textContent = 'Both Same';
+            } else {
+                sameBtn.textContent = 'All Same';
+            }
+        }
+
+        function setLevel(level) {
+            currentLevel = level;
+            document.querySelectorAll('.level-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            updateButtonText();
+            adjustSpacingForLevel();
+            startNewGame();
+        }
+
+        function adjustSpacingForLevel() {
+            const levelSelector = document.querySelector('.level-selector');
+            const swatchesContainer = document.querySelector('.swatches-container');
+            
+            if (currentLevel === 2) {
+                // Tight spacing for easy mode
+                levelSelector.style.marginBottom = '0.3rem';
+                swatchesContainer.style.marginBottom = '0.5rem';
+                swatchesContainer.style.minHeight = '180px';
+            } else {
+                // Normal spacing for 3 and 4 blocks
+                levelSelector.style.marginBottom = '1.5rem';
+                swatchesContainer.style.marginBottom = '2rem';
+                swatchesContainer.style.minHeight = '420px';
+            }
+        }
+
+        function randomColor() {
+            return `rgb(${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)})`;
+        }
+
+        function generateComplementaryColor(baseColor) {
+            const rgb = baseColor.match(/\d+/g).map(Number);
+            const compR = 255 - rgb[0];
+            const compG = 255 - rgb[1];
+            const compB = 255 - rgb[2];
+            
+            const variation = 30;
+            const r = Math.max(0, Math.min(255, compR + (Math.random() - 0.5) * variation));
+            const g = Math.max(0, Math.min(255, compG + (Math.random() - 0.5) * variation));
+            const b = Math.max(0, Math.min(255, compB + (Math.random() - 0.5) * variation));
+            
+            return `rgb(${Math.floor(r)}, ${Math.floor(g)}, ${Math.floor(b)})`;
+        }
+
+        function colorDistance(c1, c2) {
+            const r1 = parseInt(c1.match(/\d+/g)[0]);
+            const g1 = parseInt(c1.match(/\d+/g)[1]);
+            const b1 = parseInt(c1.match(/\d+/g)[2]);
+            
+            const r2 = parseInt(c2.match(/\d+/g)[0]);
+            const g2 = parseInt(c2.match(/\d+/g)[1]);
+            const b2 = parseInt(c2.match(/\d+/g)[2]);
+            
+            return Math.sqrt(Math.pow(r2 - r1, 2) + Math.pow(g2 - g1, 2) + Math.pow(b2 - b1, 2));
+        }
+
+        function generateColorInSpace(space = null) {
+            if (space === null) {
+                space = Math.floor(Math.random() * 6);
+            }
+            
+            let r, g, b;
+            const variation = 80;
+            
+            switch(space) {
+                case 0: // Reds
+                    r = 180 + Math.floor(Math.random() * 75);
+                    g = Math.floor(Math.random() * variation);
+                    b = Math.floor(Math.random() * variation);
+                    break;
+                case 1: // Greens
+                    r = Math.floor(Math.random() * variation);
+                    g = 180 + Math.floor(Math.random() * 75);
+                    b = Math.floor(Math.random() * variation);
+                    break;
+                case 2: // Blues
+                    r = Math.floor(Math.random() * variation);
+                    g = Math.floor(Math.random() * variation);
+                    b = 180 + Math.floor(Math.random() * 75);
+                    break;
+                case 3: // Yellows
+                    r = 180 + Math.floor(Math.random() * 75);
+                    g = 180 + Math.floor(Math.random() * 75);
+                    b = Math.floor(Math.random() * variation);
+                    break;
+                case 4: // Cyans
+                    r = Math.floor(Math.random() * variation);
+                    g = 180 + Math.floor(Math.random() * 75);
+                    b = 180 + Math.floor(Math.random() * 75);
+                    break;
+                case 5: // Magentas
+                    r = 180 + Math.floor(Math.random() * 75);
+                    g = Math.floor(Math.random() * variation);
+                    b = 180 + Math.floor(Math.random() * 75);
+                    break;
+            }
+            
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
+        function generateHighContrastColor(outerColors) {
+            let attempts = 0;
+            let innerColor;
+            
+            do {
+                innerColor = generateColorInSpace();
+                const innerRgb = innerColor.match(/\d+/g).map(Number);
+                
+                let minContrast = Infinity;
+                for (const outer of outerColors) {
+                    const outerRgb = outer.match(/\d+/g).map(Number);
+                    const contrast = Math.abs(innerRgb[0] - outerRgb[0]) + 
+                                   Math.abs(innerRgb[1] - outerRgb[1]) + 
+                                   Math.abs(innerRgb[2] - outerRgb[2]);
+                    minContrast = Math.min(minContrast, contrast);
+                }
+                
+                if (minContrast > 200) break;
+                attempts++;
+            } while (attempts < 20);
+            
+            return innerColor;
+        }
+
+        function generateSimilarButDifferentColor(baseColor) {
+            const rgb = baseColor.match(/\d+/g).map(Number);
+            let attempts = 0;
+            let newColor;
+            
+            do {
+                const shift = 30 + Math.floor(Math.random() * 50);
+                const direction = Math.random() < 0.5 ? -1 : 1;
+                
+                const r = Math.max(0, Math.min(255, rgb[0] + (shift * direction)));
+                const g = Math.max(0, Math.min(255, rgb[1] + (shift * 0.5 * direction)));
+                const b = Math.max(0, Math.min(255, rgb[2] + (shift * 0.5 * direction)));
+                
+                newColor = `rgb(${r}, ${g}, ${b})`;
+                attempts++;
+            } while (colorDistance(baseColor, newColor) < 50 && attempts < 10);
+            
+            return newColor;
+        }
+
+        function createSwatches() {
+            const grid = document.getElementById('swatchesGrid');
+            const container = document.querySelector('.swatches-container');
+            grid.innerHTML = '';
+            grid.className = `swatches-grid level-${currentLevel}`;
+            
+            if (currentLevel === 2) {
+                for (let i = 0; i < 2; i++) {
+                    const swatch = document.createElement('div');
+                    swatch.className = 'swatch';
+                    swatch.id = `swatch${i}`;
+                    
+                    const inner = document.createElement('div');
+                    inner.className = 'inner-square';
+                    inner.id = `inner${i}`;
+                    
+                    swatch.appendChild(inner);
+                    grid.appendChild(swatch);
+                }
+            } else if (currentLevel === 3) {
+                // Top row (2 swatches)
+                const topRow = document.createElement('div');
+                topRow.className = 'swatch-row';
+                for (let i = 0; i < 2; i++) {
+                    const swatch = document.createElement('div');
+                    swatch.className = 'swatch';
+                    swatch.id = `swatch${i}`;
+                    
+                    const inner = document.createElement('div');
+                    inner.className = 'inner-square';
+                    inner.id = `inner${i}`;
+                    
+                    swatch.appendChild(inner);
+                    topRow.appendChild(swatch);
+                }
+                grid.appendChild(topRow);
+                
+                // Bottom row (1 swatch)
+                const bottomRow = document.createElement('div');
+                bottomRow.className = 'swatch-row';
+                const swatch = document.createElement('div');
+                swatch.className = 'swatch';
+                swatch.id = 'swatch2';
+                
+                const inner = document.createElement('div');
+                inner.className = 'inner-square';
+                inner.id = 'inner2';
+                
+                swatch.appendChild(inner);
+                bottomRow.appendChild(swatch);
+                grid.appendChild(bottomRow);
+            } else if (currentLevel === 4) {
+                for (let i = 0; i < 4; i++) {
+                    const swatch = document.createElement('div');
+                    swatch.className = 'swatch';
+                    swatch.id = `swatch${i}`;
+                    
+                    const inner = document.createElement('div');
+                    inner.className = 'inner-square';
+                    inner.id = `inner${i}`;
+                    
+                    swatch.appendChild(inner);
+                    grid.appendChild(swatch);
+                }
+            }
+        }
+
+        function generateColors() {
+            const outerColors = [];
+            
+            // Generate unique outer colors
+            if (currentLevel === 2) {
+                // For 2 blocks: complementary colors
+                outerColors.push(randomColor());
+                outerColors.push(generateComplementaryColor(outerColors[0]));
+            } else if (currentLevel === 3) {
+                // For 3 blocks: triadic color scheme (120 degrees apart)
+                const baseHue = Math.random() * 360;
+                for (let i = 0; i < 3; i++) {
+                    const hue = (baseHue + i * 120) % 360;
+                    outerColors.push(hslToRgb(hue, 70 + Math.random() * 30, 40 + Math.random() * 40));
+                }
+            } else if (currentLevel === 4) {
+                // For 4 blocks: tetrad color scheme (90 degrees apart)
+                const baseHue = Math.random() * 360;
+                for (let i = 0; i < 4; i++) {
+                    const hue = (baseHue + i * 90) % 360;
+                    outerColors.push(hslToRgb(hue, 70 + Math.random() * 30, 40 + Math.random() * 40));
+                }
+            }
+            
+            // Decide if all same or one different
+            const allSame = Math.random() < 0.5;
+            currentAnswer = !allSame; // true means "different" button is correct
+            
+            const baseInnerColor = generateHighContrastColor(outerColors);
+            const innerColors = [];
+            
+            if (allSame) {
+                // All inner colors the same
+                for (let i = 0; i < currentLevel; i++) {
+                    innerColors.push(baseInnerColor);
+                }
+            } else {
+                // One color is different
+                const differentIndex = Math.floor(Math.random() * currentLevel);
+                for (let i = 0; i < currentLevel; i++) {
+                    if (i === differentIndex) {
+                        innerColors.push(generateSimilarButDifferentColor(baseInnerColor));
+                    } else {
+                        innerColors.push(baseInnerColor);
+                    }
+                }
+            }
+            
+            // Apply colors
+            for (let i = 0; i < currentLevel; i++) {
+                document.getElementById(`swatch${i}`).style.backgroundColor = outerColors[i];
+                document.getElementById(`inner${i}`).style.backgroundColor = innerColors[i];
+            }
+            
+            // Start timer
+            startTime = Date.now();
+        }
+
+        function hslToRgb(h, s, l) {
+            h = h / 360;
+            s = s / 100;
+            l = l / 100;
+            
+            let r, g, b;
+            
+            if (s === 0) {
+                r = g = b = l;
+            } else {
+                const hue2rgb = (p, q, t) => {
+                    if (t < 0) t += 1;
+                    if (t > 1) t -= 1;
+                    if (t < 1/6) return p + (q - p) * 6 * t;
+                    if (t < 1/2) return q;
+                    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                    return p;
+                };
+                
+                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                const p = 2 * l - q;
+                r = hue2rgb(p, q, h + 1/3);
+                g = hue2rgb(p, q, h);
+                b = hue2rgb(p, q, h - 1/3);
+            }
+            
+            return `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
+        }
+
+        function makeGuess(guessedAllSame) {
+            if (!startTime) return;
+            
+            const timeTaken = (Date.now() - startTime) / 1000;
+            totalTime += timeTaken;
+            attempts++;
+            
+            const correct = guessedAllSame !== currentAnswer;
+            
+            if (correct) {
+                score++;
+            }
+            
+            // Add classes for animation
+            for (let i = 0; i < currentLevel; i++) {
+                document.getElementById(`inner${i}`).classList.add('animate');
+                document.getElementById(`swatch${i}`).classList.add('revealing');
+                document.getElementById(`inner${i}`).classList.add('revealing');
+                document.getElementById(`swatch${i}`).style.backgroundColor = '#000';
+            }
+            
+            // Update UI
+            document.getElementById('choiceButtons').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('choiceButtons').style.display = 'none';
+                document.getElementById('newGameBtn').style.display = 'inline-block';
+            }, 300);
+            
+            const resultEl = document.getElementById('result');
+            resultEl.textContent = correct ? 'Correct! ✓' : 'Wrong! ✗';
+            resultEl.className = `result show ${correct ? 'correct' : 'incorrect'}`;
+            
+            document.getElementById('score').textContent = `Score: ${score} / ${attempts}`;
+            document.getElementById('avgTime').textContent = `Avg Time: ${(totalTime / attempts).toFixed(1)}s`;
+            
+            startTime = null;
+        }
+
+        function startNewGame() {
+            document.getElementById('result').className = 'result';
+            document.getElementById('newGameBtn').style.display = 'none';
+            document.getElementById('choiceButtons').style.display = 'flex';
+            setTimeout(() => {
+                document.getElementById('choiceButtons').style.opacity = '1';
+            }, 50);
+            
+            createSwatches();
+            generateColors();
+        }
+
+        function toggleHelp() {
+            const modal = document.getElementById('helpModal');
+            modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        function closeHelpOnBackground(event) {
+            if (event.target === event.currentTarget) {
+                toggleHelp();
+            }
+        }
+
+        // Initialize game
+        adjustSpacingForLevel();
+        updateButtonText();
+        createSwatches();
+        generateColors();
+    </script>
+</body>
+</html>
