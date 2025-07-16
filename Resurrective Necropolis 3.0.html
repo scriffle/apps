@@ -643,11 +643,13 @@ class LanguageDataLoader {
 
     async loadMetadata() {
         try {
+            console.log('Loading metadata from:', './languages/metadata.json');
             const response = await fetch('./languages/metadata.json');
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const data = await response.json();
+            console.log('Metadata loaded successfully:', data);
             this.metadata = data;
             this.config = data.config;
             return data;
@@ -783,11 +785,11 @@ async function initializeApp() {
         // Update stats
         updateStats();
         
-        // Generate first name without speaking
-        generateAndDisplay();
-        
         // Update voice status
         updateVoiceStatus('Click "Initialize Voice System" to enable speech');
+        
+        // Start the app
+        startApp();
         
     } catch (error) {
         console.error('Failed to initialize app:', error);
@@ -797,6 +799,13 @@ async function initializeApp() {
             Please ensure the JSON files are in the ./languages/ directory.
             <br>Error: ${error.message}
         `;
+    }
+}
+
+// Start the interval once app is initialized
+async function startApp() {
+    if (appState.isInitialized) {
+        startInterval();
     }
 }
 
@@ -921,9 +930,16 @@ async function generateName() {
 
 async function selectFamily() {
     const families = dataLoader.getAllFamilyIds();
+    console.log('Available families:', families);
+    
+    if (!families || families.length === 0) {
+        throw new Error('No language families available');
+    }
     
     if (!appState.isWeighted) {
-        return families[Math.floor(Math.random() * families.length)];
+        const selected = families[Math.floor(Math.random() * families.length)];
+        console.log('Selected family:', selected);
+        return selected;
     }
     
     // Weighted selection
@@ -936,7 +952,10 @@ async function selectFamily() {
     
     for (let i = 0; i < families.length; i++) {
         random -= weights[i];
-        if (random <= 0) return families[i];
+        if (random <= 0) {
+            console.log('Selected family (weighted):', families[i]);
+            return families[i];
+        }
     }
     
     return families[0];
@@ -1551,6 +1570,12 @@ function formatCategory(category) {
 
 // Interval management
 function startInterval() {
+    if (!appState.isInitialized) {
+        console.log('Cannot start interval - app not initialized');
+        return;
+    }
+    
+    // Generate first name immediately
     generateAndDisplay();
     
     if (appState.intervalId) {
@@ -1566,15 +1591,26 @@ function startInterval() {
 }
 
 async function generateAndDisplay() {
-    const nameData = await generateName();
-    if (nameData) {
-        displayName(nameData);
-        
-        if (appState.isRunning && appState.isVoiceInitialized) {
-            speakName(nameData);
+    if (!appState.isInitialized) {
+        console.log('App not initialized yet');
+        return;
+    }
+    
+    try {
+        const nameData = await generateName();
+        if (nameData) {
+            displayName(nameData);
+            
+            if (appState.isRunning && appState.isVoiceInitialized) {
+                speakName(nameData);
+            }
+            
+            updateStats(nameData);
+        } else {
+            console.error('No name data generated');
         }
-        
-        updateStats(nameData);
+    } catch (error) {
+        console.error('Error in generateAndDisplay:', error);
     }
 }
 
@@ -1685,6 +1721,13 @@ window.addEventListener('click', (e) => {
 window.addEventListener('DOMContentLoaded', () => {
     initializeApp();
 });
+
+// Start the interval once app is initialized
+async function startApp() {
+    if (appState.isInitialized) {
+        startInterval();
+    }
+}
 
 // Handle visibility change to pause/resume
 document.addEventListener('visibilitychange', () => {
