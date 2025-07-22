@@ -483,6 +483,8 @@
             <option value="">-- Select Subject --</option>
             <option value="physics">Physics</option>
             <option value="chemistry">Chemistry</option>
+            <option value="biology">Biology</option>
+            <option value="psychology">Psychology</option>
         </select>
         <select id="unit-select" disabled>
             <option value="">-- Select Unit --</option>
@@ -526,6 +528,11 @@
         let currentCourseData = null;
         let studentData = {
             name: '',
+            lastCourseSelection: {
+                subject: '',
+                unit: '',
+                aos: ''
+            },
             courses: {}
         };
         
@@ -534,6 +541,7 @@
             loadManifest();
             loadSavedData();
             setupEventListeners();
+            restoreLastSelection();
         });
         
         // Load manifest
@@ -565,6 +573,8 @@
             
             if (subject) {
                 unitSelect.disabled = false;
+                studentData.lastCourseSelection.subject = subject;
+                saveData();
             } else {
                 unitSelect.disabled = true;
                 aosSelect.disabled = true;
@@ -585,6 +595,9 @@
             const loadBtn = document.getElementById('load-course');
             
             if (unit && manifest) {
+                studentData.lastCourseSelection.unit = unit;
+                saveData();
+                
                 // Filter courses for this subject and unit
                 const relevantCourses = manifest.courses.filter(course => 
                     course.id.includes(subject) && course.id.includes(unit)
@@ -613,6 +626,10 @@
         function handleAosChange() {
             const aos = document.getElementById('aos-select').value;
             document.getElementById('load-course').disabled = !aos;
+            if (aos) {
+                studentData.lastCourseSelection.aos = aos;
+                saveData();
+            }
         }
         
         // Load selected course
@@ -652,6 +669,28 @@
                 console.error('Course load error:', error);
             } finally {
                 showLoading(false);
+            }
+        }
+        
+        // Restore last selection
+        function restoreLastSelection() {
+            if (studentData.lastCourseSelection.subject) {
+                document.getElementById('subject-select').value = studentData.lastCourseSelection.subject;
+                handleSubjectChange();
+                
+                if (studentData.lastCourseSelection.unit) {
+                    setTimeout(() => {
+                        document.getElementById('unit-select').value = studentData.lastCourseSelection.unit;
+                        handleUnitChange();
+                        
+                        if (studentData.lastCourseSelection.aos) {
+                            setTimeout(() => {
+                                document.getElementById('aos-select').value = studentData.lastCourseSelection.aos;
+                                handleAosChange();
+                            }, 100);
+                        }
+                    }, 100);
+                }
             }
         }
         
@@ -1069,7 +1108,7 @@
             const selected = document.querySelector(`#${questionId} input[value="${option}"]`);
             if (selected) {
                 selected.checked = true;
-                selected.parentElement.classList.add('selected');
+                selected.parentElement.parentElement.classList.add('selected');
             }
         }
         
@@ -1290,6 +1329,14 @@
             const saved = localStorage.getItem('vcePhysicsData');
             if (saved) {
                 studentData = JSON.parse(saved);
+                // Ensure lastCourseSelection exists for older saved data
+                if (!studentData.lastCourseSelection) {
+                    studentData.lastCourseSelection = {
+                        subject: '',
+                        unit: '',
+                        aos: ''
+                    };
+                }
                 document.getElementById('student-name').value = studentData.name || '';
             }
         }
