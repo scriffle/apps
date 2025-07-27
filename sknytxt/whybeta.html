@@ -637,22 +637,21 @@
             font-style: italic;
         }
         
-        /* Search tooltip styles */
+        /* Text Selection Tooltip Styles */
         .search-tooltip {
             position: absolute;
             background: #333;
             color: white;
             padding: 8px 12px;
             border-radius: 6px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            font-size: 13px;
+            z-index: 10000;
             opacity: 0;
             pointer-events: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
             transform: translateY(-5px);
-            transition: all 0.2s ease;
-            z-index: 10000;
-            font-size: 13px;
-            min-width: 150px;
-            text-align: center;
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
         }
         
         .search-tooltip.visible {
@@ -666,47 +665,49 @@
             position: absolute;
             top: 100%;
             left: 50%;
-            margin-left: -5px;
-            border-width: 5px;
-            border-style: solid;
-            border-color: #333 transparent transparent transparent;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: #333;
+        }
+        
+        .search-tooltip.below {
+            transform: translateY(5px);
         }
         
         .search-tooltip.below::after {
             top: auto;
             bottom: 100%;
-            border-color: transparent transparent #333 transparent;
+            border-top-color: transparent;
+            border-bottom-color: #333;
         }
         
-        .search-tooltip-links {
+        .search-options {
             display: flex;
-            gap: 12px;
-            justify-content: center;
+            gap: 10px;
             align-items: center;
         }
         
-        .search-tooltip a {
+        .search-link {
             color: white;
             text-decoration: none;
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
             padding: 4px 8px;
             border-radius: 4px;
-            transition: background-color 0.2s;
+            transition: background 0.2s ease;
+            font-size: 13px;
         }
         
-        .search-tooltip a:hover {
-            background: rgba(255,255,255,0.1);
+        .search-link:hover {
+            background: rgba(255, 255, 255, 0.1);
         }
         
-        .search-tooltip .divider {
-            color: #666;
-            font-weight: 300;
+        .search-link .icon {
+            font-size: 14px;
         }
         
-        /* Selection tip */
-        .selection-tip {
+        .search-tip {
             position: fixed;
             bottom: 20px;
             right: 20px;
@@ -714,28 +715,33 @@
             color: white;
             padding: 12px 16px;
             border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
             font-size: 13px;
             opacity: 0;
             transform: translateY(10px);
             transition: all 0.3s ease;
-            z-index: 9999;
+            pointer-events: none;
             max-width: 280px;
+            line-height: 1.4;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
         }
         
-        .selection-tip.visible {
+        .search-tip.visible {
             opacity: 1;
             transform: translateY(0);
+            pointer-events: auto;
         }
         
-        .selection-tip-close {
-            margin-left: 10px;
+        .search-tip-close {
+            position: absolute;
+            top: 4px;
+            right: 8px;
             cursor: pointer;
-            opacity: 0.6;
+            opacity: 0.7;
+            font-size: 16px;
             transition: opacity 0.2s;
         }
         
-        .selection-tip-close:hover {
+        .search-tip-close:hover {
             opacity: 1;
         }
         
@@ -746,7 +752,7 @@
                 align-items: center;
             }
             
-            .selection-tip {
+            .search-tip {
                 bottom: 10px;
                 right: 10px;
                 left: 10px;
@@ -804,24 +810,23 @@
         <h2 id="course-title"></h2>
         <div id="topics-container"></div>
     </div>
-    
+
     <!-- Search tooltip -->
     <div class="search-tooltip" id="searchTooltip">
-        <div class="search-tooltip-links">
-            <a href="#" target="_blank" id="googleSearchLink">
-                <span>🔍</span> Google
+        <div class="search-options">
+            <a href="#" class="search-link" id="googleSearchLink" target="_blank">
+                <span class="icon">🔍</span> Google
             </a>
-            <span class="divider">|</span>
-            <a href="#" target="_blank" id="chatgptSearchLink">
-                <span>💬</span> ChatGPT
+            <a href="#" class="search-link" id="chatgptSearchLink" target="_blank">
+                <span class="icon">💬</span> ChatGPT
             </a>
         </div>
     </div>
-    
-    <!-- Selection tip -->
-    <div class="selection-tip" id="selectionTip">
-        <span>Tip: Select any text to search for it on Google or ChatGPT</span>
-        <span class="selection-tip-close" onclick="hideSelectionTip()">✕</span>
+
+    <!-- Search tip -->
+    <div class="search-tip" id="searchTip">
+        <span class="search-tip-close" onclick="hideSearchTip()">×</span>
+        Tip: Select any text on the page to quickly search for it on Google or ChatGPT
     </div>
 
     <script>
@@ -838,13 +843,13 @@
                 aos: ''
             },
             courses: {},
-            hasSeenSelectionTip: false
+            hasSeenSearchTip: false
         };
         
         // Text selection tooltip variables
-        let tooltip;
-        let showTimeout;
-        let hideTimeout;
+        let tooltip = null;
+        let showTimeout = null;
+        let hideTimeout = null;
         let lastSelectionText = '';
         let isTouch = false;
         
@@ -854,99 +859,111 @@
             loadSavedData();
             setupEventListeners();
             restoreLastSelection();
-            initializeTextSelectionTooltip();
+            initializeSelectionTooltip();
+            showSearchTipIfNeeded();
         });
         
         // Initialize text selection tooltip
-        function initializeTextSelectionTooltip() {
+        function initializeSelectionTooltip() {
             tooltip = document.getElementById('searchTooltip');
             isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
             
-            // Show tip if user hasn't seen it
-            if (!studentData.hasSeenSelectionTip) {
-                setTimeout(() => {
-                    showSelectionTip();
-                }, 2000);
-            }
-            
-            // Desktop events
-            if (!isTouch) {
+            // Event listeners
+            if (isTouch) {
+                document.addEventListener('touchend', () => handleSelection(false));
+                document.addEventListener('selectionchange', () => handleSelection(false));
+            } else {
                 document.addEventListener('mouseup', () => handleSelection(true));
             }
             
-            // Touch events
-            document.addEventListener('touchend', () => handleSelection(false));
-            document.addEventListener('selectionchange', () => {
-                if (isTouch) handleSelection(false);
-            });
-            
-            // Hide tooltip on click outside
-            document.addEventListener('click', (e) => {
+            // Hide tooltip when clicking elsewhere
+            document.addEventListener('mousedown', (e) => {
                 if (!tooltip.contains(e.target)) {
                     hideTooltip();
                 }
             });
             
-            // Hide tooltip on scroll
-            window.addEventListener('scroll', hideTooltip);
-        }
-        
-        // Show selection tip
-        function showSelectionTip() {
-            const tip = document.getElementById('selectionTip');
-            tip.classList.add('visible');
-        }
-        
-        // Hide selection tip
-        function hideSelectionTip() {
-            const tip = document.getElementById('selectionTip');
-            tip.classList.remove('visible');
-            studentData.hasSeenSelectionTip = true;
-            saveData();
+            document.addEventListener('touchstart', (e) => {
+                if (!tooltip.contains(e.target)) {
+                    hideTooltip();
+                }
+            });
+            
+            // Prevent selection inside tooltip
+            tooltip.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+            });
         }
         
         // Handle text selection
         function handleSelection(immediate) {
-            clearTimeout(showTimeout);
-            clearTimeout(hideTimeout);
-            
             const selection = window.getSelection();
-            const text = selection.toString().trim();
+            const selectedText = selection.toString().trim();
             
-            // Check if selection changed
-            if (text !== lastSelectionText) {
-                lastSelectionText = text;
+            // Clear any existing timeouts
+            if (showTimeout) {
+                clearTimeout(showTimeout);
+                showTimeout = null;
+            }
+            
+            // If selection changed or cleared
+            if (selectedText !== lastSelectionText) {
+                lastSelectionText = selectedText;
                 
-                if (text && text.length > 0) {
-                    // Hide tip on first selection
-                    if (!studentData.hasSeenSelectionTip) {
-                        hideSelectionTip();
-                    }
-                    
+                if (!selectedText) {
+                    hideTooltip();
+                    return;
+                }
+                
+                // Don't show for single characters
+                if (selectedText.length < 2) {
+                    hideTooltip();
+                    return;
+                }
+                
+                const showTooltipFunc = () => {
                     const range = selection.getRangeAt(0);
                     const rect = range.getBoundingClientRect();
                     
-                    if (immediate) {
-                        showTooltip(text, rect);
-                    } else {
-                        // Touch device: wait 1.5 seconds
-                        showTimeout = setTimeout(() => {
-                            // Check if selection still exists and is the same
-                            const currentSelection = window.getSelection();
-                            const currentText = currentSelection.toString().trim();
-                            if (currentText === text) {
-                                showTooltip(text, rect);
-                            }
-                        }, 1500);
+                    // Calculate position
+                    const tooltipWidth = 160; // Approximate width
+                    const tooltipHeight = 40; // Approximate height
+                    
+                    let x = rect.left + (rect.width / 2) - (tooltipWidth / 2);
+                    let y = rect.top - tooltipHeight - 10;
+                    
+                    // Check if tooltip would go off-screen
+                    const viewportWidth = window.innerWidth;
+                    const viewportHeight = window.innerHeight;
+                    
+                    // Horizontal bounds
+                    if (x < 10) x = 10;
+                    if (x + tooltipWidth > viewportWidth - 10) {
+                        x = viewportWidth - tooltipWidth - 10;
                     }
+                    
+                    // Vertical bounds
+                    let isBelow = false;
+                    if (y < 10) {
+                        // Show below selection instead
+                        y = rect.bottom + 10;
+                        isBelow = true;
+                    }
+                    
+                    showTooltip(selectedText, x + window.scrollX, y + window.scrollY, isBelow);
+                };
+                
+                if (immediate) {
+                    showTooltipFunc();
                 } else {
-                    hideTooltip();
+                    // Touch device - wait 1.5 seconds
+                    showTimeout = setTimeout(showTooltipFunc, 1500);
                 }
             }
         }
         
         // Show tooltip
-        function showTooltip(text, rect) {
+        function showTooltip(text, x, y, isBelow = false) {
             // Update search links
             const encodedText = encodeURIComponent(text);
             document.getElementById('googleSearchLink').href = 
@@ -954,58 +971,52 @@
             document.getElementById('chatgptSearchLink').href = 
                 `https://chat.openai.com/?q=${encodedText}`;
             
-            // Calculate position (convert viewport coords to document coords)
-            let left = rect.left + (rect.width / 2) + window.scrollX;
-            let top = rect.top - 10 + window.scrollY;
+            // Position tooltip
+            tooltip.style.left = x + 'px';
+            tooltip.style.top = y + 'px';
             
-            // Show tooltip to get dimensions
-            tooltip.style.left = '0px';
-            tooltip.style.top = '0px';
-            tooltip.classList.add('visible');
-            
-            const tooltipRect = tooltip.getBoundingClientRect();
-            const tooltipWidth = tooltipRect.width;
-            const tooltipHeight = tooltipRect.height;
-            
-            // Center horizontally
-            left -= tooltipWidth / 2;
-            
-            // Check boundaries
-            const padding = 10;
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-            
-            // Horizontal boundaries (check against viewport + scroll)
-            if (left < padding + window.scrollX) {
-                left = padding + window.scrollX;
-            } else if (left + tooltipWidth + padding > viewportWidth + window.scrollX) {
-                left = viewportWidth + window.scrollX - tooltipWidth - padding;
-            }
-            
-            // Vertical boundaries
-            tooltip.classList.remove('below');
-            if (top - tooltipHeight < padding + window.scrollY) {
-                // Show below selection
-                top = rect.bottom + 10 + window.scrollY;
+            // Add/remove below class
+            if (isBelow) {
                 tooltip.classList.add('below');
             } else {
-                top -= tooltipHeight;
+                tooltip.classList.remove('below');
             }
             
-            // Set final position
-            tooltip.style.left = left + 'px';
-            tooltip.style.top = top + 'px';
+            // Show tooltip
+            tooltip.classList.add('visible');
+            
+            // Hide search tip if visible
+            hideSearchTip();
         }
         
         // Hide tooltip
         function hideTooltip() {
-            clearTimeout(showTimeout);
-            clearTimeout(hideTimeout);
+            if (hideTimeout) {
+                clearTimeout(hideTimeout);
+            }
             
             hideTimeout = setTimeout(() => {
                 tooltip.classList.remove('visible');
                 lastSelectionText = '';
             }, 100);
+        }
+        
+        // Show search tip if needed
+        function showSearchTipIfNeeded() {
+            if (!studentData.hasSeenSearchTip) {
+                setTimeout(() => {
+                    const tip = document.getElementById('searchTip');
+                    tip.classList.add('visible');
+                }, 2000);
+            }
+        }
+        
+        // Hide search tip
+        function hideSearchTip() {
+            const tip = document.getElementById('searchTip');
+            tip.classList.remove('visible');
+            studentData.hasSeenSearchTip = true;
+            saveData();
         }
         
         // Load manifest
@@ -1941,9 +1952,9 @@
                         aos: ''
                     };
                 }
-                // Ensure hasSeenSelectionTip exists
-                if (studentData.hasSeenSelectionTip === undefined) {
-                    studentData.hasSeenSelectionTip = false;
+                // Ensure hasSeenSearchTip exists
+                if (studentData.hasSeenSearchTip === undefined) {
+                    studentData.hasSeenSearchTip = false;
                 }
                 document.getElementById('student-name').value = studentData.name || '';
             }
