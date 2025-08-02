@@ -110,7 +110,7 @@
         /* Slide-in tab panel styles */
         .slide-panel {
             position: fixed;
-            top: 20%;
+            top: 100px;
             right: -300px;
             width: 300px;
             background-color: #f0f0f0;
@@ -126,24 +126,7 @@
         }
         
         .panel-tab {
-            position: absolute;
-            left: -80px;
-            top: 100px;
-            width: 80px;
-            height: 40px;
-            transform: rotate(-90deg);
-            transform-origin: right center;
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 8px 8px 0 0;
-            cursor: pointer;
-            font-weight: bold;
-            box-shadow: -2px 0 4px rgba(0,0,0,0.2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
+            display: none;
         }
         
         .panel-content {
@@ -285,15 +268,31 @@
     </style>
 </head>
 <body>
+    <!-- Floating Control Button - Always Visible -->
+    <button class="floating-control-btn" onclick="togglePanel()" style="
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        width: 60px;
+        height: 60px;
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 24px;
+        font-weight: bold;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        z-index: 1001;
+        transition: all 0.3s;
+    " onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">☰</button>
+
     <div class="slide-panel" id="controlPanel">
-        <div class="panel-tab" onclick="togglePanel()">Controls</div>
         <div class="panel-content">
             <h4 style="margin-top: 0;">Mode Selection</h4>
             <div class="timer-display" id="timerDisplay">
                 Feedback available in: <span id="timeRemaining">5:00</span>
             </div>
-            <button class="mode-button active" id="entryModeBtn" onclick="setMode('entry')">Data Entry</button>
-            <button class="mode-button" id="feedbackModeBtn" onclick="setMode('feedback')" disabled>Feedback</button>
             <button class="show-model-button" id="modelDataBtn" onclick="showModelData()" disabled>Show Model Data</button>
         </div>
     </div>
@@ -604,8 +603,7 @@
                 
                 // Check if Q, W, and E are all pressed
                 if (keysPressed['q'] && keysPressed['w'] && keysPressed['e']) {
-                    // Immediately enable feedback and model data
-                    document.getElementById('feedbackModeBtn').disabled = false;
+                    // Immediately enable model data
                     document.getElementById('modelDataBtn').disabled = false;
                     
                     const timerDisplay = document.getElementById('timerDisplay');
@@ -638,15 +636,34 @@
         function initializeTimer() {
             // Check if timer has already been started
             const savedStartTime = localStorage.getItem('photoelectric_timer_start');
-            if (savedStartTime) {
+            const timerActive = localStorage.getItem('photoelectric_timer_active');
+            
+            if (savedStartTime && timerActive === 'true') {
                 startTime = parseInt(savedStartTime);
             } else {
-                startTime = Date.now();
-                localStorage.setItem('photoelectric_timer_start', startTime);
+                // Timer not started yet - don't start until user begins entering data
+                startTime = null;
             }
             
-            updateTimer();
-            timerInterval = setInterval(updateTimer, 1000);
+            if (startTime) {
+                updateTimer();
+                timerInterval = setInterval(updateTimer, 1000);
+            } else {
+                // Show timer as not started
+                const timerDisplay = document.getElementById('timerDisplay');
+                timerDisplay.innerHTML = 'Timer will start when you begin entering data';
+                timerDisplay.classList.remove('ready');
+            }
+        }
+        
+        function startTimerIfNeeded() {
+            if (!startTime) {
+                startTime = Date.now();
+                localStorage.setItem('photoelectric_timer_start', startTime);
+                localStorage.setItem('photoelectric_timer_active', 'true');
+                updateTimer();
+                timerInterval = setInterval(updateTimer, 1000);
+            }
         }
 
         function updateTimer() {
@@ -662,16 +679,16 @@
             const timeRemaining = document.getElementById('timeRemaining');
             
             if (remaining > 0) {
-                timeRemaining.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                timerDisplay.innerHTML = `Model answers available in: <span id="timeRemaining">${minutes}:${seconds.toString().padStart(2, '0')}</span>`;
                 timerDisplay.classList.remove('ready');
-                document.getElementById('feedbackModeBtn').disabled = true;
                 document.getElementById('modelDataBtn').disabled = true;
             } else {
-                timerDisplay.innerHTML = '<span style="color: #4CAF50;">✓ Feedback and Model Data Available!</span>';
+                timerDisplay.innerHTML = '<span style="color: #4CAF50;">✓ Model Answers Available!</span>';
                 timerDisplay.classList.add('ready');
-                document.getElementById('feedbackModeBtn').disabled = false;
                 document.getElementById('modelDataBtn').disabled = false;
-                clearInterval(timerInterval);
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                }
             }
         }
 
@@ -681,9 +698,11 @@
             persistElements.forEach(element => {
                 element.addEventListener('input', function() {
                     saveData(this);
+                    startTimerIfNeeded(); // Start timer on first input
                 });
                 element.addEventListener('change', function() {
                     saveData(this);
+                    startTimerIfNeeded(); // Start timer on first input
                 });
             });
         }
@@ -719,16 +738,7 @@
 
         function setMode(mode) {
             currentMode = mode;
-            document.querySelectorAll('.mode-button').forEach(btn => {
-                btn.classList.remove('active');
-            });
             
-            if (mode === 'entry') {
-                document.getElementById('entryModeBtn').classList.add('active');
-            } else {
-                document.getElementById('feedbackModeBtn').classList.add('active');
-            }
-
             if (mode === 'feedback') {
                 document.body.classList.add('feedback-mode');
                 applyFeedback();
@@ -792,11 +802,11 @@
         }
 
         function clearAllData() {
-            if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
-                // Clear localStorage (except timer)
+            if (confirm('Are you sure you want to clear all data? This will also reset the timer.')) {
+                // Clear localStorage
                 const keys = Object.keys(localStorage);
                 keys.forEach(key => {
-                    if (key.startsWith('photoelectric_') && key !== 'photoelectric_timer_start') {
+                    if (key.startsWith('photoelectric_')) {
                         localStorage.removeItem(key);
                     }
                 });
@@ -810,8 +820,18 @@
                 // Clear feedback
                 clearFeedback();
                 
+                // Reset timer
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                }
+                startTime = null;
+                initializeTimer();
+                
                 // Update graph
                 updateGraph();
+                
+                // Reset mode to entry
+                setMode('entry');
             }
         }
 
