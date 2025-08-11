@@ -85,7 +85,7 @@
             border-radius: 5px;
             line-height: 2;
             font-size: 17px;
-            text-align: justify;
+            text-align: left;
         }
         
         .content-section h3 {
@@ -100,7 +100,7 @@
             border: 2px solid #cbd5e0;
             border-radius: 5px;
             font-size: 16px;
-            background: white;
+            background: #fffacd;
             cursor: pointer;
             transition: all 0.3s;
             min-width: 150px;
@@ -110,14 +110,19 @@
             border-color: #5C4033;
         }
         
+        select.selected {
+            background: #add8e6;
+            border-color: #4682b4;
+        }
+        
         select.correct {
-            border-color: #48bb78;
-            background: #e6fffa;
+            background: #90ee90;
+            border-color: #228b22;
         }
         
         select.incorrect {
-            border-color: #f56565;
-            background: #fff5f5;
+            background: #d3d3d3;
+            border-color: #696969;
         }
         
         .tooltip {
@@ -141,9 +146,10 @@
             opacity: 0;
             transition: opacity 0.3s;
             font-size: 14px;
+            pointer-events: none;
         }
         
-        .tooltip .tooltiptext.show {
+        .tooltip .tooltiptext.show-delayed {
             visibility: visible;
             opacity: 1;
         }
@@ -243,7 +249,7 @@
         </div>
         
         <div class="progress-indicator">
-            Completed: <span id="progressCount">0/64</span> | Submit button will activate when all fields are complete
+            Current Tab - Completed: <span id="progressCount">0/16</span> | Submit button will activate when current tab is complete
         </div>
         
         <div class="tabs">
@@ -450,6 +456,11 @@
                 </span>
                 was preferred over limestone for ancient Greek statues.
             </div>
+            
+            <div class="button-container">
+                <button id="rocksSubmitBtn" onclick="submitTab('rocks')" disabled>Submit Types of Rock</button>
+                <button onclick="resetTab('rocks')">Reset This Section</button>
+            </div>
         </div>
         
         <!-- Tab 2: Structure of the Earth -->
@@ -649,6 +660,11 @@
                 </span>
                 and pressure conditions.
             </div>
+            
+            <div class="button-container">
+                <button id="structureSubmitBtn" onclick="submitTab('structure')" disabled>Submit Earth's Structure</button>
+                <button onclick="resetTab('structure')">Reset This Section</button>
+            </div>
         </div>
         
         <!-- Tab 3: Rock Cycle -->
@@ -846,6 +862,11 @@
                     <span class="tooltiptext">Geological hazard</span>
                 </span>
                 risks.
+            </div>
+            
+            <div class="button-container">
+                <button id="cycleSubmitBtn" onclick="submitTab('cycle')" disabled>Submit Rock Cycle</button>
+                <button onclick="resetTab('cycle')">Reset This Section</button>
             </div>
         </div>
         
@@ -1045,22 +1066,20 @@
                 </span>
                 minerals in the field.
             </div>
+            
+            <div class="button-container">
+                <button id="mineralsSubmitBtn" onclick="submitTab('minerals')" disabled>Submit Minerals</button>
+                <button onclick="resetTab('minerals')">Reset This Section</button>
+            </div>
         </div>
         
-        <div class="button-container">
-            <button id="submitBtn" onclick="submitAnswers()" disabled>Submit Answers</button>
-            <button onclick="resetQuiz()">Reset Quiz</button>
-        </div>
         
         <div class="stats" id="stats" style="display: none;">
             <h3>Your Results</h3>
+            <div id="tabStats"></div>
             <div class="stat-item">
-                <div class="stat-value" id="scoreValue">0/0</div>
-                <div class="stat-label">Score</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-value" id="percentValue">0%</div>
-                <div class="stat-label">Percentage</div>
+                <div class="stat-value" id="overallScore">0/64</div>
+                <div class="stat-label">Overall Score</div>
             </div>
             <div class="stat-item">
                 <div class="stat-value" id="attemptValue">1</div>
@@ -1070,14 +1089,98 @@
     </div>
     
     <script>
-        let submitted = false;
+        let submitted = {};
         let currentTab = 'rocks';
+        let tabScores = {
+            rocks: null,
+            structure: null,
+            cycle: null,
+            minerals: null
+        };
+        let tooltipTimers = {};
         
         // Load saved data on page load
         window.onload = function() {
             loadSavedData();
+            randomizeDropdowns();
             addChangeListeners();
+            addTooltipListeners();
+            checkCompletion();
         };
+        
+        function randomizeDropdowns() {
+            // Get all select elements
+            const selects = document.querySelectorAll('select');
+            
+            selects.forEach(select => {
+                // Get all options except the first one (--Select--)
+                const options = Array.from(select.options).slice(1);
+                
+                // Shuffle the options array
+                for (let i = options.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [options[i], options[j]] = [options[j], options[i]];
+                }
+                
+                // Remove all options except the first
+                while (select.options.length > 1) {
+                    select.remove(1);
+                }
+                
+                // Re-add the shuffled options
+                options.forEach(option => {
+                    select.add(option);
+                });
+            });
+        }
+        
+        function addTooltipListeners() {
+            // Add hover listeners to all tooltips
+            const tooltips = document.querySelectorAll('.tooltip');
+            
+            tooltips.forEach((tooltip, index) => {
+                const tooltipText = tooltip.querySelector('.tooltiptext');
+                const select = tooltip.querySelector('select');
+                
+                if (tooltipText && select) {
+                    // Mouse enter - start timer
+                    tooltip.addEventListener('mouseenter', function() {
+                        // Only show tooltip if the answer is incorrect (has incorrect class)
+                        if (select.classList.contains('incorrect')) {
+                            // Clear any existing timer for this tooltip
+                            if (tooltipTimers[index]) {
+                                clearTimeout(tooltipTimers[index]);
+                            }
+                            
+                            // Set new timer for 1.5 seconds
+                            tooltipTimers[index] = setTimeout(() => {
+                                tooltipText.classList.add('show-delayed');
+                            }, 1500);
+                        }
+                    });
+                    
+                    // Mouse leave - clear timer and hide tooltip
+                    tooltip.addEventListener('mouseleave', function() {
+                        if (tooltipTimers[index]) {
+                            clearTimeout(tooltipTimers[index]);
+                            tooltipTimers[index] = null;
+                        }
+                        tooltipText.classList.remove('show-delayed');
+                    });
+                    
+                    // Mouse move - hide tooltip and clear timer
+                    tooltip.addEventListener('mousemove', function() {
+                        if (tooltipText.classList.contains('show-delayed')) {
+                            tooltipText.classList.remove('show-delayed');
+                        }
+                        if (tooltipTimers[index]) {
+                            clearTimeout(tooltipTimers[index]);
+                            tooltipTimers[index] = null;
+                        }
+                    });
+                }
+            });
+        }
         
         function openTab(evt, tabName) {
             // Hide all tab content
@@ -1096,37 +1199,54 @@
             document.getElementById(tabName).classList.add('active');
             evt.currentTarget.classList.add('active');
             currentTab = tabName;
+            
+            // Update progress for current tab
+            checkCompletion();
         }
         
         function addChangeListeners() {
             // Add change listeners to all select elements
             const selects = document.querySelectorAll('select');
             selects.forEach(select => {
-                select.addEventListener('change', checkCompletion);
+                select.addEventListener('change', function() {
+                    if (this.value !== '') {
+                        this.classList.add('selected');
+                    } else {
+                        this.classList.remove('selected');
+                    }
+                    checkCompletion();
+                });
             });
         }
         
         function checkCompletion() {
-            let completed = 0;
-            let total = 64;
+            // Get the prefix for current tab
+            let prefix = '';
+            switch(currentTab) {
+                case 'rocks': prefix = 'r'; break;
+                case 'structure': prefix = 's'; break;
+                case 'cycle': prefix = 'c'; break;
+                case 'minerals': prefix = 'm'; break;
+            }
             
-            // Count all completed fields across all tabs
-            const selects = document.querySelectorAll('select');
-            selects.forEach(select => {
-                if (select.value !== '') {
+            let completed = 0;
+            let total = 16;
+            
+            // Count completed fields in current tab
+            for (let i = 1; i <= 16; i++) {
+                const select = document.getElementById(prefix + i);
+                if (select && select.value !== '') {
                     completed++;
                 }
-            });
+            }
             
             // Update progress indicator
             document.getElementById('progressCount').textContent = completed + '/' + total;
             
-            // Enable submit button only if all fields are completed
-            const submitBtn = document.getElementById('submitBtn');
-            if (completed === total) {
-                submitBtn.disabled = false;
-            } else {
-                submitBtn.disabled = true;
+            // Enable/disable submit button for current tab
+            const submitBtn = document.getElementById(currentTab + 'SubmitBtn');
+            if (submitBtn) {
+                submitBtn.disabled = (completed !== total);
             }
         }
         
@@ -1134,6 +1254,13 @@
             const savedName = localStorage.getItem('geoStudentName');
             const firstAttemptDate = localStorage.getItem('geoFirstAttemptDate');
             const attemptCount = localStorage.getItem('geoAttemptCount') || 0;
+            
+            // Load saved scores
+            const savedScores = localStorage.getItem('geoTabScores');
+            if (savedScores) {
+                tabScores = JSON.parse(savedScores);
+                updateStatsDisplay();
+            }
             
             if (savedName) {
                 document.getElementById('studentName').value = savedName;
@@ -1148,9 +1275,7 @@
             }
         }
         
-        function submitAnswers() {
-            submitted = true;
-            
+        function submitTab(tabName) {
             // Save student name
             const studentName = document.getElementById('studentName').value;
             if (studentName) {
@@ -1165,72 +1290,142 @@
                 document.getElementById('firstAttempt').value = dateStr;
             }
             
-            // Increment attempt count
-            let attemptCount = parseInt(localStorage.getItem('geoAttemptCount') || 0) + 1;
-            localStorage.setItem('geoAttemptCount', attemptCount);
+            // Get the prefix for this tab
+            let prefix = '';
+            switch(tabName) {
+                case 'rocks': prefix = 'r'; break;
+                case 'structure': prefix = 's'; break;
+                case 'cycle': prefix = 'c'; break;
+                case 'minerals': prefix = 'm'; break;
+            }
             
-            // Check answers
+            // Check answers for this tab
             let correct = 0;
-            let total = 64;
+            let total = 16;
             
-            const selects = document.querySelectorAll('select');
-            selects.forEach(select => {
-                const correctAnswer = select.getAttribute('data-correct');
-                const selectedAnswer = select.value;
-                
-                // Reset classes
-                select.classList.remove('correct', 'incorrect');
-                
-                if (selectedAnswer === correctAnswer) {
-                    select.classList.add('correct');
-                    correct++;
-                } else if (selectedAnswer !== '') {
-                    select.classList.add('incorrect');
-                    // Show tooltip for incorrect answers
-                    const tooltip = select.parentElement.querySelector('.tooltiptext');
-                    if (tooltip) {
-                        tooltip.classList.add('show');
+            for (let i = 1; i <= 16; i++) {
+                const select = document.getElementById(prefix + i);
+                if (select) {
+                    const correctAnswer = select.getAttribute('data-correct');
+                    const selectedAnswer = select.value;
+                    
+                    // Reset classes
+                    select.classList.remove('selected', 'correct', 'incorrect');
+                    
+                    if (selectedAnswer === correctAnswer) {
+                        select.classList.add('correct');
+                        correct++;
+                    } else if (selectedAnswer !== '') {
+                        select.classList.add('incorrect');
+                        // Note: Not automatically showing tooltips anymore
                     }
+                }
+            }
+            
+            // Save score for this tab
+            tabScores[tabName] = {
+                score: correct,
+                total: total,
+                percentage: Math.round((correct/total)*100)
+            };
+            
+            // Save to localStorage
+            localStorage.setItem('geoTabScores', JSON.stringify(tabScores));
+            
+            // Update attempt count only if this is the first submission for any tab
+            if (!submitted[tabName]) {
+                let attemptCount = parseInt(localStorage.getItem('geoAttemptCount') || 0) + 1;
+                localStorage.setItem('geoAttemptCount', attemptCount);
+                document.getElementById('attemptValue').textContent = attemptCount;
+                submitted[tabName] = true;
+            }
+            
+            // Update stats display
+            updateStatsDisplay();
+            
+            // Disable submit button after submission
+            document.getElementById(tabName + 'SubmitBtn').disabled = true;
+        }
+        
+        function updateStatsDisplay() {
+            let totalCorrect = 0;
+            let hasAnyScore = false;
+            
+            // Create tab-specific stats
+            let tabStatsHTML = '';
+            
+            Object.keys(tabScores).forEach(tab => {
+                if (tabScores[tab]) {
+                    hasAnyScore = true;
+                    totalCorrect += tabScores[tab].score;
+                    
+                    let tabLabel = '';
+                    switch(tab) {
+                        case 'rocks': tabLabel = 'Types of Rock'; break;
+                        case 'structure': tabLabel = "Earth's Structure"; break;
+                        case 'cycle': tabLabel = 'Rock Cycle'; break;
+                        case 'minerals': tabLabel = 'Minerals'; break;
+                    }
+                    
+                    tabStatsHTML += `
+                        <div class="stat-item" style="margin: 10px;">
+                            <div class="stat-value">${tabScores[tab].score}/${tabScores[tab].total}</div>
+                            <div class="stat-label">${tabLabel} (${tabScores[tab].percentage}%)</div>
+                        </div>
+                    `;
                 }
             });
             
-            // Update stats
-            document.getElementById('scoreValue').textContent = correct + '/' + total;
-            document.getElementById('percentValue').textContent = Math.round((correct/total)*100) + '%';
-            document.getElementById('attemptValue').textContent = attemptCount;
-            document.getElementById('stats').style.display = 'block';
-            
-            // Save best score
-            const bestScore = localStorage.getItem('geoBestScore') || 0;
-            if (correct > bestScore) {
-                localStorage.setItem('geoBestScore', correct);
+            if (hasAnyScore) {
+                document.getElementById('tabStats').innerHTML = tabStatsHTML;
+                document.getElementById('overallScore').textContent = totalCorrect + '/64';
+                document.getElementById('stats').style.display = 'block';
             }
         }
         
-        function resetQuiz() {
-            submitted = false;
+        function resetTab(tabName) {
+            // Get the prefix for this tab
+            let prefix = '';
+            switch(tabName) {
+                case 'rocks': prefix = 'r'; break;
+                case 'structure': prefix = 's'; break;
+                case 'cycle': prefix = 'c'; break;
+                case 'minerals': prefix = 'm'; break;
+            }
             
-            // Reset all selections
-            const selects = document.querySelectorAll('select');
-            selects.forEach(select => {
-                select.value = '';
-                select.classList.remove('correct', 'incorrect');
-                
-                // Hide all tooltips
-                const tooltip = select.parentElement.querySelector('.tooltiptext');
-                if (tooltip) {
-                    tooltip.classList.remove('show');
+            // Reset all selections in this tab
+            for (let i = 1; i <= 16; i++) {
+                const select = document.getElementById(prefix + i);
+                if (select) {
+                    select.value = '';
+                    select.classList.remove('selected', 'correct', 'incorrect');
+                    
+                    // Hide tooltip
+                    const tooltip = select.parentElement.querySelector('.tooltiptext');
+                    if (tooltip) {
+                        tooltip.classList.remove('show-delayed');
+                    }
+                }
+            }
+            
+            // Clear any active tooltip timers
+            Object.keys(tooltipTimers).forEach(key => {
+                if (tooltipTimers[key]) {
+                    clearTimeout(tooltipTimers[key]);
+                    tooltipTimers[key] = null;
                 }
             });
             
-            // Reset progress
-            document.getElementById('progressCount').textContent = '0/64';
+            // Reset submission status for this tab
+            submitted[tabName] = false;
             
-            // Disable submit button
-            document.getElementById('submitBtn').disabled = true;
+            // Reset score for this tab
+            tabScores[tabName] = null;
+            localStorage.setItem('geoTabScores', JSON.stringify(tabScores));
             
-            // Hide stats
-            document.getElementById('stats').style.display = 'none';
+            // Update displays
+            checkCompletion();
+            updateStatsDisplay();
         }
     </script>
 </body>
