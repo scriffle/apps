@@ -45,32 +45,63 @@
         
         .tabs {
             display: flex;
-            border-bottom: 2px solid #5C4033;
-            margin-bottom: 20px;
+            border-bottom: 3px solid #5C4033;
+            margin-bottom: 0;
+            background: #e8e8e8;
+            padding: 5px 5px 0 5px;
+            border-radius: 10px 10px 0 0;
         }
         
         .tab {
             padding: 12px 24px;
-            background: #f7f7f7;
-            border: none;
+            background: #d0d0d0;
+            border: 1px solid #999;
             cursor: pointer;
             font-size: 16px;
-            margin-right: 5px;
-            border-radius: 10px 10px 0 0;
+            margin-right: 3px;
+            border-radius: 8px 8px 0 0;
             transition: all 0.3s;
+            color: #333;
+            font-weight: 500;
+            position: relative;
+        }
+        
+        .tab.completed::after {
+            content: "✓";
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            color: #48bb78;
+            font-weight: bold;
         }
         
         .tab:hover {
-            background: #e7e7e7;
+            background: #c0c0c0;
+            transform: translateY(-2px);
+            box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
         }
         
         .tab.active {
-            background: #5C4033;
-            color: white;
+            background: white;
+            color: #5C4033;
+            font-weight: bold;
+            border-bottom: 3px solid white;
+            position: relative;
+            top: 3px;
+            box-shadow: 0 -3px 8px rgba(0,0,0,0.15);
+            border: 1px solid #5C4033;
+            border-bottom: 1px solid white;
         }
         
         .tab-content {
             display: none;
+            background: white;
+            padding: 20px;
+            border: 1px solid #5C4033;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+            margin-top: -1px;
         }
         
         .tab-content.active {
@@ -1077,13 +1108,24 @@
         <div class="stats" id="stats" style="display: none;">
             <h3>Your Results</h3>
             <div id="tabStats"></div>
-            <div class="stat-item">
-                <div class="stat-value" id="overallScore">0/64</div>
-                <div class="stat-label">Overall Score</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-value" id="attemptValue">1</div>
-                <div class="stat-label">Attempt #</div>
+            <hr style="margin: 20px 0; border: 1px solid #e0e0e0;">
+            <div style="display: flex; justify-content: center; flex-wrap: wrap;">
+                <div class="stat-item">
+                    <div class="stat-value" id="overallScore">0/64</div>
+                    <div class="stat-label">Overall Score</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="overallPercent">0%</div>
+                    <div class="stat-label">Overall Percentage</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="attemptValue">1</div>
+                    <div class="stat-label">Total Attempts</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="efficiencyValue">0%</div>
+                    <div class="stat-label">Efficiency (% per Attempt)</div>
+                </div>
             </div>
         </div>
     </div>
@@ -1143,39 +1185,48 @@
                 const select = tooltip.querySelector('select');
                 
                 if (tooltipText && select) {
+                    let hoverTimer = null;
+                    let tooltipShown = false;
+                    
                     // Mouse enter - start timer
                     tooltip.addEventListener('mouseenter', function() {
                         // Only show tooltip if the answer is incorrect (has incorrect class)
                         if (select.classList.contains('incorrect')) {
-                            // Clear any existing timer for this tooltip
-                            if (tooltipTimers[index]) {
-                                clearTimeout(tooltipTimers[index]);
+                            // Clear any existing timer
+                            if (hoverTimer) {
+                                clearTimeout(hoverTimer);
                             }
                             
+                            tooltipShown = false;
+                            
                             // Set new timer for 1.5 seconds
-                            tooltipTimers[index] = setTimeout(() => {
+                            hoverTimer = setTimeout(() => {
                                 tooltipText.classList.add('show-delayed');
+                                tooltipShown = true;
                             }, 1500);
                         }
                     });
                     
                     // Mouse leave - clear timer and hide tooltip
                     tooltip.addEventListener('mouseleave', function() {
-                        if (tooltipTimers[index]) {
-                            clearTimeout(tooltipTimers[index]);
-                            tooltipTimers[index] = null;
+                        if (hoverTimer) {
+                            clearTimeout(hoverTimer);
+                            hoverTimer = null;
                         }
                         tooltipText.classList.remove('show-delayed');
+                        tooltipShown = false;
                     });
                     
-                    // Mouse move - hide tooltip and clear timer
+                    // Mouse move - only hide if tooltip is already shown
                     tooltip.addEventListener('mousemove', function() {
-                        if (tooltipText.classList.contains('show-delayed')) {
+                        if (tooltipShown) {
                             tooltipText.classList.remove('show-delayed');
-                        }
-                        if (tooltipTimers[index]) {
-                            clearTimeout(tooltipTimers[index]);
-                            tooltipTimers[index] = null;
+                            tooltipShown = false;
+                            // Clear timer to prevent re-showing
+                            if (hoverTimer) {
+                                clearTimeout(hoverTimer);
+                                hoverTimer = null;
+                            }
                         }
                     });
                 }
@@ -1253,13 +1304,27 @@
         function loadSavedData() {
             const savedName = localStorage.getItem('geoStudentName');
             const firstAttemptDate = localStorage.getItem('geoFirstAttemptDate');
-            const attemptCount = localStorage.getItem('geoAttemptCount') || 0;
+            const attemptCount = parseInt(localStorage.getItem('geoAttemptCount') || 0);
             
             // Load saved scores
             const savedScores = localStorage.getItem('geoTabScores');
             if (savedScores) {
                 tabScores = JSON.parse(savedScores);
                 updateStatsDisplay();
+                
+                // Mark completed tabs
+                Object.keys(tabScores).forEach(tabName => {
+                    if (tabScores[tabName]) {
+                        const tabs = document.querySelectorAll('.tab');
+                        tabs.forEach(tab => {
+                            if (tab.textContent.includes(getTabLabel(tabName))) {
+                                tab.classList.add('completed');
+                            }
+                        });
+                        // Also mark as submitted
+                        submitted[tabName] = true;
+                    }
+                });
             }
             
             if (savedName) {
@@ -1336,20 +1401,38 @@
             if (!submitted[tabName]) {
                 let attemptCount = parseInt(localStorage.getItem('geoAttemptCount') || 0) + 1;
                 localStorage.setItem('geoAttemptCount', attemptCount);
-                document.getElementById('attemptValue').textContent = attemptCount;
                 submitted[tabName] = true;
             }
             
             // Update stats display
             updateStatsDisplay();
             
+            // Mark tab as completed
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                if (tab.textContent.includes(getTabLabel(tabName))) {
+                    tab.classList.add('completed');
+                }
+            });
+            
             // Disable submit button after submission
             document.getElementById(tabName + 'SubmitBtn').disabled = true;
+        }
+        
+        function getTabLabel(tabName) {
+            switch(tabName) {
+                case 'rocks': return 'Types of Rock';
+                case 'structure': return "Earth's Structure";
+                case 'cycle': return 'Rock Cycle';
+                case 'minerals': return 'Minerals';
+                default: return '';
+            }
         }
         
         function updateStatsDisplay() {
             let totalCorrect = 0;
             let hasAnyScore = false;
+            let completedTabs = 0;
             
             // Create tab-specific stats
             let tabStatsHTML = '';
@@ -1358,6 +1441,7 @@
                 if (tabScores[tab]) {
                     hasAnyScore = true;
                     totalCorrect += tabScores[tab].score;
+                    completedTabs++;
                     
                     let tabLabel = '';
                     switch(tab) {
@@ -1379,6 +1463,17 @@
             if (hasAnyScore) {
                 document.getElementById('tabStats').innerHTML = tabStatsHTML;
                 document.getElementById('overallScore').textContent = totalCorrect + '/64';
+                
+                // Calculate overall percentage and efficiency
+                const overallPercentage = Math.round((totalCorrect / 64) * 100);
+                const attemptCount = parseInt(localStorage.getItem('geoAttemptCount') || 1);
+                const percentPerAttempt = Math.round(overallPercentage / attemptCount);
+                
+                // Update all stat values
+                document.getElementById('overallPercent').textContent = overallPercentage + '%';
+                document.getElementById('attemptValue').textContent = attemptCount;
+                document.getElementById('efficiencyValue').textContent = percentPerAttempt + '%';
+                
                 document.getElementById('stats').style.display = 'block';
             }
         }
@@ -1418,6 +1513,14 @@
             
             // Reset submission status for this tab
             submitted[tabName] = false;
+            
+            // Remove completed checkmark
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                if (tab.textContent.includes(getTabLabel(tabName))) {
+                    tab.classList.remove('completed');
+                }
+            });
             
             // Reset score for this tab
             tabScores[tabName] = null;
