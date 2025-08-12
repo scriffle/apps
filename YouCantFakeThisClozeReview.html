@@ -1,0 +1,1716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VCE Physics Multi-Round Review System</title>
+    <style>
+        /* Base styles - will be overridden by topic colors */
+        :root {
+            --primary: #5a67d8;
+            --primary-dark: #4c51bf;
+            --success: #48bb78;
+            --success-dark: #38a169;
+            --error: #f56565;
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --tab-active: #5a67d8;
+            --tab-hover: #c0c0c0;
+            --tab-default: #d0d0d0;
+            --round1: #48bb78;
+            --round2: #4299e1;
+            --round3: #9f7aea;
+            --select-default: #fffacd;
+            --select-selected: #add8e6;
+            --select-correct: #90ee90;
+            --select-incorrect: #d3d3d3;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: var(--gradient);
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        
+        h1 {
+            color: var(--primary);
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        /* Topic Selection Menu */
+        .topic-selector {
+            background: #f7fafc;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            display: none;
+        }
+        
+        .topic-selector.active {
+            display: block;
+        }
+        
+        .topic-selector h2 {
+            color: #2d3748;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .selector-group {
+            margin-bottom: 15px;
+        }
+        
+        .selector-group label {
+            display: inline-block;
+            width: 120px;
+            font-weight: bold;
+            color: #4a5568;
+        }
+        
+        .selector-group select {
+            padding: 8px 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 5px;
+            font-size: 16px;
+            min-width: 300px;
+            cursor: pointer;
+        }
+        
+        .selector-group select:hover {
+            border-color: var(--primary);
+        }
+        
+        .topic-path {
+            text-align: center;
+            padding: 10px;
+            background: #edf2f7;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #718096;
+            display: none;
+        }
+        
+        .topic-path.active {
+            display: block;
+        }
+        
+        .change-topic-btn {
+            padding: 8px 16px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        
+        .change-topic-btn:hover {
+            background: var(--primary-dark);
+        }
+        
+        /* Main content - initially hidden */
+        .main-content {
+            display: none;
+        }
+        
+        .main-content.active {
+            display: block;
+        }
+        
+        /* Loading state */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+        }
+        
+        .loading-spinner {
+            border: 4px solid #f3f4f6;
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Existing styles continue... */
+        .round-indicator {
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            color: var(--primary);
+            margin: 20px 0;
+            padding: 10px;
+            background: #f0f4ff;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        .round-indicator.visible {
+            display: block;
+        }
+        
+        .header-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            padding: 15px;
+            background: #f7fafc;
+            border-radius: 10px;
+        }
+        
+        .header-info input {
+            padding: 8px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        
+        .tabs {
+            display: flex;
+            border-bottom: 3px solid var(--primary);
+            margin-bottom: 0;
+            background: #e8e8e8;
+            padding: 5px 5px 0 5px;
+            border-radius: 10px 10px 0 0;
+        }
+        
+        .tab {
+            padding: 12px 24px;
+            background: var(--tab-default);
+            border: 1px solid #999;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 3px;
+            border-radius: 8px 8px 0 0;
+            transition: all 0.3s;
+            color: #333;
+            font-weight: 500;
+            position: relative;
+        }
+        
+        .tab.completed-r1::before {
+            content: "①";
+            position: absolute;
+            top: 3px;
+            right: 20px;
+            color: var(--round1);
+            font-size: 12px;
+        }
+        
+        .tab.completed-r2::before {
+            content: "②";
+            position: absolute;
+            top: 3px;
+            right: 10px;
+            color: var(--round2);
+            font-size: 12px;
+        }
+        
+        .tab.completed-r3::before {
+            content: "③";
+            position: absolute;
+            top: 3px;
+            right: 0px;
+            color: var(--round3);
+            font-size: 12px;
+        }
+        
+        .tab:hover {
+            background: var(--tab-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .tab.active {
+            background: white;
+            color: var(--primary);
+            font-weight: bold;
+            border-bottom: 3px solid white;
+            position: relative;
+            top: 3px;
+            box-shadow: 0 -3px 8px rgba(0,0,0,0.15);
+            border: 1px solid var(--primary);
+            border-bottom: 1px solid white;
+        }
+        
+        .tab-content {
+            display: none;
+            background: white;
+            padding: 20px;
+            border: 1px solid var(--primary);
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+            margin-top: -1px;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .content-section {
+            margin: 25px 0;
+            padding: 25px;
+            background: #f8f9ff;
+            border-left: 4px solid var(--primary);
+            border-radius: 5px;
+            line-height: 2;
+            font-size: 17px;
+            text-align: left;
+        }
+        
+        .content-section h3 {
+            color: var(--primary-dark);
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        
+        select {
+            padding: 5px 10px;
+            margin: 0 3px;
+            border: 2px solid #cbd5e0;
+            border-radius: 5px;
+            font-size: 16px;
+            background: var(--select-default);
+            cursor: pointer;
+            transition: all 0.3s;
+            min-width: 150px;
+        }
+        
+        select:hover {
+            border-color: var(--primary);
+        }
+        
+        select.selected {
+            background: var(--select-selected);
+            border-color: #4682b4;
+        }
+        
+        select.correct {
+            background: var(--select-correct);
+            border-color: #228b22;
+        }
+        
+        select.incorrect {
+            background: var(--select-incorrect);
+            border-color: #696969;
+        }
+        
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 220px;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -110px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 14px;
+            pointer-events: none;
+        }
+        
+        .tooltip .tooltiptext.show-delayed {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        .button-container {
+            text-align: center;
+            margin-top: 30px;
+        }
+        
+        button {
+            padding: 12px 30px;
+            font-size: 18px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 0 10px;
+        }
+        
+        button:hover:not(:disabled) {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(90, 103, 216, 0.3);
+        }
+        
+        button:disabled {
+            background: #a0aec0;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        
+        .review-button {
+            background: var(--success);
+        }
+        
+        .review-button:hover:not(:disabled) {
+            background: var(--success-dark);
+        }
+        
+        .stats {
+            margin-top: 30px;
+            padding: 20px;
+            background: #edf2f7;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stats h3 {
+            color: #2d3748;
+            margin-bottom: 15px;
+        }
+        
+        .stat-item {
+            display: inline-block;
+            margin: 0 20px;
+            padding: 10px 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--primary);
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #718096;
+            margin-top: 5px;
+        }
+        
+        .stat-explanation {
+            font-size: 12px;
+            color: #a0aec0;
+            margin-top: 3px;
+            font-style: italic;
+        }
+        
+        .progress-indicator {
+            text-align: center;
+            margin: 20px 0;
+            padding: 10px;
+            background: #edf2f7;
+            border-radius: 8px;
+            font-size: 16px;
+            color: #4a5568;
+        }
+        
+        .progress-indicator span {
+            font-weight: bold;
+            color: var(--primary);
+        }
+        
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 400px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .modal-buttons {
+            margin-top: 20px;
+        }
+        
+        .modal-buttons button {
+            margin: 0 10px;
+        }
+        
+        .cancel-btn {
+            background: var(--error);
+        }
+        
+        .cancel-btn:hover {
+            background: #c53030;
+        }
+        
+        /* Review Page Styles */
+        .review-container {
+            display: none;
+            margin-top: 30px;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 10px;
+        }
+        
+        .review-container.active {
+            display: block;
+        }
+        
+        .review-filters {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .filter-btn {
+            padding: 8px 16px;
+            margin: 0 5px;
+            background: #e2e8f0;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .filter-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .weakness-item {
+            padding: 15px;
+            margin: 10px 0;
+            background: white;
+            border-left: 4px solid var(--error);
+            border-radius: 5px;
+        }
+        
+        .weakness-title {
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        .weakness-details {
+            color: #4a5568;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+        
+        .weakness-details strong {
+            color: #2d3748;
+            display: inline-block;
+            margin-top: 5px;
+        }
+        
+        .weakness-details em {
+            display: block;
+            margin-top: 8px;
+            font-size: 13px;
+            color: #718096;
+        }
+        
+        .improvement-trend {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        
+        .trend-improving {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+        
+        .trend-declining {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+        
+        .trend-stable {
+            background: #feebc8;
+            color: #744210;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>VCE Physics Multi-Round Review System</h1>
+        
+        <!-- Topic Selection Menu -->
+        <div class="topic-selector active" id="topicSelector">
+            <h2>Select Your Topic</h2>
+            <div class="selector-group">
+                <label>Unit:</label>
+                <select id="unitSelect">
+                    <option value="">--Select Unit--</option>
+                </select>
+            </div>
+            <div class="selector-group">
+                <label>Area of Study:</label>
+                <select id="aosSelect" disabled>
+                    <option value="">--Select Area of Study--</option>
+                </select>
+            </div>
+            <div class="selector-group">
+                <label>Topic:</label>
+                <select id="topicSelect" disabled>
+                    <option value="">--Select Topic--</option>
+                </select>
+            </div>
+        </div>
+        
+        <!-- Topic Path Display -->
+        <div class="topic-path" id="topicPath">
+            <span id="pathText"></span>
+            <button class="change-topic-btn" onclick="changeTopic()">Change Topic</button>
+        </div>
+        
+        <!-- Loading State -->
+        <div class="loading" id="loadingState" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p>Loading topic content...</p>
+        </div>
+        
+        <!-- Main Content (hidden initially) -->
+        <div class="main-content" id="mainContent">
+            <div class="round-indicator" id="roundIndicator">
+                <span id="roundIndicatorText"></span>
+            </div>
+            
+            <div class="header-info">
+                <div>
+                    <label>Name: </label>
+                    <input type="text" id="studentName" placeholder="Enter your name">
+                </div>
+                <div>
+                    <label>First Attempt: </label>
+                    <input type="text" id="firstAttempt" readonly>
+                </div>
+            </div>
+            
+            <div class="progress-indicator">
+                <span id="progressText"></span>
+            </div>
+            
+            <div class="tabs" id="tabContainer">
+                <!-- Tabs will be dynamically generated -->
+            </div>
+            
+            <!-- Tab Content Container -->
+            <div id="tabContentContainer">
+                <!-- Tab content will be dynamically generated -->
+            </div>
+            
+            <!-- Review Button (appears after completing all tabs in a round) -->
+            <div class="button-container" id="reviewButtonContainer" style="display: none;">
+                <button class="review-button" id="reviewShowBtn"></button>
+            </div>
+            
+            <!-- Review Container -->
+            <div class="review-container" id="reviewContainer">
+                <h2>Performance Review</h2>
+                <div class="review-filters" id="reviewFilters">
+                    <!-- Filter buttons will be dynamically generated -->
+                </div>
+                <div id="reviewContent"></div>
+                <div class="button-container">
+                    <button id="continueBtn"></button>
+                    <button id="resetRoundBtn"></button>
+                    <button id="resetAllBtn"></button>
+                </div>
+            </div>
+            
+            <!-- Stats Container -->
+            <div class="stats" id="stats" style="display: none;">
+                <h3>Your Performance Summary</h3>
+                <div id="roundStats"></div>
+                <hr style="margin: 20px 0; border: 1px solid #e0e0e0;">
+                <div style="display: flex; justify-content: center; flex-wrap: wrap;" id="overallStats">
+                    <!-- Stats will be dynamically generated -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal for Reset Confirmation -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content">
+            <h3 id="modalTitle">Confirm Reset</h3>
+            <p id="modalMessage">Are you sure you want to reset?</p>
+            <div class="modal-buttons">
+                <button onclick="confirmReset()">Yes, Reset</button>
+                <button class="cancel-btn" onclick="closeModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Global variables
+        let topicsIndex = null;
+        let currentTopic = null;
+        let currentTopicData = null;
+        let currentRound = 1;
+        let currentTab = null;
+        let tabScores = {};
+        let errorTracking = {};
+        let tooltipTimers = {};
+        let pendingReset = null;
+        let explanations = {};
+        
+        // Initialize on load
+        window.onload = async function() {
+            await loadTopicsIndex();
+            loadLastTopic();
+            addDebugListener();
+        };
+        
+        // Load topics index
+        async function loadTopicsIndex() {
+            try {
+                const response = await fetch('data/topics-index.json');
+                topicsIndex = await response.json();
+                populateUnitSelector();
+            } catch (error) {
+                console.error('Error loading topics index:', error);
+                alert('Error loading topics. Please check your data folder.');
+            }
+        }
+        
+        // Populate unit selector
+        function populateUnitSelector() {
+            const unitSelect = document.getElementById('unitSelect');
+            unitSelect.innerHTML = '<option value="">--Select Unit--</option>';
+            
+            topicsIndex.units.forEach(unit => {
+                const option = document.createElement('option');
+                option.value = unit.id;
+                option.textContent = `${unit.id}: ${unit.name}`;
+                unitSelect.appendChild(option);
+            });
+            
+            unitSelect.addEventListener('change', onUnitChange);
+        }
+        
+        // Handle unit selection
+        function onUnitChange() {
+            const unitId = document.getElementById('unitSelect').value;
+            const aosSelect = document.getElementById('aosSelect');
+            const topicSelect = document.getElementById('topicSelect');
+            
+            aosSelect.innerHTML = '<option value="">--Select Area of Study--</option>';
+            topicSelect.innerHTML = '<option value="">--Select Topic--</option>';
+            topicSelect.disabled = true;
+            
+            if (unitId) {
+                const unit = topicsIndex.units.find(u => u.id === unitId);
+                unit.areas.forEach(area => {
+                    const option = document.createElement('option');
+                    option.value = area.id;
+                    option.textContent = `${area.id}: ${area.name}`;
+                    aosSelect.appendChild(option);
+                });
+                aosSelect.disabled = false;
+                aosSelect.addEventListener('change', onAOSChange);
+            } else {
+                aosSelect.disabled = true;
+            }
+        }
+        
+        // Handle AOS selection
+        function onAOSChange() {
+            const unitId = document.getElementById('unitSelect').value;
+            const aosId = document.getElementById('aosSelect').value;
+            const topicSelect = document.getElementById('topicSelect');
+            
+            topicSelect.innerHTML = '<option value="">--Select Topic--</option>';
+            
+            if (aosId) {
+                const unit = topicsIndex.units.find(u => u.id === unitId);
+                const area = unit.areas.find(a => a.id === aosId);
+                
+                area.topics.forEach(topic => {
+                    const option = document.createElement('option');
+                    option.value = topic.file;
+                    option.textContent = `${topic.id}: ${topic.name}`;
+                    if (!topic.available) {
+                        option.disabled = true;
+                        option.textContent += ' (Coming Soon)';
+                    }
+                    topicSelect.appendChild(option);
+                });
+                topicSelect.disabled = false;
+                topicSelect.addEventListener('change', onTopicChange);
+            } else {
+                topicSelect.disabled = true;
+            }
+        }
+        
+        // Handle topic selection
+        async function onTopicChange() {
+            const topicFile = document.getElementById('topicSelect').value;
+            if (topicFile) {
+                await loadTopic(topicFile);
+            }
+        }
+        
+        // Load topic data
+        async function loadTopic(topicFile) {
+            document.getElementById('loadingState').style.display = 'block';
+            document.getElementById('topicSelector').classList.remove('active');
+            
+            try {
+                const response = await fetch(`data/${topicFile}`);
+                currentTopicData = await response.json();
+                currentTopic = topicFile;
+                
+                // Save last topic
+                localStorage.setItem('vcePhysicsLastTopic', topicFile);
+                
+                // Apply color theme
+                applyColorTheme(currentTopicData.metadata.colorTheme);
+                
+                // Initialize topic
+                initializeTopic();
+                
+                // Show main content
+                document.getElementById('loadingState').style.display = 'none';
+                document.getElementById('mainContent').classList.add('active');
+                document.getElementById('topicPath').classList.add('active');
+                
+                // Update topic path
+                updateTopicPath();
+                
+            } catch (error) {
+                console.error('Error loading topic:', error);
+                alert('Error loading topic content.');
+                document.getElementById('loadingState').style.display = 'none';
+                document.getElementById('topicSelector').classList.add('active');
+            }
+        }
+        
+        // Apply color theme
+        function applyColorTheme(theme) {
+            const root = document.documentElement;
+            Object.keys(theme).forEach(key => {
+                root.style.setProperty(`--${key}`, theme[key]);
+            });
+        }
+        
+        // Update topic path display
+        function updateTopicPath() {
+            const pathText = `${currentTopicData.metadata.unit} > ${currentTopicData.metadata.aos} > ${currentTopicData.metadata.topicName}`;
+            document.getElementById('pathText').textContent = pathText;
+        }
+        
+        // Change topic
+        function changeTopic() {
+            document.getElementById('mainContent').classList.remove('active');
+            document.getElementById('topicPath').classList.remove('active');
+            document.getElementById('topicSelector').classList.add('active');
+            
+            // Reset selectors
+            document.getElementById('unitSelect').value = '';
+            document.getElementById('aosSelect').innerHTML = '<option value="">--Select Area of Study--</option>';
+            document.getElementById('aosSelect').disabled = true;
+            document.getElementById('topicSelect').innerHTML = '<option value="">--Select Topic--</option>';
+            document.getElementById('topicSelect').disabled = true;
+        }
+        
+        // Load last topic
+        function loadLastTopic() {
+            const lastTopic = localStorage.getItem('vcePhysicsLastTopic');
+            if (lastTopic) {
+                // Auto-load last topic
+                loadTopic(lastTopic);
+            }
+        }
+        
+        // Initialize topic
+        function initializeTopic() {
+            // Set title
+            document.querySelector('h1').textContent = currentTopicData.metadata.fullTitle;
+            
+            // Load saved data for this topic
+            loadSavedTopicData();
+            
+            // Initialize round
+            initializeRound();
+            
+            // Setup tabs
+            setupTabs();
+            
+            // Setup buttons
+            setupButtons();
+            
+            // Load explanations
+            explanations = currentTopicData.explanations;
+            
+            // Update progress text template
+            updateProgressText();
+            
+            // Check completion
+            checkCompletion();
+        }
+        
+        // Setup tabs
+        function setupTabs() {
+            const tabContainer = document.getElementById('tabContainer');
+            tabContainer.innerHTML = '';
+            
+            currentTopicData.tabs.forEach((tab, index) => {
+                const tabElement = document.createElement('button');
+                tabElement.className = index === 0 ? 'tab active' : 'tab';
+                tabElement.textContent = tab.label;
+                tabElement.onclick = (e) => openTab(e, tab.id);
+                tabContainer.appendChild(tabElement);
+                
+                if (index === 0) currentTab = tab.id;
+            });
+        }
+        
+        // Setup buttons with labels from JSON
+        function setupButtons() {
+            const reviewBtn = document.getElementById('reviewShowBtn');
+            reviewBtn.textContent = currentTopicData.buttonLabels.review.show;
+            
+            document.getElementById('continueBtn').textContent = currentTopicData.buttonLabels.review.continue;
+            document.getElementById('resetRoundBtn').textContent = currentTopicData.buttonLabels.reset.round;
+            document.getElementById('resetAllBtn').textContent = currentTopicData.buttonLabels.reset.all;
+            
+            // Setup review filters
+            const filterContainer = document.getElementById('reviewFilters');
+            filterContainer.innerHTML = '';
+            
+            currentTopicData.reviewSettings.filterOptions.forEach(filter => {
+                const btn = document.createElement('button');
+                btn.className = filter.active ? 'filter-btn active' : 'filter-btn';
+                btn.textContent = filter.label;
+                btn.onclick = () => filterReview(filter.id);
+                filterContainer.appendChild(btn);
+            });
+        }
+        
+        // Initialize round
+        function initializeRound() {
+            const roundKey = 'round' + currentRound;
+            const roundContent = currentTopicData.content[roundKey];
+            
+            // Generate tab content
+            const contentContainer = document.getElementById('tabContentContainer');
+            contentContainer.innerHTML = '';
+            
+            currentTopicData.tabs.forEach(tab => {
+                const tabDiv = document.createElement('div');
+                tabDiv.id = tab.id;
+                tabDiv.className = tab.id === currentTab ? 'tab-content active' : 'tab-content';
+                
+                const content = roundContent[tab.id];
+                let html = `
+                    <div class="content-section">
+                        <h3>${content.title}</h3>
+                        <div class="content-text">
+                `;
+                
+                // Build content with dropdowns
+                let textParts = [];
+                let lastEnd = 0;
+                
+                // Sort questions by ID to process in order
+                const questionIds = Object.keys(content.questions).sort();
+                
+                questionIds.forEach(qId => {
+                    const q = content.questions[qId];
+                    
+                    // Create dropdown HTML
+                    const selectHtml = `<span class="tooltip">
+                        <select id="${qId}" data-correct="${q.correct}">
+                            <option value="">--Select--</option>
+                            ${q.options.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+                        </select>
+                        <span class="tooltiptext">${q.tooltip}</span>
+                    </span>`;
+                    
+                    // Add to content (this is simplified - in real implementation,
+                    // you'd need to parse the content text to insert selects at correct positions)
+                    html += selectHtml + ' ';
+                });
+                
+                html += `
+                        </div>
+                    </div>
+                    <div class="button-container">
+                        <button id="${tab.id}SubmitBtn" onclick="submitTab('${tab.id}')" disabled>
+                            ${currentTopicData.buttonLabels.submit[tab.id]}
+                        </button>
+                        <button onclick="resetTab('${tab.id}')">
+                            ${currentTopicData.buttonLabels.reset.tab}
+                        </button>
+                    </div>
+                `;
+                
+                tabDiv.innerHTML = html;
+                contentContainer.appendChild(tabDiv);
+            });
+            
+            // Update round indicator
+            const indicator = document.getElementById('roundIndicatorText');
+            const template = currentTopicData.progressMessages.roundIndicator;
+            indicator.textContent = template
+                .replace('{current}', currentRound)
+                .replace('{total}', currentTopicData.metadata.totalRounds);
+            
+            // Show round indicator if needed
+            if (currentRound > 1 || (tabScores['round1'] && Object.keys(tabScores['round1']).length === 4)) {
+                document.getElementById('roundIndicator').classList.add('visible');
+            }
+            
+            // Randomize dropdowns
+            randomizeDropdowns();
+            
+            // Add event listeners
+            addChangeListeners();
+            addTooltipListeners();
+        }
+        
+        // Update progress text
+        function updateProgressText() {
+            const template = currentTopicData.progressMessages.tabProgress;
+            const completed = document.querySelectorAll(`#${currentTab} select`).length;
+            const filled = Array.from(document.querySelectorAll(`#${currentTab} select`))
+                .filter(s => s.value !== '').length;
+            
+            document.getElementById('progressText').innerHTML = template
+                .replace('{completed}', `<span id="progressCount">${filled}/${completed}</span>`)
+                .replace('{total}', completed);
+        }
+        
+        // Debug feature - press q+w+e together
+        function addDebugListener() {
+            let keysPressed = {};
+            
+            document.addEventListener('keydown', function(e) {
+                keysPressed[e.key.toLowerCase()] = true;
+                
+                if (keysPressed['q'] && keysPressed['w'] && keysPressed['e']) {
+                    populateAllFields();
+                    keysPressed = {};
+                }
+            });
+            
+            document.addEventListener('keyup', function(e) {
+                delete keysPressed[e.key.toLowerCase()];
+            });
+        }
+        
+        function populateAllFields() {
+            console.log('Debug mode: Auto-filling all fields');
+            const selects = document.querySelectorAll('select');
+            
+            selects.forEach(select => {
+                if (select.value === '') {
+                    const correctAnswer = select.getAttribute('data-correct');
+                    select.value = correctAnswer;
+                    select.classList.add('selected');
+                }
+            });
+            
+            checkCompletion();
+            saveCurrentProgress();
+        }
+        
+        // Tab functions
+        function openTab(evt, tabName) {
+            const tabContents = document.getElementsByClassName('tab-content');
+            for (let i = 0; i < tabContents.length; i++) {
+                tabContents[i].classList.remove('active');
+            }
+            
+            const tabs = document.getElementsByClassName('tab');
+            for (let i = 0; i < tabs.length; i++) {
+                tabs[i].classList.remove('active');
+            }
+            
+            document.getElementById(tabName).classList.add('active');
+            evt.currentTarget.classList.add('active');
+            currentTab = tabName;
+            
+            updateProgressText();
+            checkCompletion();
+        }
+        
+        // Add change listeners
+        function addChangeListeners() {
+            const selects = document.querySelectorAll('select');
+            selects.forEach(select => {
+                select.addEventListener('change', function() {
+                    if (this.value !== '') {
+                        this.classList.add('selected');
+                    } else {
+                        this.classList.remove('selected');
+                    }
+                    saveCurrentProgress();
+                    checkCompletion();
+                });
+            });
+        }
+        
+        // Add tooltip listeners
+        function addTooltipListeners() {
+            const tooltips = document.querySelectorAll('.tooltip');
+            
+            tooltips.forEach((tooltip) => {
+                const tooltipText = tooltip.querySelector('.tooltiptext');
+                const select = tooltip.querySelector('select');
+                
+                if (tooltipText && select) {
+                    let hoverTimer = null;
+                    
+                    tooltip.addEventListener('mouseenter', function() {
+                        if (select.classList.contains('incorrect')) {
+                            hoverTimer = setTimeout(() => {
+                                tooltipText.classList.add('show-delayed');
+                            }, 1500);
+                        }
+                    });
+                    
+                    tooltip.addEventListener('mouseleave', function() {
+                        if (hoverTimer) {
+                            clearTimeout(hoverTimer);
+                            hoverTimer = null;
+                        }
+                        tooltipText.classList.remove('show-delayed');
+                    });
+                }
+            });
+        }
+        
+        // Check completion
+        function checkCompletion() {
+            const selects = document.querySelectorAll(`#${currentTab} select`);
+            const total = selects.length;
+            const completed = Array.from(selects).filter(s => s.value !== '').length;
+            
+            document.getElementById('progressCount').textContent = `${completed}/${total}`;
+            
+            const submitBtn = document.getElementById(currentTab + 'SubmitBtn');
+            if (submitBtn) {
+                submitBtn.disabled = (completed !== total);
+            }
+            
+            checkRoundCompletion();
+        }
+        
+        // Check round completion
+        function checkRoundCompletion() {
+            const roundKey = 'round' + currentRound;
+            if (!tabScores[roundKey]) return;
+            
+            const allComplete = currentTopicData.tabs.every(tab => 
+                tabScores[roundKey][tab.id]
+            );
+            
+            if (allComplete) {
+                document.getElementById('reviewButtonContainer').style.display = 'block';
+            }
+        }
+        
+        // Submit tab
+        function submitTab(tabName) {
+            const studentName = document.getElementById('studentName').value;
+            if (studentName) {
+                localStorage.setItem(`physics_${currentTopic}_studentName`, studentName);
+            }
+            
+            const firstAttemptKey = `physics_${currentTopic}_firstAttemptDate`;
+            if (!localStorage.getItem(firstAttemptKey)) {
+                const now = new Date();
+                const dateStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString();
+                localStorage.setItem(firstAttemptKey, dateStr);
+                document.getElementById('firstAttempt').value = dateStr;
+            }
+            
+            const roundKey = 'round' + currentRound;
+            const questions = currentTopicData.content[roundKey][tabName].questions;
+            
+            let correct = 0;
+            let total = Object.keys(questions).length;
+            
+            if (!tabScores[roundKey]) {
+                tabScores[roundKey] = {};
+            }
+            
+            if (!errorTracking[roundKey]) {
+                errorTracking[roundKey] = {};
+            }
+            
+            // Track submissions
+            let totalSubmissions = parseInt(localStorage.getItem(`physics_${currentTopic}_totalSubmissions`) || '0') + 1;
+            localStorage.setItem(`physics_${currentTopic}_totalSubmissions`, totalSubmissions.toString());
+            
+            // Check answers
+            Object.keys(questions).forEach(qId => {
+                const select = document.getElementById(qId);
+                const question = questions[qId];
+                
+                if (select) {
+                    const selectedAnswer = select.value;
+                    
+                    select.classList.remove('selected', 'correct', 'incorrect');
+                    
+                    if (selectedAnswer === question.correct) {
+                        select.classList.add('correct');
+                        correct++;
+                    } else if (selectedAnswer !== '') {
+                        select.classList.add('incorrect');
+                        
+                        // Track errors
+                        const questionKey = tabName + '_' + qId;
+                        if (!errorTracking[roundKey][questionKey]) {
+                            errorTracking[roundKey][questionKey] = {
+                                concept: question.correct,
+                                attempts: [],
+                                context: question.tooltip
+                            };
+                        }
+                        errorTracking[roundKey][questionKey].attempts.push(selectedAnswer);
+                    }
+                }
+            });
+            
+            // Save score
+            tabScores[roundKey][tabName] = {
+                score: correct,
+                total: total,
+                percentage: Math.round((correct/total)*100)
+            };
+            
+            // Update visual indicators
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                const tabData = currentTopicData.tabs.find(t => t.id === tabName);
+                if (tab.textContent === tabData.label) {
+                    tab.classList.add('completed-r' + currentRound);
+                }
+            });
+            
+            // Save to localStorage
+            localStorage.setItem(`physics_${currentTopic}_tabScores`, JSON.stringify(tabScores));
+            localStorage.setItem(`physics_${currentTopic}_errorTracking`, JSON.stringify(errorTracking));
+            
+            document.getElementById(tabName + 'SubmitBtn').disabled = true;
+            
+            checkRoundCompletion();
+            updateStatsDisplay();
+        }
+        
+        // Show review
+        function showReview() {
+            document.getElementById('reviewContainer').classList.add('active');
+            filterReview('current');
+        }
+        
+        // Filter review
+        function filterReview(filter) {
+            const filterBtns = document.querySelectorAll('.filter-btn');
+            filterBtns.forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.textContent === currentTopicData.reviewSettings.filterOptions.find(f => f.id === filter).label) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            let content = '<div>';
+            
+            if (filter === 'current') {
+                content += generateReviewContent('round' + currentRound);
+            } else if (filter === 'total') {
+                content += generateTotalReview();
+            } else {
+                content += generateReviewContent(filter);
+            }
+            
+            content += '</div>';
+            document.getElementById('reviewContent').innerHTML = content;
+        }
+        
+        // Generate review content
+        function generateReviewContent(roundKey) {
+            if (!errorTracking[roundKey] || Object.keys(errorTracking[roundKey]).length === 0) {
+                return `<p>${currentTopicData.reviewSettings.messages.perfectRound}</p>`;
+            }
+            
+            let content = `<h3>${currentTopicData.reviewSettings.messages.improvementHeader}</h3>`;
+            
+            Object.keys(errorTracking[roundKey]).forEach(questionKey => {
+                const error = errorTracking[roundKey][questionKey];
+                const explanation = explanations[error.concept] || `The correct answer is '${error.concept}'.`;
+                
+                content += `
+                    <div class="weakness-item">
+                        <div class="weakness-title">Incorrect: ${error.concept}</div>
+                        <div class="weakness-details">
+                            <strong>You selected:</strong> ${error.attempts.join(', ')}<br>
+                            <strong>Explanation:</strong> ${explanation}<br>
+                            <em>Context: ${error.context || 'General concept'}</em>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            return content;
+        }
+        
+        // Generate total review
+        function generateTotalReview() {
+            let content = `<h3>${currentTopicData.reviewSettings.messages.analysisHeader}</h3>`;
+            let conceptErrors = {};
+            
+            // Collect all errors
+            Object.keys(errorTracking).forEach(roundKey => {
+                Object.keys(errorTracking[roundKey]).forEach(questionKey => {
+                    const error = errorTracking[roundKey][questionKey];
+                    if (!conceptErrors[error.concept]) {
+                        conceptErrors[error.concept] = {
+                            count: 0,
+                            rounds: [],
+                            context: error.context
+                        };
+                    }
+                    conceptErrors[error.concept].count++;
+                    const roundNum = roundKey.replace('round', '');
+                    if (!conceptErrors[error.concept].rounds.includes(roundNum)) {
+                        conceptErrors[error.concept].rounds.push(roundNum);
+                    }
+                });
+            });
+            
+            // Sort by error count
+            const sortedConcepts = Object.keys(conceptErrors).sort((a, b) => 
+                conceptErrors[b].count - conceptErrors[a].count
+            );
+            
+            sortedConcepts.forEach(concept => {
+                const errorData = conceptErrors[concept];
+                const explanation = explanations[concept] || `The correct answer is '${concept}'.`;
+                
+                content += `
+                    <div class="weakness-item">
+                        <div class="weakness-title">
+                            ${concept}
+                            <span class="improvement-trend trend-stable">
+                                ${errorData.count} error${errorData.count > 1 ? 's' : ''} in round${errorData.rounds.length > 1 ? 's' : ''} ${errorData.rounds.join(', ')}
+                            </span>
+                        </div>
+                        <div class="weakness-details">
+                            <strong>Key Learning Point:</strong> ${explanation}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            if (Object.keys(conceptErrors).length === 0) {
+                content += `<p>${currentTopicData.reviewSettings.messages.perfectTotal}</p>`;
+            }
+            
+            return content;
+        }
+        
+        // Continue to next round
+        function continueToNextRound() {
+            if (currentRound < currentTopicData.metadata.totalRounds) {
+                currentRound++;
+                localStorage.setItem(`physics_${currentTopic}_currentRound`, currentRound);
+                
+                // Reset tabs for new round
+                currentTopicData.tabs.forEach(tab => {
+                    resetTabQuietly(tab.id);
+                });
+                
+                // Reinitialize with new content
+                initializeRound();
+                
+                // Hide review and show main content
+                document.getElementById('reviewContainer').classList.remove('active');
+                document.getElementById('reviewButtonContainer').style.display = 'none';
+                
+                // Show round indicator
+                if (currentRound === 2) {
+                    document.getElementById('roundIndicator').classList.add('visible');
+                }
+            } else {
+                alert(currentTopicData.modalMessages.roundComplete);
+            }
+        }
+        
+        // Reset functions
+        function resetTab(tabName) {
+            pendingReset = { type: 'tab', target: tabName };
+            const tabData = currentTopicData.tabs.find(t => t.id === tabName);
+            const message = currentTopicData.modalMessages.resetTab.message.replace('{tabName}', tabData.label);
+            showResetModal(currentTopicData.modalMessages.resetTab.title, message);
+        }
+        
+        function resetRound() {
+            pendingReset = { type: 'round', target: currentRound };
+            const message = currentTopicData.modalMessages.resetRound.message.replace('{round}', currentRound);
+            showResetModal(currentTopicData.modalMessages.resetRound.title, message);
+        }
+        
+        function resetAll() {
+            pendingReset = { type: 'all' };
+            showResetModal(currentTopicData.modalMessages.resetAll.title, currentTopicData.modalMessages.resetAll.message);
+        }
+        
+        function showResetModal(title, message) {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalMessage').textContent = message;
+            document.getElementById('confirmModal').style.display = 'block';
+        }
+        
+        function confirmReset() {
+            if (!pendingReset) return;
+            
+            if (pendingReset.type === 'tab') {
+                resetTabQuietly(pendingReset.target);
+                updateStatsDisplay();
+            } else if (pendingReset.type === 'round') {
+                resetRoundData(pendingReset.target);
+            } else if (pendingReset.type === 'all') {
+                resetAllData();
+            }
+            
+            closeModal();
+        }
+        
+        function resetTabQuietly(tabName) {
+            const selects = document.querySelectorAll(`#${tabName} select`);
+            selects.forEach(select => {
+                select.value = '';
+                select.classList.remove('selected', 'correct', 'incorrect');
+                
+                const tooltip = select.parentElement.querySelector('.tooltiptext');
+                if (tooltip) {
+                    tooltip.classList.remove('show-delayed');
+                }
+            });
+            
+            const submitBtn = document.getElementById(tabName + 'SubmitBtn');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+            }
+            
+            checkCompletion();
+        }
+        
+        function resetRoundData(round) {
+            const roundKey = 'round' + round;
+            delete tabScores[roundKey];
+            delete errorTracking[roundKey];
+            
+            localStorage.setItem(`physics_${currentTopic}_tabScores`, JSON.stringify(tabScores));
+            localStorage.setItem(`physics_${currentTopic}_errorTracking`, JSON.stringify(errorTracking));
+            
+            // Reset all tabs for this round
+            currentTopicData.tabs.forEach(tab => {
+                resetTabQuietly(tab.id);
+                
+                const tabElements = document.querySelectorAll('.tab');
+                tabElements.forEach(tabEl => {
+                    if (tabEl.textContent === tab.label) {
+                        tabEl.classList.remove('completed-r' + round);
+                    }
+                });
+            });
+            
+            document.getElementById('reviewContainer').classList.remove('active');
+            document.getElementById('reviewButtonContainer').style.display = 'none';
+            
+            updateStatsDisplay();
+            
+            if (Object.keys(tabScores).length === 0) {
+                document.getElementById('stats').style.display = 'none';
+            }
+        }
+        
+        function resetAllData() {
+            // Clear all topic-specific data
+            const prefix = `physics_${currentTopic}_`;
+            const keysToRemove = [];
+            
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith(prefix)) {
+                    keysToRemove.push(key);
+                }
+            }
+            
+            keysToRemove.forEach(key => localStorage.removeItem(key));
+            
+            currentRound = 1;
+            tabScores = {};
+            errorTracking = {};
+            
+            // Reset UI
+            initializeRound();
+            
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                tab.classList.remove('completed-r1', 'completed-r2', 'completed-r3');
+            });
+            
+            document.getElementById('roundIndicator').classList.remove('visible');
+            document.getElementById('reviewContainer').classList.remove('active');
+            document.getElementById('reviewButtonContainer').style.display = 'none';
+            document.getElementById('stats').style.display = 'none';
+            
+            document.getElementById('studentName').value = '';
+            document.getElementById('firstAttempt').value = '';
+            
+            setTimeout(() => {
+                location.reload();
+            }, 100);
+        }
+        
+        function closeModal() {
+            document.getElementById('confirmModal').style.display = 'none';
+            pendingReset = null;
+        }
+        
+        // Save/Load functions
+        function saveCurrentProgress() {
+            let currentSelections = JSON.parse(localStorage.getItem(`physics_${currentTopic}_currentSelections`) || '{}');
+            
+            const selects = document.querySelectorAll('select');
+            selects.forEach(select => {
+                if (select.id && select.value !== '') {
+                    currentSelections[select.id] = select.value;
+                } else if (select.id && select.value === '') {
+                    delete currentSelections[select.id];
+                }
+            });
+            
+            localStorage.setItem(`physics_${currentTopic}_currentSelections`, JSON.stringify(currentSelections));
+        }
+        
+        function loadSavedTopicData() {
+            const prefix = `physics_${currentTopic}_`;
+            
+            // Load student name
+            const savedName = localStorage.getItem(prefix + 'studentName');
+            if (savedName) {
+                document.getElementById('studentName').value = savedName;
+            }
+            
+            // Load first attempt date
+            const firstAttemptDate = localStorage.getItem(prefix + 'firstAttemptDate');
+            if (firstAttemptDate) {
+                document.getElementById('firstAttempt').value = firstAttemptDate;
+            }
+            
+            // Load current round
+            const savedRound = localStorage.getItem(prefix + 'currentRound');
+            if (savedRound) {
+                currentRound = parseInt(savedRound);
+            }
+            
+            // Load scores
+            const savedScores = localStorage.getItem(prefix + 'tabScores');
+            if (savedScores) {
+                tabScores = JSON.parse(savedScores);
+                
+                // Update visual indicators
+                Object.keys(tabScores).forEach(roundKey => {
+                    const roundNum = parseInt(roundKey.replace('round', ''));
+                    Object.keys(tabScores[roundKey]).forEach(tabName => {
+                        if (tabScores[roundKey][tabName]) {
+                            const tabs = document.querySelectorAll('.tab');
+                            const tabData = currentTopicData.tabs.find(t => t.id === tabName);
+                            tabs.forEach(tab => {
+                                if (tab.textContent === tabData.label) {
+                                    tab.classList.add('completed-r' + roundNum);
+                                }
+                            });
+                        }
+                    });
+                });
+                
+                updateStatsDisplay();
+            }
+            
+            // Load errors
+            const savedErrors = localStorage.getItem(prefix + 'errorTracking');
+            if (savedErrors) {
+                errorTracking = JSON.parse(savedErrors);
+            }
+        }
+        
+        // Update stats display
+        function updateStatsDisplay() {
+            let totalCorrect = 0;
+            let totalQuestions = 0;
+            let hasAnyScore = false;
+            let roundStatsHTML = '';
+            let completedRounds = 0;
+            
+            // Calculate scores for each round
+            for (let r = 1; r <= currentTopicData.metadata.totalRounds; r++) {
+                const roundKey = 'round' + r;
+                let roundCorrect = 0;
+                let roundTotal = 0;
+                let roundTabsCompleted = 0;
+                
+                if (tabScores[roundKey]) {
+                    currentTopicData.tabs.forEach(tab => {
+                        if (tabScores[roundKey][tab.id]) {
+                            hasAnyScore = true;
+                            const tabData = tabScores[roundKey][tab.id];
+                            roundCorrect += tabData.score || 0;
+                            roundTotal += tabData.total || 0;
+                            totalCorrect += tabData.score || 0;
+                            totalQuestions += tabData.total || 0;
+                            roundTabsCompleted++;
+                        }
+                    });
+                }
+                
+                if (roundTabsCompleted === currentTopicData.tabs.length) {
+                    completedRounds++;
+                }
+                
+                if (roundTotal > 0) {
+                    const roundPercent = Math.round((roundCorrect / roundTotal) * 100);
+                    const template = currentTopicData.statsDisplay.roundStats.template;
+                    const scoreFormat = currentTopicData.statsDisplay.roundStats.scoreFormat;
+                    
+                    const score = scoreFormat
+                        .replace('{correct}', roundCorrect)
+                        .replace('{total}', roundTotal);
+                    
+                    const label = template
+                        .replace('{round}', r)
+                        .replace('{percent}', roundPercent);
+                    
+                    roundStatsHTML += `
+                        <div class="stat-item" style="margin: 5px; display: inline-block;">
+                            <div class="stat-value">${score}</div>
+                            <div class="stat-label">${label}</div>
+                        </div>
+                    `;
+                }
+            }
+            
+            if (hasAnyScore) {
+                document.getElementById('roundStats').innerHTML = roundStatsHTML;
+                
+                // Update overall stats
+                const overallContainer = document.getElementById('overallStats');
+                overallContainer.innerHTML = '';
+                
+                const overallPercentage = totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
+                const totalSubmissions = parseInt(localStorage.getItem(`physics_${currentTopic}_totalSubmissions`) || '0');
+                
+                currentTopicData.statsDisplay.overallStats.forEach(stat => {
+                    const statDiv = document.createElement('div');
+                    statDiv.className = 'stat-item';
+                    
+                    let value = '';
+                    let valueStyle = '';
+                    
+                    switch(stat.id) {
+                        case 'overallScore':
+                            value = `${totalCorrect}/${totalQuestions}`;
+                            if (overallPercentage === 100 && totalQuestions > 0) {
+                                valueStyle = `color: ${stat.perfectColor}`;
+                            }
+                            break;
+                        case 'overallPercent':
+                            value = `${overallPercentage}%`;
+                            if (overallPercentage === 100 && totalQuestions > 0) {
+                                valueStyle = `color: ${stat.perfectColor}`;
+                            }
+                            break;
+                        case 'totalSubmissions':
+                            value = totalSubmissions.toString();
+                            break;
+                        case 'completedRounds':
+                            value = `${completedRounds}/${currentTopicData.metadata.totalRounds}`;
+                            break;
+                    }
+                    
+                    statDiv.innerHTML = `
+                        <div class="stat-value" style="${valueStyle}">${value}</div>
+                        <div class="stat-label">${stat.label}</div>
+                        <div class="stat-explanation">${stat.sublabel}</div>
+                    `;
+                    
+                    overallContainer.appendChild(statDiv);
+                });
+                
+                document.getElementById('stats').style.display = 'block';
+            } else {
+                document.getElementById('stats').style.display = 'none';
+            }
+        }
+        
+        // Randomize dropdowns
+        function randomizeDropdowns() {
+            const selects = document.querySelectorAll('select');
+            
+            selects.forEach(select => {
+                const options = Array.from(select.options).slice(1);
+                
+                for (let i = options.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [options[i], options[j]] = [options[j], options[i]];
+                }
+                
+                while (select.options.length > 1) {
+                    select.remove(1);
+                }
+                
+                options.forEach(option => {
+                    select.add(option);
+                });
+            });
+        }
+        
+        // Button click handlers for review
+        document.getElementById('resetRoundBtn').onclick = () => resetRound();
+        document.getElementById('resetAllBtn').onclick = () => resetAll();
+        document.getElementById('continueBtn').onclick = () => continueToNextRound();
+    </script>
+</body>
+</html>
