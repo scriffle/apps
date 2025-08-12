@@ -530,8 +530,19 @@
         }
         
         .tab-header.active {
-            color: var(--topic-primary);
-            border-bottom-color: var(--topic-primary);
+            color: var(--text-inverse);
+            background: var(--topic-gradient);
+            border-bottom-color: transparent;
+            font-weight: 700;
+        }
+        
+        .tab-header.completed {
+            background: var(--bg-secondary);
+            border-left: 3px solid var(--dropdown-correct);
+        }
+        
+        .tab-header.completed.active {
+            background: var(--topic-gradient);
         }
         
         .tab-header .round-markers {
@@ -750,9 +761,105 @@
             background: var(--topic-secondary);
         }
         
-        /* Utility classes */
-        .hidden {
-            display: none !important;
+        /* Scoring display */
+        .score-display {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: var(--bg-secondary);
+            border-radius: 6px;
+            font-weight: 600;
+        }
+        
+        .score-display.perfect {
+            background: var(--dropdown-correct);
+            color: #16a34a;
+        }
+        
+        .score-display.partial {
+            background: var(--dropdown-filled);
+            color: var(--text-primary);
+        }
+        
+        .score-display.poor {
+            background: var(--dropdown-incorrect);
+            color: #dc2626;
+        }
+        
+        /* Explanation box */
+        .explanation-box {
+            margin-top: 16px;
+            padding: 16px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            border-left: 4px solid var(--topic-primary);
+        }
+        
+        .explanation-box.correct {
+            border-left-color: var(--dropdown-correct);
+            background: rgba(144, 238, 144, 0.1);
+        }
+        
+        .explanation-box.incorrect {
+            border-left-color: var(--dropdown-incorrect);
+            background: rgba(255, 204, 203, 0.1);
+        }
+        
+        .explanation-box h4 {
+            margin: 0 0 8px 0;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+        
+        .explanation-box p {
+            margin: 4px 0;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+        
+        /* Review button after completion */
+        .review-performance-btn {
+            background: var(--topic-gradient);
+            color: var(--text-inverse);
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 20px auto;
+            display: block;
+            transition: all var(--transition-fast);
+        }
+        
+        .review-performance-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        /* Continue to next round button */
+        .continue-round-btn {
+            background: var(--topic-gradient);
+            color: var(--text-inverse);
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 20px auto;
+            display: none;
+            transition: all var(--transition-fast);
+        }
+        
+        .continue-round-btn.show {
+            display: block;
+        }
+        
+        .continue-round-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
         }
         
         .text-center {
@@ -1135,10 +1242,27 @@
             }
             
             resetTab(topicId, round, tab) {
+                // Clear selections for this tab
                 const selections = this.load(this.getKey(topicId, 'selections'), {});
                 if (selections[`round${round}`] && selections[`round${round}`][tab]) {
                     delete selections[`round${round}`][tab];
                     this.save(this.getKey(topicId, 'selections'), selections);
+                }
+                
+                // Remove tab from completed list
+                const tabsCompleted = this.load(this.getKey(topicId, 'tabsCompleted'), { round1: [], round2: [], round3: [] });
+                const roundKey = `round${round}`;
+                const index = tabsCompleted[roundKey].indexOf(tab);
+                if (index > -1) {
+                    tabsCompleted[roundKey].splice(index, 1);
+                    this.save(this.getKey(topicId, 'tabsCompleted'), tabsCompleted);
+                }
+                
+                // Clear scores for this tab
+                const scores = this.load(this.getKey(topicId, 'scores'), {});
+                if (scores[`round${round}`] && scores[`round${round}`][tab]) {
+                    delete scores[`round${round}`][tab];
+                    this.save(this.getKey(topicId, 'scores'), scores);
                 }
             }
             
@@ -1366,6 +1490,7 @@
                 this.currentContent = null;
                 this.currentRound = 1;
                 this.currentTab = null;
+                this.tabsSubmitted = {};
             }
             
             async loadTopicContent(filename) {
@@ -1394,6 +1519,10 @@
                 
                 const mainContent = document.getElementById('mainContent');
                 const state = this.stateManager.loadTopicState(this.currentContent.metadata.topicId);
+                this.currentRound = state.currentRound;
+                
+                // Check if all tabs completed for round
+                const allTabsCompleted = this.checkAllTabsCompleted(state);
                 
                 let tabsHTML = `
                     <div class="tabs-container">
@@ -1404,6 +1533,7 @@
                 this.currentContent.tabs.forEach((tab, index) => {
                     const isActive = index === 0;
                     const completedRounds = this.getCompletedRounds(state, tab.id);
+                    const isCompletedThisRound = state.tabsCompleted[`round${this.currentRound}`]?.includes(tab.id);
                     
                     let roundMarkers = '';
                     if (completedRounds.length > 0) {
@@ -1415,7 +1545,7 @@
                     }
                     
                     tabsHTML += `
-                        <button class="tab-header ${isActive ? 'active' : ''}" 
+                        <button class="tab-header ${isActive ? 'active' : ''} ${isCompletedThisRound ? 'completed' : ''}" 
                                 data-tab="${tab.id}">
                             ${tab.label}
                             ${roundMarkers}
@@ -1431,11 +1561,13 @@
                 // Generate tab panels
                 this.currentContent.tabs.forEach((tab, index) => {
                     const isActive = index === 0;
+                    const isSubmitted = state.tabsCompleted[`round${this.currentRound}`]?.includes(tab.id);
+                    
                     tabsHTML += `
                         <div class="tab-panel ${isActive ? 'active' : ''}" 
                              data-tab="${tab.id}">
                             <div class="tab-content" id="content-${tab.id}">
-                                ${this.renderTabContent(tab.id, state.currentRound)}
+                                ${this.renderTabContent(tab.id, state.currentRound, isSubmitted)}
                             </div>
                         </div>
                     `;
@@ -1446,6 +1578,15 @@
                     </div>
                 `;
                 
+                // Add continue button if all tabs completed
+                if (allTabsCompleted) {
+                    tabsHTML += `
+                        <button class="continue-round-btn show" onclick="app.showReviewScreen()">
+                            Review Performance & Continue
+                        </button>
+                    `;
+                }
+                
                 mainContent.innerHTML = tabsHTML;
                 
                 // Setup tab switching
@@ -1453,9 +1594,12 @@
                 
                 // Restore selections
                 this.restoreSelections(state);
+                
+                // Lock submitted tabs
+                this.lockSubmittedTabs(state);
             }
             
-            renderTabContent(tabId, round) {
+            renderTabContent(tabId, round, isSubmitted) {
                 const roundKey = `round${round}`;
                 const tabContent = this.currentContent.content[roundKey]?.[tabId];
                 
@@ -1488,24 +1632,43 @@
                 
                 html += `</div>`;
                 
-                // Add footer with buttons
-                html += `
-                    <div class="tab-footer">
-                        <div class="progress-info">
-                            <span class="progress-text">
-                                Completed: <strong id="progress-${tabId}">0/0</strong>
-                            </span>
+                // Show score if submitted
+                if (isSubmitted) {
+                    const state = this.stateManager.loadTopicState(this.currentContent.metadata.topicId);
+                    const score = state.scores[roundKey]?.[tabId];
+                    if (score) {
+                        const percentage = Math.round((score.correct / score.total) * 100);
+                        const scoreClass = percentage === 100 ? 'perfect' : percentage >= 70 ? 'partial' : 'poor';
+                        
+                        html += `
+                            <div class="tab-footer">
+                                <div class="score-display ${scoreClass}">
+                                    Score: ${score.correct}/${score.total} (${percentage}%)
+                                </div>
+                            </div>
+                        `;
+                    }
+                } else {
+                    // Add footer with buttons
+                    html += `
+                        <div class="tab-footer">
+                            <div class="progress-info">
+                                <span class="progress-text">
+                                    Completed: <strong id="progress-${tabId}">0/0</strong>
+                                </span>
+                            </div>
+                            <div class="tab-actions">
+                                <button class="btn btn-secondary" onclick="app.resetCurrentTab()">
+                                    Reset Tab
+                                </button>
+                                <button class="btn btn-primary" id="submit-${tabId}" 
+                                        onclick="app.submitTab('${tabId}')" disabled>
+                                    Submit Answers
+                                </button>
+                            </div>
                         </div>
-                        <div class="tab-actions">
-                            <button class="btn btn-secondary" onclick="app.resetCurrentTab()">
-                                Reset Tab
-                            </button>
-                            <button class="btn btn-primary" id="submit-${tabId}" disabled>
-                                Submit Answers
-                            </button>
-                        </div>
-                    </div>
-                `;
+                    `;
+                }
                 
                 return html;
             }
@@ -1525,7 +1688,9 @@
                     let dropdownHTML = `<select class="content-dropdown" 
                                                 data-tab="${tabId}"
                                                 data-question="${questionId}"
-                                                data-correct="${question.correct}">
+                                                data-correct="${question.correct}"
+                                                data-concept="${question.concept || ''}"
+                                                data-tooltip="${question.tooltip || ''}">
                         <option value="">Select...</option>`;
                     
                     options.forEach(option => {
@@ -1631,6 +1796,81 @@
                 }
             }
             
+            submitTab(tabId) {
+                const topicId = this.currentContent.metadata.topicId;
+                const dropdowns = document.querySelectorAll(`.content-dropdown[data-tab="${tabId}"]`);
+                let correct = 0;
+                let total = 0;
+                
+                // Grade each dropdown
+                dropdowns.forEach(dropdown => {
+                    const userAnswer = dropdown.value;
+                    const correctAnswer = dropdown.dataset.correct;
+                    const concept = dropdown.dataset.concept;
+                    
+                    total++;
+                    
+                    if (userAnswer === correctAnswer) {
+                        dropdown.classList.add('correct');
+                        dropdown.classList.remove('incorrect');
+                        correct++;
+                    } else {
+                        dropdown.classList.add('incorrect');
+                        dropdown.classList.remove('correct');
+                        
+                        // Track concept error
+                        if (concept) {
+                            this.stateManager.trackConceptError(topicId, concept, userAnswer, this.currentRound);
+                        }
+                    }
+                    
+                    // Disable dropdown
+                    dropdown.disabled = true;
+                });
+                
+                // Save score
+                this.stateManager.saveTabScore(topicId, this.currentRound, tabId, correct, total);
+                
+                // Mark tab as completed
+                this.stateManager.markTabCompleted(topicId, this.currentRound, tabId);
+                
+                // Update tab header
+                const tabHeader = document.querySelector(`.tab-header[data-tab="${tabId}"]`);
+                if (tabHeader) {
+                    tabHeader.classList.add('completed');
+                }
+                
+                // Show score
+                const percentage = Math.round((correct / total) * 100);
+                const scoreClass = percentage === 100 ? 'perfect' : percentage >= 70 ? 'partial' : 'poor';
+                
+                const tabFooter = document.querySelector(`#content-${tabId} .tab-footer`);
+                if (tabFooter) {
+                    tabFooter.innerHTML = `
+                        <div class="score-display ${scoreClass}">
+                            Score: ${correct}/${total} (${percentage}%)
+                        </div>
+                    `;
+                }
+                
+                // Check if all tabs completed
+                const state = this.stateManager.loadTopicState(topicId);
+                if (this.checkAllTabsCompleted(state)) {
+                    // Show continue button
+                    const continueBtn = document.querySelector('.continue-round-btn');
+                    if (!continueBtn) {
+                        const container = document.querySelector('.tabs-container');
+                        const btn = document.createElement('button');
+                        btn.className = 'continue-round-btn show';
+                        btn.textContent = 'Review Performance & Continue';
+                        btn.onclick = () => app.showReviewScreen();
+                        container.parentNode.insertBefore(btn, container.nextSibling);
+                    } else {
+                        continueBtn.classList.add('show');
+                    }
+                }
+            }
+            
             restoreSelections(state) {
                 const roundKey = `round${this.currentRound}`;
                 const selections = state.selections[roundKey] || {};
@@ -1650,6 +1890,52 @@
                 });
             }
             
+            lockSubmittedTabs(state) {
+                const roundKey = `round${this.currentRound}`;
+                const completedTabs = state.tabsCompleted[roundKey] || [];
+                
+                completedTabs.forEach(tabId => {
+                    // Lock dropdowns
+                    const dropdowns = document.querySelectorAll(`.content-dropdown[data-tab="${tabId}"]`);
+                    dropdowns.forEach(dropdown => {
+                        dropdown.disabled = true;
+                        
+                        // Show correct/incorrect state
+                        const userAnswer = dropdown.value;
+                        const correctAnswer = dropdown.dataset.correct;
+                        
+                        if (userAnswer === correctAnswer) {
+                            dropdown.classList.add('correct');
+                        } else {
+                            dropdown.classList.add('incorrect');
+                        }
+                    });
+                });
+            }
+            
+            resetCurrentTab() {
+                if (!this.currentTab) return;
+                
+                const topicId = this.currentContent.metadata.topicId;
+                
+                // Clear dropdowns
+                const dropdowns = document.querySelectorAll(`.content-dropdown[data-tab="${this.currentTab}"]`);
+                dropdowns.forEach(dropdown => {
+                    dropdown.value = '';
+                    dropdown.classList.remove('filled', 'correct', 'incorrect');
+                    dropdown.disabled = false;
+                });
+                
+                // Reset state
+                this.stateManager.resetTab(topicId, this.currentRound, this.currentTab);
+                
+                // Update progress
+                this.updateProgress(this.currentTab);
+                
+                // Re-render to update UI
+                this.renderTabs();
+            }
+            
             getCompletedRounds(state, tabId) {
                 const completed = [];
                 ['round1', 'round2', 'round3'].forEach((round, index) => {
@@ -1658,6 +1944,111 @@
                     }
                 });
                 return completed;
+            }
+            
+            checkAllTabsCompleted(state) {
+                const roundKey = `round${this.currentRound}`;
+                const completedTabs = state.tabsCompleted[roundKey] || [];
+                return completedTabs.length === this.currentContent.tabs.length;
+            }
+            
+            showReviewScreen() {
+                const topicId = this.currentContent.metadata.topicId;
+                const state = this.stateManager.loadTopicState(topicId);
+                const roundKey = `round${this.currentRound}`;
+                
+                let html = `
+                    <div class="review-screen">
+                        <h2>Round ${this.currentRound} Review</h2>
+                `;
+                
+                // Calculate overall score
+                let totalCorrect = 0;
+                let totalQuestions = 0;
+                
+                this.currentContent.tabs.forEach(tab => {
+                    const score = state.scores[roundKey]?.[tab.id];
+                    if (score) {
+                        totalCorrect += score.correct;
+                        totalQuestions += score.total;
+                    }
+                });
+                
+                const percentage = Math.round((totalCorrect / totalQuestions) * 100);
+                const scoreClass = percentage === 100 ? 'perfect' : percentage >= 70 ? 'partial' : 'poor';
+                
+                html += `
+                    <div class="score-display ${scoreClass}" style="font-size: 20px; padding: 12px 24px;">
+                        Overall Score: ${totalCorrect}/${totalQuestions} (${percentage}%)
+                    </div>
+                `;
+                
+                // Show concept errors
+                if (state.conceptErrors && Object.keys(state.conceptErrors).length > 0) {
+                    html += `
+                        <div class="explanation-box incorrect">
+                            <h4>Concepts to Review:</h4>
+                    `;
+                    
+                    Object.entries(state.conceptErrors).forEach(([concept, data]) => {
+                        html += `<p>• ${concept.replace(/_/g, ' ')}: ${data.errors} error(s)</p>`;
+                    });
+                    
+                    html += `</div>`;
+                }
+                
+                // Add continue button
+                if (this.currentRound < 3) {
+                    html += `
+                        <button class="btn btn-primary" onclick="app.startNextRound()">
+                            Continue to Round ${this.currentRound + 1}
+                        </button>
+                    `;
+                } else {
+                    html += `
+                        <div class="explanation-box correct">
+                            <h4>Congratulations!</h4>
+                            <p>You've completed all 3 rounds of this topic!</p>
+                        </div>
+                    `;
+                }
+                
+                html += `</div>`;
+                
+                document.getElementById('mainContent').innerHTML = html;
+            }
+            
+            startNextRound() {
+                const topicId = this.currentContent.metadata.topicId;
+                const state = this.stateManager.loadTopicState(topicId);
+                
+                // Increment round
+                this.currentRound = Math.min(state.currentRound + 1, 3);
+                state.currentRound = this.currentRound;
+                this.stateManager.saveTopicState(topicId, state);
+                
+                // Update status display
+                document.getElementById('currentRoundText').textContent = `Round ${this.currentRound}`;
+                document.getElementById('miniTopicName').textContent = `${topicId} - Round ${this.currentRound}`;
+                
+                // Update round indicators
+                const roundIndicator = document.getElementById('roundIndicator');
+                if (roundIndicator) {
+                    roundIndicator.style.display = 'inline-flex';
+                    roundIndicator.querySelectorAll('.round-badge').forEach((badge, index) => {
+                        const round = index + 1;
+                        badge.classList.remove('completed', 'current');
+                        
+                        if (round < this.currentRound) {
+                            badge.classList.add('completed');
+                        } else if (round === this.currentRound) {
+                            badge.classList.add('current');
+                        }
+                    });
+                }
+                
+                // Re-render tabs for new round
+                this.renderTabs();
             }
         }
         
@@ -1990,14 +2381,21 @@
             window.app = {
                 resetCurrentTab: () => {
                     if (contentManager.currentTab) {
-                        if (confirm('Reset all answers in this tab?')) {
-                            const topicId = contentManager.currentContent?.metadata?.topicId;
-                            if (topicId) {
-                                stateManager.resetTab(topicId, contentManager.currentRound, contentManager.currentTab);
-                                contentManager.renderTabs();
-                            }
+                        if (confirm('Reset all answers in this tab? This will clear your selections but not your score if already submitted.')) {
+                            contentManager.resetCurrentTab();
                         }
                     }
+                },
+                submitTab: (tabId) => {
+                    if (confirm('Submit this tab for grading? You cannot change your answers after submission.')) {
+                        contentManager.submitTab(tabId);
+                    }
+                },
+                showReviewScreen: () => {
+                    contentManager.showReviewScreen();
+                },
+                startNextRound: () => {
+                    contentManager.startNextRound();
                 }
             };
             
