@@ -761,15 +761,62 @@
             background: var(--topic-secondary);
         }
         
-        /* Scoring display */
-        .score-display {
+        /* Tooltip styles */
+        .dropdown-tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 8px;
+            padding: 8px 12px;
+            background: var(--text-primary);
+            color: var(--bg-main);
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity var(--transition-normal);
+            z-index: 1000;
+            max-width: 200px;
+            white-space: normal;
+        }
+        
+        .dropdown-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: var(--text-primary);
+        }
+        
+        .dropdown-tooltip.show {
+            opacity: 0.95;
+        }
+        
+        .dropdown-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+        
+        /* Attempt counter */
+        .attempt-counter {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 6px 12px;
-            background: var(--bg-secondary);
-            border-radius: 6px;
-            font-weight: 600;
+            gap: 4px;
+            padding: 4px 8px;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-left: 8px;
+        }
+        
+        .attempt-counter.multiple {
+            background: var(--dropdown-filled);
+            color: var(--text-primary);
         }
         
         .score-display.perfect {
@@ -1200,11 +1247,30 @@
                 this.save(this.getKey(topicId, 'selections'), selections);
             }
             
-            saveTabScore(topicId, round, tab, correct, total) {
+            saveTabScore(topicId, round, tab, correct, total, attempt = 1) {
                 const scores = this.load(this.getKey(topicId, 'scores'), {});
                 if (!scores[`round${round}`]) scores[`round${round}`] = {};
-                scores[`round${round}`][tab] = { correct, total };
+                if (!scores[`round${round}`][tab]) {
+                    scores[`round${round}`][tab] = { 
+                        correct: correct, 
+                        total: total,
+                        attempts: attempt,
+                        bestScore: correct
+                    };
+                } else {
+                    // Update attempt count and best score
+                    scores[`round${round}`][tab].attempts = attempt;
+                    scores[`round${round}`][tab].correct = correct;
+                    if (correct > scores[`round${round}`][tab].bestScore) {
+                        scores[`round${round}`][tab].bestScore = correct;
+                    }
+                }
                 this.save(this.getKey(topicId, 'scores'), scores);
+            }
+            
+            getTabAttempts(topicId, round, tab) {
+                const scores = this.load(this.getKey(topicId, 'scores'), {});
+                return scores[`round${round}`]?.[tab]?.attempts || 0;
             }
             
             trackConceptError(topicId, concept, wrongAnswer, round) {
@@ -1682,22 +1748,26 @@
                     // Randomize options
                     const options = this.shuffleOptions(
                         [question.correct, ...question.distractors],
-                        `${tabId}-${questionId}`
+                        `${tabId}-${questionId}-${this.currentRound}` // Include round in seed
                     );
                     
-                    let dropdownHTML = `<select class="content-dropdown" 
-                                                data-tab="${tabId}"
-                                                data-question="${questionId}"
-                                                data-correct="${question.correct}"
-                                                data-concept="${question.concept || ''}"
-                                                data-tooltip="${question.tooltip || ''}">
-                        <option value="">Select...</option>`;
+                    let dropdownHTML = `
+                        <span class="dropdown-wrapper">
+                            <select class="content-dropdown" 
+                                    data-tab="${tabId}"
+                                    data-question="${questionId}"
+                                    data-correct="${question.correct}"
+                                    data-concept="${question.concept || ''}"
+                                    data-tooltip="${question.tooltip || ''}">
+                                <option value="">Select...</option>`;
                     
                     options.forEach(option => {
                         dropdownHTML += `<option value="${option}">${option}</option>`;
                     });
                     
-                    dropdownHTML += `</select>`;
+                    dropdownHTML += `</select>
+                        <div class="dropdown-tooltip"></div>
+                    </span>`;
                     return dropdownHTML;
                 });
             }
@@ -1802,11 +1872,15 @@
                 let correct = 0;
                 let total = 0;
                 
+                // Get current attempt number
+                const currentAttempt = this.stateManager.getTabAttempts(topicId, this.currentRound, tabId) + 1;
+                
                 // Grade each dropdown
                 dropdowns.forEach(dropdown => {
                     const userAnswer = dropdown.value;
                     const correctAnswer = dropdown.dataset.correct;
                     const concept = dropdown.dataset.concept;
+                    const tooltip = dropdown.dataset.tooltip;
                     
                     total++;
                     
@@ -1814,6 +1888,11 @@
                         dropdown.classList.add('correct');
                         dropdown.classList.remove('incorrect');
                         correct++;
+                        // Hide tooltip for correct answers
+                        const tooltipEl = dropdown.parentElement.querySelector('.dropdown-tooltip');
+                        if (tooltipEl) {
+                            tooltipEl.classList.remove('show');
+                        }
                     } else {
                         dropdown.classList.add('incorrect');
                         dropdown.classList.remove('correct');
@@ -1822,38 +1901,78 @@
                         if (concept) {
                             this.stateManager.trackConceptError(topicId, concept, userAnswer, this.currentRound);
                         }
+                        
+                        // Show tooltip for incorrect answers (with delay)
+                        if (tooltip) {
+                            const tooltipEl = dropdown.parentElement.querySelector('.dropdown-tooltip');
+                            if (tooltipEl) {
+                                tooltipEl.textContent = tooltip;
+                                // Set up hover behavior
+                                let hoverTimeout;
+                                dropdown.addEventListener('mouseenter', () => {
+                                    hoverTimeout = setTimeout(() => {
+                                        tooltipEl.classList.add('show');
+                                    }, 1500); // 1.5 second delay
+                                });
+                                dropdown.addEventListener('mouseleave', () => {
+                                    clearTimeout(hoverTimeout);
+                                    tooltipEl.classList.remove('show');
+                                });
+                            }
+                        }
                     }
                     
-                    // Disable dropdown
-                    dropdown.disabled = true;
+                    // Don't disable dropdowns - allow continued attempts
+                    // dropdown.disabled = true;
                 });
                 
-                // Save score
-                this.stateManager.saveTabScore(topicId, this.currentRound, tabId, correct, total);
+                // Save score with attempt number
+                this.stateManager.saveTabScore(topicId, this.currentRound, tabId, correct, total, currentAttempt);
                 
-                // Mark tab as completed
-                this.stateManager.markTabCompleted(topicId, this.currentRound, tabId);
-                
-                // Update tab header
-                const tabHeader = document.querySelector(`.tab-header[data-tab="${tabId}"]`);
-                if (tabHeader) {
-                    tabHeader.classList.add('completed');
+                // Only mark as completed if perfect score
+                if (correct === total) {
+                    this.stateManager.markTabCompleted(topicId, this.currentRound, tabId);
+                    
+                    // Update tab header
+                    const tabHeader = document.querySelector(`.tab-header[data-tab="${tabId}"]`);
+                    if (tabHeader) {
+                        tabHeader.classList.add('completed');
+                    }
                 }
                 
-                // Show score
+                // Show score with attempt counter
                 const percentage = Math.round((correct / total) * 100);
                 const scoreClass = percentage === 100 ? 'perfect' : percentage >= 70 ? 'partial' : 'poor';
                 
                 const tabFooter = document.querySelector(`#content-${tabId} .tab-footer`);
                 if (tabFooter) {
+                    let attemptText = currentAttempt > 1 ? 
+                        `<span class="attempt-counter multiple">Attempt ${currentAttempt}</span>` : 
+                        `<span class="attempt-counter">Attempt 1</span>`;
+                    
                     tabFooter.innerHTML = `
                         <div class="score-display ${scoreClass}">
                             Score: ${correct}/${total} (${percentage}%)
+                            ${attemptText}
+                        </div>
+                        <div class="tab-actions">
+                            ${correct < total ? `
+                                <button class="btn btn-secondary" onclick="app.resetCurrentTab()">
+                                    Reset Tab
+                                </button>
+                                <button class="btn btn-primary" onclick="app.submitTab('${tabId}')">
+                                    Try Again
+                                </button>
+                            ` : `
+                                <div class="explanation-box correct">
+                                    <p>Perfect! You've mastered this section.</p>
+                                </div>
+                            `}
                         </div>
                     `;
                 }
                 
-                // Check if all tabs completed
+                // Check if all tabs completed (perfect scores)
                 const state = this.stateManager.loadTopicState(topicId);
                 if (this.checkAllTabsCompleted(state)) {
                     // Show continue button
@@ -1862,7 +1981,7 @@
                         const container = document.querySelector('.tabs-container');
                         const btn = document.createElement('button');
                         btn.className = 'continue-round-btn show';
-                        btn.textContent = 'Review Performance & Continue';
+                        btn.textContent = 'Review Performance & Continue to Next Round';
                         btn.onclick = () => app.showReviewScreen();
                         container.parentNode.insertBefore(btn, container.nextSibling);
                     } else {
@@ -1959,39 +2078,68 @@
                 
                 let html = `
                     <div class="review-screen">
-                        <h2>Round ${this.currentRound} Review</h2>
+                        <h2>Round ${this.currentRound} Complete!</h2>
                 `;
                 
                 // Calculate overall score
                 let totalCorrect = 0;
                 let totalQuestions = 0;
+                let totalAttempts = 0;
                 
                 this.currentContent.tabs.forEach(tab => {
                     const score = state.scores[roundKey]?.[tab.id];
                     if (score) {
                         totalCorrect += score.correct;
                         totalQuestions += score.total;
+                        totalAttempts += score.attempts || 1;
                     }
                 });
                 
                 const percentage = Math.round((totalCorrect / totalQuestions) * 100);
+                const avgAttempts = (totalAttempts / this.currentContent.tabs.length).toFixed(1);
                 const scoreClass = percentage === 100 ? 'perfect' : percentage >= 70 ? 'partial' : 'poor';
                 
                 html += `
                     <div class="score-display ${scoreClass}" style="font-size: 20px; padding: 12px 24px;">
                         Overall Score: ${totalCorrect}/${totalQuestions} (${percentage}%)
                     </div>
+                    <p style="color: var(--text-secondary); margin-top: 8px;">
+                        Average attempts per tab: ${avgAttempts}
+                    </p>
                 `;
+                
+                // Show per-tab breakdown
+                html += `<div class="explanation-box" style="margin-top: 20px;">
+                    <h4>Tab Performance:</h4>`;
+                
+                this.currentContent.tabs.forEach(tab => {
+                    const score = state.scores[roundKey]?.[tab.id];
+                    if (score) {
+                        const tabPercentage = Math.round((score.correct / score.total) * 100);
+                        const attempts = score.attempts || 1;
+                        html += `
+                            <p>• ${tab.label}: ${score.correct}/${score.total} (${tabPercentage}%) 
+                            ${attempts > 1 ? `- ${attempts} attempts` : '- First try!'}</p>
+                        `;
+                    }
+                });
+                
+                html += `</div>`;
                 
                 // Show concept errors
                 if (state.conceptErrors && Object.keys(state.conceptErrors).length > 0) {
                     html += `
-                        <div class="explanation-box incorrect">
+                        <div class="explanation-box incorrect" style="margin-top: 20px;">
                             <h4>Concepts to Review:</h4>
                     `;
                     
-                    Object.entries(state.conceptErrors).forEach(([concept, data]) => {
-                        html += `<p>• ${concept.replace(/_/g, ' ')}: ${data.errors} error(s)</p>`;
+                    // Sort by error count
+                    const sortedErrors = Object.entries(state.conceptErrors)
+                        .sort((a, b) => b[1].errors - a[1].errors)
+                        .slice(0, 5); // Top 5 problem areas
+                    
+                    sortedErrors.forEach(([concept, data]) => {
+                        html += `<p>• ${concept.replace(/_/g, ' ')}: ${data.errors} error(s) across ${data.rounds.length} round(s)</p>`;
                     });
                     
                     html += `</div>`;
@@ -2000,15 +2148,29 @@
                 // Add continue button
                 if (this.currentRound < 3) {
                     html += `
-                        <button class="btn btn-primary" onclick="app.startNextRound()">
-                            Continue to Round ${this.currentRound + 1}
-                        </button>
+                        <div style="margin-top: 24px; text-align: center;">
+                            <p style="color: var(--text-secondary); margin-bottom: 12px;">
+                                Ready for Round ${this.currentRound + 1}? The same concepts will be tested with different wording.
+                            </p>
+                            <button class="btn btn-primary" onclick="app.startNextRound()" style="font-size: 16px; padding: 12px 24px;">
+                                Continue to Round ${this.currentRound + 1}
+                            </button>
+                        </div>
                     `;
                 } else {
                     html += `
-                        <div class="explanation-box correct">
-                            <h4>Congratulations!</h4>
-                            <p>You've completed all 3 rounds of this topic!</p>
+                        <div class="explanation-box correct" style="margin-top: 24px;">
+                            <h4>🎉 Congratulations!</h4>
+                            <p>You've completed all 3 rounds of ${this.currentContent.metadata.topicName}!</p>
+                            <p>Through spaced repetition across ${totalAttempts} total attempts, you've reinforced your understanding of these key concepts.</p>
+                        </div>
+                        <div style="margin-top: 24px; text-align: center;">
+                            <button class="btn btn-secondary" onclick="app.resetTopic()">
+                                Start Over
+                            </button>
+                            <button class="btn btn-primary" onclick="location.reload()">
+                                Choose New Topic
+                            </button>
                         </div>
                     `;
                 }
@@ -2381,21 +2543,29 @@
             window.app = {
                 resetCurrentTab: () => {
                     if (contentManager.currentTab) {
-                        if (confirm('Reset all answers in this tab? This will clear your selections but not your score if already submitted.')) {
+                        if (confirm('Reset all answers in this tab? This will clear your selections and allow you to start over.')) {
                             contentManager.resetCurrentTab();
                         }
                     }
                 },
                 submitTab: (tabId) => {
-                    if (confirm('Submit this tab for grading? You cannot change your answers after submission.')) {
-                        contentManager.submitTab(tabId);
-                    }
+                    // No confirmation needed - just submit
+                    contentManager.submitTab(tabId);
                 },
                 showReviewScreen: () => {
                     contentManager.showReviewScreen();
                 },
                 startNextRound: () => {
                     contentManager.startNextRound();
+                },
+                resetTopic: () => {
+                    if (confirm('Reset all progress for this topic? This will clear all rounds and scores.')) {
+                        const topicId = contentManager.currentContent?.metadata?.topicId;
+                        if (topicId) {
+                            stateManager.resetTopic(topicId);
+                            location.reload();
+                        }
+                    }
                 }
             };
             
