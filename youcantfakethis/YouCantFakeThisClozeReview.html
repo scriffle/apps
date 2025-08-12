@@ -1670,7 +1670,8 @@
                 const tabContent = this.currentContent.content[roundKey]?.[tabId];
                 
                 if (!tabContent) {
-                    return '<p>Content not available for this round.</p>';
+                    console.warn(`No content found for round${round}/${tabId}`);
+                    return `<p>Content not available for Round ${round} - ${tabId}.</p>`;
                 }
                 
                 let html = `<div class="content-section">`;
@@ -1691,9 +1692,15 @@
                 
                 // Render sentences with dropdowns
                 if (tabContent.sentences) {
-                    tabContent.sentences.forEach(sentence => {
+                    tabContent.sentences.forEach((sentence, index) => {
+                        if (!sentence || !sentence.text) {
+                            console.error(`Invalid sentence at index ${index} in ${tabId}`);
+                            return;
+                        }
                         html += `<div class="content-sentence">${this.processSentence(sentence, tabId)}</div>`;
                     });
+                } else {
+                    console.warn(`No sentences found for ${roundKey}/${tabId}`);
                 }
                 
                 html += `</div>`;
@@ -1742,13 +1749,50 @@
             processSentence(sentence, tabId) {
                 // Replace placeholders with dropdowns
                 return sentence.text.replace(/\{\{(\w+)\}\}/g, (match, questionId) => {
-                    const question = sentence.questions[questionId];
-                    if (!question) return match;
+                    const question = sentence.questions?.[questionId];
+                    if (!question) {
+                        console.error(`Question ${questionId} not found in sentence for tab ${tabId}`);
+                        return match;
+                    }
+                    
+                    // Validate question structure
+                    if (!question.correct) {
+                        console.error(`No correct answer for question ${questionId} in tab ${tabId}`);
+                        return match;
+                    }
+                    
+                    // Ensure we have valid distractors
+                    const distractors = question.distractors || [];
+                    if (!Array.isArray(distractors)) {
+                        console.error(`Distractors is not an array for question ${questionId} in tab ${tabId}`);
+                        return match;
+                    }
+                    
+                    if (distractors.length !== 3) {
+                        console.warn(`Question ${questionId} in tab ${tabId} has ${distractors.length} distractors, expected 3`);
+                    }
+                    
+                    // Filter out any invalid values
+                    const validDistractors = distractors.filter(opt => 
+                        opt !== undefined && 
+                        opt !== null && 
+                        opt !== '' &&
+                        typeof opt === 'string'
+                    );
+                    
+                    // Combine with correct answer
+                    const allOptions = [question.correct, ...validDistractors];
+                    
+                    // Log if we have issues
+                    if (allOptions.length !== 4) {
+                        console.warn(`Question ${questionId} in tab ${tabId} has ${allOptions.length} total options (should be 4)`);
+                        console.log('Options:', allOptions);
+                    }
                     
                     // Randomize options
                     const options = this.shuffleOptions(
-                        [question.correct, ...question.distractors],
-                        `${tabId}-${questionId}-${this.currentRound}` // Include round in seed
+                        allOptions,
+                        `${tabId}-${questionId}-${this.currentRound}`
                     );
                     
                     let dropdownHTML = `
@@ -1756,13 +1800,15 @@
                             <select class="content-dropdown" 
                                     data-tab="${tabId}"
                                     data-question="${questionId}"
-                                    data-correct="${question.correct}"
+                                    data-correct="${question.correct || ''}"
                                     data-concept="${question.concept || ''}"
                                     data-tooltip="${question.tooltip || ''}">
                                 <option value="">Select...</option>`;
                     
                     options.forEach(option => {
-                        dropdownHTML += `<option value="${option}">${option}</option>`;
+                        if (option && typeof option === 'string') {
+                            dropdownHTML += `<option value="${option}">${option}</option>`;
+                        }
                     });
                     
                     dropdownHTML += `</select>
