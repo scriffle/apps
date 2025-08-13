@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Global Names Memorial - Speaking Every Name</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="A memorial honoring the diversity of human naming across all cultures, speaking names in multiple languages with native scripts.">
 
 <style>
     :root {
@@ -707,6 +708,48 @@
         font-size: 1.2rem;
         margin: 0.5rem 0;
         opacity: 0.8;
+        line-height: 1.5;
+    }
+
+    .script-display.chinese,
+    .script-display.traditional {
+        font-family: "Noto Sans CJK SC", "Microsoft YaHei", "SimHei", sans-serif;
+        font-size: 1.6rem;
+    }
+
+    .script-display.tibetan {
+        font-family: "Noto Sans Tibetan", "Microsoft Himalaya", "Tibetan Machine Uni", serif;
+        font-size: 1.4rem;
+    }
+
+    .script-display.burmese {
+        font-family: "Noto Sans Myanmar", "Myanmar Text", "Padauk", sans-serif;
+        font-size: 1.4rem;
+    }
+
+    .script-display.devanagari {
+        font-family: "Noto Sans Devanagari", "Mangal", "Kokila", sans-serif;
+        font-size: 1.5rem;
+    }
+
+    .script-display.cyrillic {
+        font-family: "Noto Sans", "Arial", sans-serif;
+        font-size: 1.4rem;
+    }
+
+    .script-display.greek {
+        font-family: "Noto Sans Greek", "Arial", sans-serif;
+        font-size: 1.4rem;
+    }
+
+    .script-display.armenian {
+        font-family: "Noto Sans Armenian", "Sylfaen", sans-serif;
+        font-size: 1.4rem;
+    }
+
+    .script-display.bengali {
+        font-family: "Noto Sans Bengali", "Vrinda", "SolaimanLipi", sans-serif;
+        font-size: 1.4rem;
     }
 
     .rtl {
@@ -791,7 +834,9 @@
                     </label>
                     <span style="font-size: 0.85rem;">Detail</span>
                 </div>
-                
+            </div>
+            
+            <div class="control-row">
                 <div class="control-group">
                     <span style="font-size: 0.85rem;">Now</span>
                     <label class="switch">
@@ -799,6 +844,24 @@
                         <span class="slider"></span>
                     </label>
                     <span style="font-size: 0.85rem;">Old</span>
+                </div>
+                
+                <div class="control-group">
+                    <span style="font-size: 0.85rem;">Separate</span>
+                    <label class="switch">
+                        <input type="checkbox" id="mixNamesToggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span style="font-size: 0.85rem;">Mix</span>
+                </div>
+                
+                <div class="control-group">
+                    <span style="font-size: 0.85rem;">Latin</span>
+                    <label class="switch">
+                        <input type="checkbox" id="nativeScriptToggle" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <span style="font-size: 0.85rem;">Native</span>
                 </div>
             </div>
         </div>
@@ -909,8 +972,11 @@
     </div>
 
     <script>
-// Global Names Memorial - Version 3.1
+// Global Names Memorial - Version 3.2
 // Features:
+// - Expanded name databases (doubled names for all language families)
+// - Native script display (Chinese, Tibetan, Cyrillic, Devanagari, etc.)
+// - Mixed mode: combines historical and modern names
 // - Intelligent voice matching based on gender and language family
 // - Voice settings panel (press Q+W+E to open)
 // - Persistent voice preferences saved in localStorage
@@ -925,6 +991,8 @@ const appState = {
     isWeighted: false,
     showDetails: true,
     showOldNames: false,
+    mixOldAndNew: false,
+    showNativeScript: true,
     isVoiceInitialized: false,
     currentName: null,
     synth: window.speechSynthesis,
@@ -1629,7 +1697,44 @@ async function generateName() {
         const genders = ['male', 'female', 'neutral'];
         const gender = genders[Math.floor(Math.random() * genders.length)];
         
-        // Get names
+        // Determine if this should be an old name
+        let useOldName = false;
+        if (appState.mixOldAndNew && appState.showOldNames) {
+            // Mix mode: 30% chance of old name
+            useOldName = Math.random() < 0.3;
+        } else if (appState.showOldNames && !appState.mixOldAndNew) {
+            // Old names only mode
+            useOldName = true;
+        }
+        
+        // Get native script if available
+        let nativeScript = null;
+        if (appState.showNativeScript && familyData.nameComponents.nativeScript) {
+            nativeScript = getNativeScriptName(familyData, gender, familyId);
+        }
+        
+        if (useOldName && familyData.nameComponents.oldNames) {
+            // Generate old name
+            const oldNameData = generateOldName(familyData, gender);
+            if (oldNameData) {
+                return {
+                    display: oldNameData.display,
+                    spoken: oldNameData.display,
+                    nativeScript: nativeScript,
+                    given: oldNameData.given,
+                    meaning: oldNameData.meaning,
+                    category: oldNameData.category,
+                    isOldName: true,
+                    gender: gender,
+                    familyId: familyId,
+                    languageFamily: familyData.metadata.family,
+                    writingSystems: familyData.metadata.writingSystems,
+                    populationPercentage: appState.metadata.languageFamilies.find(f => f.id === familyId)?.populationPercentage
+                };
+            }
+        }
+        
+        // Generate modern name
         const givenNames = familyData.nameComponents.given[gender] || 
                           familyData.nameComponents.given.neutral ||
                           [];
@@ -1660,6 +1765,7 @@ async function generateName() {
         return {
             display: fullName,
             spoken: fullName,
+            nativeScript: nativeScript,
             given: givenName,
             family: familyName,
             gender: gender,
@@ -1675,37 +1781,174 @@ async function generateName() {
     }
 }
 
+// Generate old name
+function generateOldName(familyData, gender) {
+    const oldNames = familyData.nameComponents.oldNames;
+    if (!oldNames) return null;
+    
+    const genderOldNames = oldNames[gender === 'female' ? 'female' : 'male'];
+    if (!genderOldNames) return null;
+    
+    // Get all categories
+    const categories = Object.keys(genderOldNames);
+    if (categories.length === 0) return null;
+    
+    // Select a category
+    const category = categories[Math.floor(Math.random() * categories.length)];
+    const namesInCategory = genderOldNames[category];
+    
+    // Get name and meaning
+    const nameEntries = Object.entries(namesInCategory);
+    if (nameEntries.length === 0) return null;
+    
+    const [name, meaning] = nameEntries[Math.floor(Math.random() * nameEntries.length)];
+    
+    return {
+        display: name,
+        given: name,
+        meaning: meaning,
+        category: category
+    };
+}
+
+// Get native script version of name
+function getNativeScriptName(familyData, gender, familyId) {
+    const nativeScript = familyData.nameComponents.nativeScript;
+    if (!nativeScript) return null;
+    
+    // Determine which script to use
+    let scriptType = null;
+    if (familyId === 'indoEuropean') {
+        // Choose script based on random selection
+        const scripts = ['cyrillic', 'devanagari', 'greek', 'armenian', 'bengali'];
+        scriptType = scripts[Math.floor(Math.random() * scripts.length)];
+    } else if (familyId === 'sinoTibetan') {
+        const scripts = ['chinese', 'traditional', 'tibetan', 'burmese'];
+        scriptType = scripts[Math.floor(Math.random() * scripts.length)];
+    }
+    
+    if (!scriptType || !nativeScript[scriptType]) return null;
+    
+    const scriptData = nativeScript[scriptType];
+    const givenNames = scriptData.given[gender] || scriptData.given.neutral || [];
+    const familyNames = scriptData.family || [];
+    
+    if (givenNames.length === 0 || familyNames.length === 0) return null;
+    
+    const given = givenNames[Math.floor(Math.random() * givenNames.length)];
+    const family = familyNames[Math.floor(Math.random() * familyNames.length)];
+    
+    // Format based on name order
+    if (familyData.metadata.nameOrder === 'family_first') {
+        return {
+            full: `${family}${given}`,
+            given: given,
+            family: family,
+            script: scriptType
+        };
+    } else {
+        return {
+            full: `${given} ${family}`,
+            given: given,
+            family: family,
+            script: scriptType
+        };
+    }
+}
+
 // Display name
 function displayName(nameData) {
     if (!nameData) return;
     
     const nameDisplay = document.getElementById('nameDisplay');
+    const scriptDisplay = document.getElementById('scriptDisplay');
     const componentsDisplay = document.getElementById('nameComponents');
     const contextDisplay = document.getElementById('culturalContext');
+    const indicatorsDisplay = document.getElementById('specialIndicators');
+    const meaningsSection = document.getElementById('meaningsSection');
+    const oldNamesSection = document.getElementById('oldNamesSection');
     
     // Clear previous displays
     componentsDisplay.innerHTML = '';
     contextDisplay.innerHTML = '';
+    scriptDisplay.innerHTML = '';
+    indicatorsDisplay.innerHTML = '';
+    meaningsSection.style.display = 'none';
+    oldNamesSection.style.display = 'none';
     
     // Display main name
     nameDisplay.textContent = nameData.display;
     nameDisplay.className = 'name-main fade-in';
     
+    // Display native script if available
+    if (nameData.nativeScript && appState.showNativeScript) {
+        const scriptDiv = document.createElement('div');
+        scriptDiv.className = `script-display ${nameData.nativeScript.script}`;
+        
+        // Add appropriate class for RTL scripts
+        if (nameData.nativeScript.script === 'arabic' || nameData.nativeScript.script === 'hebrew') {
+            scriptDiv.classList.add('rtl');
+        }
+        
+        scriptDiv.textContent = nameData.nativeScript.full;
+        scriptDisplay.appendChild(scriptDiv);
+        
+        // Add script type indicator
+        const scriptLabel = document.createElement('div');
+        scriptLabel.style.fontSize = '0.7rem';
+        scriptLabel.style.opacity = '0.6';
+        scriptLabel.style.marginTop = '0.2rem';
+        scriptLabel.textContent = `(${formatScriptName(nameData.nativeScript.script)})`;
+        scriptDisplay.appendChild(scriptLabel);
+    }
+    
+    // Show indicators
+    if (nameData.isOldName) {
+        const indicator = document.createElement('span');
+        indicator.className = 'indicator indicator-old-name';
+        indicator.textContent = '📜 Historical Name';
+        indicatorsDisplay.appendChild(indicator);
+    }
+    
+    if (appState.mixOldAndNew && nameData.isOldName) {
+        const mixIndicator = document.createElement('span');
+        mixIndicator.className = 'indicator indicator-transition';
+        mixIndicator.textContent = '🔄 Mixed Mode';
+        indicatorsDisplay.appendChild(mixIndicator);
+    }
+    
     // Show components if detailed view
     if (appState.showDetails) {
         // Components
-        if (nameData.given) {
+        if (nameData.given && !nameData.isOldName) {
             const givenDiv = document.createElement('div');
             givenDiv.className = 'component';
             givenDiv.innerHTML = '<span class="component-label">Given:</span> ' + nameData.given;
             componentsDisplay.appendChild(givenDiv);
         }
         
-        if (nameData.family) {
+        if (nameData.family && !nameData.isOldName) {
             const familyDiv = document.createElement('div');
             familyDiv.className = 'component';
             familyDiv.innerHTML = '<span class="component-label">Family:</span> ' + nameData.family;
             componentsDisplay.appendChild(familyDiv);
+        }
+        
+        // Show old name details
+        if (nameData.isOldName) {
+            oldNamesSection.style.display = 'block';
+            oldNamesSection.innerHTML = `
+                <div class="old-names-title">Historical Name:</div>
+                <div class="meaning-item">
+                    <span class="meaning-label">Period:</span> ${formatCategory(nameData.category)}
+                </div>
+                <div class="meaning-item">
+                    <span class="meaning-label">Name:</span> ${nameData.given}
+                </div>
+                <div class="meaning-item">
+                    <span class="meaning-label">Meaning:</span> "${nameData.meaning}"
+                </div>
+            `;
         }
         
         // Cultural context
@@ -1720,15 +1963,71 @@ function displayName(nameData) {
                 <span class="info-label">Writing System:</span> ${nameData.writingSystems.join(', ')}
             </div>
             <div class="info-item">
-                <span class="info-label">Gender:</span> ${nameData.gender}
+                <span class="info-label">Gender:</span> ${formatGender(nameData.gender)}
             </div>
         `;
+        
+        // Add native script info if present
+        if (nameData.nativeScript) {
+            const scriptInfo = document.createElement('div');
+            scriptInfo.className = 'info-item';
+            scriptInfo.innerHTML = `
+                <span class="info-label">Script Type:</span> ${formatScriptName(nameData.nativeScript.script)}
+            `;
+            info.appendChild(scriptInfo);
+        }
         
         contextDisplay.appendChild(info);
     }
     
     // Store current name
     appState.currentName = nameData;
+}
+
+function formatScriptName(script) {
+    const scriptNames = {
+        'chinese': 'Simplified Chinese',
+        'traditional': 'Traditional Chinese',
+        'cyrillic': 'Cyrillic',
+        'devanagari': 'Devanagari',
+        'greek': 'Greek',
+        'armenian': 'Armenian',
+        'bengali': 'Bengali',
+        'tibetan': 'Tibetan',
+        'burmese': 'Burmese',
+        'arabic': 'Arabic',
+        'hebrew': 'Hebrew'
+    };
+    return scriptNames[script] || script;
+}
+
+function formatCategory(category) {
+    const categoryMap = {
+        'ancient': 'Ancient period',
+        'medieval': 'Medieval period',
+        'slavic': 'Slavic tradition',
+        'indic': 'Indian subcontinent',
+        'germanic': 'Germanic tradition',
+        'dynastic': 'Dynastic period',
+        'literary': 'Literary figures',
+        'historical': 'Historical figure',
+        'legendary': 'Legendary/Mythological',
+        'epic': 'Epic tradition',
+        'royal': 'Royal/Noble',
+        'traditional': 'Traditional'
+    };
+    
+    return categoryMap[category] || category.charAt(0).toUpperCase() + category.slice(1);
+}
+
+function formatGender(gender) {
+    const genderMap = {
+        'male': 'Male',
+        'female': 'Female',
+        'neutral': 'Gender neutral'
+    };
+    
+    return genderMap[gender] || gender;
 }
 
 // Speak name
@@ -1806,6 +2105,16 @@ function updateStats(currentName) {
         statsText += `Random selection • `;
     }
     
+    if (appState.mixOldAndNew) {
+        statsText += `Mixed historical/modern • `;
+    } else if (appState.showOldNames) {
+        statsText += `Historical names only • `;
+    }
+    
+    if (appState.showNativeScript) {
+        statsText += `Native scripts enabled • `;
+    }
+    
     statsText += `${appState.isFast ? 'Fast' : 'Slow'} speed`;
     
     stats.innerHTML = statsText;
@@ -1880,7 +2189,29 @@ document.getElementById('detailToggle').addEventListener('change', (e) => {
 
 document.getElementById('oldNamesToggle').addEventListener('change', (e) => {
     appState.showOldNames = e.target.checked;
+    // If turning off old names while in mix mode, also turn off mix mode
+    if (!appState.showOldNames && appState.mixOldAndNew) {
+        appState.mixOldAndNew = false;
+        document.getElementById('mixNamesToggle').checked = false;
+    }
     generateAndDisplay();
+});
+
+document.getElementById('mixNamesToggle').addEventListener('change', (e) => {
+    appState.mixOldAndNew = e.target.checked;
+    // If enabling mix mode, ensure old names are also enabled
+    if (appState.mixOldAndNew && !appState.showOldNames) {
+        appState.showOldNames = true;
+        document.getElementById('oldNamesToggle').checked = true;
+    }
+    generateAndDisplay();
+});
+
+document.getElementById('nativeScriptToggle').addEventListener('change', (e) => {
+    appState.showNativeScript = e.target.checked;
+    if (appState.currentName) {
+        displayName(appState.currentName);
+    }
 });
 
 document.getElementById('speakButton').addEventListener('click', () => {
@@ -1920,6 +2251,14 @@ window.addEventListener('DOMContentLoaded', () => {
     
     // Load voice settings from localStorage
     loadVoiceSettings();
+    
+    // Set initial toggle states
+    document.getElementById('speedToggle').checked = appState.isFast;
+    document.getElementById('weightedToggle').checked = appState.isWeighted;
+    document.getElementById('detailToggle').checked = appState.showDetails;
+    document.getElementById('oldNamesToggle').checked = appState.showOldNames;
+    document.getElementById('mixNamesToggle').checked = appState.mixOldAndNew;
+    document.getElementById('nativeScriptToggle').checked = appState.showNativeScript;
     
     // Add diagnostic function to window for debugging
     window.checkFiles = async function() {
