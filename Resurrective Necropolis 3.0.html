@@ -671,17 +671,30 @@ async function initializeApp() {
         appState.metadata = await metaResponse.json();
         console.log('Metadata loaded:', appState.metadata);
         
-        // Preload common language families
+        // Load ALL language families (or as many as possible)
         loadingStatus.innerHTML = '<span class="loading"></span> Loading language families...';
-        const preloadFamilies = appState.metadata.config.preloadCommon || ['indoEuropean'];
         
-        for (const familyId of preloadFamilies) {
+        // Try to load all families, not just preloadCommon
+        let loadedCount = 0;
+        let failedCount = 0;
+        
+        for (const family of appState.metadata.languageFamilies) {
             try {
-                await loadLanguageFamily(familyId);
-                console.log(`Loaded ${familyId}`);
+                await loadLanguageFamily(family.id);
+                loadedCount++;
+                console.log(`Loaded ${family.id} (${loadedCount}/${appState.metadata.languageFamilies.length})`);
+                loadingStatus.innerHTML = `<span class="loading"></span> Loading language families... (${loadedCount}/${appState.metadata.languageFamilies.length})`;
             } catch (err) {
-                console.warn(`Failed to preload ${familyId}:`, err);
+                failedCount++;
+                console.warn(`Failed to load ${family.id}:`, err.message);
+                // Continue loading others even if one fails
             }
+        }
+        
+        console.log(`Successfully loaded ${loadedCount} families, ${failedCount} failed`);
+        
+        if (loadedCount === 0) {
+            throw new Error('No language families could be loaded');
         }
         
         // Mark as initialized
@@ -803,15 +816,44 @@ async function generateName() {
     }
     
     try {
-        // Select family
-        const families = Object.keys(appState.loadedFamilies);
-        if (families.length === 0) {
+        // Get loaded families
+        const loadedFamilyIds = Object.keys(appState.loadedFamilies);
+        if (loadedFamilyIds.length === 0) {
             console.log('No families loaded');
             return null;
         }
         
-        const familyId = families[Math.floor(Math.random() * families.length)];
+        let familyId;
+        
+        // Select family based on weighted or random
+        if (appState.isWeighted) {
+            // Weighted selection based on population percentage
+            const weights = loadedFamilyIds.map(id => {
+                const familyInfo = appState.metadata.languageFamilies.find(f => f.id === id);
+                return familyInfo ? familyInfo.populationPercentage : 1;
+            });
+            
+            const totalWeight = weights.reduce((a, b) => a + b, 0);
+            let random = Math.random() * totalWeight;
+            
+            for (let i = 0; i < loadedFamilyIds.length; i++) {
+                random -= weights[i];
+                if (random <= 0) {
+                    familyId = loadedFamilyIds[i];
+                    break;
+                }
+            }
+            
+            if (!familyId) {
+                familyId = loadedFamilyIds[0];
+            }
+        } else {
+            // Random selection
+            familyId = loadedFamilyIds[Math.floor(Math.random() * loadedFamilyIds.length)];
+        }
+        
         const familyData = appState.loadedFamilies[familyId];
+        console.log(`Selected family: ${familyId}`);
         
         // Select gender
         const genders = ['male', 'female', 'neutral'];
@@ -853,7 +895,8 @@ async function generateName() {
             gender: gender,
             familyId: familyId,
             languageFamily: familyData.metadata.family,
-            writingSystems: familyData.metadata.writingSystems
+            writingSystems: familyData.metadata.writingSystems,
+            populationPercentage: appState.metadata.languageFamilies.find(f => f.id === familyId)?.populationPercentage
         };
         
     } catch (error) {
