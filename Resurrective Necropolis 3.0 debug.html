@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Names Memorial - DEBUG MODE</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: monospace;
+            background: #1a1a1a;
+            color: #0f0;
+            padding: 20px;
+            margin: 0;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: #fff;
+            border-bottom: 2px solid #0f0;
+            padding-bottom: 10px;
+        }
+        
+        .debug-panel {
+            background: #000;
+            border: 1px solid #0f0;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #333;
+        }
+        
+        .log-success {
+            border-left-color: #0f0;
+            color: #0f0;
+        }
+        
+        .log-error {
+            border-left-color: #f00;
+            color: #f00;
+        }
+        
+        .log-warning {
+            border-left-color: #ff0;
+            color: #ff0;
+        }
+        
+        .log-info {
+            border-left-color: #00f;
+            color: #88f;
+        }
+        
+        .test-button {
+            background: #0f0;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .test-button:hover {
+            background: #0a0;
+        }
+        
+        .name-display {
+            background: #222;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 10px;
+            min-height: 100px;
+            font-size: 24px;
+            color: #fff;
+            text-align: center;
+        }
+        
+        pre {
+            background: #111;
+            padding: 10px;
+            overflow-x: auto;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Names Memorial - Debug Mode</h1>
+        
+        <div class="debug-panel">
+            <h2>System Status</h2>
+            <div id="systemStatus"></div>
+        </div>
+        
+        <div class="debug-panel">
+            <h2>Debug Log</h2>
+            <div id="debugLog"></div>
+        </div>
+        
+        <div class="debug-panel">
+            <h2>Test Controls</h2>
+            <button class="test-button" onclick="testFetch()">Test Fetch metadata.json</button>
+            <button class="test-button" onclick="testLoadFamily()">Test Load Indo-European</button>
+            <button class="test-button" onclick="testGenerateName()">Test Generate Name</button>
+            <button class="test-button" onclick="testVoiceSystem()">Test Voice System</button>
+            <button class="test-button" onclick="clearLogs()">Clear Logs</button>
+        </div>
+        
+        <div class="name-display">
+            <div id="nameDisplay">Waiting for initialization...</div>
+        </div>
+        
+        <div class="debug-panel">
+            <h2>Loaded Data</h2>
+            <pre id="dataDisplay"></pre>
+        </div>
+    </div>
+
+    <script>
+        // Debug logging system
+        const debugLog = {
+            entries: [],
+            maxEntries: 100,
+            
+            log(message, type = 'info') {
+                const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+                const entry = {
+                    time: timestamp,
+                    message: message,
+                    type: type
+                };
+                
+                this.entries.push(entry);
+                if (this.entries.length > this.maxEntries) {
+                    this.entries.shift();
+                }
+                
+                this.render();
+                console.log(`[${type.toUpperCase()}] ${message}`);
+            },
+            
+            render() {
+                const container = document.getElementById('debugLog');
+                if (!container) return;
+                
+                container.innerHTML = this.entries.map(entry => 
+                    `<div class="log-entry log-${entry.type}">
+                        [${entry.time}] ${entry.message}
+                    </div>`
+                ).reverse().join('');
+            },
+            
+            clear() {
+                this.entries = [];
+                this.render();
+            }
+        };
+        
+        // System status display
+        function updateSystemStatus() {
+            const status = document.getElementById('systemStatus');
+            const info = {
+                'Browser': navigator.userAgent.split(' ').slice(-2).join(' '),
+                'Protocol': window.location.protocol,
+                'Host': window.location.host,
+                'Path': window.location.pathname,
+                'Speech Synthesis': 'speechSynthesis' in window ? 'Available' : 'Not Available',
+                'Voices Loaded': window.speechSynthesis ? window.speechSynthesis.getVoices().length : 0,
+                'JSON Files Path': './languages/',
+                'Expected Files': 'metadata.json, indo-european.json, sino-tibetan.json'
+            };
+            
+            status.innerHTML = Object.entries(info).map(([key, value]) => 
+                `<div><strong>${key}:</strong> ${value}</div>`
+            ).join('');
+        }
+        
+        // Test fetch functionality
+        async function testFetch() {
+            debugLog.log('Starting fetch test for metadata.json...', 'info');
+            
+            try {
+                const url = './languages/metadata.json';
+                debugLog.log(`Fetching: ${url}`, 'info');
+                
+                const response = await fetch(url);
+                debugLog.log(`Response status: ${response.status} ${response.statusText}`, 
+                    response.ok ? 'success' : 'error');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const text = await response.text();
+                debugLog.log(`Received ${text.length} characters`, 'info');
+                
+                // Try to parse as JSON
+                try {
+                    const data = JSON.parse(text);
+                    debugLog.log('JSON parsed successfully!', 'success');
+                    debugLog.log(`Found ${data.languageFamilies.length} language families`, 'success');
+                    
+                    // Display the data
+                    document.getElementById('dataDisplay').textContent = 
+                        JSON.stringify(data, null, 2).substring(0, 1000) + '...';
+                    
+                    return data;
+                } catch (parseError) {
+                    debugLog.log(`JSON parse error: ${parseError.message}`, 'error');
+                    debugLog.log(`First 200 chars: ${text.substring(0, 200)}`, 'warning');
+                    
+                    // Check for common issues
+                    if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+                        debugLog.log('ERROR: Server returned HTML instead of JSON!', 'error');
+                    }
+                    if (text.charCodeAt(0) === 65279) {
+                        debugLog.log('ERROR: File has BOM (Byte Order Mark)', 'error');
+                    }
+                }
+            } catch (error) {
+                debugLog.log(`Fetch error: ${error.message}`, 'error');
+                debugLog.log('Possible causes:', 'warning');
+                debugLog.log('1. File not found (check path)', 'warning');
+                debugLog.log('2. CORS issue (check server headers)', 'warning');
+                debugLog.log('3. Network error', 'warning');
+            }
+        }
+        
+        // Test loading a language family
+        async function testLoadFamily() {
+            debugLog.log('Testing Indo-European family load...', 'info');
+            
+            try {
+                // First load metadata
+                const metaResponse = await fetch('./languages/metadata.json');
+                const metadata = await metaResponse.json();
+                debugLog.log('Metadata loaded', 'success');
+                
+                // Now load Indo-European
+                const url = './languages/indo-european.json';
+                debugLog.log(`Fetching: ${url}`, 'info');
+                
+                const response = await fetch(url);
+                debugLog.log(`Response status: ${response.status}`, response.ok ? 'success' : 'error');
+                
+                const text = await response.text();
+                debugLog.log(`Received ${text.length} characters`, 'info');
+                
+                const data = JSON.parse(text);
+                debugLog.log('Indo-European data parsed successfully!', 'success');
+                
+                // Check structure
+                if (data.nameComponents && data.nameComponents.given) {
+                    const maleNames = data.nameComponents.given.male?.length || 0;
+                    const femaleNames = data.nameComponents.given.female?.length || 0;
+                    debugLog.log(`Found ${maleNames} male names, ${femaleNames} female names`, 'success');
+                    
+                    // Try to display a sample name
+                    if (maleNames > 0) {
+                        const sampleName = data.nameComponents.given.male[0];
+                        document.getElementById('nameDisplay').textContent = `Sample name: ${sampleName}`;
+                        debugLog.log(`Sample name: ${sampleName}`, 'success');
+                    }
+                } else {
+                    debugLog.log('WARNING: Data structure not as expected', 'warning');
+                }
+                
+                return data;
+            } catch (error) {
+                debugLog.log(`Family load error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Test name generation
+        async function testGenerateName() {
+            debugLog.log('Testing name generation...', 'info');
+            
+            try {
+                // Load required data
+                const metadata = await testFetch();
+                if (!metadata) {
+                    debugLog.log('Cannot generate name: metadata not loaded', 'error');
+                    return;
+                }
+                
+                const familyData = await testLoadFamily();
+                if (!familyData) {
+                    debugLog.log('Cannot generate name: family data not loaded', 'error');
+                    return;
+                }
+                
+                // Generate a name
+                const genders = ['male', 'female', 'neutral'];
+                const gender = genders[Math.floor(Math.random() * genders.length)];
+                debugLog.log(`Selected gender: ${gender}`, 'info');
+                
+                const givenNames = familyData.nameComponents.given[gender] || 
+                                  familyData.nameComponents.given.neutral ||
+                                  [...familyData.nameComponents.given.male, ...familyData.nameComponents.given.female];
+                
+                const familyNames = Array.isArray(familyData.nameComponents.family) ? 
+                    familyData.nameComponents.family :
+                    familyData.nameComponents.family.common || [];
+                
+                if (givenNames.length === 0 || familyNames.length === 0) {
+                    debugLog.log('No names available in arrays', 'error');
+                    return;
+                }
+                
+                const givenName = givenNames[Math.floor(Math.random() * givenNames.length)];
+                const familyName = familyNames[Math.floor(Math.random() * familyNames.length)];
+                
+                const fullName = `${givenName} ${familyName}`;
+                debugLog.log(`Generated name: ${fullName}`, 'success');
+                
+                document.getElementById('nameDisplay').textContent = fullName;
+                
+                return fullName;
+            } catch (error) {
+                debugLog.log(`Name generation error: ${error.message}`, 'error');
+                debugLog.log(`Stack: ${error.stack}`, 'error');
+            }
+        }
+        
+        // Test voice system
+        async function testVoiceSystem() {
+            debugLog.log('Testing voice system...', 'info');
+            
+            if (!('speechSynthesis' in window)) {
+                debugLog.log('Speech synthesis not supported', 'error');
+                return;
+            }
+            
+            // Cancel any ongoing speech
+            window.speechSynthesis.cancel();
+            
+            // Get voices
+            let voices = window.speechSynthesis.getVoices();
+            debugLog.log(`Found ${voices.length} voices initially`, 'info');
+            
+            if (voices.length === 0) {
+                debugLog.log('Waiting for voices to load...', 'warning');
+                
+                await new Promise(resolve => {
+                    window.speechSynthesis.onvoiceschanged = () => {
+                        voices = window.speechSynthesis.getVoices();
+                        debugLog.log(`Voices loaded: ${voices.length}`, 'success');
+                        resolve();
+                    };
+                    
+                    // Timeout after 2 seconds
+                    setTimeout(resolve, 2000);
+                });
+            }
+            
+            if (voices.length === 0) {
+                debugLog.log('No voices available after waiting', 'error');
+                return;
+            }
+            
+            // List first 5 voices
+            voices.slice(0, 5).forEach(voice => {
+                debugLog.log(`Voice: ${voice.name} (${voice.lang})`, 'info');
+            });
+            
+            // Test speech
+            const text = document.getElementById('nameDisplay').textContent || 'Test speech';
+            const utterance = new SpeechSynthesisUtterance(text);
+            
+            utterance.onstart = () => debugLog.log('Speech started', 'success');
+            utterance.onend = () => debugLog.log('Speech completed', 'success');
+            utterance.onerror = (e) => debugLog.log(`Speech error: ${e.error}`, 'error');
+            
+            debugLog.log(`Speaking: "${text}"`, 'info');
+            window.speechSynthesis.speak(utterance);
+        }
+        
+        // Clear logs
+        function clearLogs() {
+            debugLog.clear();
+            document.getElementById('dataDisplay').textContent = '';
+            debugLog.log('Logs cleared', 'info');
+        }
+        
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            debugLog.log('Page loaded, initializing debug mode...', 'info');
+            updateSystemStatus();
+            
+            // Auto-run basic test
+            setTimeout(() => {
+                debugLog.log('Running automatic diagnostics...', 'info');
+                testFetch();
+            }, 500);
+        });
+        
+        // Monitor for voice changes
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.onvoiceschanged = () => {
+                const count = window.speechSynthesis.getVoices().length;
+                debugLog.log(`Voice list updated: ${count} voices available`, 'info');
+                updateSystemStatus();
+            };
+        }
+    </script>
+</body>
+</html>
