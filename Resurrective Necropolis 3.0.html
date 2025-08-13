@@ -553,7 +553,7 @@
         </div>
         
         <div class="name-display-section">
-            <div id="nameDisplay" class="name-main fade-in"></div>
+            <div id="nameDisplay" class="name-main fade-in">Initializing...</div>
             <div id="scriptDisplay" class="script-display"></div>
             <div id="nameComponents" class="name-components"></div>
             <div id="specialIndicators" class="special-indicators"></div>
@@ -610,7 +610,7 @@
             </div>
         </div>
         
-        <div id="statsDisplay" class="stats"></div>
+        <div id="statsDisplay" class="stats">Initializing...</div>
     </div>
     
     <!-- Information Modal -->
@@ -632,122 +632,11 @@
     </div>
 
     <script>
-// Language Data Loader
-class LanguageDataLoader {
-    constructor() {
-        this.cache = new Map();
-        this.loadingPromises = new Map();
-        this.metadata = null;
-        this.config = null;
-    }
+// Simplified and fixed version
 
-    async loadMetadata() {
-        try {
-            console.log('Loading metadata from:', './languages/metadata.json');
-            const response = await fetch('./languages/metadata.json');
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            console.log('Metadata loaded successfully:', data);
-            this.metadata = data;
-            this.config = data.config;
-            return data;
-        } catch (error) {
-            console.error('Failed to load metadata:', error);
-            throw error;
-        }
-    }
-
-    async loadLanguageFamily(familyId) {
-        // Check cache first
-        if (this.cache.has(familyId)) {
-            return this.cache.get(familyId);
-        }
-
-        // Check if already loading
-        if (this.loadingPromises.has(familyId)) {
-            return this.loadingPromises.get(familyId);
-        }
-
-        // Find family info
-        const familyInfo = this.metadata.languageFamilies.find(f => f.id === familyId);
-        if (!familyInfo) {
-            throw new Error(`Unknown language family: ${familyId}`);
-        }
-
-        // Create loading promise
-        const loadPromise = this._loadFamilyData(familyInfo);
-        this.loadingPromises.set(familyId, loadPromise);
-
-        try {
-            const data = await loadPromise;
-            this.cache.set(familyId, data);
-            this.loadingPromises.delete(familyId);
-            
-            // Mark as loaded in metadata
-            familyInfo.loaded = true;
-            
-            return data;
-        } catch (error) {
-            this.loadingPromises.delete(familyId);
-            throw error;
-        }
-    }
-
-    async _loadFamilyData(familyInfo) {
-        const url = `${this.config.dataPath}${familyInfo.fileName}`;
-        let lastError;
-        
-        for (let attempt = 0; attempt < this.config.maxRetries; attempt++) {
-            try {
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return await response.json();
-            } catch (error) {
-                lastError = error;
-                if (attempt < this.config.maxRetries - 1) {
-                    await new Promise(resolve => setTimeout(resolve, this.config.retryDelay));
-                }
-            }
-        }
-        
-        throw lastError;
-    }
-
-    async preloadCommon() {
-        if (!this.config.preloadCommon) return;
-        
-        const promises = this.config.preloadCommon.map(familyId => 
-            this.loadLanguageFamily(familyId).catch(err => 
-                console.warn(`Failed to preload ${familyId}:`, err)
-            )
-        );
-        
-        await Promise.allSettled(promises);
-    }
-
-    getLoadedFamilies() {
-        return Array.from(this.cache.keys());
-    }
-
-    getAllFamilyIds() {
-        return this.metadata.languageFamilies.map(f => f.id);
-    }
-
-    getFamilyInfo(familyId) {
-        return this.metadata.languageFamilies.find(f => f.id === familyId);
-    }
-}
-
-// Global data loader instance
-const dataLoader = new LanguageDataLoader();
-
-// Application state
-let appState = {
-    isRunning: true,
+// Global state
+const appState = {
+    isRunning: false,
     isFast: false,
     isWeighted: false,
     showDetails: true,
@@ -760,6 +649,7 @@ let appState = {
     SLOW_SPEED: 10000,
     FAST_SPEED: 5000,
     metadata: null,
+    loadedFamilies: {},
     isInitialized: false
 };
 
@@ -768,13 +658,31 @@ async function initializeApp() {
     const loadingStatus = document.getElementById('loadingStatus');
     
     try {
+        console.log('Starting initialization...');
+        
         // Load metadata
         loadingStatus.innerHTML = '<span class="loading"></span> Loading system metadata...';
-        appState.metadata = await dataLoader.loadMetadata();
+        const metaResponse = await fetch('./languages/metadata.json');
         
-        // Preload common languages
-        loadingStatus.innerHTML = '<span class="loading"></span> Loading common language families...';
-        await dataLoader.preloadCommon();
+        if (!metaResponse.ok) {
+            throw new Error(`Failed to load metadata: ${metaResponse.status}`);
+        }
+        
+        appState.metadata = await metaResponse.json();
+        console.log('Metadata loaded:', appState.metadata);
+        
+        // Preload common language families
+        loadingStatus.innerHTML = '<span class="loading"></span> Loading language families...';
+        const preloadFamilies = appState.metadata.config.preloadCommon || ['indoEuropean'];
+        
+        for (const familyId of preloadFamilies) {
+            try {
+                await loadLanguageFamily(familyId);
+                console.log(`Loaded ${familyId}`);
+            } catch (err) {
+                console.warn(`Failed to preload ${familyId}:`, err);
+            }
+        }
         
         // Mark as initialized
         appState.isInitialized = true;
@@ -788,30 +696,54 @@ async function initializeApp() {
         // Update voice status
         updateVoiceStatus('Click "Initialize Voice System" to enable speech');
         
-        // Start the app
-        startApp();
+        // Start the memorial
+        appState.isRunning = true;
+        startInterval();
+        
+        console.log('Initialization complete!');
         
     } catch (error) {
         console.error('Failed to initialize app:', error);
         loadingStatus.className = 'loading-status error-message';
         loadingStatus.innerHTML = `
             ⚠️ Failed to load language data. 
-            Please ensure the JSON files are in the ./languages/ directory.
             <br>Error: ${error.message}
         `;
     }
 }
 
-// Start the interval once app is initialized
-async function startApp() {
-    if (appState.isInitialized) {
-        startInterval();
+// Load a language family
+async function loadLanguageFamily(familyId) {
+    // Check if already loaded
+    if (appState.loadedFamilies[familyId]) {
+        return appState.loadedFamilies[familyId];
     }
+    
+    // Find family info
+    const familyInfo = appState.metadata.languageFamilies.find(f => f.id === familyId);
+    if (!familyInfo) {
+        throw new Error(`Unknown language family: ${familyId}`);
+    }
+    
+    // Load the file
+    const url = `./languages/${familyInfo.fileName}`;
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+        throw new Error(`Failed to load ${familyId}: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    appState.loadedFamilies[familyId] = data;
+    
+    return data;
 }
 
 // Voice system initialization
 async function initializeVoiceSystem() {
     const status = document.getElementById('voiceStatus');
+    const button = document.getElementById('initVoiceButton');
+    
     status.innerHTML = '<span class="loading"></span> Initializing voice system...';
     
     try {
@@ -820,634 +752,214 @@ async function initializeVoiceSystem() {
             throw new Error('Speech synthesis not supported in this browser');
         }
         
-        // Load voices
-        appState.voices = await loadVoices();
+        // Cancel any ongoing speech
+        appState.synth.cancel();
         
-        if (appState.voices.length === 0) {
+        // Load voices
+        let voices = appState.synth.getVoices();
+        
+        if (voices.length === 0) {
+            // Wait for voices to load
+            await new Promise((resolve) => {
+                appState.synth.onvoiceschanged = () => {
+                    voices = appState.synth.getVoices();
+                    resolve();
+                };
+                // Timeout after 2 seconds
+                setTimeout(resolve, 2000);
+            });
+        }
+        
+        appState.voices = voices;
+        console.log(`Loaded ${voices.length} voices`);
+        
+        if (voices.length === 0) {
             throw new Error('No voices available');
         }
         
-        // Test voice
-        await testVoice();
+        // Test voice with a simple utterance
+        const testUtterance = new SpeechSynthesisUtterance('Voice system ready');
+        testUtterance.volume = 0.3;
+        appState.synth.speak(testUtterance);
         
         appState.isVoiceInitialized = true;
-        status.innerHTML = '✓ Voice system ready';
-        document.getElementById('initVoiceButton').style.display = 'none';
+        status.innerHTML = `✓ Voice system ready (${voices.length} voices)`;
+        button.style.display = 'none';
         
-        // Start the memorial if not already running
-        if (!appState.intervalId) {
-            startInterval();
-        }
+        console.log('Voice system initialized');
         
     } catch (error) {
         console.error('Voice initialization failed:', error);
         status.innerHTML = `⚠️ ${error.message}. Names will display without audio.`;
-        document.getElementById('initVoiceButton').textContent = 'Retry Voice';
-        
-        // Start without voice if not already running
-        if (!appState.intervalId) {
-            startInterval();
-        }
+        button.textContent = 'Retry Voice';
     }
-}
-
-function loadVoices() {
-    return new Promise((resolve) => {
-        const loadVoiceList = () => {
-            const voices = appState.synth.getVoices();
-            if (voices.length > 0) {
-                // List of novelty voices to exclude
-                const EXCLUDED_VOICES = [
-                    'trinoids', 'zarvox', 'albert', 'whisper', 'bahh', 'boing', 
-                    'bubbles', 'deranged', 'hysterical', 'cellos', 'pipe organ', 
-                    'organ', 'good news', 'bad news', 'bells', 'jester', 'princess', 
-                    'superstar', 'junior', 'wobble'
-                ];
-                
-                // Log excluded voices for debugging
-                const excludedVoicesList = voices.filter(voice => {
-                    const voiceNameLower = voice.name.toLowerCase();
-                    return EXCLUDED_VOICES.some(excluded => voiceNameLower.includes(excluded));
-                });
-                
-                if (excludedVoicesList.length > 0) {
-                    console.log('Excluding novelty voices:', excludedVoicesList.map(v => v.name));
-                }
-                
-                resolve(voices);
-            }
-        };
-        
-        loadVoiceList();
-        if (appState.synth.onvoiceschanged !== undefined) {
-            appState.synth.onvoiceschanged = loadVoiceList;
-        }
-        
-        // Timeout fallback
-        setTimeout(() => resolve(appState.synth.getVoices()), 1000);
-    });
-}
-
-function testVoice() {
-    return new Promise((resolve) => {
-        const utterance = new SpeechSynthesisUtterance('Voice initialized');
-        utterance.volume = 0.1;
-        utterance.onend = () => resolve();
-        utterance.onerror = () => resolve();
-        appState.synth.speak(utterance);
-        
-        // Timeout fallback
-        setTimeout(resolve, 2000);
-    });
 }
 
 // Name generation
 async function generateName() {
-    if (!appState.isInitialized) {
+    if (!appState.isInitialized || !appState.metadata) {
+        console.log('Not initialized yet');
         return null;
     }
     
     try {
-        const familyId = await selectFamily();
-        const familyData = await dataLoader.loadLanguageFamily(familyId);
-        const gender = selectGender(familyData, familyId);
-        const components = buildNameComponents(familyData, gender, familyId);
+        // Select family
+        const families = Object.keys(appState.loadedFamilies);
+        if (families.length === 0) {
+            console.log('No families loaded');
+            return null;
+        }
+        
+        const familyId = families[Math.floor(Math.random() * families.length)];
+        const familyData = appState.loadedFamilies[familyId];
+        
+        // Select gender
+        const genders = ['male', 'female', 'neutral'];
+        const gender = genders[Math.floor(Math.random() * genders.length)];
+        
+        // Get names
+        const givenNames = familyData.nameComponents.given[gender] || 
+                          familyData.nameComponents.given.neutral ||
+                          [];
+                          
+        let familyNames = [];
+        if (Array.isArray(familyData.nameComponents.family)) {
+            familyNames = familyData.nameComponents.family;
+        } else if (familyData.nameComponents.family) {
+            familyNames = familyData.nameComponents.family.common || [];
+        }
+        
+        if (givenNames.length === 0 || familyNames.length === 0) {
+            console.log('No names available for', gender, 'in', familyId);
+            return null;
+        }
+        
+        const givenName = givenNames[Math.floor(Math.random() * givenNames.length)];
+        const familyName = familyNames[Math.floor(Math.random() * familyNames.length)];
+        
+        // Build full name based on order
+        let fullName;
+        if (familyData.metadata.nameOrder === 'family_first') {
+            fullName = `${familyName} ${givenName}`;
+        } else {
+            fullName = `${givenName} ${familyName}`;
+        }
         
         return {
-            familyId: familyId,
-            familyData: familyData,
+            display: fullName,
+            spoken: fullName,
+            given: givenName,
+            family: familyName,
             gender: gender,
-            components: components,
-            display: formatNameForDisplay(components, familyData, familyId),
-            spoken: formatNameForSpeech(components, familyData, familyId),
-            metadata: gatherMetadata(components, familyData, gender, familyId)
+            familyId: familyId,
+            languageFamily: familyData.metadata.family,
+            writingSystems: familyData.metadata.writingSystems
         };
+        
     } catch (error) {
         console.error('Error generating name:', error);
         return null;
     }
 }
 
-async function selectFamily() {
-    const families = dataLoader.getAllFamilyIds();
-    console.log('Available families:', families);
-    
-    if (!families || families.length === 0) {
-        throw new Error('No language families available');
-    }
-    
-    if (!appState.isWeighted) {
-        const selected = families[Math.floor(Math.random() * families.length)];
-        console.log('Selected family:', selected);
-        return selected;
-    }
-    
-    // Weighted selection
-    const weights = families.map(id => {
-        const info = dataLoader.getFamilyInfo(id);
-        return info.populationPercentage || 1;
-    });
-    const total = weights.reduce((a, b) => a + b, 0);
-    let random = Math.random() * total;
-    
-    for (let i = 0; i < families.length; i++) {
-        random -= weights[i];
-        if (random <= 0) {
-            console.log('Selected family (weighted):', families[i]);
-            return families[i];
-        }
-    }
-    
-    return families[0];
-}
-
-function selectGender(familyData, familyId) {
-    const genderSystem = appState.metadata.genderSystem;
-    
-    // Check for cultural specific genders
-    const culturalGenders = Object.entries(genderSystem.culturalSpecific)
-        .filter(([_, info]) => info.cultures.some(c => 
-            familyData.metadata.family.includes(c) ||
-            familyId.toLowerCase().includes(c.toLowerCase())
-        ))
-        .map(([gender, _]) => gender);
-    
-    const allGenders = [
-        ...genderSystem.binary,
-        ...genderSystem.nonBinary,
-        ...culturalGenders
-    ];
-    
-    return allGenders[Math.floor(Math.random() * allGenders.length)];
-}
-
-function buildNameComponents(familyData, gender, familyId) {
-    const components = {};
-    
-    // Handle old names if enabled
-    if (appState.showOldNames && familyData.nameComponents.oldNames) {
-        return buildOldNameComponents(familyData, gender);
-    }
-    
-    // Handle special cases (same as before)
-    if (familyData.specialFeatures?.deathTaboo?.active && Math.random() < 0.1) {
-        return {
-            isTaboo: true,
-            substitute: familyData.specialFeatures.deathTaboo.substitute,
-            originalType: 'ancestral'
-        };
-    }
-    
-    if (familyData.specialFeatures?.sacredNames && Math.random() < 0.05) {
-        return {
-            isSacred: true,
-            display: familyData.nameComponents.traditional?.display || '[ceremonial name]'
-        };
-    }
-    
-    // Continue with regular name building...
-    // (This is the same logic as in the original, but using familyData instead of looking it up)
-    
-    // Standard structure handling
-    let givenNames = [];
-    
-    if (familyData.nameComponents.given) {
-        const genderMap = {
-            'male': 'male',
-            'female': 'female',
-            'neutral': 'neutral',
-            'fluid': 'neutral',
-            'agender': 'neutral',
-            'hijra': 'neutral',
-            'twoSpirit': 'neutral',
-            'faAfafine': 'female',
-            'mahu': 'neutral',
-            'sistergirl': 'female',
-            'xGender': 'neutral'
-        };
-        
-        const genderKey = genderMap[gender] || 'neutral';
-        givenNames = familyData.nameComponents.given[genderKey] || 
-                    familyData.nameComponents.given.neutral ||
-                    [...(familyData.nameComponents.given.male || []), 
-                     ...(familyData.nameComponents.given.female || [])];
-    }
-    
-    // Handle mononyms
-    if (familyData.nameComponents.mononyms && Math.random() < 0.3) {
-        components.mononym = randomChoice(familyData.nameComponents.mononyms);
-        components.isMononym = true;
-        return components;
-    }
-    
-    // Regular names
-    if (givenNames && givenNames.length > 0) {
-        components.given = randomChoice(givenNames);
-    }
-    
-    // Family names
-    if (familyData.nameComponents.family) {
-        if (typeof familyData.nameComponents.family === 'object' && !Array.isArray(familyData.nameComponents.family)) {
-            // Handle structured family names
-            const allFamilyNames = [
-                ...(familyData.nameComponents.family.common || []),
-                ...(familyData.nameComponents.family.compound || []),
-                ...(familyData.nameComponents.family.noble || []),
-                ...(familyData.nameComponents.family.single || []),
-                ...(familyData.nameComponents.family.romanized || [])
-            ];
-            if (allFamilyNames.length > 0) {
-                components.family = randomChoice(allFamilyNames);
-            }
-        } else if (Array.isArray(familyData.nameComponents.family)) {
-            components.family = randomChoice(familyData.nameComponents.family);
-        }
-    }
-    
-    // Add patronymics for Indo-European if applicable
-    if (familyId === 'indoEuropean' && familyData.metadata.hasPatronymics && Math.random() < 0.5) {
-        const patronymics = familyData.nameComponents.patronymic;
-        if (patronymics?.russian) {
-            components.patronymic = randomChoice(
-                gender === 'female' ? patronymics.russian.female : patronymics.russian.male
-            );
-        }
-    }
-    
-    return components;
-}
-
-function buildOldNameComponents(familyData, gender) {
-    const oldNames = familyData.nameComponents.oldNames;
-    if (!oldNames) return { noOldNames: true };
-    
-    const genderKey = gender === 'female' ? 'female' : 'male';
-    const genderOldNames = oldNames[genderKey];
-    if (!genderOldNames) return { noOldNames: true };
-    
-    // Get all categories of old names
-    const categories = Object.keys(genderOldNames);
-    if (categories.length === 0) return { noOldNames: true };
-    
-    // Select a category
-    const category = randomChoice(categories);
-    const categoryNames = genderOldNames[category];
-    
-    // Get name and meaning
-    const nameEntries = Object.entries(categoryNames);
-    if (nameEntries.length === 0) return { noOldNames: true };
-    
-    const [name, meaning] = randomChoice(nameEntries);
-    
-    return {
-        given: name,
-        meaning: meaning,
-        isOldName: true,
-        category: category,
-        gender: gender
-    };
-}
-
-function formatNameForDisplay(components, familyData, familyId) {
-    // Handle special display cases
-    if (components.noOldNames) {
-        return '[No historical names available]';
-    }
-    
-    if (components.isTaboo) {
-        return components.substitute || 'Kuminjay';
-    }
-    
-    if (components.isSacred) {
-        return components.display;
-    }
-    
-    if (components.isMononym) {
-        return components.mononym;
-    }
-    
-    if (components.isOldName) {
-        return components.given;
-    }
-    
-    // Standard format based on name order
-    const parts = [];
-    const order = familyData.metadata.nameOrder;
-    
-    if (order === 'family_first') {
-        if (components.family) parts.push(components.family);
-        if (components.given) parts.push(components.given);
-    } else {
-        if (components.given) parts.push(components.given);
-        if (components.patronymic) parts.push(components.patronymic);
-        if (components.family) parts.push(components.family);
-    }
-    
-    return parts.join(' ') || '[Name cannot be displayed]';
-}
-
-function formatNameForSpeech(components, familyData, familyId) {
-    if (components.isTaboo) {
-        return "Name cannot be spoken due to cultural taboo";
-    }
-    
-    if (components.isSacred) {
-        return "Sacred name - spoken only in ceremony";
-    }
-    
-    // Default to display format
-    return formatNameForDisplay(components, familyData, familyId);
-}
-
-function gatherMetadata(components, familyData, gender, familyId) {
-    const metadata = {
-        languageFamily: familyData.metadata.family,
-        writingSystems: familyData.metadata.writingSystems,
-        gender: gender,
-        culturalNotes: []
-    };
-    
-    // Add relevant cultural notes
-    if (components.isMononym) {
-        metadata.culturalNotes.push("Mononym (single name)");
-    }
-    
-    if (components.patronymic) {
-        metadata.culturalNotes.push("Includes patronymic");
-    }
-    
-    if (components.isOldName) {
-        metadata.culturalNotes.push(`Historical name (${components.category})`);
-    }
-    
-    if (familyData.metadata.hasClickConsonants) {
-        metadata.culturalNotes.push("Contains click consonants");
-    }
-    
-    if (familyData.metadata.tonal) {
-        metadata.culturalNotes.push("Tonal language");
-    }
-    
-    if (familyData.metadata.rtl?.length > 0) {
-        metadata.culturalNotes.push("Written right-to-left");
-    }
-    
-    // Gender-specific notes
-    const genderInfo = appState.metadata.genderSystem.culturalSpecific[gender];
-    if (genderInfo) {
-        metadata.culturalNotes.push(`${gender}: ${genderInfo.cultures.join(', ')} cultural identity`);
-    }
-    
-    return metadata;
-}
-
-// Display functions
+// Display name
 function displayName(nameData) {
     if (!nameData) return;
     
     const nameDisplay = document.getElementById('nameDisplay');
-    const scriptDisplay = document.getElementById('scriptDisplay');
     const componentsDisplay = document.getElementById('nameComponents');
-    const indicatorsDisplay = document.getElementById('specialIndicators');
     const contextDisplay = document.getElementById('culturalContext');
-    const meaningsSection = document.getElementById('meaningsSection');
-    const oldNamesSection = document.getElementById('oldNamesSection');
-    const voiceStatus = document.getElementById('voiceStatus');
-    const signNote = document.getElementById('signLanguageNote');
     
-    // Reset displays
-    nameDisplay.className = 'name-main fade-in';
-    scriptDisplay.textContent = '';
+    // Clear previous displays
     componentsDisplay.innerHTML = '';
-    indicatorsDisplay.innerHTML = '';
     contextDisplay.innerHTML = '';
-    meaningsSection.style.display = 'none';
-    oldNamesSection.style.display = 'none';
-    signNote.style.display = 'none';
     
-    // Main name display
+    // Display main name
     nameDisplay.textContent = nameData.display;
-    
-    // Handle special scripts
-    if (nameData.metadata.writingSystems.includes('Arabic') || 
-        nameData.metadata.writingSystems.includes('Hebrew')) {
-        nameDisplay.classList.add('rtl');
-    }
+    nameDisplay.className = 'name-main fade-in';
     
     // Show components if detailed view
-    if (appState.showDetails && !nameData.components.isTaboo && !nameData.components.isSacred) {
-        displayComponents(nameData.components, componentsDisplay);
-        
-        // Show meanings if available
-        if (nameData.familyData.nameComponents.meanings && !nameData.components.isOldName) {
-            displayMeanings(nameData, meaningsSection);
-        }
-        
-        // Show old name details if it's an old name
-        if (nameData.components.isOldName) {
-            displayOldNameDetails(nameData, oldNamesSection);
-        }
-    }
-    
-    // Special indicators
-    displayIndicators(nameData, indicatorsDisplay);
-    
-    // Cultural context
     if (appState.showDetails) {
-        displayCulturalContext(nameData, contextDisplay);
+        // Components
+        if (nameData.given) {
+            const givenDiv = document.createElement('div');
+            givenDiv.className = 'component';
+            givenDiv.innerHTML = '<span class="component-label">Given:</span> ' + nameData.given;
+            componentsDisplay.appendChild(givenDiv);
+        }
+        
+        if (nameData.family) {
+            const familyDiv = document.createElement('div');
+            familyDiv.className = 'component';
+            familyDiv.innerHTML = '<span class="component-label">Family:</span> ' + nameData.family;
+            componentsDisplay.appendChild(familyDiv);
+        }
+        
+        // Cultural context
+        const info = document.createElement('div');
+        info.className = 'culture-info';
+        
+        info.innerHTML = `
+            <div class="info-item">
+                <span class="info-label">Language Family:</span> ${nameData.languageFamily}
+            </div>
+            <div class="info-item">
+                <span class="info-label">Writing System:</span> ${nameData.writingSystems.join(', ')}
+            </div>
+            <div class="info-item">
+                <span class="info-label">Gender:</span> ${nameData.gender}
+            </div>
+        `;
+        
+        contextDisplay.appendChild(info);
     }
     
     // Store current name
     appState.currentName = nameData;
 }
 
-function displayComponents(components, container) {
-    Object.entries(components).forEach(([key, value]) => {
-        if (key === 'isMononym' || key === 'isTaboo' || key === 'isSacred' || 
-            key === 'isOldName' || key === 'category' || key === 'meaning' ||
-            key === 'noOldNames') {
-            return;
-        }
-        
-        const div = document.createElement('div');
-        div.className = 'component';
-        
-        const label = document.createElement('span');
-        label.className = 'component-label';
-        label.textContent = formatComponentLabel(key) + ':';
-        
-        const text = document.createElement('span');
-        text.textContent = value;
-        
-        div.appendChild(label);
-        div.appendChild(text);
-        container.appendChild(div);
-    });
-}
-
-function displayMeanings(nameData, container) {
-    const meanings = nameData.familyData.nameComponents.meanings;
-    if (!meanings) return;
-    
-    const relevantMeanings = [];
-    
-    // Check given name meaning
-    if (nameData.components.given && meanings.given && meanings.given[nameData.components.given]) {
-        relevantMeanings.push({
-            name: nameData.components.given,
-            meaning: meanings.given[nameData.components.given],
-            type: 'Given name'
-        });
-    }
-    
-    // Check family name meaning
-    if (nameData.components.family && meanings.family && meanings.family[nameData.components.family]) {
-        relevantMeanings.push({
-            name: nameData.components.family,
-            meaning: meanings.family[nameData.components.family],
-            type: 'Family name'
-        });
-    }
-    
-    // Check patronymic meaning
-    if (nameData.components.patronymic && meanings.patronymic) {
-        const suffix = nameData.components.patronymic.match(/(ovich|ovna|evich|evna)$/);
-        if (suffix) {
-            relevantMeanings.push({
-                name: suffix[0],
-                meaning: nameData.gender === 'female' ? 'daughter of' : 'son of',
-                type: 'Patronymic'
-            });
-        }
-    }
-    
-    if (relevantMeanings.length > 0) {
-        container.style.display = 'block';
-        container.innerHTML = '<div class="meanings-title">Name Meanings:</div>';
-        
-        relevantMeanings.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'meaning-item';
-            div.innerHTML = `<span class="meaning-label">${item.type}:</span> ${item.name} = "${item.meaning}"`;
-            container.appendChild(div);
-        });
-    }
-}
-
-function displayOldNameDetails(nameData, container) {
-    if (!nameData.components.isOldName) return;
-    
-    container.style.display = 'block';
-    container.innerHTML = `
-        <div class="old-names-title">Historical Name:</div>
-        <div class="meaning-item">
-            <span class="meaning-label">Period:</span> ${formatCategory(nameData.components.category)}
-        </div>
-        <div class="meaning-item">
-            <span class="meaning-label">Name:</span> ${nameData.components.given}
-        </div>
-        <div class="meaning-item">
-            <span class="meaning-label">Meaning:</span> "${nameData.components.meaning}"
-        </div>
-    `;
-}
-
-function displayIndicators(nameData, container) {
-    const indicators = [];
-    
-    if (nameData.components.isTaboo) {
-        indicators.push({ class: 'indicator-taboo', text: '⚠️ Death Taboo Active' });
-    }
-    
-    if (nameData.components.isSacred) {
-        indicators.push({ class: 'indicator-sacred', text: '🙏 Sacred Name' });
-    }
-    
-    if (nameData.components.isMononym) {
-        indicators.push({ class: 'indicator-mononym', text: '◉ Mononym' });
-    }
-    
-    if (nameData.components.isOldName) {
-        indicators.push({ class: 'indicator-old-name', text: '📜 Historical Name' });
-    }
-    
-    if (nameData.gender !== 'male' && nameData.gender !== 'female') {
-        const genderInfo = appState.metadata.genderSystem.culturalSpecific[nameData.gender];
-        const symbol = genderInfo?.symbol || '⚧';
-        indicators.push({ 
-            class: 'indicator-cultural', 
-            text: `${symbol} ${formatGender(nameData.gender)}` 
-        });
-    }
-    
-    indicators.forEach(indicator => {
-        const span = document.createElement('span');
-        span.className = `indicator ${indicator.class}`;
-        span.textContent = indicator.text;
-        container.appendChild(span);
-    });
-}
-
-function displayCulturalContext(nameData, container) {
-    const info = document.createElement('div');
-    info.className = 'culture-info';
-    
-    // Language family
-    addInfoItem(info, 'Language Family', nameData.metadata.languageFamily);
-    
-    // Writing systems
-    addInfoItem(info, 'Writing System', nameData.metadata.writingSystems.join(', '));
-    
-    // Gender
-    addInfoItem(info, 'Gender', formatGender(nameData.gender));
-    
-    // Cultural notes
-    if (nameData.metadata.culturalNotes.length > 0) {
-        addInfoItem(info, 'Cultural Notes', nameData.metadata.culturalNotes.join('; '));
-    }
-    
-    container.appendChild(info);
-}
-
-function addInfoItem(container, label, value) {
-    const div = document.createElement('div');
-    div.className = 'info-item';
-    div.innerHTML = `<span class="info-label">${label}:</span> ${value}`;
-    container.appendChild(div);
-}
-
-// Speech functions
+// Speak name
 function speakName(nameData) {
-    if (!appState.isVoiceInitialized || !nameData) {
-        return;
-    }
-    
-    if (nameData.components.isTaboo) {
-        updateVoiceStatus('Observing speech taboo');
-        return;
-    }
-    
-    if (nameData.components.isSacred) {
-        updateVoiceStatus('Sacred name - spoken privately only');
+    if (!appState.isVoiceInitialized || !nameData || !appState.synth) {
         return;
     }
     
     try {
+        // Cancel any ongoing speech
         appState.synth.cancel();
         
         const utterance = new SpeechSynthesisUtterance(nameData.spoken);
-        const voice = selectVoice(nameData);
         
-        if (voice) {
+        // Select a voice
+        if (appState.voices.length > 0) {
+            // Try to find a suitable voice based on language
+            let voice = appState.voices.find(v => v.lang.startsWith('en'));
+            if (!voice) {
+                voice = appState.voices[0];
+            }
             utterance.voice = voice;
-            updateVoiceStatus(`Speaking with ${voice.name}`);
         }
         
-        // Adjust speech parameters based on gender
+        // Adjust parameters
         utterance.rate = 0.9;
-        utterance.pitch = getPitchForGender(nameData.gender);
+        utterance.pitch = 1.0;
         utterance.volume = 1.0;
         
+        // Event handlers
+        utterance.onstart = () => {
+            updateVoiceStatus('Speaking: ' + nameData.spoken);
+        };
+        
+        utterance.onend = () => {
+            updateVoiceStatus('Ready');
+        };
+        
+        utterance.onerror = (event) => {
+            console.error('Speech error:', event);
+            updateVoiceStatus('Speech error');
+        };
+        
+        // Speak
         appState.synth.speak(utterance);
         
     } catch (error) {
@@ -1456,132 +968,41 @@ function speakName(nameData) {
     }
 }
 
-function selectVoice(nameData) {
-    const preferredVoices = nameData.familyData.metadata.voicePreferences || [];
-    
-    if (!appState.voices || appState.voices.length === 0) {
-        return null;
-    }
-    
-    // List of novelty voices to exclude
-    const EXCLUDED_VOICES = [
-        'trinoids', 'zarvox', 'albert', 'whisper', 'bahh', 'boing', 
-        'bubbles', 'deranged', 'hysterical', 'cellos', 'pipe organ', 
-        'organ', 'good news', 'bad news', 'bells', 'jester', 'princess', 
-        'superstar', 'junior', 'wobble'
-    ];
-    
-    // Filter out excluded voices
-    const availableVoices = appState.voices.filter(voice => {
-        const voiceNameLower = voice.name.toLowerCase();
-        return !EXCLUDED_VOICES.some(excluded => voiceNameLower.includes(excluded));
-    });
-    
-    if (availableVoices.length === 0) {
-        return null;
-    }
-    
-    // Try to match preferred language/locale
-    for (const pref of preferredVoices) {
-        const voice = availableVoices.find(v => v.lang === pref || v.lang.startsWith(pref));
-        if (voice) return voice;
-    }
-    
-    // Fallback to any non-excluded voice
-    return availableVoices.find(v => v.default) || availableVoices[0];
-}
-
-function getPitchForGender(gender) {
-    const pitchMap = {
-        'female': 1.2,
-        'male': 0.9,
-        'neutral': 1.0,
-        'fluid': 1.0,
-        'agender': 1.0,
-        'hijra': 1.1,
-        'twoSpirit': 1.0,
-        'faAfafine': 1.15,
-        'mahu': 1.1,
-        'sistergirl': 1.2,
-        'xGender': 1.0
-    };
-    
-    return pitchMap[gender] || 1.0;
-}
-
+// Update voice status
 function updateVoiceStatus(message) {
     const status = document.getElementById('voiceStatus');
     status.textContent = message;
 }
 
-// Utility functions
-function randomChoice(array) {
-    if (!array || array.length === 0) return '';
-    return array[Math.floor(Math.random() * array.length)];
-}
-
-function formatComponentLabel(key) {
-    const labelMap = {
-        'given': 'Given name',
-        'family': 'Family name',
-        'patronymic': 'Patronymic',
-        'particle': 'Particle',
-        'mononym': 'Single name',
-        'native': 'Native form',
-        'english': 'English form'
-    };
+// Update stats
+function updateStats() {
+    const stats = document.getElementById('statsDisplay');
+    const loadedCount = Object.keys(appState.loadedFamilies).length;
+    const totalCount = appState.metadata ? appState.metadata.languageFamilies.length : 0;
     
-    return labelMap[key] || key.charAt(0).toUpperCase() + key.slice(1);
-}
-
-function formatGender(gender) {
-    const genderMap = {
-        'male': 'Male',
-        'female': 'Female',
-        'neutral': 'Gender neutral',
-        'fluid': 'Gender fluid',
-        'agender': 'Agender',
-        'hijra': 'Hijra (South Asian third gender)',
-        'twoSpirit': 'Two-Spirit (Native American)',
-        'faAfafine': 'Fa\'afafine (Samoan third gender)',
-        'mahu': 'Māhū (Hawaiian/Tahitian)',
-        'sistergirl': 'Sistergirl (Aboriginal Australian)',
-        'xGender': 'X-gender (Japanese non-binary)'
-    };
-    
-    return genderMap[gender] || gender;
-}
-
-function formatCategory(category) {
-    const categoryMap = {
-        'ancient': 'Ancient period',
-        'medieval': 'Medieval period',
-        'slavic': 'Slavic tradition',
-        'indic': 'Indian subcontinent',
-        'historical': 'Historical figure',
-        'legendary': 'Legendary/Mythological',
-        'epic': 'Epic tradition',
-        'royal': 'Royal/Noble',
-        'traditional': 'Traditional'
-    };
-    
-    return categoryMap[category] || category.charAt(0).toUpperCase() + category.slice(1);
+    stats.innerHTML = `
+        ${loadedCount} of ${totalCount} language families loaded • 
+        ${appState.isWeighted ? 'Population weighted' : 'Random selection'} • 
+        ${appState.isFast ? 'Fast' : 'Slow'} speed
+    `;
 }
 
 // Interval management
 function startInterval() {
     if (!appState.isInitialized) {
-        console.log('Cannot start interval - app not initialized');
+        console.log('Cannot start - not initialized');
         return;
+    }
+    
+    // Clear existing interval
+    if (appState.intervalId) {
+        clearInterval(appState.intervalId);
     }
     
     // Generate first name immediately
     generateAndDisplay();
     
-    if (appState.intervalId) {
-        clearInterval(appState.intervalId);
-    }
-    
+    // Set up interval
     const speed = appState.isFast ? appState.FAST_SPEED : appState.SLOW_SPEED;
     appState.intervalId = setInterval(() => {
         if (appState.isRunning) {
@@ -1591,59 +1012,15 @@ function startInterval() {
 }
 
 async function generateAndDisplay() {
-    if (!appState.isInitialized) {
-        console.log('App not initialized yet');
-        return;
-    }
-    
-    try {
-        const nameData = await generateName();
-        if (nameData) {
-            displayName(nameData);
-            
-            if (appState.isRunning && appState.isVoiceInitialized) {
-                speakName(nameData);
-            }
-            
-            updateStats(nameData);
-        } else {
-            console.error('No name data generated');
+    const nameData = await generateName();
+    if (nameData) {
+        displayName(nameData);
+        
+        if (appState.isRunning && appState.isVoiceInitialized) {
+            // Small delay to ensure display updates first
+            setTimeout(() => speakName(nameData), 100);
         }
-    } catch (error) {
-        console.error('Error in generateAndDisplay:', error);
     }
-}
-
-function updateStats(nameData) {
-    const stats = document.getElementById('statsDisplay');
-    
-    if (!appState.metadata) {
-        stats.innerHTML = 'Loading...';
-        return;
-    }
-    
-    const parts = [];
-    
-    if (appState.isWeighted) {
-        if (nameData && nameData.familyData) {
-            parts.push(`Population weighting active (${nameData.familyData.metadata.family}: ${nameData.familyData.metadata.populationPercentage}%)`);
-        } else {
-            parts.push('Population weighting active');
-        }
-    } else {
-        parts.push('Random selection (equal probability)');
-    }
-    
-    const loadedCount = dataLoader.getLoadedFamilies().length;
-    const totalCount = appState.metadata.languageFamilies.length;
-    
-    parts.push(`${loadedCount} of ${totalCount} language families loaded`);
-    
-    if (appState.showOldNames) {
-        parts.push('Showing historical names');
-    }
-    
-    stats.innerHTML = parts.join(' • ');
 }
 
 // Event handlers
@@ -1653,9 +1030,7 @@ document.getElementById('toggleButton').addEventListener('click', () => {
     appState.isRunning = !appState.isRunning;
     document.getElementById('toggleButton').textContent = appState.isRunning ? 'Pause' : 'Resume';
     
-    if (appState.isRunning) {
-        generateAndDisplay();
-    } else {
+    if (!appState.isRunning) {
         appState.synth.cancel();
     }
 });
@@ -1667,7 +1042,7 @@ document.getElementById('speedToggle').addEventListener('change', (e) => {
 
 document.getElementById('weightedToggle').addEventListener('change', (e) => {
     appState.isWeighted = e.target.checked;
-    updateStats(appState.currentName);
+    updateStats();
 });
 
 document.getElementById('detailToggle').addEventListener('change', (e) => {
@@ -1688,16 +1063,12 @@ document.getElementById('speakButton').addEventListener('click', () => {
     }
 });
 
-// Name click handler for image search
+// Name click for Google Images
 document.getElementById('nameDisplay').addEventListener('click', (e) => {
     const name = e.target.textContent;
-    if (name && !name.includes('[') && !name.includes('Name withheld')) {
-        window.focus();
-        setTimeout(() => {
-            const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(name)}&tbm=isch`;
-            window.open(searchUrl, '_blank', 'noopener,noreferrer');
-            window.focus();
-        }, 0);
+    if (name && !name.includes('[') && !name.includes('Initializing')) {
+        const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(name)}&tbm=isch`;
+        window.open(searchUrl, '_blank', 'noopener,noreferrer');
     }
 });
 
@@ -1719,34 +1090,32 @@ window.addEventListener('click', (e) => {
 
 // Initialize on load
 window.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded, starting initialization...');
     initializeApp();
 });
 
-// Start the interval once app is initialized
-async function startApp() {
-    if (appState.isInitialized) {
-        startInterval();
-    }
-}
-
-// Handle visibility change to pause/resume
+// Handle visibility change
 document.addEventListener('visibilitychange', () => {
-    if (document.hidden && appState.isRunning) {
+    if (document.hidden && appState.isRunning && appState.synth) {
         appState.synth.cancel();
     }
 });
 
-// Error handling
-window.addEventListener('error', (e) => {
-    console.error('Application error:', e.error);
-});
-
-// Prevent speech on page unload
+// Handle page unload
 window.addEventListener('beforeunload', () => {
     if (appState.synth) {
         appState.synth.cancel();
     }
 });
+
+// Monitor voice changes
+if ('speechSynthesis' in window) {
+    window.speechSynthesis.onvoiceschanged = () => {
+        if (!appState.isVoiceInitialized) {
+            console.log('Voices changed, available:', window.speechSynthesis.getVoices().length);
+        }
+    };
+}
     </script>
 </body>
 </html>
