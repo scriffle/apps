@@ -677,21 +677,29 @@ async function initializeApp() {
         // Try to load all families, not just preloadCommon
         let loadedCount = 0;
         let failedCount = 0;
+        const failedFamilies = [];
         
         for (const family of appState.metadata.languageFamilies) {
             try {
                 await loadLanguageFamily(family.id);
                 loadedCount++;
-                console.log(`Loaded ${family.id} (${loadedCount}/${appState.metadata.languageFamilies.length})`);
+                console.log(`✓ Loaded ${family.id} (${loadedCount}/${appState.metadata.languageFamilies.length})`);
                 loadingStatus.innerHTML = `<span class="loading"></span> Loading language families... (${loadedCount}/${appState.metadata.languageFamilies.length})`;
             } catch (err) {
                 failedCount++;
-                console.warn(`Failed to load ${family.id}:`, err.message);
+                failedFamilies.push(family.id);
+                console.warn(`✗ Failed to load ${family.id}: ${err.message}`);
                 // Continue loading others even if one fails
             }
         }
         
-        console.log(`Successfully loaded ${loadedCount} families, ${failedCount} failed`);
+        console.log(`=== LOADING SUMMARY ===`);
+        console.log(`Successfully loaded: ${loadedCount} families`);
+        console.log(`Failed: ${failedCount} families`);
+        if (failedFamilies.length > 0) {
+            console.log(`Failed families: ${failedFamilies.join(', ')}`);
+        }
+        console.log(`Loaded families:`, Object.keys(appState.loadedFamilies));
         
         if (loadedCount === 0) {
             throw new Error('No language families could be loaded');
@@ -729,6 +737,7 @@ async function initializeApp() {
 async function loadLanguageFamily(familyId) {
     // Check if already loaded
     if (appState.loadedFamilies[familyId]) {
+        console.log(`${familyId} already loaded`);
         return appState.loadedFamilies[familyId];
     }
     
@@ -740,16 +749,28 @@ async function loadLanguageFamily(familyId) {
     
     // Load the file
     const url = `./languages/${familyInfo.fileName}`;
+    console.log(`Attempting to load ${familyId} from: ${url}`);
+    
     const response = await fetch(url);
+    console.log(`Response for ${familyId}: ${response.status} ${response.statusText}`);
     
     if (!response.ok) {
-        throw new Error(`Failed to load ${familyId}: ${response.status}`);
+        throw new Error(`Failed to load ${familyId}: ${response.status} ${response.statusText}`);
     }
     
-    const data = await response.json();
-    appState.loadedFamilies[familyId] = data;
-    
-    return data;
+    try {
+        const text = await response.text();
+        console.log(`${familyId} file size: ${text.length} characters`);
+        
+        const data = JSON.parse(text);
+        console.log(`${familyId} parsed successfully, has ${Object.keys(data).length} top-level keys`);
+        
+        appState.loadedFamilies[familyId] = data;
+        return data;
+    } catch (parseError) {
+        console.error(`JSON parse error for ${familyId}:`, parseError);
+        throw new Error(`JSON parse error for ${familyId}: ${parseError.message}`);
+    }
 }
 
 // Voice system initialization
@@ -1018,16 +1039,24 @@ function updateVoiceStatus(message) {
 }
 
 // Update stats
-function updateStats() {
+function updateStats(currentName) {
     const stats = document.getElementById('statsDisplay');
     const loadedCount = Object.keys(appState.loadedFamilies).length;
     const totalCount = appState.metadata ? appState.metadata.languageFamilies.length : 0;
     
-    stats.innerHTML = `
-        ${loadedCount} of ${totalCount} language families loaded • 
-        ${appState.isWeighted ? 'Population weighted' : 'Random selection'} • 
-        ${appState.isFast ? 'Fast' : 'Slow'} speed
-    `;
+    let statsText = `${loadedCount} of ${totalCount} language families loaded • `;
+    
+    if (appState.isWeighted && currentName && currentName.populationPercentage !== undefined) {
+        statsText += `Population weighted (${currentName.languageFamily}: ${currentName.populationPercentage}%) • `;
+    } else if (appState.isWeighted) {
+        statsText += `Population weighted • `;
+    } else {
+        statsText += `Random selection • `;
+    }
+    
+    statsText += `${appState.isFast ? 'Fast' : 'Slow'} speed`;
+    
+    stats.innerHTML = statsText;
 }
 
 // Interval management
@@ -1058,6 +1087,7 @@ async function generateAndDisplay() {
     const nameData = await generateName();
     if (nameData) {
         displayName(nameData);
+        updateStats(nameData);  // Pass the current name data
         
         if (appState.isRunning && appState.isVoiceInitialized) {
             // Small delay to ensure display updates first
@@ -1080,12 +1110,13 @@ document.getElementById('toggleButton').addEventListener('click', () => {
 
 document.getElementById('speedToggle').addEventListener('change', (e) => {
     appState.isFast = e.target.checked;
+    updateStats(appState.currentName);
     startInterval();
 });
 
 document.getElementById('weightedToggle').addEventListener('change', (e) => {
     appState.isWeighted = e.target.checked;
-    updateStats();
+    updateStats(appState.currentName);
 });
 
 document.getElementById('detailToggle').addEventListener('change', (e) => {
@@ -1134,6 +1165,62 @@ window.addEventListener('click', (e) => {
 // Initialize on load
 window.addEventListener('DOMContentLoaded', () => {
     console.log('DOM loaded, starting initialization...');
+    
+    // Add diagnostic function to window for debugging
+    window.checkFiles = async function() {
+        console.log('=== FILE CHECK DIAGNOSTIC ===');
+        const files = [
+            './languages/metadata.json',
+            './languages/indo-european.json',
+            './languages/sino-tibetan.json'
+        ];
+        
+        for (const file of files) {
+            try {
+                const response = await fetch(file);
+                if (response.ok) {
+                    const text = await response.text();
+                    console.log(`✓ ${file}: SUCCESS (${text.length} chars)`);
+                    
+                    // Check first 100 characters
+                    console.log(`  First 100 chars: ${text.substring(0, 100)}`);
+                    
+                    try {
+                        JSON.parse(text);
+                        console.log(`  JSON: Valid`);
+                    } catch (e) {
+                        console.log(`  JSON: INVALID - ${e.message}`);
+                        // Show where the error occurred
+                        const errorPosition = parseInt(e.message.match(/position (\d+)/)?.[1] || 0);
+                        if (errorPosition > 0) {
+                            console.log(`  Error near: "${text.substring(Math.max(0, errorPosition - 20), errorPosition + 20)}"`);
+                        }
+                    }
+                } else {
+                    console.log(`✗ ${file}: HTTP ${response.status}`);
+                }
+            } catch (e) {
+                console.log(`✗ ${file}: NETWORK ERROR - ${e.message}`);
+            }
+        }
+        console.log('=== END DIAGNOSTIC ===');
+    };
+    
+    // Also add function to check loaded families
+    window.showLoaded = function() {
+        console.log('=== LOADED FAMILIES ===');
+        console.log('Count:', Object.keys(appState.loadedFamilies).length);
+        console.log('IDs:', Object.keys(appState.loadedFamilies));
+        for (const [id, data] of Object.entries(appState.loadedFamilies)) {
+            const nameCount = data.nameComponents?.given?.male?.length || 0;
+            console.log(`${id}: ${nameCount} male names`);
+        }
+    };
+    
+    console.log('Diagnostics available:');
+    console.log('  checkFiles() - Check if files are accessible');
+    console.log('  showLoaded() - Show loaded families');
+    
     initializeApp();
 });
 
