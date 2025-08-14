@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<!-- 
+    Periodic Table Tetris
+    This game uses localStorage for persistent high scores.
+    Note: localStorage will work when served from a web server,
+    but may be restricted in some environments (like Claude artifacts).
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Periodic Table Tetris</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .game-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        .game-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            margin: 0;
+            color: #333;
+            font-size: 2em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .game-info {
+            display: flex;
+            justify-content: space-around;
+            margin: 10px 0;
+            font-size: 1.1em;
+        }
+
+        .info-item {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: white;
+            border-radius: 10px;
+            font-weight: bold;
+        }
+        
+        .explode-counter {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #d32f2f, #f44336);
+            color: white;
+            border-radius: 10px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .explode-counter.available {
+            animation: pulse 2s infinite;
+            box-shadow: 0 0 20px rgba(244, 67, 54, 0.5);
+        }
+        
+        .explode-counter.empty {
+            background: linear-gradient(135deg, #757575, #9e9e9e);
+            opacity: 0.7;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .high-scores {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            max-width: 350px;
+            max-height: 80vh;
+            overflow-y: auto;
+            display: none;
+            z-index: 100;
+            animation: slideIn 0.3s ease;
+        }
+        
+        .high-scores.show {
+            display: block;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .trophy-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #FFD700, #FFA000);
+            border: none;
+            border-radius: 50%;
+            font-size: 1.5em;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            z-index: 99;
+        }
+        
+        .trophy-button:hover {
+            transform: scale(1.1) rotate(10deg);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+        
+        .speech-toggle {
+            position: absolute;
+            top: 80px;
+            left: 20px;
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #4CAF50, #2E7D32);
+            border: none;
+            border-radius: 50%;
+            font-size: 1.5em;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            z-index: 99;
+        }
+        
+        .speech-toggle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+        
+        .trophy-button.new-high-score {
+            animation: trophyPulse 1s infinite;
+        }
+        
+        @keyframes trophyPulse {
+            0% { transform: scale(1) rotate(0deg); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+            25% { transform: scale(1.1) rotate(-5deg); }
+            50% { transform: scale(1.2) rotate(5deg); box-shadow: 0 8px 25px rgba(255, 215, 0, 0.5); }
+            75% { transform: scale(1.1) rotate(-5deg); }
+            100% { transform: scale(1) rotate(0deg); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+        }
+        
+        .close-scores {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            font-size: 1.5em;
+            cursor: pointer;
+            color: #666;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+        }
+        
+        .close-scores:hover {
+            color: #333;
+            transform: scale(1.1);
+        }
+        
+        .high-scores h3 {
+            margin: 0 0 15px 0;
+            color: #333;
+            font-size: 1.3em;
+            text-align: center;
+        }
+        
+        .score-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .score-entry {
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 8px;
+            font-size: 0.9em;
+            background: linear-gradient(135deg, #f5f5f5, #e0e0e0);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .score-entry.gold {
+            background: linear-gradient(135deg, #FFD700, #FFA000);
+            color: white;
+        }
+        
+        .score-entry.silver {
+            background: linear-gradient(135deg, #C0C0C0, #808080);
+            color: white;
+        }
+        
+        .score-entry.bronze {
+            background: linear-gradient(135deg, #CD7F32, #8B4513);
+            color: white;
+        }
+        
+        .score-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .score-rank {
+            font-size: 1.2em;
+            margin-right: 8px;
+        }
+        
+        .score-name {
+            flex: 1;
+        }
+        
+        .score-value {
+            font-size: 1.1em;
+        }
+        
+        .score-stats {
+            display: flex;
+            justify-content: space-around;
+            font-size: 0.85em;
+            margin-top: 5px;
+            opacity: 0.9;
+        }
+        
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        #gameCanvas {
+            border: 3px solid #333;
+            border-radius: 10px;
+            background: #fff;
+            display: block;
+            margin: 0 auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .controls {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 12px 30px;
+            margin: 0 10px;
+            font-size: 1em;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .instructions {
+            text-align: center;
+            margin-top: 15px;
+            color: #555;
+            font-size: 0.9em;
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 15px;
+            gap: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            background: rgba(0,0,0,0.05);
+            border-radius: 5px;
+            font-size: 0.85em;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #333;
+            border-radius: 3px;
+        }
+
+        .next-piece {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .next-piece h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+
+        #nextCanvas {
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            background: #fafafa;
+        }
+    </style>
+</head>
+<body>
+    <button class="trophy-button" onclick="toggleHighScores()" title="High Scores">🏆</button>
+    <button class="speech-toggle" onclick="toggleSpeech()" title="Mute Speech">🔊</button>
+    
+    <div class="high-scores" id="highScoresPanel">
+        <button class="close-scores" onclick="toggleHighScores()">✕</button>
+        <h3>🏆 High Scores 🏆</h3>
+        <ul class="score-list" id="highScoresList">
+            <li class="score-entry">
+                <span class="score-name">Loading...</span>
+            </li>
+        </ul>
+        <div style="text-align: center; margin-top: 15px;">
+            <button onclick="clearHighScores()" style="background: linear-gradient(135deg, #616161, #424242); font-size: 0.8em; padding: 8px 15px;">Clear All Scores</button>
+        </div>
+    </div>
+    
+    <div class="game-container">
+        <div class="game-header">
+            <h1>⚛️ Periodic Table Tetris ⚛️</h1>
+            <div class="game-info">
+                <div class="info-item">Score: <span id="score">0</span></div>
+                <div class="info-item">Elements: <span id="elements">0/60</span></div>
+                <div class="info-item">Correct: <span id="correct">0</span></div>
+                <div class="explode-counter">💥 Explode: <span id="explodes">3</span></div>
+            </div>
+        </div>
+        
+        <canvas id="gameCanvas"></canvas>
+        
+        <div class="controls">
+            <button onclick="startGame()">Start Game</button>
+            <button onclick="pauseGame()">Pause</button>
+            <button onclick="resetGame()">Reset</button>
+        </div>
+        
+        <div class="instructions">
+            <strong>Controls:</strong> ←→ Move | ↓ Soft Drop | ↑ Rotate | Space: Hard Drop | E: Explode Piece
+            <br><strong>Goal:</strong> Place colored blocks to rebuild the periodic table
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #FFEB3B;"></div>
+                <span>Alkali Metals</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #FFC107;"></div>
+                <span>Alkaline Earth</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #FF9999;"></div>
+                <span>Transition Metals</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #4CAF50;"></div>
+                <span>Nonmetals</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #E91E63;"></div>
+                <span>Noble Gases</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #9C27B0;"></div>
+                <span>Metalloids</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #78909C;"></div>
+                <span>Post-Transition</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Game dimensions
+        const CELL_SIZE = 35;
+        const COLS = 18;
+        const ROWS = 10;
+        canvas.width = COLS * CELL_SIZE;
+        canvas.height = ROWS * CELL_SIZE;
+        
+        // Complete periodic table layout
+        const PERIODIC_TABLE = {
+            1: {symbol: 'H', name: 'Hydrogen', row: 1, col: 0, group: 'nonmetals'},
+            2: {symbol: 'He', name: 'Helium', row: 1, col: 17, group: 'nobleGases'},
+            3: {symbol: 'Li', name: 'Lithium', row: 2, col: 0, group: 'alkaliMetals'},
+            4: {symbol: 'Be', name: 'Beryllium', row: 2, col: 1, group: 'alkalineEarth'},
+            5: {symbol: 'B', name: 'Boron', row: 2, col: 12, group: 'metalloids'},
+            6: {symbol: 'C', name: 'Carbon', row: 2, col: 13, group: 'nonmetals'},
+            7: {symbol: 'N', name: 'Nitrogen', row: 2, col: 14, group: 'nonmetals'},
+            8: {symbol: 'O', name: 'Oxygen', row: 2, col: 15, group: 'nonmetals'},
+            9: {symbol: 'F', name: 'Fluorine', row: 2, col: 16, group: 'nonmetals'},
+            10: {symbol: 'Ne', name: 'Neon', row: 2, col: 17, group: 'nobleGases'},
+            11: {symbol: 'Na', name: 'Sodium', row: 3, col: 0, group: 'alkaliMetals'},
+            12: {symbol: 'Mg', name: 'Magnesium', row: 3, col: 1, group: 'alkalineEarth'},
+            13: {symbol: 'Al', name: 'Aluminum', row: 3, col: 12, group: 'postTransition'},
+            14: {symbol: 'Si', name: 'Silicon', row: 3, col: 13, group: 'metalloids'},
+            15: {symbol: 'P', name: 'Phosphorus', row: 3, col: 14, group: 'nonmetals'},
+            16: {symbol: 'S', name: 'Sulfur', row: 3, col: 15, group: 'nonmetals'},
+            17: {symbol: 'Cl', name: 'Chlorine', row: 3, col: 16, group: 'nonmetals'},
+            18: {symbol: 'Ar', name: 'Argon', row: 3, col: 17, group: 'nobleGases'},
+            19: {symbol: 'K', name: 'Potassium', row: 4, col: 0, group: 'alkaliMetals'},
+            20: {symbol: 'Ca', name: 'Calcium', row: 4, col: 1, group: 'alkalineEarth'},
+            21: {symbol: 'Sc', name: 'Scandium', row: 4, col: 2, group: 'transitionMetals'},
+            22: {symbol: 'Ti', name: 'Titanium', row: 4, col: 3, group: 'transitionMetals'},
+            23: {symbol: 'V', name: 'Vanadium', row: 4, col: 4, group: 'transitionMetals'},
+            24: {symbol: 'Cr', name: 'Chromium', row: 4, col: 5, group: 'transitionMetals'},
+            25: {symbol: 'Mn', name: 'Manganese', row: 4, col: 6, group: 'transitionMetals'},
+            26: {symbol: 'Fe', name: 'Iron', row: 4, col: 7, group: 'transitionMetals'},
+            27: {symbol: 'Co', name: 'Cobalt', row: 4, col: 8, group: 'transitionMetals'},
+            28: {symbol: 'Ni', name: 'Nickel', row: 4, col: 9, group: 'transitionMetals'},
+            29: {symbol: 'Cu', name: 'Copper', row: 4, col: 10, group: 'transitionMetals'},
+            30: {symbol: 'Zn', name: 'Zinc', row: 4, col: 11, group: 'transitionMetals'},
+            31: {symbol: 'Ga', name: 'Gallium', row: 4, col: 12, group: 'postTransition'},
+            32: {symbol: 'Ge', name: 'Germanium', row: 4, col: 13, group: 'metalloids'},
+            33: {symbol: 'As', name: 'Arsenic', row: 4, col: 14, group: 'metalloids'},
+            34: {symbol: 'Se', name: 'Selenium', row: 4, col: 15, group: 'nonmetals'},
+            35: {symbol: 'Br', name: 'Bromine', row: 4, col: 16, group: 'nonmetals'},
+            36: {symbol: 'Kr', name: 'Krypton', row: 4, col: 17, group: 'nobleGases'},
+            37: {symbol: 'Rb', name: 'Rubidium', row: 5, col: 0, group: 'alkaliMetals'},
+            38: {symbol: 'Sr', name: 'Strontium', row: 5, col: 1, group: 'alkalineEarth'},
+            39: {symbol: 'Y', name: 'Yttrium', row: 5, col: 2, group: 'transitionMetals'},
+            40: {symbol: 'Zr', name: 'Zirconium', row: 5, col: 3, group: 'transitionMetals'},
+            41: {symbol: 'Nb', name: 'Niobium', row: 5, col: 4, group: 'transitionMetals'},
+            42: {symbol: 'Mo', name: 'Molybdenum', row: 5, col: 5, group: 'transitionMetals'},
+            43: {symbol: 'Tc', name: 'Technetium', row: 5, col: 6, group: 'transitionMetals'},
+            44: {symbol: 'Ru', name: 'Ruthenium', row: 5, col: 7, group: 'transitionMetals'},
+            45: {symbol: 'Rh', name: 'Rhodium', row: 5, col: 8, group: 'transitionMetals'},
+            46: {symbol: 'Pd', name: 'Palladium', row: 5, col: 9, group: 'transitionMetals'},
+            47: {symbol: 'Ag', name: 'Silver', row: 5, col: 10, group: 'transitionMetals'},
+            48: {symbol: 'Cd', name: 'Cadmium', row: 5, col: 11, group: 'transitionMetals'},
+            49: {symbol: 'In', name: 'Indium', row: 5, col: 12, group: 'postTransition'},
+            50: {symbol: 'Sn', name: 'Tin', row: 5, col: 13, group: 'postTransition'},
+            51: {symbol: 'Sb', name: 'Antimony', row: 5, col: 14, group: 'metalloids'},
+            52: {symbol: 'Te', name: 'Tellurium', row: 5, col: 15, group: 'metalloids'},
+            53: {symbol: 'I', name: 'Iodine', row: 5, col: 16, group: 'nonmetals'},
+            54: {symbol: 'Xe', name: 'Xenon', row: 5, col: 17, group: 'nobleGases'},
+            55: {symbol: 'Cs', name: 'Caesium', row: 6, col: 0, group: 'alkaliMetals'},
+            56: {symbol: 'Ba', name: 'Barium', row: 6, col: 1, group: 'alkalineEarth'},
+            72: {symbol: 'Hf', name: 'Hafnium', row: 6, col: 3, group: 'transitionMetals'},
+            73: {symbol: 'Ta', name: 'Tantalum', row: 6, col: 4, group: 'transitionMetals'},
+            74: {symbol: 'W', name: 'Tungsten', row: 6, col: 5, group: 'transitionMetals'},
+            75: {symbol: 'Re', name: 'Rhenium', row: 6, col: 6, group: 'transitionMetals'},
+            76: {symbol: 'Os', name: 'Osmium', row: 6, col: 7, group: 'transitionMetals'},
+            77: {symbol: 'Ir', name: 'Iridium', row: 6, col: 8, group: 'transitionMetals'},
+            78: {symbol: 'Pt', name: 'Platinum', row: 6, col: 9, group: 'transitionMetals'},
+            79: {symbol: 'Au', name: 'Gold', row: 6, col: 10, group: 'transitionMetals'},
+            80: {symbol: 'Hg', name: 'Mercury', row: 6, col: 11, group: 'transitionMetals'},
+            81: {symbol: 'Tl', name: 'Thallium', row: 6, col: 12, group: 'postTransition'},
+            82: {symbol: 'Pb', name: 'Lead', row: 6, col: 13, group: 'postTransition'},
+            83: {symbol: 'Bi', name: 'Bismuth', row: 6, col: 14, group: 'postTransition'},
+            84: {symbol: 'Po', name: 'Polonium', row: 6, col: 15, group: 'metalloids'},
+            85: {symbol: 'At', name: 'Astatine', row: 6, col: 16, group: 'metalloids'},
+            86: {symbol: 'Rn', name: 'Radon', row: 6, col: 17, group: 'nobleGases'}
+        };
+        
+        // Group colors
+        const GROUP_COLORS = {
+            alkaliMetals: '#FFEB3B',
+            alkalineEarth: '#FFC107',
+            transitionMetals: '#FF9999',
+            nonmetals: '#4CAF50',
+            nobleGases: '#E91E63',
+            metalloids: '#9C27B0',
+            postTransition: '#78909C',
+            lanthanides: '#FFB74D',
+            actinides: '#FF8A65'
+        };
+        
+        // Piece shapes for different element groups
+        const PIECE_SHAPES = {
+            alkaliMetals: [
+                [[1], [1], [1], [1]], // Vertical line of 4
+                [[1, 1], [1, 1]], // 2x2 square
+                [[1], [1], [1]], // Vertical line of 3
+                [[1, 1, 1]] // Horizontal line of 3
+            ],
+            alkalineEarth: [
+                [[1], [1], [1]], // Vertical line of 3
+                [[1, 1, 1]], // Horizontal line of 3
+                [[1], [1], [1], [1]], // Vertical line of 4
+                [[1, 1], [1, 0]] // Small L
+            ],
+            transitionMetals: [
+                [[1, 1], [1, 1]], // 2x2 square
+                [[1, 1, 1, 1]], // Horizontal line of 4
+                [[1, 1, 1], [0, 1, 0]], // T-shape
+                [[1], [1], [1], [1]], // Vertical line of 4
+                [[1, 1, 1], [1, 0, 0]], // L-shape
+                [[1, 1], [1, 1], [1, 1]] // 2x3 rectangle
+            ],
+            nonmetals: [
+                [[1, 1], [1, 0]], // Small L
+                [[1, 1], [0, 1]], // Small step
+                [[1, 1, 1]], // Horizontal line of 3
+                [[1], [1], [1]], // Vertical line of 3
+                [[1, 1], [1, 1]] // 2x2 square
+            ],
+            nobleGases: [
+                [[1], [1]], // Vertical line of 2
+                [[1, 1]], // Horizontal line of 2
+                [[1], [1], [1]] // Vertical line of 3 for more coverage
+            ],
+            metalloids: [
+                [[1, 1, 0], [0, 1, 1]], // Z-shape
+                [[0, 1], [1, 1]], // Small S
+                [[1, 1], [1, 0]], // Small L
+                [[1], [1], [1]] // Vertical line of 3
+            ],
+            postTransition: [
+                [[1, 1], [1, 0]], // L-shape
+                [[1], [1], [1]], // Vertical line of 3
+                [[1, 1, 1]], // Horizontal line of 3
+                [[1, 1], [1, 1]] // 2x2 square
+            ]
+        };
+        
+        // Game state
+        let board = [];
+        let elementGrid = {};
+        let currentPiece = null;
+        let nextPiece = null;
+        let score = 0;
+        let elementsPlaced = 0;
+        let correctPlacements = 0;
+        let gameRunning = false;
+        let gamePaused = false;
+        let dropTime = 0;
+        let dropInterval = 1000;
+        let availableElements = new Set();
+        let explodesRemaining = 3;
+        let lastExplodeBonus = 0;
+        let highScores = [];
+        let speechEnabled = true;
+        
+        // High Score Management
+        function toggleHighScores() {
+            const panel = document.getElementById('highScoresPanel');
+            panel.classList.toggle('show');
+        }
+        
+        function loadHighScores() {
+            const stored = localStorage.getItem('periodicTetrisHighScores');
+            if (stored) {
+                highScores = JSON.parse(stored);
+            } else {
+                highScores = [];
+            }
+            updateHighScoresDisplay();
+        }
+        
+        function saveHighScore(name, score, elements, correct) {
+            highScores.push({ 
+                name: name, 
+                score: score, 
+                elements: elements,
+                correct: correct,
+                accuracy: elements > 0 ? Math.round((correct / elements) * 100) : 0,
+                date: new Date().toISOString() 
+            });
+            highScores.sort((a, b) => b.score - a.score);
+            highScores = highScores.slice(0, 10); // Keep top 10
+            localStorage.setItem('periodicTetrisHighScores', JSON.stringify(highScores));
+            updateHighScoresDisplay();
+        }
+        
+        function updateHighScoresDisplay() {
+            const list = document.getElementById('highScoresList');
+            list.innerHTML = '';
+            
+            if (highScores.length === 0) {
+                list.innerHTML = '<li class="score-entry"><span class="score-name">No scores yet</span></li>';
+                return;
+            }
+            
+            highScores.slice(0, 10).forEach((entry, index) => {
+                const li = document.createElement('li');
+                li.className = 'score-entry';
+                
+                // Add medal classes for top 3
+                if (index === 0) li.classList.add('gold');
+                else if (index === 1) li.classList.add('silver');
+                else if (index === 2) li.classList.add('bronze');
+                
+                const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+                
+                li.innerHTML = `
+                    <div class="score-header">
+                        <span class="score-rank">${medal}</span>
+                        <span class="score-name">${entry.name}</span>
+                        <span class="score-value">${entry.score}</span>
+                    </div>
+                    <div class="score-stats">
+                        <span class="stat-item">⚛️ ${entry.elements || 0}</span>
+                        <span class="stat-item">✅ ${entry.correct || 0}</span>
+                        <span class="stat-item">🎯 ${entry.accuracy || 0}%</span>
+                    </div>
+                `;
+                list.appendChild(li);
+            });
+        }
+        
+        function checkHighScore(finalScore, totalElements, correctElements) {
+            if (highScores.length < 10 || finalScore > (highScores[9]?.score || 0)) {
+                // Pulse the trophy button
+                const trophyBtn = document.querySelector('.trophy-button');
+                trophyBtn.classList.add('new-high-score');
+                setTimeout(() => trophyBtn.classList.remove('new-high-score'), 5000);
+                
+                const name = prompt(`🎉 High Score! Your score: ${finalScore}\nElements: ${totalElements} | Correct: ${correctElements}\n\nEnter your name:`, 'Player');
+                if (name) {
+                    saveHighScore(name.substring(0, 15), finalScore, totalElements, correctElements);
+                    // Open the high scores panel to show the new score
+                    setTimeout(() => {
+                        document.getElementById('highScoresPanel').classList.add('show');
+                    }, 500);
+                }
+            }
+        }
+        
+        // Explode functionality
+        function explodePiece() {
+            if (!currentPiece || explodesRemaining <= 0 || !gameRunning || gamePaused) {
+                return false;
+            }
+            
+            // Store the piece info before clearing it
+            const pieceToExplode = currentPiece;
+            
+            // Clear current piece immediately so it's not drawn during explosion
+            currentPiece = null;
+            
+            // Animate the explosion
+            animateExplosion(pieceToExplode.x, pieceToExplode.y, pieceToExplode.shape, pieceToExplode.color);
+            
+            // Play sound effect (create a simple beep)
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                
+                oscillator.start(audioCtx.currentTime);
+                oscillator.stop(audioCtx.currentTime + 0.2);
+            } catch (e) {
+                // Audio not supported or blocked
+            }
+            
+            // Remove current piece and get a new one
+            explodesRemaining--;
+            
+            // Delay piece replacement to show explosion
+            setTimeout(() => {
+                currentPiece = nextPiece;
+                nextPiece = createRandomPiece();
+                updateScore();
+                draw();
+            }, 300);
+            
+            return true;
+        }
+        
+        function animateExplosion(x, y, shape, color) {
+            const particles = [];
+            
+            // Create particles for each block
+            for (let py = 0; py < shape.length; py++) {
+                for (let px = 0; px < shape[py].length; px++) {
+                    if (shape[py][px]) {
+                        const centerX = (x + px) * CELL_SIZE + CELL_SIZE / 2;
+                        const centerY = (y + py) * CELL_SIZE + CELL_SIZE / 2;
+                        
+                        // Create multiple particles per block
+                        for (let i = 0; i < 8; i++) {
+                            particles.push({
+                                x: centerX,
+                                y: centerY,
+                                vx: (Math.random() - 0.5) * 15,
+                                vy: (Math.random() - 0.5) * 15,
+                                size: Math.random() * 10 + 5,
+                                color: color,
+                                life: 1.0
+                            });
+                        }
+                    }
+                }
+            }
+            
+            // Animate particles
+            let animationFrame;
+            function animate() {
+                draw(); // Redraw the board
+                
+                // Update and draw particles
+                particles.forEach(particle => {
+                    particle.x += particle.vx;
+                    particle.y += particle.vy;
+                    particle.vy += 0.5; // Gravity
+                    particle.life -= 0.05;
+                    particle.size *= 0.95;
+                    
+                    if (particle.life > 0) {
+                        ctx.save();
+                        ctx.globalAlpha = particle.life;
+                        
+                        // Outer glow
+                        ctx.fillStyle = '#FFA500';
+                        ctx.beginPath();
+                        ctx.arc(particle.x, particle.y, particle.size * 1.5, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // Inner particle
+                        ctx.fillStyle = particle.color;
+                        ctx.beginPath();
+                        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // White center
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.beginPath();
+                        ctx.arc(particle.x, particle.y, particle.size * 0.3, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        ctx.restore();
+                    }
+                });
+                
+                // Continue animation if particles are still alive
+                if (particles.some(p => p.life > 0)) {
+                    animationFrame = requestAnimationFrame(animate);
+                } else {
+                    cancelAnimationFrame(animationFrame);
+                }
+            }
+            
+            animate();
+        }
+        
+        function drawExplosion(x, y, shape) {
+            // This function is now replaced by animateExplosion
+            // Kept for compatibility
+        }
+        
+        function clearHighScores() {
+            if (confirm('Clear all high scores? This cannot be undone!')) {
+                highScores = [];
+                localStorage.removeItem('periodicTetrisHighScores');
+                updateHighScoresDisplay();
+            }
+        }
+        
+        // Speech synthesis helper
+        function speakElement(elementName) {
+            if (speechEnabled && 'speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(elementName);
+                utterance.rate = 1.2;
+                utterance.pitch = 1.0;
+                utterance.volume = 0.8;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+        
+        // Speak multiple elements
+        function speakElements(elements) {
+            if (speechEnabled && 'speechSynthesis' in window && elements.length > 0) {
+                const names = elements.map(el => el.name).join(', ');
+                const utterance = new SpeechSynthesisUtterance(names);
+                utterance.rate = 1.0;
+                utterance.pitch = 1.0;
+                utterance.volume = 0.8;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+        
+        function toggleSpeech() {
+            speechEnabled = !speechEnabled;
+            const btn = document.querySelector('.speech-toggle');
+            if (btn) {
+                btn.textContent = speechEnabled ? '🔊' : '🔇';
+                btn.title = speechEnabled ? 'Mute Speech' : 'Enable Speech';
+            }
+        }
+        
+        // Initialize available elements
+        function initAvailableElements() {
+            availableElements.clear();
+            const groupCounts = {};
+            
+            for (let num in PERIODIC_TABLE) {
+                const element = PERIODIC_TABLE[num];
+                if (element.row <= 6) { // Only include first 6 rows that fit on board
+                    availableElements.add(parseInt(num));
+                    if (!groupCounts[element.group]) {
+                        groupCounts[element.group] = 0;
+                    }
+                    groupCounts[element.group]++;
+                }
+            }
+            
+            // Log the distribution for debugging
+            console.log('Element distribution:', groupCounts);
+            // Should show transition metals have the most elements
+        }
+        
+        // Initialize board
+        function initBoard() {
+            board = Array(ROWS).fill().map(() => Array(COLS).fill(null));
+            elementGrid = {};
+            initAvailableElements();
+        }
+        
+        // Get element at position
+        function getElementAtPosition(row, col) {
+            for (let num in PERIODIC_TABLE) {
+                const element = PERIODIC_TABLE[num];
+                if (element.row === row && element.col === col) {
+                    return {number: parseInt(num), ...element};
+                }
+            }
+            return null;
+        }
+        
+        // Piece class
+        class Piece {
+            constructor(groupName, shape, color) {
+                this.groupName = groupName;
+                this.shape = shape;
+                this.color = color;
+                this.x = Math.floor(COLS / 2) - Math.floor(shape[0].length / 2);
+                this.y = 0;
+            }
+            
+            rotate() {
+                const rotated = this.shape[0].map((_, i) =>
+                    this.shape.map(row => row[i]).reverse()
+                );
+                return rotated;
+            }
+            
+            draw(context, offsetX = 0, offsetY = 0, cellSize = CELL_SIZE) {
+                for (let y = 0; y < this.shape.length; y++) {
+                    for (let x = 0; x < this.shape[y].length; x++) {
+                        if (this.shape[y][x]) {
+                            const drawX = (this.x + x) * cellSize + offsetX;
+                            const drawY = (this.y + y) * cellSize + offsetY;
+                            
+                            // Draw solid color block
+                            context.fillStyle = this.color;
+                            context.fillRect(drawX, drawY, cellSize, cellSize);
+                            
+                            // Draw border
+                            context.strokeStyle = '#333';
+                            context.lineWidth = 2;
+                            context.strokeRect(drawX, drawY, cellSize, cellSize);
+                        }
+                    }
+                }
+            }
+            
+            canMove(dx, dy, newShape = this.shape) {
+                for (let y = 0; y < newShape.length; y++) {
+                    for (let x = 0; x < newShape[y].length; x++) {
+                        if (newShape[y][x]) {
+                            const newX = this.x + x + dx;
+                            const newY = this.y + y + dy;
+                            
+                            if (newX < 0 || newX >= COLS || newY >= ROWS) {
+                                return false;
+                            }
+                            
+                            if (newY >= 0 && board[newY][newX]) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+                return true;
+            }
+            
+            lock() {
+                let correctCount = 0;
+                let placedCount = 0;
+                let correctElements = [];
+                
+                for (let y = 0; y < this.shape.length; y++) {
+                    for (let x = 0; x < this.shape[y].length; x++) {
+                        if (this.shape[y][x]) {
+                            const boardY = this.y + y;
+                            const boardX = this.x + x;
+                            if (boardY >= 0) {
+                                // Get the element that should be at this position
+                                // boardY - 3 because visual hints are shifted down by 4 rows
+                                const element = getElementAtPosition(boardY - 3, boardX);
+                                
+                                let isCorrect = false;
+                                if (element && element.group === this.groupName && availableElements.has(element.number)) {
+                                    // Correct placement
+                                    board[boardY][boardX] = {
+                                        color: this.color,
+                                        element: element,
+                                        correct: true
+                                    };
+                                    elementGrid[`${boardY},${boardX}`] = element.number;
+                                    availableElements.delete(element.number);
+                                    correctElements.push(element);
+                                    correctCount++;
+                                    isCorrect = true;
+                                } else {
+                                    // Wrong placement
+                                    board[boardY][boardX] = {
+                                        color: this.color,
+                                        element: null,
+                                        correct: false
+                                    };
+                                }
+                                placedCount++;
+                            }
+                        }
+                    }
+                }
+                
+                // Speak the names of correctly placed elements
+                if (correctElements.length > 0) {
+                    speakElements(correctElements);
+                }
+                
+                return {placed: placedCount, correct: correctCount};
+            }
+        }
+        
+        // Create random piece from available groups (weighted by number of remaining elements)
+        function createRandomPiece() {
+            // Count available elements per group
+            const groupCounts = {};
+            for (let num of availableElements) {
+                const element = PERIODIC_TABLE[num];
+                if (!groupCounts[element.group]) {
+                    groupCounts[element.group] = 0;
+                }
+                groupCounts[element.group]++;
+            }
+            
+            if (Object.keys(groupCounts).length === 0) {
+                return null; // No more elements available
+            }
+            
+            // Create weighted array for selection
+            const weightedGroups = [];
+            for (let group in groupCounts) {
+                // Add the group multiple times based on how many elements it has
+                // This makes groups with more elements more likely to be selected
+                const weight = Math.ceil(Math.sqrt(groupCounts[group])); // Square root for balanced weighting
+                for (let i = 0; i < weight; i++) {
+                    weightedGroups.push(group);
+                }
+            }
+            
+            // Select a random group from weighted array
+            const groupName = weightedGroups[Math.floor(Math.random() * weightedGroups.length)];
+            const shapes = PIECE_SHAPES[groupName];
+            const shape = shapes[Math.floor(Math.random() * shapes.length)];
+            const color = GROUP_COLORS[groupName];
+            
+            return new Piece(groupName, shape, color);
+        }
+        
+        // Draw background grid with periodic table hints
+        function drawBackground() {
+            // Draw faint periodic table layout
+            for (let num in PERIODIC_TABLE) {
+                const element = PERIODIC_TABLE[num];
+                const x = element.col;
+                const y = element.row + 3; // Shift hints down by 4 rows (row - 1 + 4 = row + 3)
+                
+                // Only draw if within board boundaries
+                if (y >= 0 && y < ROWS && x >= 0 && x < COLS) {
+                    if (!board[y][x]) {
+                        // Draw faint color hint
+                        ctx.fillStyle = GROUP_COLORS[element.group] + '3A'; // More saturated transparency
+                        ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                        
+                        // Draw element symbol very faintly
+                        if (availableElements.has(parseInt(num))) {
+                            ctx.fillStyle = '#00000025';
+                            ctx.font = `${CELL_SIZE * 0.3}px Arial`;
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillText(
+                                element.symbol,
+                                x * CELL_SIZE + CELL_SIZE / 2,
+                                y * CELL_SIZE + CELL_SIZE / 2
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Game functions
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw background hints
+            drawBackground();
+            
+            // Draw grid lines
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 0.5;
+            for (let x = 0; x <= COLS; x++) {
+                ctx.beginPath();
+                ctx.moveTo(x * CELL_SIZE, 0);
+                ctx.lineTo(x * CELL_SIZE, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= ROWS; y++) {
+                ctx.beginPath();
+                ctx.moveTo(0, y * CELL_SIZE);
+                ctx.lineTo(canvas.width, y * CELL_SIZE);
+                ctx.stroke();
+            }
+            
+            // Draw board
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    if (board[y][x]) {
+                        const cell = board[y][x];
+                        
+                        // Draw cell background
+                        ctx.fillStyle = cell.color;
+                        ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                        
+                        // Draw border (thicker for correct placements)
+                        ctx.strokeStyle = cell.correct ? '#2E7D32' : '#333';
+                        ctx.lineWidth = cell.correct ? 3 : 2;
+                        ctx.strokeRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                        
+                        // Draw element symbol if correct
+                        if (cell.element && cell.correct) {
+                            ctx.fillStyle = '#000';
+                            ctx.font = `bold ${CELL_SIZE * 0.5}px Arial`;
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillText(
+                                cell.element.symbol,
+                                x * CELL_SIZE + CELL_SIZE / 2,
+                                y * CELL_SIZE + CELL_SIZE / 2
+                            );
+                            
+                            // Draw atomic number
+                            ctx.font = `${CELL_SIZE * 0.2}px Arial`;
+                            ctx.fillText(
+                                cell.element.number,
+                                x * CELL_SIZE + CELL_SIZE * 0.2,
+                                y * CELL_SIZE + CELL_SIZE * 0.25
+                            );
+                        } else if (!cell.correct) {
+                            // Draw X for wrong placement
+                            ctx.strokeStyle = '#D32F2F';
+                            ctx.lineWidth = 2;
+                            ctx.beginPath();
+                            ctx.moveTo(x * CELL_SIZE + 8, y * CELL_SIZE + 8);
+                            ctx.lineTo(x * CELL_SIZE + CELL_SIZE - 8, y * CELL_SIZE + CELL_SIZE - 8);
+                            ctx.moveTo(x * CELL_SIZE + CELL_SIZE - 8, y * CELL_SIZE + 8);
+                            ctx.lineTo(x * CELL_SIZE + 8, y * CELL_SIZE + CELL_SIZE - 8);
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+            
+            // Draw current piece (only if not exploding)
+            if (currentPiece) {
+                currentPiece.draw(ctx);
+            }
+            
+            // Draw next piece preview in top right of grid
+            if (nextPiece && gameRunning && !gamePaused) {
+                const previewX = COLS - 3.5;
+                const previewY = 0.5;
+                const previewSize = 20;
+                
+                // Draw preview background
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.fillRect((COLS - 4) * CELL_SIZE + 5, 5, 3 * CELL_SIZE - 10, 3 * CELL_SIZE - 10);
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 2;
+                ctx.strokeRect((COLS - 4) * CELL_SIZE + 5, 5, 3 * CELL_SIZE - 10, 3 * CELL_SIZE - 10);
+                
+                // Draw the next piece centered
+                ctx.save();
+                const offsetX = (3 - nextPiece.shape[0].length) * previewSize / 2;
+                const offsetY = (3 - nextPiece.shape.length) * previewSize / 2;
+                ctx.translate((previewX) * CELL_SIZE + offsetX, (previewY) * CELL_SIZE + offsetY);
+                
+                for (let y = 0; y < nextPiece.shape.length; y++) {
+                    for (let x = 0; x < nextPiece.shape[y].length; x++) {
+                        if (nextPiece.shape[y][x]) {
+                            ctx.fillStyle = nextPiece.color;
+                            ctx.fillRect(x * previewSize, y * previewSize, previewSize, previewSize);
+                            ctx.strokeStyle = '#333';
+                            ctx.lineWidth = 1;
+                            ctx.strokeRect(x * previewSize, y * previewSize, previewSize, previewSize);
+                        }
+                    }
+                }
+                
+                ctx.restore();
+            }
+        }
+        
+        function clearLines() {
+            let linesCleared = 0;
+            for (let y = ROWS - 1; y >= 0; y--) {
+                if (board[y].every(cell => cell !== null)) {
+                    // Check if the line has any correct placements
+                    const hasCorrect = board[y].some(cell => cell && cell.correct);
+                    if (hasCorrect) {
+                        score += 200; // Bonus for clearing a line with correct elements
+                    }
+                    
+                    board.splice(y, 1);
+                    board.unshift(Array(COLS).fill(null));
+                    linesCleared++;
+                    score += 100;
+                    y++; // Check the same row again
+                }
+            }
+            
+            updateScore();
+        }
+        
+        function updateScore() {
+            const totalElements = Object.keys(PERIODIC_TABLE).filter(num => PERIODIC_TABLE[num].row <= 6).length;
+            document.getElementById('score').textContent = score;
+            document.getElementById('elements').textContent = `${totalElements - availableElements.size}/${totalElements}`;
+            document.getElementById('correct').textContent = correctPlacements;
+            document.getElementById('explodes').textContent = explodesRemaining;
+            
+            // Update explode counter styling
+            const explodeDiv = document.querySelector('.explode-counter');
+            if (explodesRemaining > 0) {
+                explodeDiv.classList.remove('empty');
+                explodeDiv.classList.add('available');
+            } else {
+                explodeDiv.classList.remove('available');
+                explodeDiv.classList.add('empty');
+            }
+            
+            // Add explode bonus every 500 points
+            const explodeBonusThreshold = Math.floor(score / 500);
+            if (explodeBonusThreshold > lastExplodeBonus) {
+                explodesRemaining++;
+                lastExplodeBonus = explodeBonusThreshold;
+                
+                // Visual notification (top right corner)
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 100px;
+                    right: 20px;
+                    background: linear-gradient(135deg, #f44336, #ff6659);
+                    color: white;
+                    padding: 15px 25px;
+                    border-radius: 10px;
+                    font-size: 1.2em;
+                    font-weight: bold;
+                    z-index: 1000;
+                    animation: slideInRight 0.3s ease;
+                    box-shadow: 0 5px 20px rgba(244, 67, 54, 0.4);
+                `;
+                notification.textContent = '💥 +1 Explode';
+                document.body.appendChild(notification);
+                
+                // Add slide in animation
+                const style = document.createElement('style');
+                style.textContent = `
+                    @keyframes slideInRight {
+                        from { transform: translateX(100%); opacity: 0; }
+                        to { transform: translateX(0); opacity: 1; }
+                    }
+                `;
+                document.head.appendChild(style);
+                
+                // Flash the explode counter
+                explodeDiv.style.transform = 'scale(1.3)';
+                setTimeout(() => {
+                    explodeDiv.style.transform = 'scale(1)';
+                    notification.style.animation = 'slideInRight 0.3s ease reverse';
+                    setTimeout(() => {
+                        notification.remove();
+                        style.remove();
+                    }, 300);
+                }, 800);
+            }
+        }
+        
+        function gameLoop(currentTime = 0) {
+            if (!gameRunning || gamePaused) return;
+            
+            if (currentTime - dropTime > dropInterval) {
+                if (currentPiece) {
+                    if (currentPiece.canMove(0, 1)) {
+                        currentPiece.y++;
+                    } else {
+                        const result = currentPiece.lock();
+                        elementsPlaced += result.placed;
+                        correctPlacements += result.correct;
+                        score += result.placed * 10;
+                        score += result.correct * 50; // Bonus for correct placement
+                        
+                        clearLines();
+                        
+                        currentPiece = nextPiece;
+                        nextPiece = createRandomPiece();
+                        
+                        if (!nextPiece && availableElements.size === 0) {
+                            // Victory!
+                            victory();
+                            return;
+                        }
+                        
+                        if (currentPiece && !currentPiece.canMove(0, 0)) {
+                            gameOver();
+                            return;
+                        }
+                        
+                        updateScore();
+                    }
+                }
+                dropTime = currentTime;
+            }
+            
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function startGame() {
+            if (!gameRunning) {
+                initBoard();
+                score = 0;
+                elementsPlaced = 0;
+                correctPlacements = 0;
+                explodesRemaining = 3;
+                lastExplodeBonus = 0;
+                dropInterval = 1000;
+                currentPiece = createRandomPiece();
+                nextPiece = createRandomPiece();
+                gameRunning = true;
+                gamePaused = false;
+                updateScore();
+                gameLoop();
+            }
+        }
+        
+        function pauseGame() {
+            gamePaused = !gamePaused;
+            if (!gamePaused && gameRunning) {
+                gameLoop();
+            }
+        }
+        
+        function resetGame() {
+            gameRunning = false;
+            gamePaused = false;
+            initBoard();
+            score = 0;
+            elementsPlaced = 0;
+            correctPlacements = 0;
+            explodesRemaining = 3;
+            lastExplodeBonus = 0;
+            currentPiece = null;
+            nextPiece = null;
+            updateScore();
+            draw();
+        }
+        
+        function gameOver() {
+            gameRunning = false;
+            const totalElements = Object.keys(PERIODIC_TABLE).filter(num => PERIODIC_TABLE[num].row <= 6).length;
+            const placedElements = totalElements - availableElements.size;
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 50);
+            ctx.font = '24px Arial';
+            ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2);
+            ctx.fillText(`Correct Elements: ${correctPlacements}`, canvas.width / 2, canvas.height / 2 + 35);
+            ctx.fillText(`Total Placed: ${placedElements}/${totalElements}`, canvas.width / 2, canvas.height / 2 + 70);
+            
+            // Check for high score
+            setTimeout(() => checkHighScore(score, placedElements, correctPlacements), 500);
+        }
+        
+        function victory() {
+            gameRunning = false;
+            const totalElements = Object.keys(PERIODIC_TABLE).filter(num => PERIODIC_TABLE[num].row <= 6).length;
+            const placedElements = totalElements - availableElements.size;
+            
+            // Bonus points for completing the table
+            score += 1000;
+            
+            ctx.fillStyle = 'rgba(0, 200, 0, 0.8)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🎉 VICTORY 🎉', canvas.width / 2, canvas.height / 2 - 50);
+            ctx.font = '24px Arial';
+            ctx.fillText('Periodic Table Complete', canvas.width / 2, canvas.height / 2);
+            ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2 + 35);
+            
+            // Speak victory message
+            speakElement('Victory. Periodic Table Complete');
+            
+            // Check for high score
+            setTimeout(() => checkHighScore(score, placedElements, correctPlacements), 500);
+        }
+        
+        // Controls
+        document.addEventListener('keydown', (e) => {
+            // Close high scores panel with Escape
+            if (e.key === 'Escape') {
+                const panel = document.getElementById('highScoresPanel');
+                if (panel.classList.contains('show')) {
+                    panel.classList.remove('show');
+                    return;
+                }
+            }
+            
+            if (!gameRunning || gamePaused || !currentPiece) return;
+            
+            switch(e.key) {
+                case 'ArrowLeft':
+                    if (currentPiece.canMove(-1, 0)) {
+                        currentPiece.x--;
+                        draw();
+                    }
+                    break;
+                case 'ArrowRight':
+                    if (currentPiece.canMove(1, 0)) {
+                        currentPiece.x++;
+                        draw();
+                    }
+                    break;
+                case 'ArrowDown':
+                    if (currentPiece.canMove(0, 1)) {
+                        currentPiece.y++;
+                        score++;
+                        updateScore();
+                        draw();
+                    }
+                    break;
+                case 'ArrowUp':
+                    const rotated = currentPiece.rotate();
+                    if (currentPiece.canMove(0, 0, rotated)) {
+                        currentPiece.shape = rotated;
+                        draw();
+                    }
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    while (currentPiece.canMove(0, 1)) {
+                        currentPiece.y++;
+                        score += 2;
+                    }
+                    updateScore();
+                    draw();
+                    break;
+                case 'e':
+                case 'E':
+                    e.preventDefault();
+                    explodePiece();
+                    break;
+            }
+        });
+        
+        // Initialize
+        loadHighScores();
+        initBoard();
+        updateScore();
+        draw();
+    </script>
+</body>
+</html>
