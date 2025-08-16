@@ -575,6 +575,48 @@
             font-size: 0.95rem;
         }
         
+        /* Error Display */
+        #error-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            max-width: 400px;
+            padding: 1rem 1.5rem;
+            background: white;
+            border-left: 4px solid #ef4444;
+            border-radius: 6px;
+            box-shadow: var(--shadow-lg);
+            z-index: 10000;
+            display: none;
+        }
+        
+        #error-container.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .error-message {
+            color: #dc2626;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .error-details {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
         /* Responsive */
         @media (max-width: 768px) {
             .panel-title h1 {
@@ -637,9 +679,6 @@
             <div class="selector-cascade">
                 <select id="subject-select">
                     <option value="">Select Subject...</option>
-                    <option value="physics">VCE Physics</option>
-                    <option value="chemistry">VCE Chemistry</option>
-                    <option value="biology">VCE Biology</option>
                 </select>
                 <select id="unit-select" disabled>
                     <option value="">Select Unit...</option>
@@ -703,12 +742,26 @@
         <div class="spinner"></div>
         <p>Loading topic data...</p>
     </div>
+    
+    <!-- Error Display -->
+    <div id="error-container">
+        <div class="error-message"></div>
+        <div class="error-details"></div>
+    </div>
 
     <script>
-        // Educational Review App
+        // Educational Review App - Server Version
         const EducationalReviewApp = {
+            // Configuration
+            config: {
+                manifestPath: 'youcantfakethis/manifest.json',
+                contentPath: 'youcantfakethis/',
+                debugMode: false
+            },
+            
             // Current state
             state: {
+                manifest: null,
                 currentSubject: null,
                 currentUnit: null,
                 currentAOS: null,
@@ -722,255 +775,85 @@
                 panelCollapsed: false
             },
             
-            // Mock data structure (mimics the manifest)
-            mockManifest: {
-                physics: {
-                    name: "VCE Physics",
-                    units: {
-                        U4: {
-                            name: "Unit 4: Light and Matter",
-                            areasOfStudy: {
-                                AOS1: {
-                                    name: "How can waves explain behaviour?",
-                                    topics: {
-                                        "11": {
-                                            name: "Comparing Light and Matter",
-                                            filename: "U4-AOS1-11-Comparing-Light-Matter.json"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                chemistry: {
-                    name: "VCE Chemistry",
-                    units: {}
-                },
-                biology: {
-                    name: "VCE Biology",
-                    units: {}
-                }
-            },
-            
-            // Mock topic data (simplified version of the JSON we created)
-            mockTopicData: {
-                metadata: {
-                    tabs: [
-                        { id: "debroglie", label: "de Broglie Wavelength", icon: "λ" },
-                        { id: "momentum", label: "Photon Momentum", icon: "p" },
-                        { id: "diffraction", label: "Diffraction & Imaging", icon: "◊" },
-                        { id: "doubleslit", label: "Double Slit", icon: "||" }
-                    ]
-                },
-                content: {
-                    round1: {
-                        debroglie: {
-                            title: "Understanding de Broglie Wavelength",
-                            instructions: "Complete the dropdowns to test your understanding of matter waves.",
-                            htmlContent: "In 1924, Louis de Broglie hypothesised that {{q1_dropdown}}, not just photons, must have {{q2_dropdown}} properties. The de Broglie wavelength can be calculated using {{q3_dropdown}}, where h is {{q4_dropdown}}.",
-                            questions: {
-                                q1_dropdown: {
-                                    correct: "all matter",
-                                    options: ["all matter", "only electrons", "only charged particles", "only subatomic particles"]
-                                },
-                                q2_dropdown: {
-                                    correct: "wave-like",
-                                    options: ["wave-like", "particle-like", "electromagnetic", "quantum"]
-                                },
-                                q3_dropdown: {
-                                    correct: "λ = h/p",
-                                    options: ["λ = h/p", "λ = p/h", "λ = hp", "λ = h/mv²"]
-                                },
-                                q4_dropdown: {
-                                    correct: "Planck's constant",
-                                    options: ["Planck's constant", "Boltzmann's constant", "Avogadro's constant", "Rydberg's constant"]
-                                }
-                            }
-                        },
-                        momentum: {
-                            title: "Photon Momentum and Energy",
-                            instructions: "Explore the relationship between photon energy and momentum.",
-                            htmlContent: "Although photons have {{q1_dropdown}} mass, they still possess {{q2_dropdown}} which can be calculated using {{q3_dropdown}}.",
-                            questions: {
-                                q1_dropdown: {
-                                    correct: "no",
-                                    options: ["no", "very small", "negative", "infinite"]
-                                },
-                                q2_dropdown: {
-                                    correct: "momentum",
-                                    options: ["momentum", "mass", "charge", "spin"]
-                                },
-                                q3_dropdown: {
-                                    correct: "p = h/λ",
-                                    options: ["p = h/λ", "p = λ/h", "p = hλ", "p = h + λ"]
-                                }
-                            }
-                        },
-                        diffraction: {
-                            title: "Diffraction Patterns and Imaging",
-                            instructions: "Understand how diffraction affects imaging.",
-                            htmlContent: "The amount of diffraction depends on the ratio {{q1_dropdown}}, where significant diffraction occurs when this ratio is {{q2_dropdown}}.",
-                            questions: {
-                                q1_dropdown: {
-                                    correct: "λ/w",
-                                    options: ["λ/w", "w/λ", "λw", "λ + w"]
-                                },
-                                q2_dropdown: {
-                                    correct: "≥ 1",
-                                    options: ["≥ 1", "≤ 1", "= 0", ">> 1"]
-                                }
-                            }
-                        },
-                        doubleslit: {
-                            title: "Wave-Particle Duality Evidence",
-                            instructions: "Explore how the double slit experiment demonstrates duality.",
-                            htmlContent: "When individual photons are sent {{q1_dropdown}} through a double slit, each creates a {{q2_dropdown}} on the screen.",
-                            questions: {
-                                q1_dropdown: {
-                                    correct: "one at a time",
-                                    options: ["one at a time", "in pairs", "continuously", "randomly"]
-                                },
-                                q2_dropdown: {
-                                    correct: "single spot",
-                                    options: ["single spot", "wave pattern", "two spots", "continuous line"]
-                                }
-                            }
-                        }
-                    },
-                    round2: {
-                        debroglie: {
-                            title: "Matter Waves in Practice",
-                            instructions: "Apply your understanding to practical scenarios.",
-                            htmlContent: "The revolutionary concept that {{q1_dropdown}} particles exhibit wave properties was confirmed in {{q2_dropdown}}.",
-                            questions: {
-                                q1_dropdown: {
-                                    correct: "material",
-                                    options: ["material", "massless", "charged", "quantum"]
-                                },
-                                q2_dropdown: {
-                                    correct: "1927",
-                                    options: ["1927", "1924", "1929", "1932"]
-                                }
-                            }
-                        },
-                        momentum: {
-                            title: "Comparing Matter and Photon Properties",
-                            instructions: "Examine relationships between energy and momentum.",
-                            htmlContent: "For matter particles, momentum is {{q1_dropdown}}, while for photons it's {{q2_dropdown}}.",
-                            questions: {
-                                q1_dropdown: {
-                                    correct: "p = √(2mKE)",
-                                    options: ["p = √(2mKE)", "p = 2mKE", "p = √(mKE)", "p = mKE"]
-                                },
-                                q2_dropdown: {
-                                    correct: "p = E/c",
-                                    options: ["p = E/c", "p = Ec", "p = E/c²", "p = c/E"]
-                                }
-                            }
-                        },
-                        diffraction: {
-                            title: "Microscopy and Resolution Limits",
-                            instructions: "Analyze imaging capabilities.",
-                            htmlContent: "Resolution depends on {{q1_dropdown}} of radiation, with {{q2_dropdown}} wavelengths providing better resolution.",
-                            questions: {
-                                q1_dropdown: {
-                                    correct: "wavelength",
-                                    options: ["wavelength", "frequency", "intensity", "polarization"]
-                                },
-                                q2_dropdown: {
-                                    correct: "shorter",
-                                    options: ["shorter", "longer", "medium", "variable"]
-                                }
-                            }
-                        },
-                        doubleslit: {
-                            title: "Evidence for Wave-Particle Duality",
-                            instructions: "Modern experiments prove dual nature.",
-                            htmlContent: "The experiment shows both {{q1_dropdown}} and {{q2_dropdown}} exhibit duality.",
-                            questions: {
-                                q1_dropdown: {
-                                    correct: "light",
-                                    options: ["light", "sound", "heat", "electricity"]
-                                },
-                                q2_dropdown: {
-                                    correct: "electrons",
-                                    options: ["electrons", "photons only", "waves only", "fields"]
-                                }
-                            }
-                        }
-                    },
-                    round3: {
-                        debroglie: {
-                            title: "Advanced Applications",
-                            instructions: "Explore sophisticated applications.",
-                            htmlContent: "Modern technologies rely on {{q1_dropdown}} particles having measurable {{q2_dropdown}}.",
-                            questions: {
-                                q1_dropdown: {
-                                    correct: "all matter",
-                                    options: ["all matter", "only quantum", "only microscopic", "only charged"]
-                                },
-                                q2_dropdown: {
-                                    correct: "wavelengths",
-                                    options: ["wavelengths", "frequencies", "amplitudes", "phases"]
-                                }
-                            }
-                        },
-                        momentum: {
-                            title: "Quantitative Comparisons",
-                            instructions: "Master quantitative relationships.",
-                            htmlContent: "The approach differs for {{q1_dropdown}} photons versus {{q2_dropdown}} matter particles.",
-                            questions: {
-                                q1_dropdown: {
-                                    correct: "massless",
-                                    options: ["massless", "massive", "charged", "neutral"]
-                                },
-                                q2_dropdown: {
-                                    correct: "massive",
-                                    options: ["massive", "massless", "relativistic", "quantum"]
-                                }
-                            }
-                        },
-                        diffraction: {
-                            title: "Cutting-Edge Technologies",
-                            instructions: "Examine imaging frontiers.",
-                            htmlContent: "Next-generation imaging uses {{q1_dropdown}} particles to achieve {{q2_dropdown}} resolution.",
-                            questions: {
-                                q1_dropdown: {
-                                    correct: "matter",
-                                    options: ["matter", "light only", "energy", "field"]
-                                },
-                                q2_dropdown: {
-                                    correct: "atomic",
-                                    options: ["atomic", "molecular", "cellular", "tissue"]
-                                }
-                            }
-                        },
-                        doubleslit: {
-                            title: "Philosophical Implications",
-                            instructions: "Consider deeper implications.",
-                            htmlContent: "Wave-particle duality challenges our {{q1_dropdown}} understanding, suggesting particles exist in {{q2_dropdown}}.",
-                            questions: {
-                                q1_dropdown: {
-                                    correct: "classical",
-                                    options: ["classical", "quantum", "relativistic", "modern"]
-                                },
-                                q2_dropdown: {
-                                    correct: "superpositions",
-                                    options: ["superpositions", "locations", "velocities", "energies"]
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            
             // Initialize the application
-            init() {
+            async init() {
                 console.log('Initializing Educational Review App...');
-                this.attachEventListeners();
-                this.setupDebugMode();
-                this.loadSavedState();
+                
+                try {
+                    // Load manifest first
+                    await this.loadManifest();
+                    
+                    // Set up UI
+                    this.attachEventListeners();
+                    this.setupDebugMode();
+                    this.loadSavedState();
+                    
+                    // Build subject selector from manifest
+                    this.buildSubjectSelector();
+                    
+                } catch (error) {
+                    this.handleError('Failed to initialize application', error);
+                }
+            },
+            
+            // Load manifest from server
+            async loadManifest() {
+                try {
+                    const response = await fetch(this.config.manifestPath);
+                    
+                    if (!response.ok) {
+                        throw new Error(`Failed to load manifest: ${response.status} ${response.statusText}`);
+                    }
+                    
+                    this.state.manifest = await response.json();
+                    console.log('Manifest loaded successfully:', this.state.manifest);
+                    
+                } catch (error) {
+                    console.error('Error loading manifest:', error);
+                    throw error;
+                }
+            },
+            
+            // Build subject selector from manifest
+            buildSubjectSelector() {
+                const subjectSelect = document.getElementById('subject-select');
+                
+                // Clear existing options except the first
+                while (subjectSelect.options.length > 1) {
+                    subjectSelect.remove(1);
+                }
+                
+                // Add subjects from manifest
+                if (this.state.manifest && this.state.manifest.subjects) {
+                    this.state.manifest.subjects.forEach(subject => {
+                        const option = document.createElement('option');
+                        option.value = subject.id;
+                        option.textContent = subject.name;
+                        subjectSelect.appendChild(option);
+                    });
+                }
+            },
+            
+            // Load topic JSON from server
+            async loadTopicData(subject, filename) {
+                try {
+                    const path = `${this.config.contentPath}${subject}/${filename}`;
+                    console.log('Loading topic from:', path);
+                    
+                    const response = await fetch(path);
+                    
+                    if (!response.ok) {
+                        throw new Error(`Failed to load topic: ${response.status} ${response.statusText}`);
+                    }
+                    
+                    const topicData = await response.json();
+                    console.log('Topic loaded successfully');
+                    return topicData;
+                    
+                } catch (error) {
+                    console.error('Error loading topic:', error);
+                    throw error;
+                }
             },
             
             // Event Listeners
@@ -1010,8 +893,8 @@
             
             // Cascade handlers
             handleSubjectChange(e) {
-                const subject = e.target.value;
-                this.state.currentSubject = subject;
+                const subjectId = e.target.value;
+                this.state.currentSubject = subjectId;
                 
                 // Reset dependent selectors and state
                 this.state.currentUnit = null;
@@ -1023,27 +906,30 @@
                 document.getElementById('load-topic-btn').disabled = true;
                 
                 // Update subtitle
-                if (subject) {
+                if (subjectId) {
                     this.updateSubtitle();
-                }
-                
-                if (subject && this.mockManifest[subject]) {
-                    // Populate units
-                    const unitSelect = document.getElementById('unit-select');
-                    unitSelect.disabled = false;
                     
-                    Object.entries(this.mockManifest[subject].units).forEach(([unitId, unitData]) => {
-                        const option = document.createElement('option');
-                        option.value = unitId;
-                        option.textContent = unitData.name;
-                        unitSelect.appendChild(option);
-                    });
+                    // Find subject in manifest
+                    const subject = this.state.manifest.subjects.find(s => s.id === subjectId);
+                    
+                    if (subject && subject.units) {
+                        // Populate units
+                        const unitSelect = document.getElementById('unit-select');
+                        unitSelect.disabled = false;
+                        
+                        subject.units.forEach(unit => {
+                            const option = document.createElement('option');
+                            option.value = unit.id;
+                            option.textContent = `${unit.code}: ${unit.name}`;
+                            unitSelect.appendChild(option);
+                        });
+                    }
                 }
             },
             
             handleUnitChange(e) {
-                const unit = e.target.value;
-                this.state.currentUnit = unit;
+                const unitId = e.target.value;
+                this.state.currentUnit = unitId;
                 
                 // Reset dependent selectors and state
                 this.state.currentAOS = null;
@@ -1053,20 +939,22 @@
                 document.getElementById('load-topic-btn').disabled = true;
                 
                 // Update subtitle
-                if (unit) {
+                if (unitId) {
                     this.updateSubtitle();
-                }
-                
-                if (unit && this.state.currentSubject) {
-                    const unitData = this.mockManifest[this.state.currentSubject].units[unit];
-                    if (unitData) {
+                    
+                    // Find unit in manifest
+                    const subject = this.state.manifest.subjects.find(s => s.id === this.state.currentSubject);
+                    const unit = subject?.units.find(u => u.id === unitId);
+                    
+                    if (unit && unit.areasOfStudy) {
+                        // Populate areas of study
                         const aosSelect = document.getElementById('aos-select');
                         aosSelect.disabled = false;
                         
-                        Object.entries(unitData.areasOfStudy).forEach(([aosId, aosData]) => {
+                        unit.areasOfStudy.forEach(aos => {
                             const option = document.createElement('option');
-                            option.value = aosId;
-                            option.textContent = aosData.name;
+                            option.value = aos.id;
+                            option.textContent = `${aos.code}: ${aos.name}`;
                             aosSelect.appendChild(option);
                         });
                     }
@@ -1074,8 +962,8 @@
             },
             
             handleAOSChange(e) {
-                const aos = e.target.value;
-                this.state.currentAOS = aos;
+                const aosId = e.target.value;
+                this.state.currentAOS = aosId;
                 
                 // Reset topic selector and state
                 this.state.currentTopic = null;
@@ -1083,20 +971,32 @@
                 document.getElementById('load-topic-btn').disabled = true;
                 
                 // Update subtitle
-                if (aos) {
+                if (aosId) {
                     this.updateSubtitle();
-                }
-                
-                if (aos && this.state.currentSubject && this.state.currentUnit) {
-                    const aosData = this.mockManifest[this.state.currentSubject].units[this.state.currentUnit].areasOfStudy[aos];
-                    if (aosData) {
+                    
+                    // Find AOS in manifest
+                    const subject = this.state.manifest.subjects.find(s => s.id === this.state.currentSubject);
+                    const unit = subject?.units.find(u => u.id === this.state.currentUnit);
+                    const aos = unit?.areasOfStudy.find(a => a.id === aosId);
+                    
+                    if (aos && aos.topics) {
+                        // Populate topics
                         const topicSelect = document.getElementById('topic-select');
                         topicSelect.disabled = false;
                         
-                        Object.entries(aosData.topics).forEach(([topicId, topicData]) => {
+                        aos.topics.forEach(topic => {
                             const option = document.createElement('option');
-                            option.value = topicId;
-                            option.textContent = topicData.name;
+                            option.value = topic.id;
+                            option.textContent = topic.name;
+                            option.dataset.filename = topic.filename;
+                            option.dataset.status = topic.status;
+                            
+                            // Disable if not available
+                            if (topic.status !== 'available') {
+                                option.disabled = true;
+                                option.textContent += ' (Coming Soon)';
+                            }
+                            
                             topicSelect.appendChild(option);
                         });
                     }
@@ -1104,12 +1004,16 @@
             },
             
             handleTopicChange(e) {
-                const topic = e.target.value;
-                this.state.currentTopic = topic;
-                document.getElementById('load-topic-btn').disabled = !topic;
+                const topicId = e.target.value;
+                this.state.currentTopic = topicId;
+                
+                // Enable load button only if topic is available
+                const selectedOption = e.target.options[e.target.selectedIndex];
+                const isAvailable = selectedOption?.dataset.status === 'available';
+                document.getElementById('load-topic-btn').disabled = !topicId || !isAvailable;
                 
                 // Update subtitle with topic selection
-                if (topic) {
+                if (topicId) {
                     this.updateSubtitle();
                 }
             },
@@ -1122,37 +1026,50 @@
             
             // Load topic
             async loadTopic() {
-                console.log('Loading topic:', this.state.currentTopic);
+                const topicSelect = document.getElementById('topic-select');
+                const selectedOption = topicSelect.options[topicSelect.selectedIndex];
+                const filename = selectedOption?.dataset.filename;
+                
+                if (!filename) {
+                    this.handleError('No filename found for selected topic');
+                    return;
+                }
+                
+                console.log('Loading topic:', this.state.currentTopic, 'from file:', filename);
                 
                 // Show loading
                 this.showLoading();
                 
-                // Simulate loading delay
-                await new Promise(resolve => setTimeout(resolve, 500));
-                
-                // Load mock data
-                this.state.topicData = this.mockTopicData;
-                this.state.currentRound = 1;
-                this.state.completedTabs.clear();
-                
-                // Update subtitle with current selection
-                this.updateSubtitle();
-                
-                // Initialize UI
-                this.initializeTopicUI();
-                
-                // Hide loading
-                this.hideLoading();
-                
-                // Collapse panel and show main content
-                if (!this.state.panelCollapsed) {
-                    this.togglePanel();
+                try {
+                    // Load topic data from server
+                    this.state.topicData = await this.loadTopicData(this.state.currentSubject, filename);
+                    
+                    // Reset state for new topic
+                    this.state.currentRound = 1;
+                    this.state.completedTabs.clear();
+                    
+                    // Update subtitle with current selection
+                    this.updateSubtitle();
+                    
+                    // Initialize UI
+                    this.initializeTopicUI();
+                    
+                    // Collapse panel and show main content
+                    if (!this.state.panelCollapsed) {
+                        this.togglePanel();
+                    }
+                    
+                    // Update UI
+                    document.getElementById('app-container').style.display = 'block';
+                    document.getElementById('change-topic-btn').style.display = 'inline-block';
+                    document.getElementById('load-topic-btn').style.display = 'none';
+                    
+                } catch (error) {
+                    this.handleError('Failed to load topic', error);
+                } finally {
+                    // Hide loading
+                    this.hideLoading();
                 }
-                
-                // Update UI
-                document.getElementById('app-container').style.display = 'block';
-                document.getElementById('change-topic-btn').style.display = 'inline-block';
-                document.getElementById('load-topic-btn').style.display = 'none';
             },
             
             changeTopic() {
@@ -1211,7 +1128,7 @@
                         tabElement.classList.add('active');
                     }
                     tabElement.dataset.tabId = tab.id;
-                    tabElement.innerHTML = `${tab.icon} ${tab.label}`;
+                    tabElement.innerHTML = `${tab.icon || ''} ${tab.label}`;
                     
                     // Add round badges for completed tabs
                     const roundBadges = this.getCompletedRounds(tab.id);
@@ -1319,12 +1236,16 @@
                     optionsHtml += `<option value="${value}" title="${option}">${display}</option>`;
                 });
                 
-                return `<select class="question-dropdown" data-question-id="${questionId}" data-correct="${questionData.correct}">${optionsHtml}</select>`;
+                return `<select class="question-dropdown" data-question-id="${questionId}" data-correct="${questionData.correct}" data-concept="${questionData.concept || ''}">${optionsHtml}</select>`;
             },
             
             sanitizeOption(text) {
                 if (!text) return '';
-                return text.replace(/[<>"']/g, '').trim();
+                
+                // Basic HTML escaping
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
             },
             
             shuffleArray(array) {
@@ -1373,16 +1294,27 @@
                 const dropdowns = document.querySelectorAll('.question-dropdown');
                 let correct = 0;
                 let total = dropdowns.length;
+                const errors = [];
                 
                 dropdowns.forEach(dropdown => {
                     const selectedValue = dropdown.value;
                     const correctValue = this.sanitizeOption(dropdown.dataset.correct);
+                    const concept = dropdown.dataset.concept;
+                    const questionId = dropdown.dataset.questionId;
                     
                     if (selectedValue === correctValue) {
                         dropdown.classList.add('correct');
                         correct++;
                     } else {
                         dropdown.classList.add('incorrect');
+                        
+                        // Track error for concept-based review
+                        errors.push({
+                            questionId: questionId,
+                            concept: concept,
+                            selectedAnswer: selectedValue,
+                            correctAnswer: correctValue
+                        });
                     }
                     
                     dropdown.disabled = true;
@@ -1394,7 +1326,8 @@
                 }
                 this.state.tabScores[`round${this.state.currentRound}`][this.state.currentTab] = {
                     correct: correct,
-                    total: total
+                    total: total,
+                    errors: errors
                 };
                 
                 // Mark tab as completed
@@ -1402,7 +1335,8 @@
                 
                 // Show feedback
                 const feedback = document.getElementById('submission-feedback');
-                feedback.textContent = `Score: ${correct}/${total} (${Math.round(correct/total*100)}%)`;
+                const percentage = Math.round(correct/total*100);
+                feedback.textContent = `Score: ${correct}/${total} (${percentage}%)`;
                 feedback.className = correct === total ? 'success' : 'error';
                 
                 // Disable submit button
@@ -1413,6 +1347,9 @@
                 
                 // Update overall progress
                 this.updateOverallProgress();
+                
+                // Save state
+                this.saveState();
                 
                 // Check if round is complete
                 this.checkRoundCompletion();
@@ -1451,6 +1388,9 @@
                 
                 // Update overall progress
                 this.updateOverallProgress();
+                
+                // Save state
+                this.saveState();
             },
             
             checkRoundCompletion() {
@@ -1508,7 +1448,7 @@
             },
             
             updateOverallProgress() {
-                const totalPossible = 3 * 4; // 3 rounds × 4 tabs
+                const totalPossible = 3 * this.state.topicData.metadata.tabs.length;
                 const completed = this.state.completedTabs.size;
                 const percentage = Math.round((completed / totalPossible) * 100);
                 
@@ -1519,9 +1459,11 @@
                 const subtitle = document.getElementById('panel-subtitle');
                 let parts = [];
                 
-                if (this.state.currentSubject) {
-                    const subjectName = this.mockManifest[this.state.currentSubject].name;
-                    parts.push(`<strong>${subjectName}</strong>`);
+                if (this.state.currentSubject && this.state.manifest) {
+                    const subject = this.state.manifest.subjects.find(s => s.id === this.state.currentSubject);
+                    if (subject) {
+                        parts.push(`<strong>${subject.name}</strong>`);
+                    }
                 }
                 
                 if (this.state.currentUnit) {
@@ -1532,9 +1474,15 @@
                     parts.push(this.state.currentAOS);
                 }
                 
-                if (this.state.currentTopic && this.state.currentSubject && this.state.currentUnit && this.state.currentAOS) {
-                    const topicName = this.mockManifest[this.state.currentSubject].units[this.state.currentUnit].areasOfStudy[this.state.currentAOS].topics[this.state.currentTopic].name;
-                    parts.push(topicName);
+                if (this.state.currentTopic && this.state.manifest) {
+                    const subject = this.state.manifest.subjects.find(s => s.id === this.state.currentSubject);
+                    const unit = subject?.units.find(u => u.id === this.state.currentUnit);
+                    const aos = unit?.areasOfStudy.find(a => a.id === this.state.currentAOS);
+                    const topic = aos?.topics.find(t => t.id === this.state.currentTopic);
+                    
+                    if (topic) {
+                        parts.push(topic.name);
+                    }
                 }
                 
                 if (parts.length > 0) {
@@ -1568,9 +1516,31 @@
                 document.getElementById('loading-overlay').style.display = 'none';
             },
             
+            // Error handling
+            handleError(message, error = null) {
+                console.error(message, error);
+                
+                const errorContainer = document.getElementById('error-container');
+                const errorMessage = errorContainer.querySelector('.error-message');
+                const errorDetails = errorContainer.querySelector('.error-details');
+                
+                errorMessage.textContent = message;
+                errorDetails.textContent = error ? error.message : '';
+                
+                errorContainer.classList.add('show');
+                
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    errorContainer.classList.remove('show');
+                }, 5000);
+            },
+            
             // Storage
             saveState() {
-                const stateKey = `${this.state.currentSubject}_${this.state.currentTopic}_state`;
+                if (!this.state.currentSubject || !this.state.currentTopic) return;
+                
+                const stateKey = `ycft_${this.state.currentSubject}_${this.state.currentUnit}_${this.state.currentAOS}_${this.state.currentTopic}_state`;
+                
                 localStorage.setItem(stateKey, JSON.stringify({
                     currentRound: this.state.currentRound,
                     tabScores: this.state.tabScores,
@@ -1580,8 +1550,14 @@
             },
             
             loadSavedState() {
-                // Implement loading saved state from localStorage
-                console.log('Checking for saved state...');
+                // Check for any saved states in localStorage
+                const keys = Object.keys(localStorage);
+                const savedStates = keys.filter(key => key.startsWith('ycft_'));
+                
+                if (savedStates.length > 0) {
+                    console.log('Found saved states:', savedStates);
+                    // Could implement a "resume previous session" feature here
+                }
             },
             
             // Debug mode
