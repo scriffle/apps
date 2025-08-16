@@ -216,9 +216,24 @@
             font-size: 0.9rem;
         }
         
+        .progress-stats {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+        
         #overall-progress {
             font-size: 0.9rem;
             color: var(--text-secondary);
+        }
+        
+        #total-score {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            padding: 0.25rem 0.75rem;
+            background: var(--bg-light);
+            border-radius: 20px;
         }
         
         /* Tab Navigation */
@@ -329,6 +344,17 @@
             font-size: 0.85rem;
         }
         
+        .attempt-indicator {
+            display: inline-block;
+            margin-left: 1rem;
+            padding: 0.15rem 0.5rem;
+            background: #fef3c7;
+            color: #92400e;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
         .instructions {
             background: var(--bg-light);
             padding: 0.75rem;
@@ -364,6 +390,7 @@
             cursor: pointer;
             margin: 0 3px;
             min-width: 100px;
+            position: relative;
         }
         
         .question-dropdown:hover:not(:disabled) {
@@ -377,18 +404,58 @@
         
         .question-dropdown.correct {
             background-color: var(--dropdown-correct);
-            pointer-events: none;
             font-weight: 600;
+            border-color: #10b981;
         }
         
         .question-dropdown.incorrect {
             background-color: var(--dropdown-incorrect);
-            pointer-events: none;
+            border-color: #ef4444;
         }
         
         .question-dropdown:disabled {
             cursor: not-allowed;
             opacity: 0.7;
+        }
+        
+        /* Tooltip Styles */
+        .tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 8px;
+            padding: 0.5rem 0.75rem;
+            background: #1f2937;
+            color: white;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            max-width: 250px;
+            z-index: 1000;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+        }
+        
+        .tooltip.show {
+            opacity: 1;
+        }
+        
+        .tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: #1f2937;
+        }
+        
+        .dropdown-wrapper {
+            display: inline-block;
+            position: relative;
         }
         
         /* Control Panel */
@@ -632,6 +699,12 @@
                 overflow-x: scroll;
             }
             
+            .progress-stats {
+                flex-direction: column;
+                gap: 0.5rem;
+                align-items: flex-start;
+            }
+            
             #control-panel {
                 flex-direction: column;
                 padding-bottom: 0.5rem;
@@ -702,7 +775,10 @@
         <!-- Progress Header -->
         <div id="progress-header">
             <div id="round-indicator">Round <span class="current-round">1</span> of 3</div>
-            <div id="overall-progress">Overall Progress: 0%</div>
+            <div class="progress-stats">
+                <div id="overall-progress">Overall Progress: 0%</div>
+                <div id="total-score">Total Score: 0/0</div>
+            </div>
         </div>
         
         <!-- Tab Navigation -->
@@ -750,12 +826,13 @@
     </div>
 
     <script>
-        // Educational Review App - Server Version
+        // Educational Review App - Server Version with Enhanced Features
         const EducationalReviewApp = {
             // Configuration
             config: {
                 manifestPath: 'youcantfakethis/manifest.json',
                 contentPath: 'youcantfakethis/',
+                tooltipDelay: 1200,  // 1.2 seconds
                 debugMode: false
             },
             
@@ -772,7 +849,9 @@
                 tabScores: {},
                 selections: {},
                 completedTabs: new Set(),
-                panelCollapsed: false
+                panelCollapsed: false,
+                tooltipTimers: {},
+                submissionCounts: {}  // Track submission attempts per tab/round
             },
             
             // Initialize the application
@@ -786,6 +865,7 @@
                     // Set up UI
                     this.attachEventListeners();
                     this.setupDebugMode();
+                    this.setupTooltipHandlers();
                     this.loadSavedState();
                     
                     // Build subject selector from manifest
@@ -873,6 +953,14 @@
                 document.getElementById('reset-section-btn').addEventListener('click', () => this.resetSection());
                 document.getElementById('submit-tab-btn').addEventListener('click', () => this.submitTab());
                 document.getElementById('review-performance-btn').addEventListener('click', () => this.reviewPerformance());
+            },
+            
+            // Setup tooltip handlers
+            setupTooltipHandlers() {
+                // Global mouse move to cancel tooltips
+                document.addEventListener('mousemove', () => {
+                    this.hideAllTooltips();
+                });
             },
             
             // Panel toggle
@@ -1047,6 +1135,7 @@
                     // Reset state for new topic
                     this.state.currentRound = 1;
                     this.state.completedTabs.clear();
+                    this.state.submissionCounts = {};
                     
                     // Update subtitle with current selection
                     this.updateSubtitle();
@@ -1113,8 +1202,9 @@
                 // Update round indicator
                 this.updateRoundIndicator();
                 
-                // Update overall progress
+                // Update progress and score
                 this.updateOverallProgress();
+                this.updateTotalScore();
             },
             
             generateTabs() {
@@ -1220,10 +1310,17 @@
                 // Attach dropdown listeners
                 container.querySelectorAll('.question-dropdown').forEach(dropdown => {
                     dropdown.addEventListener('change', (e) => this.handleDropdownChange(e));
+                    
+                    // Attach tooltip handlers for incorrect answers
+                    dropdown.addEventListener('mouseenter', (e) => this.handleDropdownHover(e));
+                    dropdown.addEventListener('mouseleave', (e) => this.clearTooltipTimer(e.target));
                 });
                 
                 // Restore saved selections if any
                 this.restoreSelections();
+                
+                // Reapply visual states if tab was already submitted
+                this.reapplyVisualStates();
             },
             
             createDropdown(questionId, questionData) {
@@ -1236,7 +1333,17 @@
                     optionsHtml += `<option value="${value}" title="${option}">${display}</option>`;
                 });
                 
-                return `<select class="question-dropdown" data-question-id="${questionId}" data-correct="${questionData.correct}" data-concept="${questionData.concept || ''}">${optionsHtml}</select>`;
+                // Wrap dropdown in a container for positioning
+                return `<span class="dropdown-wrapper">
+                    <select class="question-dropdown" 
+                            data-question-id="${questionId}" 
+                            data-correct="${questionData.correct}" 
+                            data-concept="${questionData.concept || ''}"
+                            data-tooltip="${questionData.tooltip || ''}">
+                        ${optionsHtml}
+                    </select>
+                    <div class="tooltip"></div>
+                </span>`;
             },
             
             sanitizeOption(text) {
@@ -1282,6 +1389,56 @@
                 this.updateSubmitButton();
             },
             
+            handleDropdownHover(e) {
+                const dropdown = e.target;
+                
+                // Only show tooltip if dropdown has incorrect class
+                if (!dropdown.classList.contains('incorrect')) {
+                    return;
+                }
+                
+                // Clear any existing timer for this dropdown
+                this.clearTooltipTimer(dropdown);
+                
+                // Set new timer
+                const timerId = setTimeout(() => {
+                    this.showTooltip(dropdown);
+                }, this.config.tooltipDelay);
+                
+                // Store timer ID
+                this.state.tooltipTimers[dropdown.dataset.questionId] = timerId;
+            },
+            
+            clearTooltipTimer(dropdown) {
+                const questionId = dropdown.dataset.questionId;
+                if (this.state.tooltipTimers[questionId]) {
+                    clearTimeout(this.state.tooltipTimers[questionId]);
+                    delete this.state.tooltipTimers[questionId];
+                }
+            },
+            
+            showTooltip(dropdown) {
+                const tooltip = dropdown.parentElement.querySelector('.tooltip');
+                if (tooltip) {
+                    const tooltipText = dropdown.dataset.tooltip || 'Try again! Think about the concept carefully.';
+                    tooltip.textContent = tooltipText;
+                    tooltip.classList.add('show');
+                }
+            },
+            
+            hideAllTooltips() {
+                // Clear all timers
+                Object.values(this.state.tooltipTimers).forEach(timerId => {
+                    clearTimeout(timerId);
+                });
+                this.state.tooltipTimers = {};
+                
+                // Hide all tooltips
+                document.querySelectorAll('.tooltip').forEach(tooltip => {
+                    tooltip.classList.remove('show');
+                });
+            },
+            
             updateSubmitButton() {
                 const dropdowns = document.querySelectorAll('.question-dropdown');
                 const allFilled = Array.from(dropdowns).every(d => d.value);
@@ -1296,11 +1453,22 @@
                 let total = dropdowns.length;
                 const errors = [];
                 
+                // Track submission count
+                const submissionKey = `${this.state.currentRound}-${this.state.currentTab}`;
+                if (!this.state.submissionCounts[submissionKey]) {
+                    this.state.submissionCounts[submissionKey] = 0;
+                }
+                this.state.submissionCounts[submissionKey]++;
+                const attemptNumber = this.state.submissionCounts[submissionKey];
+                
                 dropdowns.forEach(dropdown => {
                     const selectedValue = dropdown.value;
                     const correctValue = this.sanitizeOption(dropdown.dataset.correct);
                     const concept = dropdown.dataset.concept;
                     const questionId = dropdown.dataset.questionId;
+                    
+                    // Remove previous state classes
+                    dropdown.classList.remove('correct', 'incorrect');
                     
                     if (selectedValue === correctValue) {
                         dropdown.classList.add('correct');
@@ -1313,46 +1481,92 @@
                             questionId: questionId,
                             concept: concept,
                             selectedAnswer: selectedValue,
-                            correctAnswer: correctValue
+                            correctAnswer: correctValue,
+                            attempt: attemptNumber
                         });
                     }
                     
-                    dropdown.disabled = true;
+                    // Keep dropdowns editable!
+                    // dropdown.disabled = false;  // Not disabling anymore
                 });
+                
+                // Calculate score with attempt penalty
+                let adjustedScore = correct;
+                if (attemptNumber > 1) {
+                    // Reduce score by 10% for each additional attempt (minimum 50% of correct answers)
+                    const penalty = 1 - ((attemptNumber - 1) * 0.1);
+                    adjustedScore = Math.max(correct * Math.max(penalty, 0.5), correct * 0.5);
+                }
                 
                 // Save score
                 if (!this.state.tabScores[`round${this.state.currentRound}`]) {
                     this.state.tabScores[`round${this.state.currentRound}`] = {};
                 }
                 this.state.tabScores[`round${this.state.currentRound}`][this.state.currentTab] = {
-                    correct: correct,
+                    correct: Math.round(adjustedScore),
+                    rawCorrect: correct,
                     total: total,
-                    errors: errors
+                    errors: errors,
+                    attempts: attemptNumber
                 };
                 
-                // Mark tab as completed
-                this.state.completedTabs.add(`${this.state.currentRound}-${this.state.currentTab}`);
+                // Mark tab as completed only on first submission
+                if (attemptNumber === 1) {
+                    this.state.completedTabs.add(`${this.state.currentRound}-${this.state.currentTab}`);
+                }
                 
                 // Show feedback
                 const feedback = document.getElementById('submission-feedback');
-                const percentage = Math.round(correct/total*100);
-                feedback.textContent = `Score: ${correct}/${total} (${percentage}%)`;
+                const percentage = Math.round(adjustedScore/total*100);
+                let feedbackText = `Score: ${Math.round(adjustedScore)}/${total} (${percentage}%)`;
+                
+                if (attemptNumber > 1) {
+                    feedbackText += ` - Attempt ${attemptNumber}`;
+                }
+                
+                feedback.textContent = feedbackText;
                 feedback.className = correct === total ? 'success' : 'error';
                 
-                // Disable submit button
-                document.getElementById('submit-tab-btn').disabled = true;
+                // Update button text to show resubmit is possible
+                document.getElementById('submit-tab-btn').textContent = correct === total ? 'PERFECT!' : 'RESUBMIT';
                 
                 // Update tabs to show completion
                 this.generateTabs();
                 
-                // Update overall progress
+                // Update progress and score
                 this.updateOverallProgress();
+                this.updateTotalScore();
                 
                 // Save state
                 this.saveState();
                 
                 // Check if round is complete
                 this.checkRoundCompletion();
+            },
+            
+            reapplyVisualStates() {
+                // Reapply correct/incorrect states if tab was already submitted
+                const roundKey = `round${this.state.currentRound}`;
+                const tabScore = this.state.tabScores[roundKey]?.[this.state.currentTab];
+                
+                if (tabScore) {
+                    document.querySelectorAll('.question-dropdown').forEach(dropdown => {
+                        const selectedValue = dropdown.value;
+                        const correctValue = this.sanitizeOption(dropdown.dataset.correct);
+                        
+                        if (selectedValue) {
+                            if (selectedValue === correctValue) {
+                                dropdown.classList.add('correct');
+                            } else {
+                                dropdown.classList.add('incorrect');
+                            }
+                        }
+                    });
+                    
+                    // Update submit button text
+                    const allCorrect = tabScore.rawCorrect === tabScore.total;
+                    document.getElementById('submit-tab-btn').textContent = allCorrect ? 'PERFECT!' : 'RESUBMIT';
+                }
             },
             
             resetSection() {
@@ -1364,12 +1578,16 @@
                 document.querySelectorAll('.question-dropdown').forEach(dropdown => {
                     dropdown.value = '';
                     dropdown.classList.remove('filled', 'correct', 'incorrect');
-                    dropdown.disabled = false;
+                    // dropdown.disabled = false;  // Already editable
                 });
                 
                 // Clear feedback
                 document.getElementById('submission-feedback').textContent = '';
                 document.getElementById('submission-feedback').className = '';
+                
+                // Reset submission count for this tab
+                const submissionKey = `${this.state.currentRound}-${this.state.currentTab}`;
+                delete this.state.submissionCounts[submissionKey];
                 
                 // Remove this tab from completed tabs for current round
                 this.state.completedTabs.delete(`${this.state.currentRound}-${this.state.currentTab}`);
@@ -1380,14 +1598,18 @@
                     delete this.state.selections[this.state.currentRound][this.state.currentTab];
                 }
                 
+                // Reset button text
+                document.getElementById('submit-tab-btn').textContent = 'SUBMIT ANSWERS';
+                
                 // Update tabs to reflect reset
                 this.generateTabs();
                 
                 // Enable submit button check
                 this.updateSubmitButton();
                 
-                // Update overall progress
+                // Update progress and score
                 this.updateOverallProgress();
+                this.updateTotalScore();
                 
                 // Save state
                 this.saveState();
@@ -1416,6 +1638,9 @@
                     document.getElementById('tab-content').style.opacity = '1';
                     document.getElementById('tab-content').style.pointerEvents = 'auto';
                     
+                    // Reset submit button text
+                    document.getElementById('submit-tab-btn').textContent = 'SUBMIT ANSWERS';
+                    
                     // Load first tab of new round
                     const firstTab = this.state.topicData.metadata.tabs[0];
                     this.loadTab(firstTab.id);
@@ -1423,8 +1648,9 @@
                     // Regenerate tabs to show updated completion status
                     this.generateTabs();
                     
-                    // Update overall progress
+                    // Update progress and score
                     this.updateOverallProgress();
+                    this.updateTotalScore();
                 } else {
                     alert('Congratulations! You have completed all rounds!');
                     this.changeTopic();
@@ -1441,7 +1667,11 @@
                 const score = this.state.tabScores[roundKey] && this.state.tabScores[roundKey][this.state.currentTab];
                 
                 if (score) {
-                    progress.textContent = `Completed: ${score.correct}/${score.total} correct`;
+                    let progressText = `Completed: ${score.correct}/${score.total} correct`;
+                    if (score.attempts > 1) {
+                        progressText += ` <span class="attempt-indicator">Attempt ${score.attempts}</span>`;
+                    }
+                    progress.innerHTML = progressText;
                 } else {
                     progress.textContent = 'Not yet completed';
                 }
@@ -1453,6 +1683,21 @@
                 const percentage = Math.round((completed / totalPossible) * 100);
                 
                 document.getElementById('overall-progress').textContent = `Overall Progress: ${percentage}%`;
+            },
+            
+            updateTotalScore() {
+                let totalCorrect = 0;
+                let totalQuestions = 0;
+                
+                // Calculate total score across all rounds and tabs
+                Object.keys(this.state.tabScores).forEach(roundKey => {
+                    Object.values(this.state.tabScores[roundKey]).forEach(tabScore => {
+                        totalCorrect += tabScore.correct || 0;
+                        totalQuestions += tabScore.total || 0;
+                    });
+                });
+                
+                document.getElementById('total-score').textContent = `Total Score: ${totalCorrect}/${totalQuestions}`;
             },
             
             updateSubtitle() {
@@ -1545,7 +1790,8 @@
                     currentRound: this.state.currentRound,
                     tabScores: this.state.tabScores,
                     selections: this.state.selections,
-                    completedTabs: Array.from(this.state.completedTabs)
+                    completedTabs: Array.from(this.state.completedTabs),
+                    submissionCounts: this.state.submissionCounts
                 }));
             },
             
