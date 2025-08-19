@@ -612,6 +612,7 @@
                 <div class="info-item">Correct: <span id="correct">0</span></div>
                 <div class="explode-counter">💥 Explode: <span id="explodes">3</span></div>
                 <div class="explode-counter" id="pickaxe-counter">⛏️ Pickaxe: <span id="pickaxes">3</span></div>
+                <div class="explode-counter" id="magnet-counter">🧲 Magnet: <span id="magnets">0</span></div>
             </div>
         </div>
         
@@ -625,8 +626,10 @@
         
         <div class="instructions">
             <strong>Controls:</strong> ←→ Move | ↓ Soft Drop | ↑ Rotate | Space: Hard Drop | E: Explode | C: Conclude Game
+            <br><strong>Special:</strong> M: Use Magnet (if available) | P: Use Pickaxe (if available)
             <br><strong>Goal:</strong> Place colored blocks to rebuild the periodic table
             <br><strong>Pickaxe:</strong> Gray blocks remove placed blocks (-100 pts). Red/fast spinning = 3x3 removal!
+            <br><strong>Magnet:</strong> Blue blocks pull adjacent blocks horizontally into their position (no cost)
             <br><small>Press "Can't Place More" or C when no more valid placements are possible</small>
         </div>
 
@@ -662,6 +665,10 @@
             <div class="legend-item">
                 <div class="legend-color" style="background: #616161;"></div>
                 <span>⛏️ Pickaxe (removes blocks)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #4682B4;"></div>
+                <span>🧲 Magnet (pulls adjacent)</span>
             </div>
         </div>
     </div>
@@ -833,6 +840,9 @@
         let pickaxesRemaining = 3;
         let lastPickaxeBonus = 0;
         let pickaxeAnimationFrame = 0;
+        let magnetsRemaining = 0;
+        let lastMagnetBonus = 0;
+        let magnetAnimationFrame = 0;
         
         // High Score Management
         function toggleHighScores() {
@@ -925,6 +935,12 @@
                 return false;
             }
             
+            // Can't explode magnets
+            if (currentPiece.isMagnet) {
+                console.log("Magnets cannot be exploded!");
+                return false;
+            }
+            
             // Store the piece info before clearing it
             const pieceToExplode = currentPiece;
             
@@ -961,12 +977,6 @@
             
             // Remove current piece and get a new one
             explodesRemaining--;
-            
-            // If we exploded a pickaxe, we saved it from being used
-            if (pieceToExplode.isPickaxe) {
-                pickaxesRemaining++; // Give it back
-                console.log('Pickaxe exploded - saved from use!');
-            }
             
             // Delay piece replacement to show explosion
             setTimeout(() => {
@@ -1526,11 +1536,12 @@
                 this.rotationOffsetY = 0;
                 this.isPickaxe = false;
                 this.is3x3Pickaxe = false;
+                this.isMagnet = false;
             }
             
             rotate() {
-                // Pickaxes cannot rotate
-                if (this.isPickaxe) return this.shape;
+                // Pickaxes and magnets cannot rotate
+                if (this.isPickaxe || this.isMagnet) return this.shape;
                 
                 // Transpose and reverse for basic rotation (90 degrees clockwise)
                 const rotated = this.shape[0].map((_, i) =>
@@ -1569,7 +1580,30 @@
             }
             
             draw(context, offsetX = 0, offsetY = 0, cellSize = CELL_SIZE) {
-                if (this.isPickaxe) {
+                if (this.isMagnet) {
+                    // Draw magnet block
+                    const drawX = this.x * cellSize + offsetX;
+                    const drawY = this.y * cellSize + offsetY;
+                    
+                    // Draw silver/blue metallic background
+                    context.fillStyle = '#4682B4';
+                    context.fillRect(drawX, drawY, cellSize, cellSize);
+                    
+                    // Draw border
+                    context.strokeStyle = '#1E90FF';
+                    context.lineWidth = 2;
+                    context.strokeRect(drawX, drawY, cellSize, cellSize);
+                    
+                    // Draw rotating magnet emoji
+                    context.save();
+                    context.translate(drawX + cellSize / 2, drawY + cellSize / 2);
+                    context.rotate((magnetAnimationFrame * 2 * Math.PI) / 30);
+                    context.font = `${cellSize * 0.7}px Arial`;
+                    context.textAlign = 'center';
+                    context.textBaseline = 'middle';
+                    context.fillText('🧲', 0, 0);
+                    context.restore();
+                } else if (this.isPickaxe) {
                     // Draw pickaxe block
                     const drawX = this.x * cellSize + offsetX;
                     const drawY = this.y * cellSize + offsetY;
@@ -1648,7 +1682,94 @@
             }
             
             lock() {
-                if (this.isPickaxe) {
+                if (this.isMagnet) {
+                    // Magnet behavior: pull adjacent block into magnet's position
+                    const magnetY = this.y;
+                    const magnetX = this.x;
+                    
+                    // Check for adjacent blocks at the same row height
+                    const leftBlock = magnetX > 0 ? board[magnetY][magnetX - 1] : null;
+                    const rightBlock = magnetX < COLS - 1 ? board[magnetY][magnetX + 1] : null;
+                    
+                    let pulledFrom = null;
+                    let blockToPull = null;
+                    
+                    if (leftBlock && rightBlock) {
+                        // Both sides have blocks, randomly choose one
+                        if (Math.random() < 0.5) {
+                            blockToPull = leftBlock;
+                            pulledFrom = {x: magnetX - 1, y: magnetY};
+                        } else {
+                            blockToPull = rightBlock;
+                            pulledFrom = {x: magnetX + 1, y: magnetY};
+                        }
+                    } else if (leftBlock) {
+                        blockToPull = leftBlock;
+                        pulledFrom = {x: magnetX - 1, y: magnetY};
+                    } else if (rightBlock) {
+                        blockToPull = rightBlock;
+                        pulledFrom = {x: magnetX + 1, y: magnetY};
+                    }
+                    
+                    if (blockToPull && pulledFrom) {
+                        // Clear the old position
+                        board[pulledFrom.y][pulledFrom.x] = null;
+                        
+                        // If it was a correctly placed element, remove it from the element grid
+                        // but keep track of what element it was
+                        let movedElement = null;
+                        if (blockToPull.element && blockToPull.correct) {
+                            movedElement = blockToPull.element;
+                            delete elementGrid[`${pulledFrom.y},${pulledFrom.x}`];
+                            availableElements.add(movedElement.number); // Add back to available
+                            correctPlacements--; // Decrease correct count since it's moved
+                        }
+                        
+                        // Check if the new position is correct for this block's element/group
+                        const targetElement = getElementAtPosition(magnetY - 3, magnetX);
+                        let newCorrectStatus = false;
+                        
+                        if (movedElement && targetElement && targetElement.number === movedElement.number) {
+                            // The block is being moved to its correct position!
+                            newCorrectStatus = true;
+                            elementGrid[`${magnetY},${magnetX}`] = movedElement.number;
+                            availableElements.delete(movedElement.number);
+                            correctPlacements++;
+                        } else if (!movedElement && targetElement && blockToPull.color === GROUP_COLORS[targetElement.group]) {
+                            // A misplaced block of the right group is moved to a correct position
+                            // But we need to check if that element is still available
+                            if (availableElements.has(targetElement.number)) {
+                                newCorrectStatus = true;
+                                elementGrid[`${magnetY},${magnetX}`] = targetElement.number;
+                                availableElements.delete(targetElement.number);
+                                correctPlacements++;
+                                movedElement = targetElement; // For speaking
+                            }
+                        }
+                        
+                        // Place the block at the magnet's position with updated correct status
+                        board[magnetY][magnetX] = {
+                            color: blockToPull.color,
+                            element: newCorrectStatus ? (movedElement || targetElement) : null,
+                            correct: newCorrectStatus
+                        };
+                        
+                        // Speak the element name if it ended up correct
+                        if (newCorrectStatus && movedElement) {
+                            speakElement(movedElement.name);
+                        }
+                        
+                        console.log(`Magnet pulled block from (${pulledFrom.x}, ${pulledFrom.y}) to (${magnetX}, ${magnetY})`);
+                        if (newCorrectStatus) {
+                            console.log('Block ended up in a correct position!');
+                        }
+                    } else {
+                        console.log('Magnet found no adjacent blocks to pull');
+                    }
+                    
+                    // Magnet disappears after use (no points change)
+                    return {placed: 0, correct: 0, misplaced: 0};
+                } else if (this.isPickaxe) {
                     // Pickaxe behavior: remove blocks below where it lands
                     // The pickaxe stops one row above blocks, so we need to remove the block below
                     const boardY = this.y + 1;  // One row below where the pickaxe stopped
@@ -1766,6 +1887,14 @@
             }
         }
         
+        // Create magnet piece
+        function createMagnetPiece() {
+            const piece = new Piece('magnet', [[1]], '#4682B4');
+            piece.isMagnet = true;
+            piece.x = Math.floor(COLS / 2);
+            return piece;
+        }
+        
         // Create pickaxe piece
         function createPickaxePiece() {
             const piece = new Piece('pickaxe', [[1]], '#616161');
@@ -1778,9 +1907,16 @@
         
         // Create random piece from available groups (weighted by number of remaining elements)
         function createRandomPiece() {
-            // Check if we should spawn a pickaxe
+            // Check if we should spawn a magnet (10% chance if available)
+            if (magnetsRemaining > 0) {
+                if (Math.random() < 0.10) { // 10% chance
+                    magnetsRemaining--;
+                    return createMagnetPiece();
+                }
+            }
+            
+            // Check if we should spawn a pickaxe (5% chance if available)
             if (pickaxesRemaining > 0) {
-                // Random chance to spawn pickaxe (adjust probability as needed)
                 if (Math.random() < 0.05) { // 5% chance
                     pickaxesRemaining--;
                     return createPickaxePiece();
@@ -1855,8 +1991,9 @@
         
         // Game functions
         function draw() {
-            // Increment animation frame for pickaxe rotation
+            // Increment animation frames
             pickaxeAnimationFrame = (pickaxeAnimationFrame + 1) % 60;
+            magnetAnimationFrame = (magnetAnimationFrame + 1) % 60;
             
             // Clear canvas
             ctx.fillStyle = '#fff';
@@ -1949,7 +2086,26 @@
                 ctx.strokeRect((COLS - 4) * CELL_SIZE + 5, 5, 3 * CELL_SIZE - 10, 3 * CELL_SIZE - 10);
                 
                 // Draw the next piece centered
-                if (nextPiece.isPickaxe) {
+                if (nextPiece.isMagnet) {
+                    // Draw magnet preview
+                    const centerX = (COLS - 2.5) * CELL_SIZE;
+                    const centerY = 1.5 * CELL_SIZE;
+                    
+                    ctx.fillStyle = '#4682B4';
+                    ctx.fillRect(centerX - previewSize/2, centerY - previewSize/2, previewSize, previewSize);
+                    ctx.strokeStyle = '#1E90FF';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(centerX - previewSize/2, centerY - previewSize/2, previewSize, previewSize);
+                    
+                    ctx.save();
+                    ctx.translate(centerX, centerY);
+                    ctx.rotate((magnetAnimationFrame * 2 * Math.PI) / 30);
+                    ctx.font = `${previewSize * 0.7}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('🧲', 0, 0);
+                    ctx.restore();
+                } else if (nextPiece.isPickaxe) {
                     // Draw pickaxe preview
                     const centerX = (COLS - 2.5) * CELL_SIZE;
                     const centerY = 1.5 * CELL_SIZE;
@@ -2003,6 +2159,7 @@
             document.getElementById('correct').textContent = correctPlacements;
             document.getElementById('explodes').textContent = explodesRemaining;
             document.getElementById('pickaxes').textContent = pickaxesRemaining;
+            document.getElementById('magnets').textContent = magnetsRemaining;
             
             // Update explode counter styling
             const explodeDiv = document.querySelector('.explode-counter');
@@ -2022,6 +2179,16 @@
             } else {
                 pickaxeDiv.classList.remove('available');
                 pickaxeDiv.classList.add('empty');
+            }
+            
+            // Update magnet counter styling
+            const magnetDiv = document.getElementById('magnet-counter');
+            if (magnetsRemaining > 0) {
+                magnetDiv.classList.remove('empty');
+                magnetDiv.classList.add('available');
+            } else {
+                magnetDiv.classList.remove('available');
+                magnetDiv.classList.add('empty');
             }
             
             // Add explode bonus every 500 points
@@ -2106,6 +2273,42 @@
                     }, 300);
                 }, 800);
             }
+            
+            // Add magnet bonus every 1000 points
+            const magnetBonusThreshold = Math.floor(score / 1000);
+            if (magnetBonusThreshold > lastMagnetBonus) {
+                magnetsRemaining++;
+                lastMagnetBonus = magnetBonusThreshold;
+                
+                // Visual notification
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 220px;
+                    right: 20px;
+                    background: linear-gradient(135deg, #4682B4, #1E90FF);
+                    color: white;
+                    padding: 15px 25px;
+                    border-radius: 10px;
+                    font-size: 1.2em;
+                    font-weight: bold;
+                    z-index: 1000;
+                    animation: slideInRight 0.3s ease;
+                    box-shadow: 0 5px 20px rgba(70, 130, 180, 0.4);
+                `;
+                notification.textContent = '🧲 +1 Magnet';
+                document.body.appendChild(notification);
+                
+                // Flash the magnet counter
+                magnetDiv.style.transform = 'scale(1.3)';
+                setTimeout(() => {
+                    magnetDiv.style.transform = 'scale(1)';
+                    notification.style.animation = 'slideInRight 0.3s ease reverse';
+                    setTimeout(() => {
+                        notification.remove();
+                    }, 300);
+                }, 800);
+            }
         }
         
         function gameLoop(currentTime = 0) {
@@ -2134,7 +2337,7 @@
                         }
                         
                         // Check if the game is stuck (no pieces placed)
-                        if (result.placed === 0 && currentPiece && !currentPiece.isPickaxe) {
+                        if (result.placed === 0 && currentPiece && !currentPiece.isPickaxe && !currentPiece.isMagnet) {
                             // Piece couldn't be placed anywhere, might be stuck
                             console.log('Warning: No blocks placed - game might be stuck');
                         }
@@ -2164,6 +2367,8 @@
                 lastExplodeBonus = 0;
                 pickaxesRemaining = 3;
                 lastPickaxeBonus = 0;
+                magnetsRemaining = 0;
+                lastMagnetBonus = 0;
                 dropInterval = 1000;
                 
                 // Select a new voice based on current settings
@@ -2217,6 +2422,8 @@
             lastExplodeBonus = 0;
             pickaxesRemaining = 3;
             lastPickaxeBonus = 0;
+            magnetsRemaining = 0;
+            lastMagnetBonus = 0;
             currentPiece = null;
             nextPiece = null;
             updateScore();
@@ -2316,7 +2523,7 @@
                     }
                     break;
                 case 'ArrowUp':
-                    if (!currentPiece.isPickaxe) {
+                    if (!currentPiece.isPickaxe && !currentPiece.isMagnet) {
                         const rotated = currentPiece.rotate();
                         // Try to rotate with center offset
                         const offsetX = currentPiece.rotationOffsetX || 0;
@@ -2327,6 +2534,9 @@
                             currentPiece.shape = rotated;
                             currentPiece.x += offsetX;
                             currentPiece.y += offsetY;
+                            // Reset rotation offsets after applying them
+                            currentPiece.rotationOffsetX = 0;
+                            currentPiece.rotationOffsetY = 0;
                             draw();
                         } 
                         // Try wall kicks if center rotation fails (left)
@@ -2334,6 +2544,8 @@
                             currentPiece.shape = rotated;
                             currentPiece.x += offsetX - 1;
                             currentPiece.y += offsetY;
+                            currentPiece.rotationOffsetX = 0;
+                            currentPiece.rotationOffsetY = 0;
                             draw();
                         } 
                         // Try wall kick right
@@ -2341,6 +2553,8 @@
                             currentPiece.shape = rotated;
                             currentPiece.x += offsetX + 1;
                             currentPiece.y += offsetY;
+                            currentPiece.rotationOffsetX = 0;
+                            currentPiece.rotationOffsetY = 0;
                             draw();
                         }
                         // Try wall kick up
@@ -2348,6 +2562,8 @@
                             currentPiece.shape = rotated;
                             currentPiece.x += offsetX;
                             currentPiece.y += offsetY - 1;
+                            currentPiece.rotationOffsetX = 0;
+                            currentPiece.rotationOffsetY = 0;
                             draw();
                         }
                         // Try double wall kicks for tight spaces
@@ -2355,12 +2571,16 @@
                             currentPiece.shape = rotated;
                             currentPiece.x += offsetX - 2;
                             currentPiece.y += offsetY;
+                            currentPiece.rotationOffsetX = 0;
+                            currentPiece.rotationOffsetY = 0;
                             draw();
                         }
                         else if (currentPiece.canMove(offsetX + 2, offsetY, rotated)) {
                             currentPiece.shape = rotated;
                             currentPiece.x += offsetX + 2;
                             currentPiece.y += offsetY;
+                            currentPiece.rotationOffsetX = 0;
+                            currentPiece.rotationOffsetY = 0;
                             draw();
                         }
                     }
@@ -2374,10 +2594,34 @@
                     updateScore();
                     draw();
                     break;
+                case 'm':
+                case 'M':
+                    e.preventDefault();
+                    // Trigger magnet as next piece if available
+                    if (magnetsRemaining > 0 && nextPiece && !nextPiece.isMagnet && !nextPiece.isPickaxe) {
+                        magnetsRemaining--;
+                        nextPiece = createMagnetPiece();
+                        updateScore();
+                        draw();
+                        console.log('Magnet triggered as next piece!');
+                    }
+                    break;
+                case 'p':
+                case 'P':
+                    e.preventDefault();
+                    // Trigger pickaxe as next piece if available
+                    if (pickaxesRemaining > 0 && nextPiece && !nextPiece.isPickaxe && !nextPiece.isMagnet) {
+                        pickaxesRemaining--;
+                        nextPiece = createPickaxePiece();
+                        updateScore();
+                        draw();
+                        console.log('Pickaxe triggered as next piece!');
+                    }
+                    break;
                 case 'e':
                 case 'E':
                     e.preventDefault();
-                    // Can explode shovel pieces too
+                    // Can explode any piece including pickaxes
                     explodePiece();
                     break;
                 case 'c':
