@@ -611,6 +611,7 @@
                 <div class="info-item">Elements: <span id="elements">0/60</span></div>
                 <div class="info-item">Correct: <span id="correct">0</span></div>
                 <div class="explode-counter">💥 Explode: <span id="explodes">3</span></div>
+                <div class="explode-counter" id="pickaxe-counter">⛏️ Pickaxe: <span id="pickaxes">3</span></div>
             </div>
         </div>
         
@@ -625,6 +626,7 @@
         <div class="instructions">
             <strong>Controls:</strong> ←→ Move | ↓ Soft Drop | ↑ Rotate | Space: Hard Drop | E: Explode | C: Conclude Game
             <br><strong>Goal:</strong> Place colored blocks to rebuild the periodic table
+            <br><strong>Pickaxe:</strong> Gray blocks remove placed blocks (-100 pts). Red/fast spinning = 3x3 removal!
             <br><small>Press "Can't Place More" or C when no more valid placements are possible</small>
         </div>
 
@@ -656,6 +658,10 @@
             <div class="legend-item">
                 <div class="legend-color" style="background: #78909C;"></div>
                 <span>Post-Transition</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #616161;"></div>
+                <span>⛏️ Pickaxe (removes blocks)</span>
             </div>
         </div>
     </div>
@@ -824,6 +830,9 @@
         let lastExplodeBonus = 0;
         let highScores = [];
         let speechEnabled = true;
+        let pickaxesRemaining = 3;
+        let lastPickaxeBonus = 0;
+        let pickaxeAnimationFrame = 0;
         
         // High Score Management
         function toggleHighScores() {
@@ -922,8 +931,13 @@
             // Clear current piece immediately so it's not drawn during explosion
             currentPiece = null;
             
-            // Animate the explosion
-            animateExplosion(pieceToExplode.x, pieceToExplode.y, pieceToExplode.shape, pieceToExplode.color);
+            // Animate the explosion - use special animation for pickaxe
+            if (pieceToExplode.isPickaxe) {
+                // For pickaxe explosion, create a metallic/rocky explosion
+                animatePickaxeExplosion(pieceToExplode.x, pieceToExplode.y);
+            } else {
+                animateExplosion(pieceToExplode.x, pieceToExplode.y, pieceToExplode.shape, pieceToExplode.color);
+            }
             
             // Play sound effect (create a simple beep)
             try {
@@ -934,8 +948,8 @@
                 oscillator.connect(gainNode);
                 gainNode.connect(audioCtx.destination);
                 
-                oscillator.frequency.value = 800;
-                oscillator.type = 'sine';
+                oscillator.frequency.value = pieceToExplode.isPickaxe ? 400 : 800;
+                oscillator.type = pieceToExplode.isPickaxe ? 'sawtooth' : 'sine';
                 gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
                 gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
                 
@@ -948,6 +962,12 @@
             // Remove current piece and get a new one
             explodesRemaining--;
             
+            // If we exploded a pickaxe, we saved it from being used
+            if (pieceToExplode.isPickaxe) {
+                pickaxesRemaining++; // Give it back
+                console.log('Pickaxe exploded - saved from use!');
+            }
+            
             // Delay piece replacement to show explosion
             setTimeout(() => {
                 currentPiece = nextPiece;
@@ -957,6 +977,101 @@
             }, 300);
             
             return true;
+        }
+        
+        function animatePickaxeExplosion(x, y) {
+            const particles = [];
+            const colors = ['#616161', '#424242', '#FFD700', '#FFA500', '#CD853F'];
+            
+            const centerX = x * CELL_SIZE + CELL_SIZE / 2;
+            const centerY = y * CELL_SIZE + CELL_SIZE / 2;
+            
+            // Create metallic/rock particles
+            for (let i = 0; i < 20; i++) {
+                particles.push({
+                    x: centerX,
+                    y: centerY,
+                    vx: (Math.random() - 0.5) * 20,
+                    vy: (Math.random() - 0.5) * 20,
+                    size: Math.random() * 12 + 4,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    life: 1.0,
+                    rotation: Math.random() * Math.PI * 2,
+                    rotationSpeed: (Math.random() - 0.5) * 0.5
+                });
+            }
+            
+            // Add sparks for metallic effect
+            for (let i = 0; i < 10; i++) {
+                particles.push({
+                    x: centerX,
+                    y: centerY,
+                    vx: (Math.random() - 0.5) * 30,
+                    vy: (Math.random() - 0.5) * 30,
+                    size: 3,
+                    color: '#FFFF00',
+                    life: 0.5,
+                    isSpark: true
+                });
+            }
+            
+            // Animate particles
+            let animationFrame;
+            function animate() {
+                draw(); // Redraw the board
+                
+                particles.forEach(particle => {
+                    particle.x += particle.vx;
+                    particle.y += particle.vy;
+                    particle.vy += 0.8; // Gravity
+                    particle.life -= 0.04;
+                    
+                    if (particle.isSpark) {
+                        particle.size *= 0.9;
+                    } else {
+                        particle.rotation += particle.rotationSpeed;
+                        particle.vx *= 0.95;
+                    }
+                    
+                    if (particle.life > 0) {
+                        ctx.save();
+                        
+                        if (particle.isSpark) {
+                            // Draw spark
+                            ctx.globalAlpha = particle.life;
+                            ctx.fillStyle = particle.color;
+                            ctx.shadowColor = particle.color;
+                            ctx.shadowBlur = 10;
+                            ctx.beginPath();
+                            ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                            ctx.fill();
+                        } else {
+                            // Draw metal/rock chunk
+                            ctx.globalAlpha = particle.life;
+                            ctx.translate(particle.x, particle.y);
+                            ctx.rotate(particle.rotation);
+                            
+                            ctx.fillStyle = particle.color;
+                            ctx.fillRect(-particle.size/2, -particle.size/2, particle.size, particle.size);
+                            
+                            // Add metallic shine
+                            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                            ctx.fillRect(-particle.size/2, -particle.size/2, particle.size/3, particle.size);
+                        }
+                        
+                        ctx.restore();
+                    }
+                });
+                
+                // Continue animation if particles are still alive
+                if (particles.some(p => p.life > 0)) {
+                    animationFrame = requestAnimationFrame(animate);
+                } else {
+                    cancelAnimationFrame(animationFrame);
+                }
+            }
+            
+            animate();
         }
         
         function animateExplosion(x, y, shape, color) {
@@ -1019,6 +1134,138 @@
                         ctx.beginPath();
                         ctx.arc(particle.x, particle.y, particle.size * 0.3, 0, Math.PI * 2);
                         ctx.fill();
+                        
+                        ctx.restore();
+                    }
+                });
+                
+                // Continue animation if particles are still alive
+                if (particles.some(p => p.life > 0)) {
+                    animationFrame = requestAnimationFrame(animate);
+                } else {
+                    cancelAnimationFrame(animationFrame);
+                }
+            }
+            
+            animate();
+        }
+        
+        function animateDigDebris(x, y, is3x3 = false) {
+            const particles = [];
+            const colors = ['#8B4513', '#CD853F', '#DEB887', '#D2691E', '#A0522D']; // Browns and tans for dirt
+            
+            // Calculate the area to create debris from
+            const positions = [];
+            if (is3x3) {
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        positions.push({x: x + dx, y: y + dy});
+                    }
+                }
+            } else {
+                positions.push({x: x, y: y});
+            }
+            
+            // Create debris particles for each position
+            positions.forEach(pos => {
+                const centerX = pos.x * CELL_SIZE + CELL_SIZE / 2;
+                const centerY = pos.y * CELL_SIZE + CELL_SIZE / 2;
+                
+                // Create multiple debris particles
+                for (let i = 0; i < 12; i++) {
+                    particles.push({
+                        x: centerX + (Math.random() - 0.5) * CELL_SIZE,
+                        y: centerY + (Math.random() - 0.5) * CELL_SIZE,
+                        vx: (Math.random() - 0.5) * 8,
+                        vy: -Math.random() * 10 - 2, // Initial upward velocity
+                        size: Math.random() * 8 + 3,
+                        color: colors[Math.floor(Math.random() * colors.length)],
+                        life: 1.0,
+                        rotation: Math.random() * Math.PI * 2,
+                        rotationSpeed: (Math.random() - 0.5) * 0.3
+                    });
+                }
+                
+                // Add some dust clouds
+                for (let i = 0; i < 5; i++) {
+                    particles.push({
+                        x: centerX,
+                        y: centerY,
+                        vx: (Math.random() - 0.5) * 4,
+                        vy: -Math.random() * 3,
+                        size: Math.random() * 20 + 10,
+                        color: '#D2691E',
+                        life: 0.6,
+                        isDust: true
+                    });
+                }
+            });
+            
+            // Play dig sound effect
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                
+                oscillator.frequency.value = 200;
+                oscillator.type = 'sawtooth';
+                gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                
+                oscillator.start(audioCtx.currentTime);
+                oscillator.stop(audioCtx.currentTime + 0.3);
+            } catch (e) {
+                // Audio not supported or blocked
+            }
+            
+            // Animate particles
+            let animationFrame;
+            function animate() {
+                draw(); // Redraw the board
+                
+                // Update and draw particles
+                particles.forEach(particle => {
+                    particle.x += particle.vx;
+                    particle.y += particle.vy;
+                    particle.vy += 0.8; // Gravity
+                    particle.life -= 0.03;
+                    
+                    if (particle.isDust) {
+                        particle.size *= 1.02; // Dust expands
+                        particle.life -= 0.02; // Dust fades faster
+                    } else {
+                        particle.rotation += particle.rotationSpeed;
+                        particle.vx *= 0.98; // Air resistance
+                    }
+                    
+                    if (particle.life > 0) {
+                        ctx.save();
+                        
+                        if (particle.isDust) {
+                            // Draw dust cloud
+                            ctx.globalAlpha = particle.life * 0.3;
+                            ctx.fillStyle = particle.color;
+                            ctx.beginPath();
+                            ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                            ctx.fill();
+                        } else {
+                            // Draw debris chunk
+                            ctx.globalAlpha = particle.life;
+                            ctx.translate(particle.x, particle.y);
+                            ctx.rotate(particle.rotation);
+                            
+                            // Draw irregular debris shape
+                            ctx.fillStyle = particle.color;
+                            ctx.fillRect(-particle.size/2, -particle.size/2, particle.size, particle.size);
+                            
+                            // Add darker edge
+                            ctx.strokeStyle = '#654321';
+                            ctx.lineWidth = 1;
+                            ctx.strokeRect(-particle.size/2, -particle.size/2, particle.size, particle.size);
+                        }
                         
                         ctx.restore();
                     }
@@ -1277,9 +1524,14 @@
                 this.y = 0;
                 this.rotationOffsetX = 0;
                 this.rotationOffsetY = 0;
+                this.isPickaxe = false;
+                this.is3x3Pickaxe = false;
             }
             
             rotate() {
+                // Pickaxes cannot rotate
+                if (this.isPickaxe) return this.shape;
+                
                 // Transpose and reverse for basic rotation (90 degrees clockwise)
                 const rotated = this.shape[0].map((_, i) =>
                     this.shape.map(row => row[i]).reverse()
@@ -1317,20 +1569,57 @@
             }
             
             draw(context, offsetX = 0, offsetY = 0, cellSize = CELL_SIZE) {
-                for (let y = 0; y < this.shape.length; y++) {
-                    for (let x = 0; x < this.shape[y].length; x++) {
-                        if (this.shape[y][x]) {
-                            const drawX = (this.x + x) * cellSize + offsetX;
-                            const drawY = (this.y + y) * cellSize + offsetY;
-                            
-                            // Draw solid color block
-                            context.fillStyle = this.color;
-                            context.fillRect(drawX, drawY, cellSize, cellSize);
-                            
-                            // Draw border
-                            context.strokeStyle = '#333';
-                            context.lineWidth = 2;
-                            context.strokeRect(drawX, drawY, cellSize, cellSize);
+                if (this.isPickaxe) {
+                    // Draw pickaxe block
+                    const drawX = this.x * cellSize + offsetX;
+                    const drawY = this.y * cellSize + offsetY;
+                    
+                    // Draw background - red tint for 3x3 pickaxe
+                    context.fillStyle = this.is3x3Pickaxe ? '#8B0000' : '#616161';
+                    context.fillRect(drawX, drawY, cellSize, cellSize);
+                    
+                    // Draw border - glowing for 3x3
+                    context.strokeStyle = this.is3x3Pickaxe ? '#FF0000' : '#333';
+                    context.lineWidth = this.is3x3Pickaxe ? 3 : 2;
+                    context.strokeRect(drawX, drawY, cellSize, cellSize);
+                    
+                    // Add glow effect for 3x3 pickaxe
+                    if (this.is3x3Pickaxe) {
+                        context.shadowColor = '#FF0000';
+                        context.shadowBlur = 10;
+                        context.strokeRect(drawX, drawY, cellSize, cellSize);
+                        context.shadowBlur = 0;
+                    }
+                    
+                    // Draw rotating pickaxe emoji
+                    context.save();
+                    context.translate(drawX + cellSize / 2, drawY + cellSize / 2);
+                    // Rotate faster for 3x3 pickaxe (4x speed vs 2x speed)
+                    const rotationSpeed = this.is3x3Pickaxe ? 4 : 2;
+                    context.rotate((pickaxeAnimationFrame * rotationSpeed * Math.PI) / 30);
+                    context.font = `${cellSize * 0.7}px Arial`;
+                    context.textAlign = 'center';
+                    context.textBaseline = 'middle';
+                    context.fillStyle = this.is3x3Pickaxe ? '#FFA500' : '#FFD700';
+                    context.fillText('⛏️', 0, 0);
+                    context.restore();
+                } else {
+                    // Normal piece drawing
+                    for (let y = 0; y < this.shape.length; y++) {
+                        for (let x = 0; x < this.shape[y].length; x++) {
+                            if (this.shape[y][x]) {
+                                const drawX = (this.x + x) * cellSize + offsetX;
+                                const drawY = (this.y + y) * cellSize + offsetY;
+                                
+                                // Draw solid color block
+                                context.fillStyle = this.color;
+                                context.fillRect(drawX, drawY, cellSize, cellSize);
+                                
+                                // Draw border
+                                context.strokeStyle = '#333';
+                                context.lineWidth = 2;
+                                context.strokeRect(drawX, drawY, cellSize, cellSize);
+                            }
                         }
                     }
                 }
@@ -1359,6 +1648,61 @@
             }
             
             lock() {
+                if (this.isPickaxe) {
+                    // Pickaxe behavior: remove blocks below where it lands
+                    // The pickaxe stops one row above blocks, so we need to remove the block below
+                    const boardY = this.y + 1;  // One row below where the pickaxe stopped
+                    const boardX = this.x;
+                    
+                    // Use pre-determined 3x3 state
+                    const remove3x3 = this.is3x3Pickaxe;
+                    
+                    // Animate the dig debris
+                    animateDigDebris(boardX, boardY, remove3x3);
+                    
+                    if (remove3x3) {
+                        // Remove 3x3 area centered on the block below the pickaxe
+                        for (let dy = -1; dy <= 1; dy++) {
+                            for (let dx = -1; dx <= 1; dx++) {
+                                const removeY = boardY + dy;
+                                const removeX = boardX + dx;
+                                if (removeY >= 0 && removeY < ROWS && removeX >= 0 && removeX < COLS) {
+                                    if (board[removeY][removeX]) {
+                                        // Add the element back to available if it was correctly placed
+                                        if (board[removeY][removeX].element && board[removeY][removeX].correct) {
+                                            availableElements.add(board[removeY][removeX].element.number);
+                                            correctPlacements--;
+                                        }
+                                        board[removeY][removeX] = null;
+                                        delete elementGrid[`${removeY},${removeX}`];
+                                    }
+                                }
+                            }
+                        }
+                        console.log('Super Pickaxe removed 3x3 area!');
+                    } else {
+                        // Remove single block below the pickaxe
+                        if (boardY >= 0 && boardY < ROWS && boardX >= 0 && boardX < COLS) {
+                            if (board[boardY][boardX]) {
+                                // Add the element back to available if it was correctly placed
+                                if (board[boardY][boardX].element && board[boardY][boardX].correct) {
+                                    availableElements.add(board[boardY][boardX].element.number);
+                                    correctPlacements--;
+                                }
+                                board[boardY][boardX] = null;
+                                delete elementGrid[`${boardY},${boardX}`];
+                            }
+                        }
+                    }
+                    
+                    // Pickaxe disappears after use, -100 points
+                    score -= 100;
+                    if (score < 0) score = 0;
+                    
+                    return {placed: 0, correct: 0, misplaced: 0};
+                }
+                
+                // Normal piece locking behavior
                 let correctCount = 0;
                 let placedCount = 0;
                 let misplacedCount = 0;
@@ -1422,8 +1766,27 @@
             }
         }
         
+        // Create pickaxe piece
+        function createPickaxePiece() {
+            const piece = new Piece('pickaxe', [[1]], '#616161');
+            piece.isPickaxe = true;
+            // Determine if this will be a 3x3 pickaxe (10% chance)
+            piece.is3x3Pickaxe = Math.random() < 0.1;
+            piece.x = Math.floor(COLS / 2);
+            return piece;
+        }
+        
         // Create random piece from available groups (weighted by number of remaining elements)
         function createRandomPiece() {
+            // Check if we should spawn a pickaxe
+            if (pickaxesRemaining > 0) {
+                // Random chance to spawn pickaxe (adjust probability as needed)
+                if (Math.random() < 0.05) { // 5% chance
+                    pickaxesRemaining--;
+                    return createPickaxePiece();
+                }
+            }
+            
             // Count available elements per group
             const groupCounts = {};
             for (let num of availableElements) {
@@ -1492,6 +1855,9 @@
         
         // Game functions
         function draw() {
+            // Increment animation frame for pickaxe rotation
+            pickaxeAnimationFrame = (pickaxeAnimationFrame + 1) % 60;
+            
             // Clear canvas
             ctx.fillStyle = '#fff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1583,24 +1949,50 @@
                 ctx.strokeRect((COLS - 4) * CELL_SIZE + 5, 5, 3 * CELL_SIZE - 10, 3 * CELL_SIZE - 10);
                 
                 // Draw the next piece centered
-                ctx.save();
-                const offsetX = (3 - nextPiece.shape[0].length) * previewSize / 2;
-                const offsetY = (3 - nextPiece.shape.length) * previewSize / 2;
-                ctx.translate((previewX) * CELL_SIZE + offsetX, (previewY) * CELL_SIZE + offsetY);
-                
-                for (let y = 0; y < nextPiece.shape.length; y++) {
-                    for (let x = 0; x < nextPiece.shape[y].length; x++) {
-                        if (nextPiece.shape[y][x]) {
-                            ctx.fillStyle = nextPiece.color;
-                            ctx.fillRect(x * previewSize, y * previewSize, previewSize, previewSize);
-                            ctx.strokeStyle = '#333';
-                            ctx.lineWidth = 1;
-                            ctx.strokeRect(x * previewSize, y * previewSize, previewSize, previewSize);
+                if (nextPiece.isPickaxe) {
+                    // Draw pickaxe preview
+                    const centerX = (COLS - 2.5) * CELL_SIZE;
+                    const centerY = 1.5 * CELL_SIZE;
+                    
+                    // Different color for 3x3 pickaxe
+                    ctx.fillStyle = nextPiece.is3x3Pickaxe ? '#8B0000' : '#616161';
+                    ctx.fillRect(centerX - previewSize/2, centerY - previewSize/2, previewSize, previewSize);
+                    ctx.strokeStyle = nextPiece.is3x3Pickaxe ? '#FF0000' : '#333';
+                    ctx.lineWidth = nextPiece.is3x3Pickaxe ? 2 : 1;
+                    ctx.strokeRect(centerX - previewSize/2, centerY - previewSize/2, previewSize, previewSize);
+                    
+                    ctx.save();
+                    ctx.translate(centerX, centerY);
+                    // Faster rotation for 3x3
+                    const rotationSpeed = nextPiece.is3x3Pickaxe ? 4 : 2;
+                    ctx.rotate((pickaxeAnimationFrame * rotationSpeed * Math.PI) / 30);
+                    ctx.font = `${previewSize * 0.7}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = nextPiece.is3x3Pickaxe ? '#FFA500' : '#FFD700';
+                    ctx.fillText('⛏️', 0, 0);
+                    ctx.restore();
+                } else {
+                    // Normal piece preview
+                    ctx.save();
+                    const offsetX = (3 - nextPiece.shape[0].length) * previewSize / 2;
+                    const offsetY = (3 - nextPiece.shape.length) * previewSize / 2;
+                    ctx.translate((previewX) * CELL_SIZE + offsetX, (previewY) * CELL_SIZE + offsetY);
+                    
+                    for (let y = 0; y < nextPiece.shape.length; y++) {
+                        for (let x = 0; x < nextPiece.shape[y].length; x++) {
+                            if (nextPiece.shape[y][x]) {
+                                ctx.fillStyle = nextPiece.color;
+                                ctx.fillRect(x * previewSize, y * previewSize, previewSize, previewSize);
+                                ctx.strokeStyle = '#333';
+                                ctx.lineWidth = 1;
+                                ctx.strokeRect(x * previewSize, y * previewSize, previewSize, previewSize);
+                            }
                         }
                     }
+                    
+                    ctx.restore();
                 }
-                
-                ctx.restore();
             }
         }
         
@@ -1610,6 +2002,7 @@
             document.getElementById('elements').textContent = `${totalElements - availableElements.size}/${totalElements}`;
             document.getElementById('correct').textContent = correctPlacements;
             document.getElementById('explodes').textContent = explodesRemaining;
+            document.getElementById('pickaxes').textContent = pickaxesRemaining;
             
             // Update explode counter styling
             const explodeDiv = document.querySelector('.explode-counter');
@@ -1619,6 +2012,16 @@
             } else {
                 explodeDiv.classList.remove('available');
                 explodeDiv.classList.add('empty');
+            }
+            
+            // Update pickaxe counter styling
+            const pickaxeDiv = document.getElementById('pickaxe-counter');
+            if (pickaxesRemaining > 0) {
+                pickaxeDiv.classList.remove('empty');
+                pickaxeDiv.classList.add('available');
+            } else {
+                pickaxeDiv.classList.remove('available');
+                pickaxeDiv.classList.add('empty');
             }
             
             // Add explode bonus every 500 points
@@ -1667,6 +2070,42 @@
                     }, 300);
                 }, 800);
             }
+            
+            // Add pickaxe bonus every 750 points
+            const pickaxeBonusThreshold = Math.floor(score / 750);
+            if (pickaxeBonusThreshold > lastPickaxeBonus) {
+                pickaxesRemaining++;
+                lastPickaxeBonus = pickaxeBonusThreshold;
+                
+                // Visual notification
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 160px;
+                    right: 20px;
+                    background: linear-gradient(135deg, #616161, #424242);
+                    color: white;
+                    padding: 15px 25px;
+                    border-radius: 10px;
+                    font-size: 1.2em;
+                    font-weight: bold;
+                    z-index: 1000;
+                    animation: slideInRight 0.3s ease;
+                    box-shadow: 0 5px 20px rgba(97, 97, 97, 0.4);
+                `;
+                notification.textContent = '⛏️ +1 Pickaxe';
+                document.body.appendChild(notification);
+                
+                // Flash the pickaxe counter
+                pickaxeDiv.style.transform = 'scale(1.3)';
+                setTimeout(() => {
+                    pickaxeDiv.style.transform = 'scale(1)';
+                    notification.style.animation = 'slideInRight 0.3s ease reverse';
+                    setTimeout(() => {
+                        notification.remove();
+                    }, 300);
+                }, 800);
+            }
         }
         
         function gameLoop(currentTime = 0) {
@@ -1695,7 +2134,7 @@
                         }
                         
                         // Check if the game is stuck (no pieces placed)
-                        if (result.placed === 0 && currentPiece) {
+                        if (result.placed === 0 && currentPiece && !currentPiece.isPickaxe) {
                             // Piece couldn't be placed anywhere, might be stuck
                             console.log('Warning: No blocks placed - game might be stuck');
                         }
@@ -1723,6 +2162,8 @@
                 correctPlacements = 0;
                 explodesRemaining = 3;
                 lastExplodeBonus = 0;
+                pickaxesRemaining = 3;
+                lastPickaxeBonus = 0;
                 dropInterval = 1000;
                 
                 // Select a new voice based on current settings
@@ -1774,6 +2215,8 @@
             correctPlacements = 0;
             explodesRemaining = 3;
             lastExplodeBonus = 0;
+            pickaxesRemaining = 3;
+            lastPickaxeBonus = 0;
             currentPiece = null;
             nextPiece = null;
             updateScore();
@@ -1873,51 +2316,53 @@
                     }
                     break;
                 case 'ArrowUp':
-                    const rotated = currentPiece.rotate();
-                    // Try to rotate with center offset
-                    const offsetX = currentPiece.rotationOffsetX || 0;
-                    const offsetY = currentPiece.rotationOffsetY || 0;
-                    
-                    // Try rotation at current position with offset
-                    if (currentPiece.canMove(offsetX, offsetY, rotated)) {
-                        currentPiece.shape = rotated;
-                        currentPiece.x += offsetX;
-                        currentPiece.y += offsetY;
-                        draw();
-                    } 
-                    // Try wall kicks if center rotation fails (left)
-                    else if (currentPiece.canMove(offsetX - 1, offsetY, rotated)) {
-                        currentPiece.shape = rotated;
-                        currentPiece.x += offsetX - 1;
-                        currentPiece.y += offsetY;
-                        draw();
-                    } 
-                    // Try wall kick right
-                    else if (currentPiece.canMove(offsetX + 1, offsetY, rotated)) {
-                        currentPiece.shape = rotated;
-                        currentPiece.x += offsetX + 1;
-                        currentPiece.y += offsetY;
-                        draw();
-                    }
-                    // Try wall kick up
-                    else if (currentPiece.canMove(offsetX, offsetY - 1, rotated)) {
-                        currentPiece.shape = rotated;
-                        currentPiece.x += offsetX;
-                        currentPiece.y += offsetY - 1;
-                        draw();
-                    }
-                    // Try double wall kicks for tight spaces
-                    else if (currentPiece.canMove(offsetX - 2, offsetY, rotated)) {
-                        currentPiece.shape = rotated;
-                        currentPiece.x += offsetX - 2;
-                        currentPiece.y += offsetY;
-                        draw();
-                    }
-                    else if (currentPiece.canMove(offsetX + 2, offsetY, rotated)) {
-                        currentPiece.shape = rotated;
-                        currentPiece.x += offsetX + 2;
-                        currentPiece.y += offsetY;
-                        draw();
+                    if (!currentPiece.isPickaxe) {
+                        const rotated = currentPiece.rotate();
+                        // Try to rotate with center offset
+                        const offsetX = currentPiece.rotationOffsetX || 0;
+                        const offsetY = currentPiece.rotationOffsetY || 0;
+                        
+                        // Try rotation at current position with offset
+                        if (currentPiece.canMove(offsetX, offsetY, rotated)) {
+                            currentPiece.shape = rotated;
+                            currentPiece.x += offsetX;
+                            currentPiece.y += offsetY;
+                            draw();
+                        } 
+                        // Try wall kicks if center rotation fails (left)
+                        else if (currentPiece.canMove(offsetX - 1, offsetY, rotated)) {
+                            currentPiece.shape = rotated;
+                            currentPiece.x += offsetX - 1;
+                            currentPiece.y += offsetY;
+                            draw();
+                        } 
+                        // Try wall kick right
+                        else if (currentPiece.canMove(offsetX + 1, offsetY, rotated)) {
+                            currentPiece.shape = rotated;
+                            currentPiece.x += offsetX + 1;
+                            currentPiece.y += offsetY;
+                            draw();
+                        }
+                        // Try wall kick up
+                        else if (currentPiece.canMove(offsetX, offsetY - 1, rotated)) {
+                            currentPiece.shape = rotated;
+                            currentPiece.x += offsetX;
+                            currentPiece.y += offsetY - 1;
+                            draw();
+                        }
+                        // Try double wall kicks for tight spaces
+                        else if (currentPiece.canMove(offsetX - 2, offsetY, rotated)) {
+                            currentPiece.shape = rotated;
+                            currentPiece.x += offsetX - 2;
+                            currentPiece.y += offsetY;
+                            draw();
+                        }
+                        else if (currentPiece.canMove(offsetX + 2, offsetY, rotated)) {
+                            currentPiece.shape = rotated;
+                            currentPiece.x += offsetX + 2;
+                            currentPiece.y += offsetY;
+                            draw();
+                        }
                     }
                     break;
                 case ' ':
@@ -1932,6 +2377,7 @@
                 case 'e':
                 case 'E':
                     e.preventDefault();
+                    // Can explode shovel pieces too
                     explodePiece();
                     break;
                 case 'c':
