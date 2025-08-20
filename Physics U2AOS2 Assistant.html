@@ -11,239 +11,6 @@
             box-sizing: border-box;
         }
 
-        // Helper function to get all assessment modes
-        function getAllAssessmentModes() {
-            return [
-                { key: 'research', name: 'Research Investigation (30 marks)' },
-                { key: 'presentation', name: 'Scientific Presentation (30 marks)' },
-                { key: 'poster', name: 'Scientific Poster (30 marks)' },
-                { key: 'practical', name: 'Practical Investigation (30 marks)' },
-                { key: 'written', name: 'Written Report (30 marks)' },
-                { key: 'caseStudy', name: 'Case Study Analysis (30 marks)' }
-            ];
-        }
-
-        // Helper function to get available assessment modes for selected topics
-        function getAvailableAssessmentModes(selectedTopics) {
-            const allModes = getAllAssessmentModes();
-            const topicAssessmentModes = selectedTopics.flatMap(topicId => {
-                const topic = topics[topicId];
-                return topic?.assessmentModes?.recommended || [];
-            });
-
-            // Create a mapping of assessment names to mode keys
-            const modeMapping = {
-                'Research Investigation': 'research',
-                'Scientific Presentation': 'presentation',
-                'Scientific Poster': 'poster',
-                'Practical Investigation': 'practical',
-                'Written Report': 'written',
-                'Case Study Analysis': 'caseStudy',
-                'Multimedia Presentation': 'presentation' // Map multimedia to presentation
-            };
-
-            const availableKeys = [...new Set(topicAssessmentModes.map(mode => modeMapping[mode]).filter(Boolean))];
-            return allModes.filter(mode => availableKeys.includes(mode.key));
-        }
-
-        // Function to display assessment details based on selection
-        function displayAssessmentDetails(selectedValue, availableModes, container) {
-            container.innerHTML = '';
-
-            if (!selectedValue) {
-                return; // No selection made
-            }
-
-            const modesToShow = selectedValue === 'all' ? availableModes : availableModes.filter(mode => mode.key === selectedValue);
-            const isMobile = window.innerWidth <= 768;
-
-            modesToShow.forEach((modeInfo, index) => {
-                const mode = assessmentInfo.specificModes[modeInfo.key];
-                if (!mode) return;
-
-                const modeDiv = document.createElement('div');
-                modeDiv.style.cssText = `
-                    background: white;
-                    border: 2px solid #3498db;
-                    border-radius: 10px;
-                    padding: ${isMobile ? '15px' : '20px'};
-                    margin-bottom: ${isMobile ? '15px' : '20px'};
-                    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-                `;
-
-                const modeTitle = document.createElement('h4');
-                modeTitle.textContent = mode.name;
-                modeTitle.style.cssText = `color: #2c3e50; margin-bottom: 12px; font-size: ${isMobile ? '1.1em' : '1.2em'}; border-bottom: 2px solid #3498db; padding-bottom: 6px;`;
-
-                const modeDescription = document.createElement('p');
-                modeDescription.textContent = mode.description;
-                modeDescription.style.cssText = `color: #666; margin-bottom: 12px; font-style: italic; font-size: ${isMobile ? '0.9em' : '1em'};`;
-
-                // Basic info - more compact
-                const basicInfo = document.createElement('div');
-                basicInfo.style.cssText = `background: #f8f9fa; padding: ${isMobile ? '10px' : '12px'}; border-radius: 6px; margin-bottom: 15px;`;
-                basicInfo.innerHTML = `
-                    <div style="display: grid; grid-template-columns: ${isMobile ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))'}; gap: 8px; font-size: ${isMobile ? '0.85em' : '0.9em'};">
-                        <div><strong>Duration:</strong> ${mode.duration}</div>
-                        ${mode.wordCount ? `<div><strong>Length:</strong> ${mode.wordCount}</div>` : ''}
-                        ${mode.size ? `<div><strong>Size:</strong> ${mode.size}</div>` : ''}
-                        ${mode.format ? `<div><strong>Format:</strong> ${mode.format}</div>` : ''}
-                    </div>
-                    <div style="margin-top: 8px; font-size: ${isMobile ? '0.8em' : '0.85em'};">
-                        <strong>Best suited for:</strong> ${mode.suitableFor.join(', ')}
-                    </div>
-                `;
-
-                // Structure section - collapsible on mobile
-                if (mode.assessmentModel && mode.assessmentModel.structure) {
-                    const structureDiv = document.createElement('div');
-                    structureDiv.style.cssText = 'margin-bottom: 15px;';
-                    
-                    if (isMobile) {
-                        const structHeader = document.createElement('div');
-                        structHeader.className = 'collapsible-header';
-                        structHeader.innerHTML = `<span style="font-weight: 600;">📋 Required Structure</span><span id="struct${index}Toggle">▼</span>`;
-                        
-                        const structContent = document.createElement('div');
-                        structContent.className = 'collapsible-content collapsed';
-                        structContent.id = `struct${index}Content`;
-                        
-                        const structureList = document.createElement('ul');
-                        structureList.style.cssText = 'margin-left: 15px; line-height: 1.4; font-size: 0.85em;';
-                        mode.assessmentModel.structure.forEach(item => {
-                            const li = document.createElement('li');
-                            li.textContent = item;
-                            li.style.cssText = 'margin-bottom: 4px;';
-                            structureList.appendChild(li);
-                        });
-                        
-                        structContent.appendChild(structureList);
-                        structureDiv.appendChild(structHeader);
-                        structureDiv.appendChild(structContent);
-                        
-                        structHeader.onclick = () => toggleCollapsible(`struct${index}Content`, `struct${index}Toggle`);
-                    } else {
-                        const structureTitle = document.createElement('h5');
-                        structureTitle.textContent = '📋 Required Structure';
-                        structureTitle.style.cssText = 'color: #2c3e50; margin-bottom: 8px; font-size: 1em;';
-                        
-                        const structureList = document.createElement('ul');
-                        structureList.style.cssText = 'margin-left: 15px; line-height: 1.4; font-size: 0.9em;';
-                        mode.assessmentModel.structure.forEach(item => {
-                            const li = document.createElement('li');
-                            li.textContent = item;
-                            li.style.cssText = 'margin-bottom: 4px;';
-                            structureList.appendChild(li);
-                        });
-                        
-                        structureDiv.appendChild(structureTitle);
-                        structureDiv.appendChild(structureList);
-                    }
-                    
-                    modeDiv.appendChild(structureDiv);
-                }
-
-                // Mark allocation section - more compact, collapsible on mobile
-                if (mode.assessmentModel && mode.assessmentModel.markAllocation) {
-                    const markingDiv = document.createElement('div');
-                    markingDiv.style.cssText = `background: #e8f5e8; padding: ${isMobile ? '10px' : '12px'}; border-radius: 6px; margin-bottom: 15px;`;
-                    
-                    const markingTitle = document.createElement('h5');
-                    markingTitle.textContent = '🎯 Mark Allocation (30 marks total)';
-                    markingTitle.style.cssText = `color: #2c3e50; margin-bottom: 10px; font-size: ${isMobile ? '0.95em' : '1em'};`;
-                    
-                    if (isMobile) {
-                        // Simplified view for mobile
-                        const quickRef = document.createElement('div');
-                        quickRef.style.cssText = 'font-size: 0.8em; line-height: 1.3;';
-                        quickRef.innerHTML = `
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                                <div>• Physics Knowledge: <strong>12 marks</strong></div>
-                                <div>• Investigation: <strong>6 marks</strong></div>
-                                <div>• Communication: <strong>6 marks</strong></div>
-                                <div>• Analysis: <strong>4 marks</strong></div>
-                                <div style="grid-column: 1/-1;">• Contemporary Context: <strong>2 marks</strong></div>
-                            </div>
-                        `;
-                        
-                        const detailsHeader = document.createElement('div');
-                        detailsHeader.className = 'collapsible-header';
-                        detailsHeader.style.cssText = 'margin-top: 10px;';
-                        detailsHeader.innerHTML = `<span style="font-size: 0.9em;">View Detailed Rubric</span><span id="rubric${index}Toggle">▼</span>`;
-                        
-                        const detailsContent = document.createElement('div');
-                        detailsContent.className = 'collapsible-content collapsed';
-                        detailsContent.id = `rubric${index}Content`;
-                        
-                        Object.entries(mode.assessmentModel.markAllocation).forEach(([criterion, details]) => {
-                            const criterionDiv = document.createElement('div');
-                            criterionDiv.style.cssText = 'margin-bottom: 10px; padding: 8px; background: white; border-radius: 4px; border-left: 3px solid #28a745;';
-                            
-                            const criterionHeader = document.createElement('h6');
-                            criterionHeader.textContent = `${criterion.charAt(0).toUpperCase() + criterion.slice(1).replace(/([A-Z])/g, ' $1')} (${details.marks} marks)`;
-                            criterionHeader.style.cssText = 'color: #2c3e50; margin-bottom: 6px; font-size: 0.85em;';
-                            
-                            const descriptorsList = document.createElement('div');
-                            descriptorsList.style.cssText = 'font-size: 0.75em; line-height: 1.3;';
-                            
-                            details.descriptors.forEach(descriptor => {
-                                const descriptorDiv = document.createElement('div');
-                                descriptorDiv.style.cssText = 'margin-bottom: 3px; padding: 2px 0;';
-                                descriptorDiv.innerHTML = descriptor;
-                                descriptorsList.appendChild(descriptorDiv);
-                            });
-                            
-                            criterionDiv.appendChild(criterionHeader);
-                            criterionDiv.appendChild(descriptorsList);
-                            detailsContent.appendChild(criterionDiv);
-                        });
-                        
-                        markingDiv.appendChild(markingTitle);
-                        markingDiv.appendChild(quickRef);
-                        markingDiv.appendChild(detailsHeader);
-                        markingDiv.appendChild(detailsContent);
-                        
-                        detailsHeader.onclick = () => toggleCollapsible(`rubric${index}Content`, `rubric${index}Toggle`);
-                        
-                    } else {
-                        // Full view for desktop
-                        Object.entries(mode.assessmentModel.markAllocation).forEach(([criterion, details]) => {
-                            const criterionDiv = document.createElement('div');
-                            criterionDiv.style.cssText = 'margin-bottom: 12px; padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #28a745;';
-                            
-                            const criterionHeader = document.createElement('h6');
-                            criterionHeader.textContent = `${criterion.charAt(0).toUpperCase() + criterion.slice(1).replace(/([A-Z])/g, ' $1')} (${details.marks} marks)`;
-                            criterionHeader.style.cssText = 'color: #2c3e50; margin-bottom: 6px; font-size: 0.95em;';
-                            
-                            const descriptorsList = document.createElement('div');
-                            descriptorsList.style.cssText = 'font-size: 0.85em; line-height: 1.3;';
-                            
-                            details.descriptors.forEach(descriptor => {
-                                const descriptorDiv = document.createElement('div');
-                                descriptorDiv.style.cssText = 'margin-bottom: 3px; padding: 2px 0;';
-                                descriptorDiv.innerHTML = descriptor;
-                                descriptorsList.appendChild(descriptorDiv);
-                            });
-                            
-                            criterionDiv.appendChild(criterionHeader);
-                            criterionDiv.appendChild(descriptorsList);
-                            markingDiv.appendChild(criterionDiv);
-                        });
-                        
-                        markingDiv.insertBefore(markingTitle, markingDiv.firstChild);
-                    }
-                    
-                    modeDiv.appendChild(markingDiv);
-                }
-
-                modeDiv.appendChild(modeTitle);
-                modeDiv.appendChild(modeDescription);
-                modeDiv.appendChild(basicInfo);
-                
-                container.appendChild(modeDiv);
-            });
-        }
-
         :root {
             --applied-color: #3498db;
             --theoretical-color: #9b59b6;
@@ -471,6 +238,37 @@
         .breadcrumb-separator {
             margin: 0 5px;
             color: #aaa;
+        }
+
+        .collapsible-header {
+            cursor: pointer;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        .collapsible-header:hover {
+            background: #e9ecef;
+        }
+
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+
+        .collapsible-content.collapsed {
+            max-height: 0;
+        }
+
+        .collapsible-content.expanded {
+            max-height: 2000px;
+            transition: max-height 0.5s ease-in;
         }
 
         .recommendations {
@@ -810,7 +608,7 @@
                 assessmentModes: [
                     "Research Investigation and Presentation",
                     "Scientific Poster",
-                    "Written Report (1500-2000 words)",
+                    "Written Report (Word count as sufficient for content.)",
                     "Multimedia Presentation",
                     "Structured Scientific Inquiry",
                     "Case Study Analysis"
@@ -861,15 +659,15 @@
                     description: "Comprehensive investigation into selected topic with detailed analysis",
                     suitableFor: ["Climate Change", "Nuclear Energy", "Medical Radiation", "SETI", "Regional Research"],
                     duration: "4-6 weeks",
-                    wordCount: "1500-2000 words or equivalent",
+                    wordCount: "Word count as sufficient for content.",
                     assessmentModel: {
                         structure: [
-                            "Abstract/Executive Summary (200 words)",
-                            "Introduction & Physics Background (400 words)", 
-                            "Investigation Methodology (300 words)",
-                            "Results & Analysis (600 words)",
-                            "Contemporary Issues Discussion (300 words)",
-                            "Conclusion & Recommendations (200 words)",
+                            "Abstract/Executive Summary ",
+                            "Introduction & Physics Background ", 
+                            "Investigation Methodology ",
+                            "Results & Analysis ",
+                            "Contemporary Issues Discussion ",
+                            "Conclusion & Recommendations ",
                             "References & Appendices"
                         ],
                         markAllocation: {
@@ -928,7 +726,7 @@
                     name: "Scientific Presentation (30 marks)",
                     description: "Oral presentation with visual aids explaining physics concepts and applications",
                     suitableFor: ["Flight Physics", "Sports Physics", "Optics", "Sound/Music", "Traditional Knowledge"],
-                    duration: "15-20 minutes presentation + 5 minutes Q&A",
+                    duration: "Duration as sufficient for content.",
                     format: "PowerPoint, Prezi, or multimedia with handout",
                     assessmentModel: {
                         structure: [
@@ -1065,7 +863,7 @@
                     description: "Hands-on experimentation with data collection and analysis",
                     suitableFor: ["Materials Testing", "Optics", "Sports Physics", "Electronics", "Sound"],
                     duration: "Multiple lab sessions + analysis report",
-                    format: "Laboratory work with comprehensive written report (1200-1500 words)",
+                    format: "Laboratory work with comprehensive written report (Word count as sufficient for content.)",
                     assessmentModel: {
                         structure: [
                             "Aim & Hypothesis (clear objectives and predictions)",
@@ -1133,16 +931,16 @@
                     description: "Detailed analytical report on selected physics topic and contemporary issue",
                     suitableFor: ["Climate Change", "Nuclear Energy", "Medical Physics", "Astrophysics", "Regional Research"],
                     duration: "4-6 weeks",
-                    wordCount: "1500-2000 words + diagrams/appendices",
+                    wordCount: "Word count as sufficient for content + diagrams/appendices",
                     assessmentModel: {
                         structure: [
-                            "Executive Summary (150 words)",
-                            "Introduction & Background (300 words)",
-                            "Physics Principles & Theory (400 words)",
-                            "Contemporary Issue Analysis (500 words)",
-                            "Evaluation & Discussion (400 words)",
-                            "Conclusion & Recommendations (200 words)",
-                            "References & Appendices (minimum 8 credible sources)"
+                            "Executive Summary ",
+                            "Introduction & Background ",
+                            "Physics Principles & Theory ",
+                            "Contemporary Issue Analysis ",
+                            "Evaluation & Discussion ",
+                            "Conclusion & Recommendations ",
+                            "References & Appendices (minimum 4 credible sources)"
                         ],
                         markAllocation: {
                             physicsKnowledge: {
@@ -1201,15 +999,15 @@
                     description: "In-depth analysis of specific real-world application or contemporary issue",
                     suitableFor: ["Medical Technology", "Engineering Applications", "Environmental Physics", "Sports Science"],
                     duration: "4-5 weeks",
-                    format: "1200-1800 words + visual aids and data analysis",
+                    format: "Word count as sufficient for content + visual aids and data analysis",
                     assessmentModel: {
                         structure: [
-                            "Case Study Selection & Rationale (200 words)",
-                            "Physics Background & Theoretical Framework (400 words)",
-                            "Case Study Description & Context (300 words)",
-                            "Physics Analysis & Application (500 words)",
-                            "Evaluation & Alternative Approaches (300 words)",
-                            "Implications & Future Considerations (200 words)",
+                            "Case Study Selection & Rationale ",
+                            "Physics Background & Theoretical Framework ",
+                            "Case Study Description & Context ",
+                            "Physics Analysis & Application ",
+                            "Evaluation & Alternative Approaches ",
+                            "Implications & Future Considerations ",
                             "Supporting Evidence & References"
                         ],
                         markAllocation: {
@@ -2276,7 +2074,7 @@
             }
         };
 
-        // Enhanced question tree with color themes and detailed contexts
+        // Enhanced question tree with sound branch added
         const questionTree = {
             start: {
                 question: "What type of physics interests you most?",
@@ -2337,6 +2135,12 @@
                         description: "Vision, photography, and optical instruments",
                         contexts: "Vision correction, camera technology, optical instruments, photography science",
                         next: "optics"
+                    },
+                    {
+                        text: "Sound & Acoustics",
+                        description: "Music, acoustics, and sound physics",
+                        contexts: "Musical instruments, audio engineering, acoustics design, voice physics",
+                        next: "sound"
                     }
                 ]
             },
@@ -2496,6 +2300,27 @@
                         description: "Camera systems and image formation",
                         contexts: "Digital vs traditional photography, camera design, image formation, technological development",
                         topics: ["2.9"],
+                        next: "results"
+                    }
+                ]
+            },
+            sound: {
+                question: "What aspect of sound physics interests you most?",
+                breadcrumb: ["Getting Started", "Applied Physics", "Sound & Acoustics"],
+                theme: "applied",
+                options: [
+                    {
+                        text: "Musical Instruments & Performance",
+                        description: "Physics of music creation and instrument design",
+                        contexts: "Instrument acoustics, resonance, harmonics, music technology, human voice physics",
+                        topics: ["2.10"],
+                        next: "results"
+                    },
+                    {
+                        text: "Audio Technology & Engineering",
+                        description: "Sound recording, acoustics, and audio systems",
+                        contexts: "Recording technology, room acoustics, sound engineering, speaker design, psychoacoustics",
+                        topics: ["2.10"],
                         next: "results"
                     }
                 ]
@@ -2691,6 +2516,29 @@
             }
         };
 
+        // Breadcrumb navigation mapping - add Sound & Acoustics
+        const breadcrumbNodeMap = {
+            'Getting Started': 'start',
+            'Applied Physics': 'applied',
+            'Theoretical Physics': 'theoretical', 
+            'Life Sciences': 'bio',
+            'Environmental Sciences': 'environmental',
+            'Engineering & Structures': 'engineering',
+            'Technology & Electronics': 'technology',
+            'Transportation & Movement': 'movement',
+            'Optics & Light': 'optics',
+            'Sound & Acoustics': 'sound',
+            'Space & Cosmology': 'space',
+            'Particle Physics': 'particles',
+            'Energy & Matter': 'nuclear',
+            'Medical Technology': 'medical',
+            'Human Body Physics': 'body',
+            'Sports & Performance': 'sports',
+            'Climate Change': 'climate',
+            'Energy Solutions': 'energy',
+            'Cultural & Traditional Knowledge': 'cultural'
+        };
+
         // Current state
         let currentNode = 'start';
         let selectedOption = null;
@@ -2746,28 +2594,6 @@
             const chatGPTUrl = `https://chat.openai.com/?q=${encodeURIComponent(prompt)}`;
             return `<a href="${chatGPTUrl}" target="_blank" class="clickable-link" title="Open this prompt in ChatGPT">${prompt}</a>`;
         }
-
-        // Breadcrumb navigation mapping
-        const breadcrumbNodeMap = {
-            'Getting Started': 'start',
-            'Applied Physics': 'applied',
-            'Theoretical Physics': 'theoretical', 
-            'Life Sciences': 'bio',
-            'Environmental Sciences': 'environmental',
-            'Engineering & Structures': 'engineering',
-            'Technology & Electronics': 'technology',
-            'Transportation & Movement': 'movement',
-            'Optics & Light': 'optics',
-            'Space & Cosmology': 'space',
-            'Particle Physics': 'particles',
-            'Energy & Matter': 'nuclear',
-            'Medical Technology': 'medical',
-            'Human Body Physics': 'body',
-            'Sports & Performance': 'sports',
-            'Climate Change': 'climate',
-            'Energy Solutions': 'energy',
-            'Cultural & Traditional Knowledge': 'cultural'
-        };
 
         // Initialize the quiz
         function init() {
@@ -3319,8 +3145,9 @@
             }
 
             const modesToShow = selectedValue === 'all' ? availableModes : availableModes.filter(mode => mode.key === selectedValue);
+            const isMobile = window.innerWidth <= 768;
 
-            modesToShow.forEach(modeInfo => {
+            modesToShow.forEach((modeInfo, index) => {
                 const mode = assessmentInfo.specificModes[modeInfo.key];
                 if (!mode) return;
 
@@ -3328,87 +3155,174 @@
                 modeDiv.style.cssText = `
                     background: white;
                     border: 2px solid #3498db;
-                    border-radius: 12px;
-                    padding: 25px;
-                    margin-bottom: 25px;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    border-radius: 10px;
+                    padding: ${isMobile ? '15px' : '20px'};
+                    margin-bottom: ${isMobile ? '15px' : '20px'};
+                    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
                 `;
 
                 const modeTitle = document.createElement('h4');
                 modeTitle.textContent = mode.name;
-                modeTitle.style.cssText = 'color: #2c3e50; margin-bottom: 15px; font-size: 1.2em; border-bottom: 2px solid #3498db; padding-bottom: 8px;';
+                modeTitle.style.cssText = `color: #2c3e50; margin-bottom: 12px; font-size: ${isMobile ? '1.1em' : '1.2em'}; border-bottom: 2px solid #3498db; padding-bottom: 6px;`;
 
                 const modeDescription = document.createElement('p');
                 modeDescription.textContent = mode.description;
-                modeDescription.style.cssText = 'color: #666; margin-bottom: 15px; font-style: italic;';
+                modeDescription.style.cssText = `color: #666; margin-bottom: 12px; font-style: italic; font-size: ${isMobile ? '0.9em' : '1em'};`;
 
-                // Basic info
+                // Basic info - more compact
                 const basicInfo = document.createElement('div');
-                basicInfo.style.cssText = 'background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;';
+                basicInfo.style.cssText = `background: #f8f9fa; padding: ${isMobile ? '10px' : '12px'}; border-radius: 6px; margin-bottom: 15px;`;
                 basicInfo.innerHTML = `
-                    <strong>Duration:</strong> ${mode.duration}<br>
-                    ${mode.wordCount ? `<strong>Length:</strong> ${mode.wordCount}<br>` : ''}
-                    ${mode.size ? `<strong>Size:</strong> ${mode.size}<br>` : ''}
-                    ${mode.format ? `<strong>Format:</strong> ${mode.format}<br>` : ''}
-                    <strong>Best suited for:</strong> ${mode.suitableFor.join(', ')}
+                    <div style="display: grid; grid-template-columns: ${isMobile ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))'}; gap: 8px; font-size: ${isMobile ? '0.85em' : '0.9em'};">
+                        <div><strong>Duration:</strong> ${mode.duration}</div>
+                        ${mode.wordCount ? `<div><strong>Length:</strong> ${mode.wordCount}</div>` : ''}
+                        ${mode.size ? `<div><strong>Size:</strong> ${mode.size}</div>` : ''}
+                        ${mode.format ? `<div><strong>Format:</strong> ${mode.format}</div>` : ''}
+                    </div>
+                    <div style="margin-top: 8px; font-size: ${isMobile ? '0.8em' : '0.85em'};">
+                        <strong>Best suited for:</strong> ${mode.suitableFor.join(', ')}
+                    </div>
                 `;
 
-                // Structure section
+                // Structure section - collapsible on mobile
                 if (mode.assessmentModel && mode.assessmentModel.structure) {
                     const structureDiv = document.createElement('div');
-                    structureDiv.style.cssText = 'margin-bottom: 20px;';
+                    structureDiv.style.cssText = 'margin-bottom: 15px;';
                     
-                    const structureTitle = document.createElement('h5');
-                    structureTitle.textContent = '📋 Required Structure';
-                    structureTitle.style.cssText = 'color: #2c3e50; margin-bottom: 10px;';
+                    if (isMobile) {
+                        const structHeader = document.createElement('div');
+                        structHeader.className = 'collapsible-header';
+                        structHeader.innerHTML = `<span style="font-weight: 600;">📋 Required Structure</span><span id="struct${index}Toggle">▼</span>`;
+                        
+                        const structContent = document.createElement('div');
+                        structContent.className = 'collapsible-content collapsed';
+                        structContent.id = `struct${index}Content`;
+                        
+                        const structureList = document.createElement('ul');
+                        structureList.style.cssText = 'margin-left: 15px; line-height: 1.4; font-size: 0.85em;';
+                        mode.assessmentModel.structure.forEach(item => {
+                            const li = document.createElement('li');
+                            li.textContent = item;
+                            li.style.cssText = 'margin-bottom: 4px;';
+                            structureList.appendChild(li);
+                        });
+                        
+                        structContent.appendChild(structureList);
+                        structureDiv.appendChild(structHeader);
+                        structureDiv.appendChild(structContent);
+                        
+                        structHeader.onclick = () => toggleCollapsible(`struct${index}Content`, `struct${index}Toggle`);
+                    } else {
+                        const structureTitle = document.createElement('h5');
+                        structureTitle.textContent = '📋 Required Structure';
+                        structureTitle.style.cssText = 'color: #2c3e50; margin-bottom: 8px; font-size: 1em;';
+                        
+                        const structureList = document.createElement('ul');
+                        structureList.style.cssText = 'margin-left: 15px; line-height: 1.4; font-size: 0.9em;';
+                        mode.assessmentModel.structure.forEach(item => {
+                            const li = document.createElement('li');
+                            li.textContent = item;
+                            li.style.cssText = 'margin-bottom: 4px;';
+                            structureList.appendChild(li);
+                        });
+                        
+                        structureDiv.appendChild(structureTitle);
+                        structureDiv.appendChild(structureList);
+                    }
                     
-                    const structureList = document.createElement('ul');
-                    structureList.style.cssText = 'margin-left: 20px; line-height: 1.5;';
-                    mode.assessmentModel.structure.forEach(item => {
-                        const li = document.createElement('li');
-                        li.textContent = item;
-                        li.style.cssText = 'margin-bottom: 5px;';
-                        structureList.appendChild(li);
-                    });
-                    
-                    structureDiv.appendChild(structureTitle);
-                    structureDiv.appendChild(structureList);
                     modeDiv.appendChild(structureDiv);
                 }
 
-                // Mark allocation section
+                // Mark allocation section - more compact, collapsible on mobile
                 if (mode.assessmentModel && mode.assessmentModel.markAllocation) {
                     const markingDiv = document.createElement('div');
-                    markingDiv.style.cssText = 'background: #e8f5e8; padding: 15px; border-radius: 8px; margin-bottom: 20px;';
+                    markingDiv.style.cssText = `background: #e8f5e8; padding: ${isMobile ? '10px' : '12px'}; border-radius: 6px; margin-bottom: 15px;`;
                     
                     const markingTitle = document.createElement('h5');
                     markingTitle.textContent = '🎯 Mark Allocation (30 marks total)';
-                    markingTitle.style.cssText = 'color: #2c3e50; margin-bottom: 15px;';
+                    markingTitle.style.cssText = `color: #2c3e50; margin-bottom: 10px; font-size: ${isMobile ? '0.95em' : '1em'};`;
                     
-                    Object.entries(mode.assessmentModel.markAllocation).forEach(([criterion, details]) => {
-                        const criterionDiv = document.createElement('div');
-                        criterionDiv.style.cssText = 'margin-bottom: 15px; padding: 12px; background: white; border-radius: 6px; border-left: 4px solid #28a745;';
+                    if (isMobile) {
+                        // Simplified view for mobile
+                        const quickRef = document.createElement('div');
+                        quickRef.style.cssText = 'font-size: 0.8em; line-height: 1.3;';
+                        quickRef.innerHTML = `
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                <div>• Physics Knowledge: <strong>12 marks</strong></div>
+                                <div>• Investigation: <strong>6 marks</strong></div>
+                                <div>• Communication: <strong>6 marks</strong></div>
+                                <div>• Analysis: <strong>4 marks</strong></div>
+                                <div style="grid-column: 1/-1;">• Contemporary Context: <strong>2 marks</strong></div>
+                            </div>
+                        `;
                         
-                        const criterionHeader = document.createElement('h6');
-                        criterionHeader.textContent = `${criterion.charAt(0).toUpperCase() + criterion.slice(1).replace(/([A-Z])/g, ' $1')} (${details.marks} marks)`;
-                        criterionHeader.style.cssText = 'color: #2c3e50; margin-bottom: 8px; font-size: 1em;';
+                        const detailsHeader = document.createElement('div');
+                        detailsHeader.className = 'collapsible-header';
+                        detailsHeader.style.cssText = 'margin-top: 10px;';
+                        detailsHeader.innerHTML = `<span style="font-size: 0.9em;">View Detailed Rubric</span><span id="rubric${index}Toggle">▼</span>`;
                         
-                        const descriptorsList = document.createElement('div');
-                        descriptorsList.style.cssText = 'font-size: 0.9em; line-height: 1.4;';
+                        const detailsContent = document.createElement('div');
+                        detailsContent.className = 'collapsible-content collapsed';
+                        detailsContent.id = `rubric${index}Content`;
                         
-                        details.descriptors.forEach(descriptor => {
-                            const descriptorDiv = document.createElement('div');
-                            descriptorDiv.style.cssText = 'margin-bottom: 4px; padding: 4px 0;';
-                            descriptorDiv.innerHTML = descriptor;
-                            descriptorsList.appendChild(descriptorDiv);
+                        Object.entries(mode.assessmentModel.markAllocation).forEach(([criterion, details]) => {
+                            const criterionDiv = document.createElement('div');
+                            criterionDiv.style.cssText = 'margin-bottom: 10px; padding: 8px; background: white; border-radius: 4px; border-left: 3px solid #28a745;';
+                            
+                            const criterionHeader = document.createElement('h6');
+                            criterionHeader.textContent = `${criterion.charAt(0).toUpperCase() + criterion.slice(1).replace(/([A-Z])/g, ' $1')} (${details.marks} marks)`;
+                            criterionHeader.style.cssText = 'color: #2c3e50; margin-bottom: 6px; font-size: 0.85em;';
+                            
+                            const descriptorsList = document.createElement('div');
+                            descriptorsList.style.cssText = 'font-size: 0.75em; line-height: 1.3;';
+                            
+                            details.descriptors.forEach(descriptor => {
+                                const descriptorDiv = document.createElement('div');
+                                descriptorDiv.style.cssText = 'margin-bottom: 3px; padding: 2px 0;';
+                                descriptorDiv.innerHTML = descriptor;
+                                descriptorsList.appendChild(descriptorDiv);
+                            });
+                            
+                            criterionDiv.appendChild(criterionHeader);
+                            criterionDiv.appendChild(descriptorsList);
+                            detailsContent.appendChild(criterionDiv);
                         });
                         
-                        criterionDiv.appendChild(criterionHeader);
-                        criterionDiv.appendChild(descriptorsList);
-                        markingDiv.appendChild(criterionDiv);
-                    });
+                        markingDiv.appendChild(markingTitle);
+                        markingDiv.appendChild(quickRef);
+                        markingDiv.appendChild(detailsHeader);
+                        markingDiv.appendChild(detailsContent);
+                        
+                        detailsHeader.onclick = () => toggleCollapsible(`rubric${index}Content`, `rubric${index}Toggle`);
+                        
+                    } else {
+                        // Full view for desktop
+                        Object.entries(mode.assessmentModel.markAllocation).forEach(([criterion, details]) => {
+                            const criterionDiv = document.createElement('div');
+                            criterionDiv.style.cssText = 'margin-bottom: 12px; padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #28a745;';
+                            
+                            const criterionHeader = document.createElement('h6');
+                            criterionHeader.textContent = `${criterion.charAt(0).toUpperCase() + criterion.slice(1).replace(/([A-Z])/g, ' $1')} (${details.marks} marks)`;
+                            criterionHeader.style.cssText = 'color: #2c3e50; margin-bottom: 6px; font-size: 0.95em;';
+                            
+                            const descriptorsList = document.createElement('div');
+                            descriptorsList.style.cssText = 'font-size: 0.85em; line-height: 1.3;';
+                            
+                            details.descriptors.forEach(descriptor => {
+                                const descriptorDiv = document.createElement('div');
+                                descriptorDiv.style.cssText = 'margin-bottom: 3px; padding: 2px 0;';
+                                descriptorDiv.innerHTML = descriptor;
+                                descriptorsList.appendChild(descriptorDiv);
+                            });
+                            
+                            criterionDiv.appendChild(criterionHeader);
+                            criterionDiv.appendChild(descriptorsList);
+                            markingDiv.appendChild(criterionDiv);
+                        });
+                        
+                        markingDiv.insertBefore(markingTitle, markingDiv.firstChild);
+                    }
                     
-                    markingDiv.insertBefore(markingTitle, markingDiv.firstChild);
                     modeDiv.appendChild(markingDiv);
                 }
 
@@ -3694,111 +3608,6 @@
             });
             searchBox.appendChild(searchList);
 
-            // Assessment modes section with detailed marking
-            const assessmentModesDiv = document.createElement('div');
-            assessmentModesDiv.className = 'resource-box';
-            assessmentModesDiv.innerHTML = '<h4>📝 Assessment Mode Details (30 marks each)</h4>';
-            
-            const modesList = document.createElement('div');
-            Object.values(assessmentInfo.specificModes).forEach(mode => {
-                const modeDiv = document.createElement('div');
-                modeDiv.style.cssText = 'margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #3498db;';
-                
-                let structureHtml = '';
-                if (mode.assessmentModel && mode.assessmentModel.structure) {
-                    structureHtml = `
-                        <br><strong>Structure:</strong>
-                        <ul style="margin: 8px 0 8px 20px; font-size: 0.85em;">
-                            ${mode.assessmentModel.structure.map(item => `<li>${item}</li>`).join('')}
-                        </ul>
-                    `;
-                }
-                
-                let markingHtml = '';
-                if (mode.assessmentModel && mode.assessmentModel.markAllocation) {
-                    markingHtml = `
-                        <br><strong>Mark Allocation:</strong>
-                        <ul style="margin: 8px 0 0 20px; font-size: 0.85em;">
-                            <li><strong>Physics Knowledge (12 marks):</strong> Accuracy, calculations, terminology</li>
-                            <li><strong>Investigation (6 marks):</strong> Research quality, methodology, sources</li>
-                            <li><strong>Communication (6 marks):</strong> Clarity, format, scientific conventions</li>
-                            <li><strong>Analysis (4 marks):</strong> Critical thinking, interpretation, conclusions</li>
-                            <li><strong>Contemporary Context (2 marks):</strong> Real-world relevance, societal implications</li>
-                        </ul>
-                    `;
-                }
-                
-                modeDiv.innerHTML = `
-                    <strong>${mode.name}</strong><br>
-                    <em>${mode.description}</em><br>
-                    <small><strong>Duration:</strong> ${mode.duration || mode.wordCount || mode.size || 'Variable'}</small><br>
-                    <small><strong>Best for:</strong> ${mode.suitableFor.join(', ')}</small>
-                    ${structureHtml}
-                    ${markingHtml}
-                `;
-                modesList.appendChild(modeDiv);
-            });
-            assessmentModesDiv.appendChild(modesList);
-
-            // Assessment criteria section with detailed descriptors
-            const criteriaBox = document.createElement('div');
-            criteriaBox.className = 'resource-box';
-            criteriaBox.innerHTML = '<h4>🎯 Assessment Criteria & Mark Descriptors</h4>';
-            
-            const criteriaContent = document.createElement('div');
-            criteriaContent.innerHTML = `
-                <div style="margin-bottom: 15px; padding: 12px; background: #e8f5e8; border-radius: 8px; border-left: 4px solid #28a745;">
-                    <strong>Universal Marking Framework (30 marks total)</strong><br>
-                    <small>All assessment modes use this consistent marking structure for parity:</small>
-                    <ul style="margin: 8px 0 0 20px; font-size: 0.9em; line-height: 1.4;">
-                        <li><strong>Physics Knowledge (12 marks):</strong> Accurate application of physics concepts, correct calculations, appropriate scientific terminology</li>
-                        <li><strong>Investigation (6 marks):</strong> Research methodology, source quality and evaluation, data collection approaches</li>
-                        <li><strong>Communication (6 marks):</strong> Clarity of expression, appropriate format/medium, scientific conventions</li>
-                        <li><strong>Analysis (4 marks):</strong> Critical thinking, evidence interpretation, reasoned conclusions</li>
-                        <li><strong>Contemporary Context (2 marks):</strong> Real-world relevance, societal/economic/political implications</li>
-                    </ul>
-                </div>
-                <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
-                    <strong>Grade Descriptors:</strong><br>
-                    <ul style="margin: 8px 0 0 20px; font-size: 0.85em; line-height: 1.3;">
-                        <li><strong>Excellent (A+ level):</strong> Sophisticated understanding, comprehensive investigation, outstanding communication</li>
-                        <li><strong>Good (A/B+ level):</strong> Sound understanding, thorough investigation, clear communication</li>
-                        <li><strong>Satisfactory (B/C+ level):</strong> Basic understanding, adequate investigation, acceptable communication</li>
-                        <li><strong>Limited (C/D level):</strong> Minimal understanding, poor investigation, unclear communication</li>
-                        <li><strong>Very Limited (E level):</strong> No evidence of understanding, no systematic investigation</li>
-                    </ul>
-                </div>
-            `;
-            criteriaBox.appendChild(criteriaContent);
-
-            // AI prompts section - topic specific
-            const promptBox = document.createElement('div');
-            promptBox.className = 'resource-box';
-            promptBox.innerHTML = '<h4>🤖 AI Chatbot Prompts</h4>';
-            const promptList = document.createElement('ul');
-            
-            // Get AI prompts from selected topics
-            const topicAIPrompts = selectedTopics.flatMap(id => topics[id]?.aiPrompts || []);
-            
-            topicAIPrompts.forEach((prompt, index) => {
-                const li = document.createElement('li');
-                li.innerHTML = createAIPromptLink(prompt, index);
-                promptList.appendChild(li);
-            });
-            promptBox.appendChild(promptList);
-
-            // Websites section
-            const websiteBox = document.createElement('div');
-            websiteBox.className = 'resource-box';
-            websiteBox.innerHTML = '<h4>🌐 Recommended Websites</h4>';
-            const websiteList = document.createElement('ul');
-            webResources.websites.forEach(site => {
-                const li = document.createElement('li');
-                li.innerHTML = `<a href="${site.url}" target="_blank">${site.name}</a><br><small>${site.description}</small>`;
-                websiteList.appendChild(li);
-            });
-            websiteBox.appendChild(websiteList);
-
             // Quick reference marking guide
             const markingGuideBox = document.createElement('div');
             markingGuideBox.className = 'resource-box';
@@ -3828,6 +3637,34 @@
                 </div>
             `;
             markingGuideBox.appendChild(guideContent);
+
+            // AI prompts section - topic specific
+            const promptBox = document.createElement('div');
+            promptBox.className = 'resource-box';
+            promptBox.innerHTML = '<h4>🤖 AI Chatbot Prompts</h4>';
+            const promptList = document.createElement('ul');
+            
+            // Get AI prompts from selected topics
+            const topicAIPrompts = selectedTopics.flatMap(id => topics[id]?.aiPrompts || []);
+            
+            topicAIPrompts.forEach((prompt, index) => {
+                const li = document.createElement('li');
+                li.innerHTML = createAIPromptLink(prompt, index);
+                promptList.appendChild(li);
+            });
+            promptBox.appendChild(promptList);
+
+            // Websites section
+            const websiteBox = document.createElement('div');
+            websiteBox.className = 'resource-box';
+            websiteBox.innerHTML = '<h4>🌐 Recommended Websites</h4>';
+            const websiteList = document.createElement('ul');
+            webResources.websites.forEach(site => {
+                const li = document.createElement('li');
+                li.innerHTML = `<a href="${site.url}" target="_blank">${site.name}</a><br><small>${site.description}</small>`;
+                websiteList.appendChild(li);
+            });
+            websiteBox.appendChild(websiteList);
 
             resourcesGrid.appendChild(vocabBox);
             resourcesGrid.appendChild(searchBox);
