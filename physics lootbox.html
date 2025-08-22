@@ -401,30 +401,37 @@
             z-index: 2000;
             justify-content: center;
             align-items: center;
+            padding: 20px;
+            overflow-y: auto;
         }
 
         .flappy-container {
             background: linear-gradient(135deg, #1e3c72, #2a5298);
             border-radius: 20px;
-            padding: 20px;
+            padding: 15px;
             text-align: center;
             border: 3px solid #FFD700;
             box-shadow: 0 0 50px rgba(255,215,0,0.5);
+            max-width: 95%;
+            max-height: 95vh;
+            display: flex;
+            flex-direction: column;
         }
 
         .flappy-header {
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
 
         .flappy-header h2 {
             color: #FFD700;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            font-size: 1.5em;
         }
 
         .flappy-header p {
             color: #FFF;
-            font-size: 1.1em;
+            font-size: 0.9em;
         }
 
         #flappyCanvas {
@@ -433,6 +440,8 @@
             background: linear-gradient(180deg, #87CEEB 0%, #98D8E8 50%, #B0E0E6 100%);
             display: block;
             margin: 0 auto;
+            max-width: 100%;
+            height: auto;
         }
 
         .flappy-stats {
@@ -920,29 +929,35 @@
             constructor(canvas) {
                 this.canvas = canvas;
                 this.ctx = canvas.getContext('2d');
-                this.canvas.width = 400;
-                this.canvas.height = 600;
+                
+                // Responsive canvas size
+                const maxHeight = window.innerHeight * 0.6;
+                const maxWidth = window.innerWidth * 0.9;
+                this.canvas.width = Math.min(400, maxWidth);
+                this.canvas.height = Math.min(500, maxHeight);
                 
                 // Game state
                 this.gameRunning = false;
                 this.gameOver = false;
+                this.gameStarted = false;
+                this.countdown = 3;
                 this.pipesPassed = 0;
                 this.coinsEarned = 0;
                 
                 // Bird properties
                 this.bird = {
                     x: 80,
-                    y: 300,
+                    y: this.canvas.height / 2,
                     radius: 15,
                     velocity: 0,
                     gravity: 0.5,
-                    jumpPower: -9
+                    jumpPower: -8
                 };
                 
                 // Pipes
                 this.pipes = [];
                 this.pipeWidth = 60;
-                this.pipeGap = 180;
+                this.pipeGap = 150;
                 this.pipeSpeed = 3;
                 this.pipeSpawnTimer = 0;
                 
@@ -950,32 +965,57 @@
                 this.handleClick = this.handleClick.bind(this);
                 this.handleKey = this.handleKey.bind(this);
                 
-                // Start game
+                // Start countdown
                 this.init();
             }
             
             init() {
                 this.canvas.addEventListener('click', this.handleClick);
                 document.addEventListener('keydown', this.handleKey);
-                this.gameRunning = true;
-                this.gameLoop();
+                this.startCountdown();
+            }
+            
+            startCountdown() {
+                const countdownInterval = setInterval(() => {
+                    this.countdown--;
+                    this.draw();
+                    
+                    if (this.countdown <= 0) {
+                        clearInterval(countdownInterval);
+                        this.gameStarted = true;
+                        this.gameRunning = true;
+                        this.gameLoop();
+                    }
+                }, 1000);
+                
+                // Initial draw to show countdown
+                this.draw();
             }
             
             handleClick() {
-                if (!this.gameOver) {
+                if (this.gameOver) {
+                    // Click to exit on game over
+                    closeFlappyGame();
+                } else if (this.gameStarted && !this.gameOver) {
                     this.bird.velocity = this.bird.jumpPower;
                 }
             }
             
             handleKey(e) {
-                if (e.code === 'Space' && !this.gameOver) {
+                if (e.code === 'Space') {
                     e.preventDefault();
-                    this.bird.velocity = this.bird.jumpPower;
+                    if (this.gameOver) {
+                        closeFlappyGame();
+                    } else if (this.gameStarted && !this.gameOver) {
+                        this.bird.velocity = this.bird.jumpPower;
+                    }
+                } else if (e.key === 'Escape') {
+                    closeFlappyGame();
                 }
             }
             
             update() {
-                if (this.gameOver) return;
+                if (this.gameOver || !this.gameStarted) return;
                 
                 // Update bird
                 this.bird.velocity += this.bird.gravity;
@@ -1053,6 +1093,25 @@
                 this.ctx.fillStyle = gradient;
                 this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
                 
+                // Draw countdown if not started
+                if (!this.gameStarted) {
+                    this.ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                    
+                    this.ctx.fillStyle = '#FFD700';
+                    this.ctx.font = 'bold 80px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+                    
+                    if (this.countdown > 0) {
+                        this.ctx.fillText(this.countdown, this.canvas.width / 2, this.canvas.height / 2);
+                        this.ctx.font = '24px Arial';
+                        this.ctx.fillStyle = '#FFF';
+                        this.ctx.fillText('Get Ready!', this.canvas.width / 2, this.canvas.height / 2 + 60);
+                    }
+                    return;
+                }
+                
                 // Draw pipes
                 this.ctx.fillStyle = '#00AA00';
                 for (const pipe of this.pipes) {
@@ -1109,27 +1168,28 @@
                 this.ctx.fillText(`Pipes: ${this.pipesPassed}`, this.canvas.width / 2, 50);
                 
                 // Draw instructions
-                if (this.pipesPassed === 0 && !this.gameOver) {
+                if (this.pipesPassed === 0 && !this.gameOver && this.gameStarted) {
                     this.ctx.fillStyle = 'rgba(0,0,0,0.7)';
-                    this.ctx.fillRect(50, 250, 300, 100);
+                    this.ctx.fillRect(this.canvas.width/2 - 150, this.canvas.height/2 - 50, 300, 100);
                     this.ctx.fillStyle = '#FFF';
                     this.ctx.font = '20px Arial';
-                    this.ctx.fillText('Click or Press Space to Jump!', this.canvas.width / 2, 290);
-                    this.ctx.fillText('Pass pipes for exponential coins!', this.canvas.width / 2, 320);
+                    this.ctx.fillText('Click or Press Space to Jump!', this.canvas.width / 2, this.canvas.height/2 - 10);
+                    this.ctx.fillText('Pass pipes for exponential coins!', this.canvas.width / 2, this.canvas.height/2 + 20);
                 }
                 
                 // Game over message
                 if (this.gameOver) {
                     this.ctx.fillStyle = 'rgba(0,0,0,0.8)';
-                    this.ctx.fillRect(50, 200, 300, 200);
+                    this.ctx.fillRect(this.canvas.width/2 - 150, this.canvas.height/2 - 100, 300, 200);
                     this.ctx.fillStyle = '#FFD700';
                     this.ctx.font = 'bold 30px Arial';
-                    this.ctx.fillText('GAME OVER!', this.canvas.width / 2, 250);
+                    this.ctx.fillText('GAME OVER!', this.canvas.width / 2, this.canvas.height/2 - 50);
                     this.ctx.fillStyle = '#FFF';
                     this.ctx.font = '24px Arial';
-                    this.ctx.fillText(`Earned: ${this.coinsEarned} coins!`, this.canvas.width / 2, 300);
+                    this.ctx.fillText(`Earned: ${this.coinsEarned} coins!`, this.canvas.width / 2, this.canvas.height/2);
                     this.ctx.font = '18px Arial';
-                    this.ctx.fillText('Click "Collect Coins" below', this.canvas.width / 2, 350);
+                    this.ctx.fillText('Click or press Space/Esc', this.canvas.width / 2, this.canvas.height/2 + 40);
+                    this.ctx.fillText('to return to loot boxes', this.canvas.width / 2, this.canvas.height/2 + 65);
                 }
             }
             
