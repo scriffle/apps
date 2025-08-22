@@ -608,8 +608,8 @@
     <div id="flappyModal" class="flappy-modal">
         <div class="flappy-container">
             <div class="flappy-header">
-                <h2>🚀 Flappy Quantum - Exponential Coins! 🚀</h2>
-                <p>Each pipe doubles: 1→2→4→8→16→32→64→128→256→512→1024...</p>
+                <h2>🚀 Flappy Quantum - Fibonacci Coins! 🚀</h2>
+                <p>Fibonacci rewards: 1→1→2→3→5→8→13→21→34→55→89→144→233...</p>
             </div>
             <canvas id="flappyCanvas"></canvas>
             <div class="flappy-stats">
@@ -955,9 +955,13 @@
                 return;
             }
             coins += 100; // Bonus for resetting
+            totalProfit += 100; // Count bonus toward profit!
             opened = 0;
             document.getElementById('coins').textContent = coins;
             document.getElementById('opened').textContent = '0';
+            document.getElementById('totalProfit').textContent = totalProfit > 0 ? '+' + totalProfit : totalProfit;
+            document.getElementById('progress').style.width = '0%';
+            document.getElementById('progress').textContent = '0%';
             document.getElementById('bankruptWarning').style.display = 'none';
             document.getElementById('grindBtn').style.display = 'none';
             initGrid();
@@ -999,6 +1003,9 @@
                 this.pipesPassed = 0;
                 this.coinsEarned = 0;
                 
+                // Fibonacci cache for faster calculation
+                this.fibCache = [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765];
+                
                 // Bird properties - EASIER PHYSICS
                 this.bird = {
                     x: 80,
@@ -1023,6 +1030,26 @@
                 
                 // Start countdown
                 this.init();
+            }
+            
+            getFibonacci(n) {
+                // Use cached values if available
+                if (n < this.fibCache.length) {
+                    return this.fibCache[n];
+                }
+                
+                // Calculate if not cached
+                let a = this.fibCache[this.fibCache.length - 2];
+                let b = this.fibCache[this.fibCache.length - 1];
+                
+                for (let i = this.fibCache.length; i <= n; i++) {
+                    let temp = a + b;
+                    a = b;
+                    b = temp;
+                    this.fibCache.push(b);
+                }
+                
+                return this.fibCache[n];
             }
             
             init() {
@@ -1113,7 +1140,7 @@
                     if (!pipe.passed && pipe.x + this.pipeWidth < this.bird.x) {
                         pipe.passed = true;
                         this.pipesPassed++;
-                        const reward = Math.pow(2, this.pipesPassed - 1);
+                        const reward = this.getFibonacci(this.pipesPassed);  // Fibonacci sequence
                         this.coinsEarned += reward;
                         this.updateStats();
                     }
@@ -1233,7 +1260,7 @@
                     this.ctx.fillStyle = '#FFF';
                     this.ctx.font = '20px Arial';
                     this.ctx.fillText('Click or Press Space to Jump!', this.canvas.width / 2, this.canvas.height/2 - 10);
-                    this.ctx.fillText('Pass pipes for exponential coins!', this.canvas.width / 2, this.canvas.height/2 + 20);
+                    this.ctx.fillText('Pass pipes for Fibonacci coins!', this.canvas.width / 2, this.canvas.height/2 + 20);
                 }
                 
                 // Game over message
@@ -1254,7 +1281,7 @@
             
             updateStats() {
                 document.getElementById('pipesPassed').textContent = this.pipesPassed;
-                const nextReward = this.pipesPassed < 20 ? Math.pow(2, this.pipesPassed) : 'MAX!';
+                const nextReward = this.getFibonacci(this.pipesPassed + 1);
                 document.getElementById('nextReward').textContent = nextReward;
                 document.getElementById('totalEarned').textContent = this.coinsEarned;
             }
@@ -1296,11 +1323,16 @@
         function closeFlappyGame() {
             if (flappyGame) {
                 // Add earned coins
-                coins += flappyGame.coinsEarned;
-                document.getElementById('coins').textContent = coins;
+                const earned = flappyGame.coinsEarned;
+                coins += earned;
+                totalProfit += earned;  // Add Flappy earnings to total profit!
                 
-                if (flappyGame.coinsEarned > 0) {
-                    alert(`🎉 You earned ${flappyGame.coinsEarned} coins! Total: ${coins}`);
+                // Update display
+                document.getElementById('coins').textContent = coins;
+                document.getElementById('totalProfit').textContent = totalProfit > 0 ? '+' + totalProfit : totalProfit;
+                
+                if (earned > 0) {
+                    alert(`🎉 You earned ${earned} coins from Flappy Quantum!\n💰 Total coins: ${coins}\n📈 Net profit: ${totalProfit > 0 ? '+' : ''}${totalProfit}`);
                 }
                 
                 // Clean up game
