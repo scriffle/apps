@@ -100,6 +100,7 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
+            margin-bottom: 20px;
         }
 
         .mass-input {
@@ -150,9 +151,50 @@
             transform: translateY(0);
         }
 
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        .log-container {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 15px;
+            padding: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .log-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.9;
+        }
+
+        .log-entry {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .log-time {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        .log-energy {
+            font-size: 18px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .log-energy.positive {
+            color: #4ade80;
+        }
+
+        .log-energy.negative {
+            color: #f87171;
         }
 
         .status {
@@ -194,6 +236,31 @@
             font-size: 14px;
             text-align: center;
         }
+
+        .buffer-indicator {
+            font-size: 10px;
+            opacity: 0.7;
+            text-align: center;
+            margin-top: 5px;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -203,6 +270,7 @@
         <div class="energy-display">
             <div class="energy-value" id="energyValue">0.000</div>
             <div class="energy-label">kWh (75% efficiency)</div>
+            <div class="buffer-indicator" id="bufferIndicator">Buffering: 0/7</div>
         </div>
 
         <div class="stats-grid">
@@ -230,46 +298,45 @@
                 <input type="number" id="mass" value="2000" min="500" max="5000" step="100">
             </div>
             
-            <button id="startBtn" onclick="toggleTracking()">Start Tracking</button>
-            <button id="resetBtn" onclick="resetTrip()">Reset Trip</button>
+            <button id="rezeroBtn" onclick="rezero()">Rezero</button>
+        </div>
+
+        <div class="log-container">
+            <div class="log-title">Energy Log</div>
+            <div id="logEntries"></div>
         </div>
 
         <div class="status" id="status">
             <span class="status-icon"></span>
-            <span id="statusText">Ready to track</span>
+            <span id="statusText">Initializing GPS...</span>
         </div>
 
         <div id="errorMsg" style="display: none;"></div>
     </div>
 
     <script>
-        let isTracking = false;
         let watchId = null;
         let lastPosition = null;
         let referenceAltitude = null;
         let totalDistance = 0;
-        let totalAltitudeChange = 0;
+        let altitudeBuffer = [];
+        let energyLog = [];
+        let currentEnergy = 0;
         
         const EFFICIENCY = 0.75; // 75% round-trip efficiency
         const GRAVITY = 9.81; // m/s²
+        const BUFFER_SIZE = 7; // Moving average of 7 readings
         
-        function toggleTracking() {
-            if (isTracking) {
-                stopTracking();
-            } else {
-                startTracking();
-            }
-        }
+        // Start tracking immediately on page load
+        window.addEventListener('load', () => {
+            startTracking();
+        });
         
         function startTracking() {
             if (!navigator.geolocation) {
                 showError("Geolocation is not supported by your browser");
                 return;
             }
-            
-            const startBtn = document.getElementById('startBtn');
-            startBtn.textContent = 'Stop Tracking';
-            isTracking = true;
             
             const options = {
                 enableHighAccuracy: true,
@@ -283,20 +350,7 @@
                 options
             );
             
-            updateStatus('Tracking active', true);
-        }
-        
-        function stopTracking() {
-            if (watchId !== null) {
-                navigator.geolocation.clearWatch(watchId);
-                watchId = null;
-            }
-            
-            const startBtn = document.getElementById('startBtn');
-            startBtn.textContent = 'Start Tracking';
-            isTracking = false;
-            
-            updateStatus('Tracking stopped', false);
+            updateStatus('GPS Active', true);
         }
         
         function handlePosition(position) {
@@ -313,12 +367,25 @@
             
             hideError();
             
-            // Set reference altitude on first reading
-            if (referenceAltitude === null) {
-                referenceAltitude = altitude;
+            // Add altitude to buffer
+            altitudeBuffer.push(altitude);
+            if (altitudeBuffer.length > BUFFER_SIZE) {
+                altitudeBuffer.shift();
             }
             
-            // Update altitude display
+            // Update buffer indicator
+            document.getElementById('bufferIndicator').textContent = 
+                `Buffering: ${altitudeBuffer.length}/${BUFFER_SIZE}`;
+            
+            // Calculate average altitude
+            const avgAltitude = altitudeBuffer.reduce((sum, val) => sum + val, 0) / altitudeBuffer.length;
+            
+            // Set reference altitude on first reading
+            if (referenceAltitude === null) {
+                referenceAltitude = avgAltitude;
+            }
+            
+            // Update altitude display (show actual current, not average)
             document.getElementById('altitudeValue').textContent = Math.round(altitude);
             
             // Calculate distance if we have a previous position
@@ -335,13 +402,13 @@
                     (totalDistance / 1000).toFixed(1);
             }
             
-            // Calculate altitude change and energy
-            const altitudeDelta = altitude - referenceAltitude;
+            // Calculate altitude change and energy using averaged altitude
+            const altitudeDelta = avgAltitude - referenceAltitude;
             document.getElementById('deltaAltitude').textContent = 
                 altitudeDelta > 0 ? `+${Math.round(altitudeDelta)}` : Math.round(altitudeDelta);
             
             // Calculate energy change
-            calculateEnergy(altitudeDelta);
+            currentEnergy = calculateEnergy(altitudeDelta);
             
             // Store current position
             lastPosition = {
@@ -349,6 +416,13 @@
                 longitude: longitude,
                 altitude: altitude
             };
+            
+            // Update status to show we're tracking
+            if (altitudeBuffer.length === BUFFER_SIZE) {
+                updateStatus('Tracking (Averaged)', true);
+            } else {
+                updateStatus(`Building buffer (${altitudeBuffer.length}/${BUFFER_SIZE})`, true);
+            }
         }
         
         function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -399,6 +473,8 @@
             } else {
                 energyElement.className = 'energy-value';
             }
+            
+            return effectiveEnergyKwh;
         }
         
         function handleError(error) {
@@ -430,26 +506,75 @@
             document.getElementById('errorMsg').style.display = 'none';
         }
         
-        function resetTrip() {
-            // Reset all values
-            referenceAltitude = null;
-            lastPosition = null;
-            totalDistance = 0;
-            totalAltitudeChange = 0;
+        function rezero() {
+            // Log the current energy before resetting
+            if (currentEnergy !== 0 && altitudeBuffer.length > 0) {
+                const now = new Date();
+                const timeString = now.toLocaleTimeString('en-US', { 
+                    hour: '2-digit', 
+                    minute: '2-digit', 
+                    second: '2-digit' 
+                });
+                
+                energyLog.unshift({
+                    time: timeString,
+                    energy: currentEnergy
+                });
+                
+                // Keep only last 20 entries
+                if (energyLog.length > 20) {
+                    energyLog.pop();
+                }
+                
+                updateLogDisplay();
+            }
+            
+            // Reset reference altitude to current average
+            if (altitudeBuffer.length > 0) {
+                referenceAltitude = altitudeBuffer.reduce((sum, val) => sum + val, 0) / altitudeBuffer.length;
+            }
             
             // Reset displays
             document.getElementById('energyValue').textContent = '0.000';
             document.getElementById('energyValue').className = 'energy-value';
-            document.getElementById('altitudeValue').textContent = '--';
             document.getElementById('deltaAltitude').textContent = '0';
-            document.getElementById('distanceValue').textContent = '0.0';
             document.getElementById('rawEnergy').textContent = '0.000';
             
-            hideError();
+            // Reset distance
+            totalDistance = 0;
+            document.getElementById('distanceValue').textContent = '0.0';
             
-            // If currently tracking, get new reference altitude
-            if (isTracking && lastPosition) {
-                referenceAltitude = lastPosition.altitude;
+            hideError();
+        }
+        
+        function updateLogDisplay() {
+            const logContainer = document.getElementById('logEntries');
+            logContainer.innerHTML = '';
+            
+            energyLog.forEach(entry => {
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry';
+                
+                const timeSpan = document.createElement('span');
+                timeSpan.className = 'log-time';
+                timeSpan.textContent = entry.time;
+                
+                const energySpan = document.createElement('span');
+                energySpan.className = 'log-energy';
+                if (entry.energy > 0) {
+                    energySpan.className += ' negative';
+                } else if (entry.energy < 0) {
+                    energySpan.className += ' positive';
+                }
+                energySpan.textContent = `${entry.energy.toFixed(3)} kWh`;
+                
+                logEntry.appendChild(timeSpan);
+                logEntry.appendChild(energySpan);
+                logContainer.appendChild(logEntry);
+            });
+            
+            if (energyLog.length === 0) {
+                logContainer.innerHTML = '<div style="text-align: center; opacity: 0.5; font-size: 14px;">No entries yet. Press "Rezero" to log current energy.</div>';
             }
         }
         
@@ -465,13 +590,8 @@
             }
         }
         
-        // Update every second while tracking
-        setInterval(() => {
-            if (isTracking && watchId !== null) {
-                // The watchPosition callback will handle updates automatically
-                // This is just to ensure the UI stays responsive
-            }
-        }, 1000);
+        // Initialize log display
+        updateLogDisplay();
     </script>
 </body>
 </html>
