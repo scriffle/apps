@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Physics Lootbox Quiz System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .stats-bar {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-around;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #764ba2;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+        }
+
+        .lootbox-grid {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .box {
+            aspect-ratio: 1;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .box.unopened {
+            background: linear-gradient(145deg, #f0f0f0, #d0d0d0);
+            border: 2px solid #999;
+        }
+
+        .box.unopened:hover {
+            transform: scale(1.1);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .box.locked {
+            background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
+            border: 2px solid #444;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        .box.locked::after {
+            content: '🔒';
+            position: absolute;
+            font-size: 20px;
+        }
+
+        .box.collected {
+            border: 2px solid #4CAF50;
+            cursor: default;
+            background: linear-gradient(145deg, #a8d5a8, #90c090);
+        }
+
+        .box.collected::after {
+            content: '✓';
+            position: absolute;
+            color: white;
+            font-size: 24px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .box-cost {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            background: rgba(0,0,0,0.7);
+            color: #FFD700;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 10px;
+        }
+
+        .collection-panel {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .collection-item {
+            background: linear-gradient(145deg, #f5f5f5, #e0e0e0);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+            font-size: 12px;
+            position: relative;
+        }
+
+        .collection-item .topic {
+            font-weight: bold;
+            color: #764ba2;
+            margin-bottom: 5px;
+        }
+
+        .collection-item .dot-point {
+            color: #666;
+            font-size: 11px;
+            margin-bottom: 5px;
+        }
+
+        .collection-item .attempts {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #FFD700;
+            color: #333;
+            padding: 2px 6px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .quiz-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .quiz-modal.active {
+            display: flex;
+        }
+
+        .quiz-content {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .quiz-header {
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .quiz-progress {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar {
+            flex-grow: 1;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            margin: 0 15px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .quiz-topic {
+            color: #764ba2;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .quiz-cost {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .question {
+            margin: 20px 0;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        .options {
+            margin: 20px 0;
+        }
+
+        .option {
+            display: block;
+            width: 100%;
+            padding: 12px 15px;
+            margin: 10px 0;
+            background: #f5f5f5;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .option:hover {
+            background: #e8e8e8;
+            border-color: #764ba2;
+        }
+
+        .quiz-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .btn-submit {
+            background: linear-gradient(145deg, #667eea, #764ba2);
+            color: white;
+            flex-grow: 1;
+        }
+
+        .btn-quit {
+            background: #f44336;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .feedback {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .feedback.wrong {
+            background: #ffebee;
+            color: #c62828;
+            border: 2px solid #ef5350;
+        }
+
+        .feedback.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 2px solid #66bb6a;
+        }
+
+        .rarity-common { border-color: #9E9E9E !important; }
+        .rarity-uncommon { border-color: #4CAF50 !important; }
+        .rarity-rare { border-color: #2196F3 !important; }
+        .rarity-epic { border-color: #9C27B0 !important; }
+        .rarity-legendary { 
+            border-color: #FFD700 !important;
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+
+        .mini-game-btn {
+            background: linear-gradient(145deg, #FF6B6B, #4ECDC4);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 20px auto;
+            display: block;
+            transition: all 0.3s ease;
+        }
+
+        .mini-game-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .box.unopened.affordable {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>⚛️ Physics Lootbox Challenge ⚛️</h1>
+        <p>Master VCE Physics Units 3-4 through gamified learning!</p>
+        <p id="units-loaded" style="font-size: 14px; margin-top: 10px; opacity: 0.9;"></p>
+    </div>
+
+    <div class="stats-bar">
+        <div class="stat">
+            <div class="stat-value" id="coins">100</div>
+            <div class="stat-label">Coins</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="collected">0/16</div>
+            <div class="stat-label">Collected</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="total-attempts">0</div>
+            <div class="stat-label">Total Attempts</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="success-rate">0%</div>
+            <div class="stat-label">Success Rate</div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="lootbox-grid" id="lootbox-grid"></div>
+        <div class="collection-panel">
+            <h3>📚 Collection</h3>
+            <div id="collection-list"></div>
+            <button class="mini-game-btn" onclick="playMiniGame()">🎮 Play Mini-Game for Coins!</button>
+        </div>
+    </div>
+
+    <div class="quiz-modal" id="quiz-modal">
+        <div class="quiz-content">
+            <div class="quiz-header">
+                <div class="quiz-progress">
+                    <span id="question-num">Question 1/6</span>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <span id="attempts-count">Attempt: 1</span>
+                </div>
+                <div class="quiz-topic" id="quiz-topic"></div>
+                <div class="quiz-cost" id="quiz-cost"></div>
+            </div>
+            <div id="quiz-body">
+                <div class="question" id="question-text"></div>
+                <div class="options" id="options"></div>
+                <div id="feedback"></div>
+                <div class="quiz-actions">
+                    <button class="btn btn-quit" onclick="quitQuiz()">Quit (Forfeit Coins)</button>
+                    <button class="btn btn-submit" id="submit-btn" onclick="submitAnswer()">Submit Answer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game state
+        let gameState = {
+            coins: 100,
+            collected: [],
+            attempts: {},
+            totalAttempts: 0,
+            successfulAttempts: 0,
+            boxMapping: {},
+            currentQuiz: null
+        };
+
+        // Data storage
+        let sdContent = null;
+        let questionsData = null;
+        let availableUnits = [];
+
+        // Initialize game
+        async function initGame() {
+            console.log('Initializing Physics Lootbox Game...');
+            console.log('Loading from:', window.location.href);
+            
+            await loadData();
+            loadGameState();
+            setupBoxMapping();
+            renderGrid();
+            updateStats();
+            updateCollection();
+            
+            // Display loaded units
+            const unitsDisplay = document.getElementById('units-loaded');
+            if (availableUnits.length > 0 && availableUnits[0] !== 'Demo Mode') {
+                unitsDisplay.textContent = `📚 Loaded: ${availableUnits.join(', ')}`;
+            } else if (availableUnits[0] === 'Demo Mode') {
+                unitsDisplay.textContent = '⚠️ Demo Mode (no question files found)';
+            }
+            
+            console.log('Game initialized successfully!');
+            console.log('Boxes with content:', Object.keys(gameState.boxMapping).sort((a,b) => Number(a)-Number(b)).join(', '));
+        }
+
+        // Load JSON data
+        async function loadData() {
+            try {
+                // Load study design content
+                const sdResponse = await fetch('physics34SDDP.json');
+                if (!sdResponse.ok) {
+                    throw new Error(`HTTP error! status: ${sdResponse.status}`);
+                }
+                const sdText = await sdResponse.text();
+                let sdData;
+                try {
+                    sdData = JSON.parse(sdText);
+                } catch (e) {
+                    console.error('Invalid JSON in physics34SDDP.json:', sdText.substring(0, 100));
+                    throw new Error('Invalid JSON format in physics34SDDP.json');
+                }
+                sdContent = sdData.lootbox_items;
+                
+                // Load questions from multiple possible files
+                const questionFiles = [
+                    'physicsU3AOS1questions.json',
+                    'physicsU3AOS2questions.json',
+                    'physicsU3AOS3questions.json',
+                    'physicsU4AOS1questions.json',
+                    'physicsU4AOS2questions.json'
+                ];
+                
+                let allQuestions = [];
+                availableUnits = [];
+                
+                for (const fileName of questionFiles) {
+                    try {
+                        const response = await fetch(fileName);
+                        if (response.ok) {
+                            const text = await response.text();
+                            const data = JSON.parse(text);
+                            allQuestions = allQuestions.concat(data.questions);
+                            
+                            // Extract unit and AOS from filename
+                            const match = fileName.match(/physicsU(\d)AOS(\d)/);
+                            if (match) {
+                                availableUnits.push(`U${match[1]} AOS${match[2]}`);
+                                console.log(`✓ Loaded ${fileName}: ${data.questions.length} questions`);
+                            }
+                        }
+                    } catch (error) {
+                        // Silently skip files that don't exist
+                        console.log(`- ${fileName} not found (this is okay)`);
+                    }
+                }
+                
+                if (allQuestions.length === 0) {
+                    throw new Error('No question files found');
+                }
+                
+                questionsData = { questions: allQuestions };
+                
+                console.log('=================================');
+                console.log(`Successfully loaded: ${sdContent.length} items`);
+                console.log(`Total questions loaded: ${allQuestions.length}`);
+                console.log(`Available units: ${availableUnits.join(', ')}`);
+                console.log('=================================');
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+                alert('Note: Could not load question files. Using demo data. Please ensure physics34SDDP.json and physicsU3AOS1questions.json are in the same folder as this HTML file.');
+                // Fallback to embedded data if files not available
+                sdContent = generateFallbackSDContent();
+                questionsData = generateFallbackQuestions();
+                availableUnits = ['Demo Mode'];
+            }
+        }
+
+        // Setup box mapping (items with questions randomly distributed)
+        function setupBoxMapping() {
+            if (Object.keys(gameState.boxMapping).length > 0) return;
+            
+            // Find which dot points have questions available
+            const dotPointsWithQuestions = new Set();
+            questionsData.questions.forEach(q => {
+                dotPointsWithQuestions.add(q.dot_point_id);
+            });
+            
+            const availableDotPoints = Array.from(dotPointsWithQuestions).sort((a, b) => a - b);
+            console.log(`Dot points with questions: ${availableDotPoints.join(', ')}`);
+            
+            // Randomly distribute available items across 100 boxes
+            const availableBoxes = Array.from({length: 100}, (_, i) => i);
+            const shuffled = availableBoxes.sort(() => Math.random() - 0.5);
+            
+            // Map dot points to random boxes
+            availableDotPoints.forEach((dotPointId, index) => {
+                if (index < shuffled.length) {
+                    gameState.boxMapping[shuffled[index]] = dotPointId;
+                }
+            });
+            
+            console.log(`Mapped ${availableDotPoints.length} items to random boxes`);
+            saveGameState();
+        }
+
+        // Calculate cost based on complexity (inverse linear)
+        function calculateCost(complexity) {
+            return Math.max(1, 11 - complexity); // Complexity 1 = 10 coins, Complexity 10 = 1 coin
+        }
+
+        // Render grid
+        function renderGrid() {
+            const grid = document.getElementById('lootbox-grid');
+            grid.innerHTML = '';
+            
+            for (let i = 0; i < 100; i++) {
+                const box = document.createElement('div');
+                box.className = 'box';
+                box.dataset.boxId = i;
+                
+                if (gameState.boxMapping[i] !== undefined) {
+                    const dotPointId = gameState.boxMapping[i];
+                    const item = sdContent[dotPointId - 1];
+                    
+                    if (gameState.collected.includes(dotPointId)) {
+                        box.classList.add('collected');
+                        box.innerHTML = `#${i + 1}`;
+                    } else {
+                        box.classList.add('unopened');
+                        const cost = calculateCost(item.complexity_score);
+                        
+                        if (gameState.coins >= cost) {
+                            box.classList.add('affordable');
+                        }
+                        
+                        box.innerHTML = `
+                            #${i + 1}
+                            <span class="box-cost">${cost}🪙</span>
+                        `;
+                        box.onclick = () => startQuiz(i, dotPointId);
+                    }
+                } else {
+                    box.classList.add('locked');
+                    box.innerHTML = `#${i + 1}`;
+                }
+                
+                grid.appendChild(box);
+            }
+        }
+
+        // Start quiz
+        function startQuiz(boxId, dotPointId) {
+            const item = sdContent.find(item => item.id === dotPointId);
+            if (!item) {
+                alert('Item data not found!');
+                return;
+            }
+            
+            const cost = calculateCost(item.complexity_score);
+            
+            if (gameState.coins < cost) {
+                alert(`Not enough coins! You need ${cost} coins.`);
+                return;
+            }
+            
+            // Get questions for this dot point
+            const questions = questionsData.questions.filter(q => q.dot_point_id === dotPointId);
+            
+            if (questions.length < 6) {
+                alert(`Not enough questions for this item! Found only ${questions.length} questions.`);
+                return;
+            }
+            
+            // Deduct coins immediately
+            gameState.coins -= cost;
+            saveGameState();
+            updateStats();
+            
+            // Initialize quiz state
+            gameState.currentQuiz = {
+                boxId: boxId,
+                dotPointId: dotPointId,
+                questions: shuffleArray([...questions]).slice(0, 6), // Take first 6 after shuffle
+                currentQuestion: 0,
+                attempts: 1,
+                cost: cost,
+                item: item
+            };
+            
+            // Track attempt
+            if (!gameState.attempts[dotPointId]) {
+                gameState.attempts[dotPointId] = 0;
+            }
+            
+            showQuizModal();
+            displayQuestion();
+        }
+
+        // Show quiz modal
+        function showQuizModal() {
+            const modal = document.getElementById('quiz-modal');
+            modal.classList.add('active');
+            
+            const quiz = gameState.currentQuiz;
+            document.getElementById('quiz-topic').textContent = quiz.item.topic;
+            document.getElementById('quiz-cost').textContent = `Cost: ${quiz.cost} coins | Rarity: ${quiz.item.rarity}`;
+            document.getElementById('attempts-count').textContent = `Attempt: ${quiz.attempts}`;
+        }
+
+        // Display current question
+        function displayQuestion() {
+            const quiz = gameState.currentQuiz;
+            const question = quiz.questions[quiz.currentQuestion];
+            
+            // Update progress
+            document.getElementById('question-num').textContent = `Question ${quiz.currentQuestion + 1}/6`;
+            document.getElementById('progress-fill').style.width = `${(quiz.currentQuestion / 6) * 100}%`;
+            
+            // Display question
+            document.getElementById('question-text').textContent = question.question;
+            
+            // Randomize options
+            const options = Object.entries(question.options);
+            const shuffledOptions = shuffleArray(options);
+            quiz.correctAnswerIndex = shuffledOptions.findIndex(([key, _]) => key === question.correct_answer);
+            
+            // Display options
+            const optionsDiv = document.getElementById('options');
+            optionsDiv.innerHTML = '';
+            
+            shuffledOptions.forEach(([key, text], index) => {
+                const button = document.createElement('button');
+                button.className = 'option';
+                button.textContent = `${String.fromCharCode(65 + index)}. ${text}`;
+                button.dataset.index = index;
+                button.onclick = () => selectOption(index);
+                optionsDiv.appendChild(button);
+            });
+            
+            // Clear feedback
+            document.getElementById('feedback').innerHTML = '';
+            document.getElementById('feedback').className = 'feedback';
+            
+            // Reset selected option
+            quiz.selectedOption = null;
+        }
+
+        // Select option
+        function selectOption(index) {
+            const options = document.querySelectorAll('.option');
+            options.forEach(opt => opt.style.background = '#f5f5f5');
+            options[index].style.background = '#e0e0ff';
+            gameState.currentQuiz.selectedOption = index;
+        }
+
+        // Submit answer
+        function submitAnswer() {
+            const quiz = gameState.currentQuiz;
+            
+            if (quiz.selectedOption === null) {
+                alert('Please select an answer!');
+                return;
+            }
+            
+            if (quiz.selectedOption === quiz.correctAnswerIndex) {
+                // Correct answer
+                quiz.currentQuestion++;
+                
+                if (quiz.currentQuestion >= 6) {
+                    // All questions answered correctly!
+                    completeQuiz();
+                } else {
+                    // Next question
+                    displayQuestion();
+                }
+            } else {
+                // Wrong answer
+                showWrongFeedback();
+            }
+        }
+
+        // Show wrong feedback and restart
+        function showWrongFeedback() {
+            const quiz = gameState.currentQuiz;
+            const feedback = document.getElementById('feedback');
+            feedback.className = 'feedback wrong';
+            feedback.innerHTML = `
+                <p>❌ Wrong answer! You reached question ${quiz.currentQuestion + 1}/6</p>
+                <p>Starting over... (Attempt ${quiz.attempts + 1})</p>
+            `;
+            
+            // Increment attempts
+            quiz.attempts++;
+            gameState.attempts[quiz.dotPointId]++;
+            gameState.totalAttempts++;
+            saveGameState();
+            
+            // Reset to first question after delay
+            setTimeout(() => {
+                quiz.currentQuestion = 0;
+                quiz.questions = shuffleArray(quiz.questions);
+                document.getElementById('attempts-count').textContent = `Attempt: ${quiz.attempts}`;
+                displayQuestion();
+            }, 2000);
+        }
+
+        // Complete quiz successfully
+        function completeQuiz() {
+            const quiz = gameState.currentQuiz;
+            
+            // Add to collection
+            gameState.collected.push(quiz.dotPointId);
+            gameState.attempts[quiz.dotPointId] = (gameState.attempts[quiz.dotPointId] || 0) + quiz.attempts;
+            gameState.totalAttempts++;
+            gameState.successfulAttempts++;
+            
+            // Show success message
+            const feedback = document.getElementById('feedback');
+            feedback.className = 'feedback success';
+            feedback.innerHTML = `
+                <p>🎉 Congratulations! You've collected:</p>
+                <p><strong>${quiz.item.topic}</strong></p>
+                <p>Completed in ${quiz.attempts} attempt${quiz.attempts > 1 ? 's' : ''}</p>
+            `;
+            
+            // Close modal after delay
+            setTimeout(() => {
+                closeQuizModal();
+                renderGrid();
+                updateStats();
+                updateCollection();
+            }, 3000);
+            
+            saveGameState();
+        }
+
+        // Quit quiz
+        function quitQuiz() {
+            if (confirm('Are you sure? You will forfeit the coins spent!')) {
+                gameState.totalAttempts++;
+                saveGameState();
+                closeQuizModal();
+                updateStats();
+            }
+        }
+
+        // Close quiz modal
+        function closeQuizModal() {
+            document.getElementById('quiz-modal').classList.remove('active');
+            gameState.currentQuiz = null;
+        }
+
+        // Update stats
+        function updateStats() {
+            document.getElementById('coins').textContent = gameState.coins;
+            
+            const totalAvailable = Object.keys(gameState.boxMapping).length;
+            document.getElementById('collected').textContent = `${gameState.collected.length}/${totalAvailable}`;
+            document.getElementById('total-attempts').textContent = gameState.totalAttempts;
+            
+            const successRate = gameState.totalAttempts > 0 
+                ? Math.round((gameState.successfulAttempts / gameState.totalAttempts) * 100)
+                : 0;
+            document.getElementById('success-rate').textContent = `${successRate}%`;
+        }
+
+        // Update collection display
+        function updateCollection() {
+            const list = document.getElementById('collection-list');
+            list.innerHTML = '';
+            
+            gameState.collected.sort((a, b) => a - b).forEach(dotPointId => {
+                const item = sdContent[dotPointId - 1];
+                const attempts = gameState.attempts[dotPointId] || 1;
+                
+                const div = document.createElement('div');
+                div.className = `collection-item rarity-${item.rarity}`;
+                div.innerHTML = `
+                    <div class="topic">${item.topic}</div>
+                    <div class="dot-point">${item.dot_point}</div>
+                    <div class="attempts">${attempts} try${attempts > 1 ? 's' : ''}</div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        // Mini-game for earning coins
+        function playMiniGame() {
+            const earned = Math.floor(Math.random() * 20) + 10;
+            gameState.coins += earned;
+            alert(`🎮 Mini-game completed! You earned ${earned} coins!`);
+            saveGameState();
+            updateStats();
+            renderGrid();
+        }
+
+        // Utility functions
+        function shuffleArray(array) {
+            const newArray = [...array];
+            for (let i = newArray.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+            }
+            return newArray;
+        }
+
+        // Save game state to localStorage
+        function saveGameState() {
+            localStorage.setItem('physicsLootboxState', JSON.stringify(gameState));
+        }
+
+        // Load game state from localStorage
+        function loadGameState() {
+            const saved = localStorage.getItem('physicsLootboxState');
+            if (saved) {
+                gameState = JSON.parse(saved);
+            }
+        }
+
+        // Fallback data generators with realistic VCE Physics content
+        function generateFallbackSDContent() {
+            return [
+                {id: 1, topic: "Newton's Laws", dot_point: "Investigate Newton's three laws of motion", rarity: "common", complexity_score: 2},
+                {id: 2, topic: "Circular Motion", dot_point: "Analyse uniform circular motion in horizontal plane", rarity: "uncommon", complexity_score: 4},
+                {id: 3, topic: "Circular Motion", dot_point: "Vehicle moving around circular road", rarity: "common", complexity_score: 3},
+                {id: 4, topic: "Circular Motion", dot_point: "Vehicle on banked track", rarity: "rare", complexity_score: 5},
+                {id: 5, topic: "Cone Pendulum", dot_point: "Object suspended by string in circular path", rarity: "rare", complexity_score: 5},
+                {id: 6, topic: "Satellite Motion", dot_point: "Satellites in orbit around Earth", rarity: "epic", complexity_score: 7},
+                {id: 7, topic: "Vertical Circular Motion", dot_point: "Object in vertical circular path", rarity: "legendary", complexity_score: 8},
+                {id: 8, topic: "Projectile Motion", dot_point: "Motion of projectiles near Earth's surface", rarity: "uncommon", complexity_score: 4},
+                {id: 9, topic: "Conservation Laws", dot_point: "Energy and momentum conservation", rarity: "uncommon", complexity_score: 4},
+                {id: 10, topic: "Impulse", dot_point: "Impulse in collisions", rarity: "uncommon", complexity_score: 3},
+                {id: 11, topic: "Work", dot_point: "Work done = force × displacement", rarity: "common", complexity_score: 2},
+                {id: 12, topic: "Kinetic Energy", dot_point: "Kinetic energy and work-energy theorem", rarity: "common", complexity_score: 2},
+                {id: 13, topic: "Elastic Potential Energy", dot_point: "Energy in springs and elastic materials", rarity: "uncommon", complexity_score: 3},
+                {id: 14, topic: "Strain Potential Energy", dot_point: "Energy transformation in collisions", rarity: "rare", complexity_score: 5},
+                {id: 15, topic: "Collisions", dot_point: "Elastic and inelastic collisions", rarity: "epic", complexity_score: 6},
+                {id: 16, topic: "Gravitational Potential Energy", dot_point: "GPE near Earth's surface", rarity: "uncommon", complexity_score: 3}
+            ];
+        }
+
+        function generateFallbackQuestions() {
+            const bloomLevels = ['Remembering', 'Understanding', 'Applying', 'Analyzing', 'Evaluating', 'Creating'];
+            const questions = [];
+            
+            // Generate realistic physics questions for demo
+            const sampleQuestions = [
+                "According to Newton's Second Law, the net force on an object equals:",
+                "A 5.0 kg box experiences forces. What is the magnitude of acceleration?",
+                "Two forces act on an object. What is the direction of acceleration?",
+                "Which statement correctly describes Newton's Third Law?",
+                "A student claims F≠ma when pushing a crate. What's the error?",
+                "Design an experiment to verify F=ma. Which approach works best?"
+            ];
+            
+            for (let dotPoint = 1; dotPoint <= 16; dotPoint++) {
+                for (let level = 0; level < 6; level++) {
+                    questions.push({
+                        dot_point_id: dotPoint,
+                        bloom_level: bloomLevels[level],
+                        question: sampleQuestions[level] || `${bloomLevels[level]} question for concept ${dotPoint}`,
+                        options: {
+                            A: "First option",
+                            B: "Second option", 
+                            C: "Third option",
+                            D: "Fourth option"
+                        },
+                        correct_answer: ['A', 'B', 'C', 'D'][Math.floor(Math.random() * 4)]
+                    });
+                }
+            }
+            return { questions };
+        }
+
+        // Start game
+        initGame();
+    </script>
+</body>
+</html>
