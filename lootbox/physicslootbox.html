@@ -513,9 +513,29 @@
             box-shadow: 0 5px 15px rgba(255,107,107,0.3);
         }
 
-        @keyframes warning-pulse {
-            0%, 100% { opacity: 0.9; }
-            50% { opacity: 1; }
+        .bonus-indicator {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: linear-gradient(145deg, #FFD700, #FFA500);
+            color: #333;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.5);
+            z-index: 1000;
+            animation: bonus-pulse 1s infinite;
+        }
+
+        @keyframes bonus-pulse {
+            0%, 100% { 
+                transform: scale(1);
+                box-shadow: 0 5px 15px rgba(255, 215, 0, 0.5);
+            }
+            50% { 
+                transform: scale(1.05);
+                box-shadow: 0 5px 25px rgba(255, 215, 0, 0.8);
+            }
         }
 
         @keyframes pulse {
@@ -557,6 +577,10 @@
         <h1>⚛️ Physics Lootbox Challenge ⚛️</h1>
         <p>Master VCE Physics Units 3-4 through gamified learning!</p>
         <p id="units-loaded" style="font-size: 14px; margin-top: 10px; opacity: 0.9;"></p>
+    </div>
+
+    <div id="bonus-indicator" class="bonus-indicator" style="display: none;">
+        <span id="bonus-text">BONUS ACTIVE!</span>
     </div>
 
     <div id="low-coins-warning" class="low-coins-warning" style="display: none;">
@@ -603,12 +627,16 @@
             <div class="stat-label">Collected</div>
         </div>
         <div class="stat">
-            <div class="stat-value" id="total-attempts">0</div>
-            <div class="stat-label">Total Attempts</div>
+            <div class="stat-value" id="streak">0</div>
+            <div class="stat-label">Streak 🔥</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="bonuses">0</div>
+            <div class="stat-label">Bonuses 🎁</div>
         </div>
         <div class="stat">
             <div class="stat-value" id="success-rate">0%</div>
-            <div class="stat-label">Success Rate</div>
+            <div class="stat-label">Success</div>
         </div>
     </div>
 
@@ -659,7 +687,24 @@
             successfulAttempts: 0,
             boxMapping: {},
             boxEmojis: {},
-            currentQuiz: null
+            currentQuiz: null,
+            // Bonus tracking
+            bonusActive: null,
+            bonusMultiplier: 1,
+            freeBoxesRemaining: 0,
+            doubleCoinsNext: 0,
+            halfPriceNext: 0,
+            instantWinNext: 0,
+            bonusHistory: [],
+            totalBonuses: 0,
+            // Statistics
+            totalCoinsEarned: 0,
+            totalCoinsSpent: 0,
+            highestStreak: 0,
+            currentStreak: 0,
+            lastPlayDate: null,
+            totalPlayTime: 0,
+            sessionStartTime: Date.now()
         };
 
         // Box emojis - diverse icons to hide content
@@ -874,7 +919,19 @@
                 return;
             }
             
-            const cost = calculateCost(item.complexity_score);
+            let cost = calculateCost(item.complexity_score);
+            let bonusApplied = '';
+            
+            // Apply bonuses
+            if (gameState.freeBoxesRemaining > 0) {
+                cost = 0;
+                gameState.freeBoxesRemaining--;
+                bonusApplied = ' (FREE BOX!)';
+            } else if (gameState.halfPriceNext > 0) {
+                cost = Math.ceil(cost / 2);
+                gameState.halfPriceNext--;
+                bonusApplied = ' (HALF PRICE!)';
+            }
             
             if (gameState.coins < cost) {
                 alert(`Not enough coins! You need ${cost} coins.`);
@@ -889,21 +946,53 @@
                 return;
             }
             
-            // Deduct coins immediately
+            // Deduct coins
             gameState.coins -= cost;
+            gameState.totalCoinsSpent += cost;
             saveGameState();
             updateStats();
             checkLowCoins();
+            
+            // Check for instant win bonus
+            if (gameState.instantWinNext > 0) {
+                gameState.instantWinNext--;
+                gameState.currentQuiz = {
+                    boxId: boxId,
+                    dotPointId: dotPointId,
+                    questions: [],
+                    currentQuestion: 0,
+                    attempts: 1,
+                    cost: cost,
+                    item: item,
+                    instantWin: true
+                };
+                
+                // Instant complete!
+                gameState.collected.push(dotPointId);
+                gameState.attempts[dotPointId] = 1;
+                gameState.totalAttempts++;
+                gameState.successfulAttempts++;
+                gameState.currentStreak++;
+                
+                alert(`🌟 INSTANT WIN BONUS! 🌟\n\nYou automatically collected:\n${item.topic}\n\nNo questions needed!`);
+                
+                saveGameState();
+                renderGrid();
+                updateStats();
+                updateCollection();
+                return;
+            }
             
             // Initialize quiz state
             gameState.currentQuiz = {
                 boxId: boxId,
                 dotPointId: dotPointId,
-                questions: shuffleArray([...questions]).slice(0, 6), // Take first 6 after shuffle
+                questions: shuffleArray([...questions]).slice(0, 6),
                 currentQuestion: 0,
                 attempts: 1,
                 cost: cost,
-                item: item
+                item: item,
+                bonusApplied: bonusApplied
             };
             
             // Track attempt
@@ -921,8 +1010,9 @@
             modal.classList.add('active');
             
             const quiz = gameState.currentQuiz;
+            const bonusText = quiz.bonusApplied || '';
             document.getElementById('quiz-topic').textContent = `Mystery Box #${gameState.currentQuiz.boxId + 1}: ${quiz.item.topic}`;
-            document.getElementById('quiz-cost').textContent = `Paid: ${quiz.cost} coins | Difficulty: ${quiz.item.rarity}`;
+            document.getElementById('quiz-cost').textContent = `Paid: ${quiz.cost} coins${bonusText} | Difficulty: ${quiz.item.rarity}`;
             document.getElementById('attempts-count').textContent = `Attempt: ${quiz.attempts}`;
         }
 
@@ -1006,12 +1096,14 @@
             feedback.innerHTML = `
                 <p>❌ Wrong answer! You reached question ${quiz.currentQuestion + 1}/6</p>
                 <p>Starting over... (Attempt ${quiz.attempts + 1})</p>
+                <p style="font-size: 12px; opacity: 0.8;">Streak lost! 😢</p>
             `;
             
-            // Increment attempts
+            // Increment attempts and reset streak
             quiz.attempts++;
             gameState.attempts[quiz.dotPointId]++;
             gameState.totalAttempts++;
+            gameState.currentStreak = 0; // Reset streak on wrong answer
             saveGameState();
             
             // Reset to first question after delay
@@ -1020,6 +1112,7 @@
                 quiz.questions = shuffleArray(quiz.questions);
                 document.getElementById('attempts-count').textContent = `Attempt: ${quiz.attempts}`;
                 displayQuestion();
+                updateStats(); // Update to show lost streak
             }, 2000);
         }
 
@@ -1032,6 +1125,24 @@
             gameState.attempts[quiz.dotPointId] = (gameState.attempts[quiz.dotPointId] || 0) + quiz.attempts;
             gameState.totalAttempts++;
             gameState.successfulAttempts++;
+            gameState.currentStreak++;
+            if (gameState.currentStreak > gameState.highestStreak) {
+                gameState.highestStreak = gameState.currentStreak;
+            }
+            
+            // Check for bonus
+            const bonus = checkForBonus();
+            let bonusMessage = '';
+            
+            if (bonus) {
+                gameState.totalBonuses++;
+                gameState.bonusHistory.push({
+                    type: bonus.type,
+                    date: new Date().toISOString(),
+                    boxId: quiz.boxId
+                });
+                bonusMessage = `<p style="color: #FFD700; font-size: 18px; margin-top: 10px;">🎊 BONUS: ${bonus.message} 🎊</p>`;
+            }
             
             // Show success message
             const feedback = document.getElementById('feedback');
@@ -1040,6 +1151,7 @@
                 <p>🎉 Congratulations! You've collected:</p>
                 <p><strong>${quiz.item.topic}</strong></p>
                 <p>Completed in ${quiz.attempts} attempt${quiz.attempts > 1 ? 's' : ''}</p>
+                ${bonusMessage}
             `;
             
             // Close modal after delay
@@ -1049,15 +1161,76 @@
                 updateStats();
                 updateCollection();
                 checkLowCoins();
-            }, 3000);
+            }, bonusMessage ? 4000 : 3000);
             
             saveGameState();
+        }
+        
+        // Check for random bonus
+        function checkForBonus() {
+            const roll = Math.random();
+            
+            // 10% chance of bonus
+            if (roll < 0.1) {
+                const bonusRoll = Math.random();
+                
+                if (bonusRoll < 0.3) {
+                    // 30% - Free next box
+                    gameState.freeBoxesRemaining = 1;
+                    return {
+                        type: 'free_box',
+                        message: 'Next box is FREE!'
+                    };
+                } else if (bonusRoll < 0.5) {
+                    // 20% - Double coins on next success
+                    gameState.doubleCoinsNext = 1;
+                    return {
+                        type: 'double_coins',
+                        message: 'Double coins on next success!'
+                    };
+                } else if (bonusRoll < 0.7) {
+                    // 20% - Instant 50 coins
+                    gameState.coins += 50;
+                    gameState.totalCoinsEarned += 50;
+                    return {
+                        type: 'instant_coins',
+                        message: '+50 bonus coins!'
+                    };
+                } else if (bonusRoll < 0.85) {
+                    // 15% - Half price next 3 boxes
+                    gameState.halfPriceNext = 3;
+                    return {
+                        type: 'half_price',
+                        message: 'Next 3 boxes half price!'
+                    };
+                } else {
+                    // 15% - Instant win next quiz
+                    gameState.instantWinNext = 1;
+                    return {
+                        type: 'instant_win',
+                        message: 'Next quiz: INSTANT WIN!'
+                    };
+                }
+            }
+            
+            // Extra bonus for streaks
+            if (gameState.currentStreak >= 5 && roll < 0.2) {
+                gameState.coins += 100;
+                gameState.totalCoinsEarned += 100;
+                return {
+                    type: 'streak_bonus',
+                    message: `5-Streak Bonus! +100 coins!`
+                };
+            }
+            
+            return null;
         }
 
         // Quit quiz
         function quitQuiz() {
-            if (confirm('Are you sure? You will forfeit the coins spent!')) {
+            if (confirm('Are you sure? You will forfeit the coins spent and lose your streak!')) {
                 gameState.totalAttempts++;
+                gameState.currentStreak = 0; // Reset streak on quit
                 saveGameState();
                 closeQuizModal();
                 updateStats();
@@ -1079,17 +1252,34 @@
             const affordableCount = countAffordableBoxes();
             
             document.getElementById('collected').textContent = `${gameState.collected.length}/${totalAvailable}`;
-            document.getElementById('total-attempts').textContent = gameState.totalAttempts;
+            document.getElementById('streak').textContent = gameState.currentStreak;
+            document.getElementById('bonuses').textContent = gameState.totalBonuses;
             
             const successRate = gameState.totalAttempts > 0 
                 ? Math.round((gameState.successfulAttempts / gameState.totalAttempts) * 100)
                 : 0;
             document.getElementById('success-rate').textContent = `${successRate}%`;
             
-            // Update header with available boxes count
+            // Show active bonuses in header
             const unitsDisplay = document.getElementById('units-loaded');
+            let bonusText = '';
+            if (gameState.freeBoxesRemaining > 0) {
+                bonusText += ` | 🆓 ${gameState.freeBoxesRemaining} free box${gameState.freeBoxesRemaining > 1 ? 'es' : ''}`;
+            }
+            if (gameState.halfPriceNext > 0) {
+                bonusText += ` | 💸 ${gameState.halfPriceNext} half price`;
+            }
+            if (gameState.instantWinNext > 0) {
+                bonusText += ` | ⭐ ${gameState.instantWinNext} instant win`;
+            }
+            if (gameState.doubleCoinsNext > 0) {
+                bonusText += ` | 💰 Double coins next`;
+            }
+            
             if (availableUnits.length > 0 && availableUnits[0] !== 'Demo Mode') {
-                unitsDisplay.innerHTML = `📚 Loaded: ${availableUnits.join(', ')} | 🎁 ${affordableCount} boxes available to open`;
+                unitsDisplay.innerHTML = `📚 Loaded: ${availableUnits.join(', ')} | 🎁 ${affordableCount} boxes available${bonusText}`;
+            } else {
+                unitsDisplay.innerHTML = `🎁 ${affordableCount} boxes available${bonusText}`;
             }
             
             checkLowCoins();
@@ -1117,13 +1307,38 @@
         function checkLowCoins() {
             const grindBtn = document.getElementById('grind-btn');
             const warning = document.getElementById('low-coins-warning');
+            const bonusIndicator = document.getElementById('bonus-indicator');
+            const bonusText = document.getElementById('bonus-text');
             
+            // Check for low coins
             if (gameState.coins < 10) {
                 grindBtn.style.display = 'block';
                 warning.style.display = 'block';
             } else {
                 grindBtn.style.display = 'none';
                 warning.style.display = 'none';
+            }
+            
+            // Check for active bonuses
+            const activeBonuses = [];
+            if (gameState.freeBoxesRemaining > 0) {
+                activeBonuses.push(`🆓 ${gameState.freeBoxesRemaining} FREE`);
+            }
+            if (gameState.halfPriceNext > 0) {
+                activeBonuses.push(`💸 ${gameState.halfPriceNext} HALF`);
+            }
+            if (gameState.instantWinNext > 0) {
+                activeBonuses.push(`⭐ INSTANT WIN`);
+            }
+            if (gameState.doubleCoinsNext > 0) {
+                activeBonuses.push(`💰 DOUBLE COINS`);
+            }
+            
+            if (activeBonuses.length > 0) {
+                bonusIndicator.style.display = 'block';
+                bonusText.textContent = activeBonuses.join(' | ');
+            } else {
+                bonusIndicator.style.display = 'none';
             }
         }
 
@@ -1478,14 +1693,23 @@
         function closeFlappyGame() {
             if (flappyGame) {
                 // Add earned coins
-                gameState.coins += flappyGame.coinsEarned;
+                const earned = flappyGame.coinsEarned;
+                gameState.coins += earned;
+                gameState.totalCoinsEarned += earned;
+                
+                // Apply double coins bonus if active
+                if (gameState.doubleCoinsNext > 0 && earned > 0) {
+                    gameState.coins += earned; // Double it!
+                    gameState.totalCoinsEarned += earned;
+                    gameState.doubleCoinsNext--;
+                    alert(`🎉 DOUBLE COINS BONUS! You earned ${earned * 2} coins from Flappy Quantum!`);
+                } else if (earned > 0) {
+                    alert(`🎉 You earned ${earned} coins from Flappy Quantum!`);
+                }
+                
                 saveGameState();
                 updateStats();
                 renderGrid();
-                
-                if (flappyGame.coinsEarned > 0) {
-                    alert(`🎉 You earned ${flappyGame.coinsEarned} coins from Flappy Quantum!`);
-                }
                 
                 // Cleanup
                 flappyGame.destroy();
@@ -1508,7 +1732,19 @@
 
         // Save game state to localStorage
         function saveGameState() {
-            localStorage.setItem('physicsLootboxState', JSON.stringify(gameState));
+            // Don't save temporary quiz state
+            const stateToSave = {...gameState};
+            delete stateToSave.currentQuiz;
+            stateToSave.lastPlayDate = new Date().toISOString();
+            
+            // Calculate total play time
+            if (stateToSave.sessionStartTime) {
+                const sessionTime = Date.now() - stateToSave.sessionStartTime;
+                stateToSave.totalPlayTime = (stateToSave.totalPlayTime || 0) + sessionTime;
+                stateToSave.sessionStartTime = Date.now(); // Reset for next save
+            }
+            
+            localStorage.setItem('physicsLootboxState', JSON.stringify(stateToSave));
         }
 
         // Load game state from localStorage
@@ -1516,16 +1752,51 @@
             const saved = localStorage.getItem('physicsLootboxState');
             if (saved) {
                 const savedState = JSON.parse(saved);
-                gameState = savedState;
+                
+                // Merge with default state to ensure all properties exist
+                gameState = {
+                    ...gameState,  // Default values
+                    ...savedState  // Saved values override defaults
+                };
+                
                 // Ensure boxEmojis exists for older saves
                 if (!gameState.boxEmojis) {
                     gameState.boxEmojis = {};
-                    // Regenerate emojis for existing boxes
                     const shuffledEmojis = [...boxEmojis].sort(() => Math.random() - 0.5);
                     Object.keys(gameState.boxMapping).forEach((boxId, index) => {
                         gameState.boxEmojis[boxId] = shuffledEmojis[index % shuffledEmojis.length];
                     });
                 }
+                
+                // Initialize new properties for older saves
+                if (gameState.totalBonuses === undefined) gameState.totalBonuses = 0;
+                if (!gameState.bonusHistory) gameState.bonusHistory = [];
+                if (!gameState.freeBoxesRemaining) gameState.freeBoxesRemaining = 0;
+                if (!gameState.halfPriceNext) gameState.halfPriceNext = 0;
+                if (!gameState.instantWinNext) gameState.instantWinNext = 0;
+                if (!gameState.doubleCoinsNext) gameState.doubleCoinsNext = 0;
+                if (!gameState.currentStreak) gameState.currentStreak = 0;
+                if (!gameState.highestStreak) gameState.highestStreak = 0;
+                if (!gameState.totalCoinsEarned) gameState.totalCoinsEarned = 0;
+                if (!gameState.totalCoinsSpent) gameState.totalCoinsSpent = 0;
+                
+                // Update session time
+                gameState.sessionStartTime = Date.now();
+                if (gameState.lastPlayDate) {
+                    const lastPlay = new Date(gameState.lastPlayDate);
+                    const now = new Date();
+                    const hoursSinceLastPlay = (now - lastPlay) / (1000 * 60 * 60);
+                    
+                    // Daily bonus - 50 coins if haven't played in 24 hours
+                    if (hoursSinceLastPlay >= 24) {
+                        gameState.coins += 50;
+                        gameState.totalCoinsEarned += 50;
+                        setTimeout(() => {
+                            alert('🎉 Welcome back! Daily bonus: +50 coins!');
+                        }, 1000);
+                    }
+                }
+                gameState.lastPlayDate = new Date().toISOString();
             }
         }
 
