@@ -53,9 +53,6 @@
         .main-container {
             max-width: 1200px;
             margin: 0 auto;
-            display: grid;
-            grid-template-columns: 1fr 300px;
-            gap: 20px;
         }
 
         .lootbox-grid {
@@ -66,6 +63,7 @@
             grid-template-columns: repeat(10, 1fr);
             gap: 8px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
         }
 
         .box {
@@ -77,7 +75,7 @@
             align-items: center;
             justify-content: center;
             font-weight: bold;
-            font-size: 12px;
+            font-size: 24px;
             position: relative;
             overflow: hidden;
         }
@@ -88,46 +86,54 @@
         }
 
         .box.unopened:hover {
-            transform: scale(1.1);
+            transform: scale(1.1) rotate(5deg);
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            background: linear-gradient(145deg, #fff, #e0e0e0);
         }
 
-        .box.locked {
-            background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
-            border: 2px solid #444;
-            cursor: not-allowed;
-            opacity: 0.5;
-        }
-
-        .box.locked::after {
-            content: '🔒';
-            position: absolute;
-            font-size: 20px;
+        .box.hidden {
+            visibility: hidden;
+            cursor: default;
         }
 
         .box.collected {
             border: 2px solid #4CAF50;
             cursor: default;
             background: linear-gradient(145deg, #a8d5a8, #90c090);
+            opacity: 0.7;
         }
 
         .box.collected::after {
             content: '✓';
             position: absolute;
             color: white;
-            font-size: 24px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            font-size: 36px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            z-index: 1;
         }
 
-        .box-cost {
+        .box.collected .box-emoji {
+            opacity: 0.3;
+        }
+
+        .box-emoji {
+            font-size: 36px;
+            transition: transform 0.3s ease;
+        }
+
+        .box.unopened:hover .box-emoji {
+            transform: scale(1.2);
+        }
+
+        .box-number {
             position: absolute;
             bottom: 2px;
-            right: 2px;
-            background: rgba(0,0,0,0.7);
-            color: #FFD700;
-            padding: 2px 4px;
+            right: 4px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            padding: 1px 4px;
             border-radius: 3px;
-            font-size: 10px;
+            font-size: 9px;
         }
 
         .collection-panel {
@@ -135,17 +141,36 @@
             border-radius: 15px;
             padding: 20px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-            max-height: 600px;
+            margin-bottom: 100px;
+        }
+
+        .collection-header {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #764ba2;
+        }
+
+        .collection-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            max-height: 400px;
             overflow-y: auto;
+            padding: 10px;
         }
 
         .collection-item {
             background: linear-gradient(145deg, #f5f5f5, #e0e0e0);
             border-radius: 8px;
-            padding: 10px;
-            margin-bottom: 10px;
-            font-size: 12px;
+            padding: 12px;
             position: relative;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .collection-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
         }
 
         .collection-item .topic {
@@ -158,6 +183,7 @@
             color: #666;
             font-size: 11px;
             margin-bottom: 5px;
+            line-height: 1.3;
         }
 
         .collection-item .attempts {
@@ -477,13 +503,14 @@
         .low-coins-warning {
             background: linear-gradient(145deg, #ff6b6b, #ff8e53);
             color: white;
-            padding: 10px 20px;
+            padding: 15px 30px;
             border-radius: 10px;
-            margin: 10px auto;
+            margin: 20px auto;
             text-align: center;
             font-weight: bold;
             animation: warning-pulse 2s infinite;
             max-width: 600px;
+            box-shadow: 0 5px 15px rgba(255,107,107,0.3);
         }
 
         @keyframes warning-pulse {
@@ -496,8 +523,23 @@
             50% { transform: scale(1.05); }
         }
 
-        .box.unopened.affordable {
-            animation: pulse 2s infinite;
+        @keyframes fadeIn {
+            from { 
+                opacity: 0;
+                transform: scale(0.5) rotate(180deg);
+            }
+            to { 
+                opacity: 1;
+                transform: scale(1) rotate(0deg);
+            }
+        }
+        
+        .box.newly-revealed {
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .box.unopened {
+            animation: mystery-glow 2s infinite;
         }
     </style>
 </head>
@@ -563,9 +605,12 @@
 
     <div class="main-container">
         <div class="lootbox-grid" id="lootbox-grid"></div>
+        
         <div class="collection-panel">
-            <h3>📚 Collection</h3>
-            <div id="collection-list"></div>
+            <div class="collection-header">
+                <h2>📚 Your Physics Collection 📚</h2>
+            </div>
+            <div class="collection-grid" id="collection-list"></div>
             <button class="reset-btn" onclick="resetMapping()">🔄 Reset Box Positions</button>
         </div>
     </div>
@@ -604,8 +649,23 @@
             totalAttempts: 0,
             successfulAttempts: 0,
             boxMapping: {},
+            boxEmojis: {},
             currentQuiz: null
         };
+
+        // Box emojis - diverse icons to hide content
+        const boxEmojis = [
+            '📦', '🎁', '🎀', '💝', '🎉', '✨', '🌟', '⭐', '💫', '🌠',
+            '🔮', '💎', '🏆', '🎯', '🎲', '🎪', '🎨', '🎭', '🌈', '🦄',
+            '🚀', '🛸', '🌌', '🪐', '☄️', '🌙', '⚡', '🔥', '💥', '💢',
+            '❄️', '🌊', '🌪️', '🌀', '🔵', '🟣', '🟡', '🟢', '🔴', '🟠',
+            '♾️', '⚛️', '🧲', '🔬', '🔭', '🧬', '🧪', '⚗️', '🌡️', '🎓',
+            '🎸', '🎺', '🎻', '🥁', '🎹', '🎤', '🎧', '📻', '🔔', '🔊',
+            '🍎', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍒', '🍑',
+            '🦋', '🐝', '🐛', '🦗', '🕷️', '🦂', '🐢', '🐍', '🦎', '🐙',
+            '🌸', '🌺', '🌻', '🌹', '🌷', '🌵', '🌲', '🌴', '🍄', '🌾',
+            '🗿', '⚙️', '🔩', '⚖️', '🔗', '⛓️', '🧰', '🔨', '⛏️', '🪓'
+        ];
 
         // Data storage
         let sdContent = null;
@@ -625,14 +685,6 @@
             updateStats();
             updateCollection();
             checkLowCoins(); // Check if coins are low on startup
-            
-            // Display loaded units
-            const unitsDisplay = document.getElementById('units-loaded');
-            if (availableUnits.length > 0 && availableUnits[0] !== 'Demo Mode') {
-                unitsDisplay.textContent = `📚 Loaded: ${availableUnits.join(', ')}`;
-            } else if (availableUnits[0] === 'Demo Mode') {
-                unitsDisplay.textContent = '⚠️ Demo Mode (no question files found)';
-            }
             
             console.log('Game initialized successfully!');
             console.log('Boxes with content:', Object.keys(gameState.boxMapping).sort((a,b) => Number(a)-Number(b)).join(', '));
@@ -731,10 +783,16 @@
             const availableBoxes = Array.from({length: 100}, (_, i) => i);
             const shuffled = availableBoxes.sort(() => Math.random() - 0.5);
             
-            // Map dot points to random boxes
+            // Shuffle emojis for random assignment
+            const shuffledEmojis = [...boxEmojis].sort(() => Math.random() - 0.5);
+            
+            // Map dot points to random boxes and assign emojis
             availableDotPoints.forEach((dotPointId, index) => {
                 if (index < shuffled.length) {
-                    gameState.boxMapping[shuffled[index]] = dotPointId;
+                    const boxId = shuffled[index];
+                    gameState.boxMapping[boxId] = dotPointId;
+                    // Assign a random emoji to this box
+                    gameState.boxEmojis[boxId] = shuffledEmojis[index % shuffledEmojis.length];
                 }
             });
             
@@ -762,33 +820,37 @@
                     const item = sdContent.find(item => item.id === dotPointId);
                     
                     if (!item) {
-                        console.warn(`Item not found for dot point ${dotPointId}`);
-                        box.classList.add('locked');
-                        box.innerHTML = `#${i + 1}`;
+                        // No item data - hide box
+                        box.classList.add('hidden');
                         grid.appendChild(box);
                         continue;
                     }
                     
+                    const cost = calculateCost(item.complexity_score);
+                    const emoji = gameState.boxEmojis[i] || '📦';
+                    
                     if (gameState.collected.includes(dotPointId)) {
+                        // Collected box
                         box.classList.add('collected');
-                        box.innerHTML = `#${i + 1}`;
-                    } else {
-                        box.classList.add('unopened');
-                        const cost = calculateCost(item.complexity_score);
-                        
-                        if (gameState.coins >= cost) {
-                            box.classList.add('affordable');
-                        }
-                        
                         box.innerHTML = `
-                            #${i + 1}
-                            <span class="box-cost">${cost}🪙</span>
+                            <span class="box-emoji">${emoji}</span>
+                            <span class="box-number">${i + 1}</span>
+                        `;
+                    } else if (gameState.coins >= cost) {
+                        // Unopened but affordable
+                        box.classList.add('unopened');
+                        box.innerHTML = `
+                            <span class="box-emoji">${emoji}</span>
+                            <span class="box-number">${i + 1}</span>
                         `;
                         box.onclick = () => startQuiz(i, dotPointId);
+                    } else {
+                        // Unaffordable - hide it
+                        box.classList.add('hidden');
                     }
                 } else {
-                    box.classList.add('locked');
-                    box.innerHTML = `#${i + 1}`;
+                    // No content - hide box
+                    box.classList.add('hidden');
                 }
                 
                 grid.appendChild(box);
@@ -822,6 +884,7 @@
             gameState.coins -= cost;
             saveGameState();
             updateStats();
+            checkLowCoins();
             
             // Initialize quiz state
             gameState.currentQuiz = {
@@ -849,8 +912,8 @@
             modal.classList.add('active');
             
             const quiz = gameState.currentQuiz;
-            document.getElementById('quiz-topic').textContent = quiz.item.topic;
-            document.getElementById('quiz-cost').textContent = `Cost: ${quiz.cost} coins | Rarity: ${quiz.item.rarity}`;
+            document.getElementById('quiz-topic').textContent = `Mystery Box #${gameState.currentQuiz.boxId + 1}: ${quiz.item.topic}`;
+            document.getElementById('quiz-cost').textContent = `Paid: ${quiz.cost} coins | Difficulty: ${quiz.item.rarity}`;
             document.getElementById('attempts-count').textContent = `Attempt: ${quiz.attempts}`;
         }
 
@@ -976,6 +1039,7 @@
                 renderGrid();
                 updateStats();
                 updateCollection();
+                checkLowCoins();
             }, 3000);
             
             saveGameState();
@@ -988,6 +1052,7 @@
                 saveGameState();
                 closeQuizModal();
                 updateStats();
+                checkLowCoins();
             }
         }
 
@@ -1002,6 +1067,8 @@
             document.getElementById('coins').textContent = gameState.coins;
             
             const totalAvailable = Object.keys(gameState.boxMapping).length;
+            const affordableCount = countAffordableBoxes();
+            
             document.getElementById('collected').textContent = `${gameState.collected.length}/${totalAvailable}`;
             document.getElementById('total-attempts').textContent = gameState.totalAttempts;
             
@@ -1010,7 +1077,31 @@
                 : 0;
             document.getElementById('success-rate').textContent = `${successRate}%`;
             
+            // Update header with available boxes count
+            const unitsDisplay = document.getElementById('units-loaded');
+            if (availableUnits.length > 0 && availableUnits[0] !== 'Demo Mode') {
+                unitsDisplay.innerHTML = `📚 Loaded: ${availableUnits.join(', ')} | 🎁 ${affordableCount} boxes available to open`;
+            }
+            
             checkLowCoins();
+        }
+        
+        // Count affordable boxes
+        function countAffordableBoxes() {
+            let count = 0;
+            Object.keys(gameState.boxMapping).forEach(boxId => {
+                const dotPointId = gameState.boxMapping[boxId];
+                if (!gameState.collected.includes(dotPointId)) {
+                    const item = sdContent.find(item => item.id === dotPointId);
+                    if (item) {
+                        const cost = calculateCost(item.complexity_score);
+                        if (gameState.coins >= cost) {
+                            count++;
+                        }
+                    }
+                }
+            });
+            return count;
         }
 
         // Check if coins are low and show/hide grind button
@@ -1032,6 +1123,11 @@
             const list = document.getElementById('collection-list');
             list.innerHTML = '';
             
+            if (gameState.collected.length === 0) {
+                list.innerHTML = '<div style="text-align: center; opacity: 0.6; padding: 40px;">No items collected yet. Open lootboxes to build your collection!</div>';
+                return;
+            }
+            
             gameState.collected.sort((a, b) => a - b).forEach(dotPointId => {
                 const item = sdContent.find(item => item.id === dotPointId);
                 if (!item) return;
@@ -1041,9 +1137,9 @@
                 const div = document.createElement('div');
                 div.className = `collection-item rarity-${item.rarity}`;
                 div.innerHTML = `
-                    <div class="topic">${item.topic}</div>
-                    <div class="dot-point">${item.dot_point}</div>
-                    <div class="attempts">${attempts} try${attempts > 1 ? 's' : ''}</div>
+                    <div class="topic"><strong>${item.topic}</strong></div>
+                    <div class="dot-point" style="font-size: 11px; margin-top: 5px;">${item.dot_point}</div>
+                    <div class="attempts">${attempts} attempt${attempts > 1 ? 's' : ''}</div>
                 `;
                 list.appendChild(div);
             });
@@ -1473,6 +1569,7 @@
         function resetMapping() {
             if (confirm('This will shuffle all box positions. Your collection will be preserved. Continue?')) {
                 gameState.boxMapping = {};
+                gameState.boxEmojis = {};
                 saveGameState();
                 location.reload();
             }
