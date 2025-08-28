@@ -659,8 +659,11 @@
             }
 
             async loadVocabulary() {
+                console.log('Starting vocabulary load...');
+                
                 // Check if we're in Claude.ai environment
                 if (window.fs && window.fs.readFile) {
+                    console.log('Claude.ai environment detected');
                     try {
                         // Try to load the complete vocabulary JSON
                         const vocabText = await window.fs.readFile('vocabulary.json', { encoding: 'utf8' });
@@ -668,6 +671,8 @@
                         
                         if (vocabData.vocabulary) {
                             this.vocabulary = vocabData.vocabulary;
+                            console.log('Loaded vocabulary.json with', this.vocabulary.length, 'words');
+                            console.log('First word structure:', this.vocabulary[0]);
                             return;
                         }
                     } catch (error) {
@@ -676,6 +681,7 @@
                             const wordListText = await window.fs.readFile('9 pages sorted', { encoding: 'utf8' });
                             const words = wordListText.split('\n').filter(word => word.trim());
                             this.vocabulary = words.map(word => this.generateWordData(word));
+                            console.log('Generated vocabulary from word list:', this.vocabulary.length, 'words');
                             return;
                         } catch (fallbackError) {
                             console.log('No word list found either');
@@ -685,21 +691,26 @@
                 
                 // Try to fetch from a URL (for standalone usage)
                 try {
+                    console.log('Attempting to fetch vocabulary.json from URL...');
                     const response = await fetch('vocabulary.json');
                     if (response.ok) {
                         const vocabData = await response.json();
                         if (vocabData.vocabulary) {
                             this.vocabulary = vocabData.vocabulary;
+                            console.log('Loaded vocabulary.json from URL with', this.vocabulary.length, 'words');
+                            console.log('First word structure:', this.vocabulary[0]);
                             return;
                         }
                     }
                 } catch (error) {
-                    console.log('Could not fetch vocabulary.json:', error);
+                    console.log('Could not fetch vocabulary.json:', error.message);
                 }
                 
                 // Use embedded vocabulary data
                 console.log('Using embedded default vocabulary');
                 this.vocabulary = this.getDefaultVocabulary();
+                console.log('Default vocabulary loaded:', this.vocabulary.length, 'words');
+                console.log('First word structure:', this.vocabulary[0]);
             }
 
             generateWordData(word) {
@@ -1136,14 +1147,28 @@
             }
 
             createDefinitionQuestion() {
+                // Ensure current word has definitions
+                if (!this.currentWord.definitions || this.currentWord.definitions.length === 0) {
+                    console.error('Current word missing definitions:', this.currentWord);
+                    return '<div class="error-message">Error: Word missing definitions</div>';
+                }
+                
                 const correctDef = this.currentWord.definitions[0];
-                const distractors = this.getRandomWords(3).map(w => w.definitions[0]);
+                const distractors = this.getRandomWords(3)
+                    .filter(w => w.definitions && w.definitions.length > 0)
+                    .map(w => w.definitions[0]);
+                
+                // If we don't have enough distractors, add generic ones
+                while (distractors.length < 3) {
+                    distractors.push(`A different meaning unrelated to ${this.currentWord.word}`);
+                }
+                
                 const options = this.shuffleArray([correctDef, ...distractors]);
 
                 return `
                     <div class="word-display">
                         <div class="word-main">${this.currentWord.word}</div>
-                        <div class="word-pronunciation">${this.currentWord.pronunciation.phonetic_spelling}</div>
+                        <div class="word-pronunciation">${this.currentWord.pronunciation?.phonetic_spelling || ''}</div>
                     </div>
                     <div class="question-text">What is the definition of this word?</div>
                     <div class="options-grid">
@@ -1157,9 +1182,21 @@
             }
 
             createSynonymQuestion() {
+                if (!this.currentWord.synonyms || this.currentWord.synonyms.length === 0) {
+                    console.error('Current word missing synonyms:', this.currentWord);
+                    return '<div class="error-message">Error: Word missing synonyms</div>';
+                }
+                
                 const synonyms = this.currentWord.synonyms;
                 const correctSynonym = synonyms[0];
-                const distractors = this.getRandomWords(3).map(w => w.word);
+                const distractors = this.getRandomWords(3)
+                    .filter(w => w && w.word)
+                    .map(w => w.word || 'unknown');
+                
+                while (distractors.length < 3) {
+                    distractors.push(`unrelated${distractors.length + 1}`);
+                }
+                
                 const options = this.shuffleArray([correctSynonym, ...distractors]);
 
                 return `
@@ -1178,9 +1215,21 @@
             }
 
             createAntonymQuestion() {
+                if (!this.currentWord.antonyms || this.currentWord.antonyms.length === 0) {
+                    console.error('Current word missing antonyms:', this.currentWord);
+                    return '<div class="error-message">Error: Word missing antonyms</div>';
+                }
+                
                 const antonyms = this.currentWord.antonyms;
                 const correctAntonym = antonyms[0];
-                const distractors = this.getRandomWords(3).map(w => w.word);
+                const distractors = this.getRandomWords(3)
+                    .filter(w => w && w.word)
+                    .map(w => w.word || 'unknown');
+                
+                while (distractors.length < 3) {
+                    distractors.push(`unrelated${distractors.length + 1}`);
+                }
+                
                 const options = this.shuffleArray([correctAntonym, ...distractors]);
 
                 return `
@@ -1199,9 +1248,20 @@
             }
 
             createUsageQuestion() {
+                if (!this.currentWord.usage_examples || this.currentWord.usage_examples.length === 0) {
+                    console.error('Current word missing usage examples:', this.currentWord);
+                    return '<div class="error-message">Error: Word missing usage examples</div>';
+                }
+                
                 const examples = this.currentWord.usage_examples;
-                const correctExamples = examples.filter(e => e.correct);
-                const incorrectExamples = examples.filter(e => !e.correct);
+                const correctExamples = examples.filter(e => e && e.correct);
+                const incorrectExamples = examples.filter(e => e && !e.correct);
+                
+                // Ensure we have at least some examples
+                if (correctExamples.length === 0 || incorrectExamples.length === 0) {
+                    console.error('Insufficient usage examples:', this.currentWord);
+                    return '<div class="error-message">Error: Insufficient usage examples</div>';
+                }
                 
                 // Select 2 correct and 2 incorrect
                 const selectedCorrect = correctExamples.slice(0, 2);
