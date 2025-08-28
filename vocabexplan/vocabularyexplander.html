@@ -628,13 +628,33 @@
             async init() {
                 try {
                     await this.loadVocabulary();
+                    
+                    // Verify vocabulary loaded
+                    if (!this.vocabulary || this.vocabulary.length === 0) {
+                        throw new Error('No vocabulary loaded');
+                    }
+                    
+                    console.log(`Successfully loaded ${this.vocabulary.length} words`);
+                    
                     this.setupEventListeners();
                     this.updateStats();
                     this.checkBadges();
                     this.startQuiz();
                 } catch (error) {
                     console.error('Initialization error:', error);
-                    this.showError('Failed to load vocabulary data');
+                    console.error('Stack trace:', error.stack);
+                    
+                    // Try to use default vocabulary as last resort
+                    this.vocabulary = this.getDefaultVocabulary();
+                    if (this.vocabulary && this.vocabulary.length > 0) {
+                        console.log('Recovered with default vocabulary');
+                        this.setupEventListeners();
+                        this.updateStats();
+                        this.checkBadges();
+                        this.startQuiz();
+                    } else {
+                        this.showError('Failed to load vocabulary data. Check console for details.');
+                    }
                 }
             }
 
@@ -1349,6 +1369,19 @@
             }
 
             updateStats() {
+                // Ensure DOM elements exist
+                const accuracyEl = document.getElementById('accuracy');
+                const progressEl = document.getElementById('overall-progress');
+                const masteredEl = document.getElementById('mastered-count');
+                const defProgressEl = document.getElementById('def-progress');
+                const synProgressEl = document.getElementById('syn-progress');
+                const usageProgressEl = document.getElementById('usage-progress');
+                
+                if (!accuracyEl || !progressEl || !masteredEl || !defProgressEl || !synProgressEl || !usageProgressEl) {
+                    console.error('Required DOM elements not found');
+                    return;
+                }
+                
                 // Calculate overall progress
                 const totalWords = this.vocabulary.length;
                 const masteredWords = this.getMasteredCount();
@@ -1375,17 +1408,14 @@
                 });
                 
                 // Update UI
-                document.getElementById('accuracy').textContent = `${accuracy}%`;
-                document.getElementById('overall-progress').textContent = `${overallProgress}%`;
-                document.getElementById('mastered-count').textContent = masteredWords;
+                accuracyEl.textContent = `${accuracy}%`;
+                progressEl.textContent = `${overallProgress}%`;
+                masteredEl.textContent = masteredWords;
                 
                 // Update progress bars
-                document.getElementById('def-progress').style.width = 
-                    `${(typeProgress.definition / totalWords) * 100}%`;
-                document.getElementById('syn-progress').style.width = 
-                    `${(typeProgress.synonym / totalWords) * 100}%`;
-                document.getElementById('usage-progress').style.width = 
-                    `${(typeProgress.usage / totalWords) * 100}%`;
+                defProgressEl.style.width = `${(typeProgress.definition / totalWords) * 100}%`;
+                synProgressEl.style.width = `${(typeProgress.synonym / totalWords) * 100}%`;
+                usageProgressEl.style.width = `${(typeProgress.usage / totalWords) * 100}%`;
             }
 
             getMasteredCount() {
