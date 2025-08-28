@@ -574,6 +574,10 @@
             <button class="mode-btn" data-mode="antonym">↔️ Antonyms</button>
             <button class="mode-btn" data-mode="usage">✏️ Usage</button>
             <button class="mode-btn" data-mode="mixed">🎲 Mixed Mode</button>
+            <label class="mode-btn" style="position: relative; overflow: hidden;">
+                📁 Load JSON
+                <input type="file" accept=".json" id="file-input" style="position: absolute; left: -9999px;">
+            </label>
         </div>
 
         <div class="quiz-container" id="quiz-container">
@@ -635,34 +639,47 @@
             }
 
             async loadVocabulary() {
-                try {
-                    // Try to load the complete vocabulary JSON
-                    const vocabText = await window.fs.readFile('vocabulary.json', { encoding: 'utf8' });
-                    const vocabData = JSON.parse(vocabText);
-                    
-                    // Handle both single file and array of words
-                    if (vocabData.vocabulary) {
-                        this.vocabulary = vocabData.vocabulary;
-                    } else if (Array.isArray(vocabData)) {
-                        this.vocabulary = vocabData;
-                    } else {
-                        // Fallback to old format
-                        throw new Error('Unexpected JSON format');
-                    }
-                } catch (error) {
-                    console.log('Loading with fallback method...', error);
-                    // Fallback: Load the word list and generate data
+                // Check if we're in Claude.ai environment
+                if (window.fs && window.fs.readFile) {
                     try {
-                        const wordListText = await window.fs.readFile('9 pages sorted', { encoding: 'utf8' });
-                        const words = wordListText.split('\n').filter(word => word.trim());
+                        // Try to load the complete vocabulary JSON
+                        const vocabText = await window.fs.readFile('vocabulary.json', { encoding: 'utf8' });
+                        const vocabData = JSON.parse(vocabText);
                         
-                        // Generate vocabulary data for each word
-                        this.vocabulary = words.map(word => this.generateWordData(word));
-                    } catch (fallbackError) {
-                        console.error('Failed to load vocabulary:', fallbackError);
-                        this.vocabulary = this.getDefaultVocabulary();
+                        if (vocabData.vocabulary) {
+                            this.vocabulary = vocabData.vocabulary;
+                            return;
+                        }
+                    } catch (error) {
+                        console.log('No vocabulary.json found, trying word list...');
+                        try {
+                            const wordListText = await window.fs.readFile('9 pages sorted', { encoding: 'utf8' });
+                            const words = wordListText.split('\n').filter(word => word.trim());
+                            this.vocabulary = words.map(word => this.generateWordData(word));
+                            return;
+                        } catch (fallbackError) {
+                            console.log('No word list found either');
+                        }
                     }
                 }
+                
+                // Try to fetch from a URL (for standalone usage)
+                try {
+                    const response = await fetch('vocabulary.json');
+                    if (response.ok) {
+                        const vocabData = await response.json();
+                        if (vocabData.vocabulary) {
+                            this.vocabulary = vocabData.vocabulary;
+                            return;
+                        }
+                    }
+                } catch (error) {
+                    console.log('Could not fetch vocabulary.json:', error);
+                }
+                
+                // Use embedded vocabulary data
+                console.log('Using embedded default vocabulary');
+                this.vocabulary = this.getDefaultVocabulary();
             }
 
             generateWordData(word) {
@@ -743,22 +760,23 @@
             }
 
             getDefaultVocabulary() {
-                // Fallback vocabulary if files can't be loaded
+                // Complete embedded vocabulary for standalone usage
                 return [
                     {
                         word: "ephemeral",
                         pronunciation: { phonetic_spelling: "ih-FEM-er-uhl" },
                         definitions: [
                             "Lasting for a very short time; transitory",
-                            "Living or lasting only a day"
+                            "Living or lasting only a day",
+                            "Something beautiful but short-lived"
                         ],
                         synonyms: ["transitory", "fleeting", "momentary"],
                         antonyms: ["permanent", "enduring", "eternal"],
                         usage_examples: [
-                            { sentence: "The beauty of cherry blossoms is ephemeral.", correct: true },
-                            { sentence: "His ephemeral car has been there for years.", correct: false },
-                            { sentence: "Social media stories are ephemeral.", correct: true },
-                            { sentence: "The ephemeral meeting lasted all day.", correct: false }
+                            { sentence: "The beauty of cherry blossoms is ephemeral, lasting only a few weeks.", correct: true },
+                            { sentence: "His ephemeral car has been parked there for ten years.", correct: false },
+                            { sentence: "Social media stories are ephemeral, disappearing after 24 hours.", correct: true },
+                            { sentence: "The ephemeral meeting was scheduled to last all day.", correct: false }
                         ],
                         difficulty_level: "intermediate"
                     },
@@ -766,18 +784,163 @@
                         word: "serendipity",
                         pronunciation: { phonetic_spelling: "ser-uhn-DIP-ih-tee" },
                         definitions: [
-                            "The occurrence of events by chance in a happy way",
-                            "Making fortunate discoveries by accident"
+                            "The occurrence of events by chance in a happy or beneficial way",
+                            "Making fortunate discoveries by accident",
+                            "A pleasant surprise or happy accident"
                         ],
                         synonyms: ["coincidence", "fortuity", "providence"],
                         antonyms: ["misfortune", "design", "plan"],
                         usage_examples: [
-                            { sentence: "Finding $20 in my coat was pure serendipity.", correct: true },
-                            { sentence: "The serendipity of the tragedy was devastating.", correct: false },
-                            { sentence: "Many discoveries were made through serendipity.", correct: true },
+                            { sentence: "Finding $20 in my old coat was pure serendipity.", correct: true },
+                            { sentence: "The serendipity of the tragedy left everyone devastated.", correct: false },
+                            { sentence: "Many scientific discoveries were made through serendipity.", correct: true },
                             { sentence: "He planned everything with careful serendipity.", correct: false }
                         ],
                         difficulty_level: "intermediate"
+                    },
+                    {
+                        word: "ubiquitous",
+                        pronunciation: { phonetic_spelling: "yoo-BIK-wih-tuhs" },
+                        definitions: [
+                            "Present, appearing, or found everywhere",
+                            "Seeming to be everywhere at the same time",
+                            "Widespread or universal in occurrence"
+                        ],
+                        synonyms: ["omnipresent", "pervasive", "universal"],
+                        antonyms: ["rare", "scarce", "uncommon"],
+                        usage_examples: [
+                            { sentence: "Smartphones have become ubiquitous in modern society.", correct: true },
+                            { sentence: "The ubiquitous gem was so rare that only three existed.", correct: false },
+                            { sentence: "Coffee shops are ubiquitous in Seattle.", correct: true },
+                            { sentence: "His ubiquitous absence was noticed by everyone.", correct: false }
+                        ],
+                        difficulty_level: "intermediate"
+                    },
+                    {
+                        word: "mellifluous",
+                        pronunciation: { phonetic_spelling: "meh-LIF-loo-uhs" },
+                        definitions: [
+                            "Sweet or musical; pleasant to hear",
+                            "Flowing with honey; smooth and sweet",
+                            "Having a smooth rich flow"
+                        ],
+                        synonyms: ["dulcet", "euphonious", "melodious"],
+                        antonyms: ["harsh", "cacophonous", "discordant"],
+                        usage_examples: [
+                            { sentence: "The narrator's mellifluous voice made the audiobook enjoyable.", correct: true },
+                            { sentence: "The mellifluous texture of sandpaper was rough.", correct: false },
+                            { sentence: "Jazz filled the room with mellifluous tones.", correct: true },
+                            { sentence: "The mellifluous smell of garbage filled the alley.", correct: false }
+                        ],
+                        difficulty_level: "advanced"
+                    },
+                    {
+                        word: "laconic",
+                        pronunciation: { phonetic_spelling: "luh-KON-ik" },
+                        definitions: [
+                            "Using very few words; brief and concise",
+                            "Expressing much in few words",
+                            "Terse in speech or writing"
+                        ],
+                        synonyms: ["terse", "concise", "succinct"],
+                        antonyms: ["verbose", "wordy", "loquacious"],
+                        usage_examples: [
+                            { sentence: "His laconic reply of 'yes' ended the discussion.", correct: true },
+                            { sentence: "She gave a laconic three-hour presentation.", correct: false },
+                            { sentence: "The laconic text message simply read 'OK.'", correct: true },
+                            { sentence: "His laconic speech went on for hours.", correct: false }
+                        ],
+                        difficulty_level: "intermediate"
+                    },
+                    {
+                        word: "pragmatic",
+                        pronunciation: { phonetic_spelling: "prag-MAT-ik" },
+                        definitions: [
+                            "Dealing with things sensibly and realistically",
+                            "Practical rather than idealistic",
+                            "Based on practical considerations"
+                        ],
+                        synonyms: ["practical", "realistic", "sensible"],
+                        antonyms: ["idealistic", "impractical", "theoretical"],
+                        usage_examples: [
+                            { sentence: "Her pragmatic approach to the budget saved the company.", correct: true },
+                            { sentence: "His pragmatic dreams were completely unrealistic.", correct: false },
+                            { sentence: "We need a pragmatic solution we can implement now.", correct: true },
+                            { sentence: "The pragmatic philosopher only dealt with abstract concepts.", correct: false }
+                        ],
+                        difficulty_level: "intermediate"
+                    },
+                    {
+                        word: "quixotic",
+                        pronunciation: { phonetic_spelling: "kwik-SOT-ik" },
+                        definitions: [
+                            "Extremely idealistic and unrealistic",
+                            "Exceedingly romantic without regard to practicality",
+                            "Impractically idealistic"
+                        ],
+                        synonyms: ["idealistic", "romantic", "visionary"],
+                        antonyms: ["pragmatic", "realistic", "practical"],
+                        usage_examples: [
+                            { sentence: "His quixotic quest to eliminate all poverty was admirable.", correct: true },
+                            { sentence: "Her quixotic business plan was practical and guaranteed.", correct: false },
+                            { sentence: "The startup's quixotic vision attracted investors despite challenges.", correct: true },
+                            { sentence: "The quixotic accountant carefully calculated every penny.", correct: false }
+                        ],
+                        difficulty_level: "advanced"
+                    },
+                    {
+                        word: "vicarious",
+                        pronunciation: { phonetic_spelling: "vih-KAIR-ee-uhs" },
+                        definitions: [
+                            "Experienced through another person",
+                            "Felt by sharing in others' experiences",
+                            "Acting for another"
+                        ],
+                        synonyms: ["indirect", "secondhand", "surrogate"],
+                        antonyms: ["direct", "firsthand", "personal"],
+                        usage_examples: [
+                            { sentence: "Parents experience vicarious joy through their children's success.", correct: true },
+                            { sentence: "He took vicarious action by doing it completely himself.", correct: false },
+                            { sentence: "Travel blogs provide vicarious adventures.", correct: true },
+                            { sentence: "The vicarious experience happened to me directly.", correct: false }
+                        ],
+                        difficulty_level: "intermediate"
+                    },
+                    {
+                        word: "zealot",
+                        pronunciation: { phonetic_spelling: "ZEL-uht" },
+                        definitions: [
+                            "A fanatical and uncompromising person",
+                            "Someone with excessive zeal",
+                            "An extreme enthusiast"
+                        ],
+                        synonyms: ["fanatic", "extremist", "militant"],
+                        antonyms: ["moderate", "skeptic", "cynic"],
+                        usage_examples: [
+                            { sentence: "The environmental zealot chained himself to trees.", correct: true },
+                            { sentence: "The zealot was completely indifferent to the cause.", correct: false },
+                            { sentence: "Political zealots refused to compromise.", correct: true },
+                            { sentence: "The zealot calmly considered all viewpoints.", correct: false }
+                        ],
+                        difficulty_level: "beginner"
+                    },
+                    {
+                        word: "abstruse",
+                        pronunciation: { phonetic_spelling: "ab-STROOS" },
+                        definitions: [
+                            "Difficult to understand; obscure",
+                            "Hard to comprehend",
+                            "Esoteric or complex"
+                        ],
+                        synonyms: ["obscure", "arcane", "esoteric"],
+                        antonyms: ["clear", "obvious", "simple"],
+                        usage_examples: [
+                            { sentence: "The professor's abstruse lecture confused most students.", correct: true },
+                            { sentence: "The children's book was so abstruse that toddlers understood it.", correct: false },
+                            { sentence: "Legal documents are often written in abstruse language.", correct: true },
+                            { sentence: "Her abstruse explanation was crystal clear.", correct: false }
+                        ],
+                        difficulty_level: "advanced"
                     }
                 ];
             }
@@ -788,12 +951,57 @@
                     btn.addEventListener('click', (e) => {
                         if (this.waitingForAnswer) return;
                         
+                        // Skip mode switching for file input label
+                        if (btn.querySelector('input')) return;
+                        
                         document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
                         btn.classList.add('active');
                         this.currentMode = btn.dataset.mode;
                         this.startQuiz();
                     });
                 });
+                
+                // File input for loading custom vocabulary
+                const fileInput = document.getElementById('file-input');
+                if (fileInput) {
+                    fileInput.addEventListener('change', async (e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                            try {
+                                const text = await file.text();
+                                const data = JSON.parse(text);
+                                
+                                if (data.vocabulary && Array.isArray(data.vocabulary)) {
+                                    this.vocabulary = data.vocabulary;
+                                    this.userProgress = {}; // Reset progress for new vocabulary
+                                    this.saveProgress();
+                                    this.updateStats();
+                                    this.startQuiz();
+                                    
+                                    // Show success message
+                                    const container = document.getElementById('quiz-container');
+                                    const originalContent = container.innerHTML;
+                                    container.innerHTML = `
+                                        <div style="text-align: center; padding: 50px;">
+                                            <div style="font-size: 3em;">✅</div>
+                                            <div style="font-size: 1.5em; margin-top: 20px;">
+                                                Successfully loaded ${this.vocabulary.length} words!
+                                            </div>
+                                        </div>
+                                    `;
+                                    
+                                    setTimeout(() => {
+                                        this.startQuiz();
+                                    }, 2000);
+                                } else {
+                                    throw new Error('Invalid JSON format. Expected { "vocabulary": [...] }');
+                                }
+                            } catch (error) {
+                                alert('Error loading file: ' + error.message);
+                            }
+                        }
+                    });
+                }
             }
 
             startQuiz() {
