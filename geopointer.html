@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Point Through Earth</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        #canvas {
+            width: 100%;
+            height: 60vh;
+        }
+        
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            z-index: 100;
+            font-size: 12px;
+        }
+        
+        #info button {
+            font-size: 11px;
+        }
+        
+        #target-info {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .country-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid white;
+            color: white;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .country-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+        
+        .country-btn.active {
+            background: rgba(76, 175, 80, 0.8);
+        }
+        
+        #distance {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        #accuracy {
+            font-size: 18px;
+            color: #4CAF50;
+        }
+        
+        .warning {
+            background: rgba(255, 152, 0, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 20px;
+            display: none;
+        }
+        
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        
+        .status-dot.active {
+            background: #4CAF50;
+        }
+        
+        .status-dot.inactive {
+            background: #f44336;
+        }
+        
+        #phone-visual {
+            position: absolute;
+            bottom: 50%;
+            left: 50%;
+            transform: translate(-50%, 0);
+            font-size: 80px;
+            opacity: 0.2;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <div><span class="status-dot" id="location-status"></span>Location: <span id="user-location">Getting location...</span></div>
+        <div style="margin-top: 5px;"><span class="status-dot" id="orientation-status"></span>Orientation: <span id="orientation-text">Waiting...</span></div>
+        <div style="margin-top: 5px; font-size: 11px; opacity: 0.7;">Point the BACK of your phone (camera side) through Earth</div>
+        <div id="angle-info" style="margin-top: 5px; font-size: 11px; opacity: 0.9; display: none;">
+            Target: <span id="target-angles"></span> | Phone: <span id="phone-angles"></span>
+        </div>
+    </div>
+    
+    <canvas id="canvas"></canvas>
+    <div id="phone-visual">📱</div>
+    
+    <div class="warning" id="pointing-up">
+        ⬆️ You're pointing to the sky!<br>
+        <small>Tilt phone forward to point through Earth</small>
+    </div>
+    
+    <div id="target-info">
+        <div style="font-size: 16px; margin-bottom: 10px;">Select a target country:</div>
+        <div>
+            <button class="country-btn" onclick="setTarget('China', 35.8617, 104.1954)">🇨🇳 China</button>
+            <button class="country-btn" onclick="setTarget('USA', 37.0902, -95.7129)">🇺🇸 USA</button>
+            <button class="country-btn" onclick="setTarget('UK', 55.3781, -3.4360)">🇬🇧 UK</button>
+            <button class="country-btn" onclick="setTarget('Brazil', -14.2350, -51.9253)">🇧🇷 Brazil</button>
+            <button class="country-btn" onclick="setTarget('Japan', 36.2048, 138.2529)">🇯🇵 Japan</button>
+            <button class="country-btn" onclick="setTarget('Egypt', 26.8206, 30.8025)">🇪🇬 Egypt</button>
+        </div>
+        <div id="distance"></div>
+        <div id="accuracy"></div>
+        <div id="direction-hint" style="font-size: 14px; opacity: 0.8; margin-top: 10px;"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        let scene, camera, renderer, arrow, targetArrow;
+        let userLat = -37.8136; // Melbourne default
+        let userLon = 144.9631;
+        let hasLocation = false;
+        let targetLat = 35.8617; // China default
+        let targetLon = 104.1954;
+        let targetName = "China";
+        let deviceAlpha = 0, deviceBeta = 0, deviceGamma = 0;
+        let hasOrientation = false;
+        
+        // Initialize Three.js
+        function initThree() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x764ba2, 1, 20);
+            
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / (window.innerHeight * 0.6), 0.1, 1000);
+            camera.position.z = 5;
+            
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: document.getElementById('canvas'),
+                antialias: true,
+                alpha: true 
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight * 0.6);
+            renderer.setClearColor(0x000000, 0);
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 0.5);
+            scene.add(directionalLight);
+            
+            // Create current pointing arrow (green)
+            const arrowGeometry = new THREE.ConeGeometry(0.5, 2, 8);
+            const arrowMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0x00ff00,
+                emissive: 0x00ff00,
+                emissiveIntensity: 0.2,
+                shininess: 100
+            });
+            arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
+            scene.add(arrow);
+            
+            // Create target direction arrow (red, transparent)
+            const targetArrowMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xff0000,
+                emissive: 0xff0000,
+                emissiveIntensity: 0.3,
+                opacity: 0.3,
+                transparent: true
+            });
+            targetArrow = new THREE.Mesh(arrowGeometry, targetArrowMaterial);
+            scene.add(targetArrow);
+            
+            // Add grid for reference
+            const gridHelper = new THREE.GridHelper(10, 10, 0xffffff, 0xffffff);
+            gridHelper.material.opacity = 0.1;
+            gridHelper.material.transparent = true;
+            gridHelper.rotation.x = Math.PI / 2;
+            scene.add(gridHelper);
+            
+            animate();
+        }
+        
+        // Calculate vector through Earth
+        function calculateThroughEarthVector(lat1, lon1, lat2, lon2) {
+            // Convert to radians
+            const phi1 = lat1 * Math.PI / 180;
+            const lambda1 = lon1 * Math.PI / 180;
+            const phi2 = lat2 * Math.PI / 180;
+            const lambda2 = lon2 * Math.PI / 180;
+            
+            // Convert to Cartesian coordinates
+            const x1 = Math.cos(phi1) * Math.cos(lambda1);
+            const y1 = Math.cos(phi1) * Math.sin(lambda1);
+            const z1 = Math.sin(phi1);
+            
+            const x2 = Math.cos(phi2) * Math.cos(lambda2);
+            const y2 = Math.cos(phi2) * Math.sin(lambda2);
+            const z2 = Math.sin(phi2);
+            
+            // Vector through Earth
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const dz = z2 - z1;
+            
+            // Convert to local tangent plane
+            const east = [-Math.sin(lambda1), Math.cos(lambda1), 0];
+            const north = [-Math.sin(phi1) * Math.cos(lambda1), -Math.sin(phi1) * Math.sin(lambda1), Math.cos(phi1)];
+            const up = [Math.cos(phi1) * Math.cos(lambda1), Math.cos(phi1) * Math.sin(lambda1), Math.sin(phi1)];
+            
+            const localEast = dx * east[0] + dy * east[1] + dz * east[2];
+            const localNorth = dx * north[0] + dy * north[1] + dz * north[2];
+            const localUp = dx * up[0] + dy * up[1] + dz * up[2];
+            
+            // Calculate angles
+            const azimuth = Math.atan2(localEast, localNorth) * 180 / Math.PI;
+            const horizDist = Math.sqrt(localEast * localEast + localNorth * localNorth);
+            const elevation = Math.atan2(-localUp, horizDist) * 180 / Math.PI;
+            
+            const distance = Math.sqrt(dx * dx + dy * dy + dz * dz) * 6371;
+            
+            return { 
+                azimuth: azimuth < 0 ? azimuth + 360 : azimuth,
+                elevation: elevation,
+                distance: distance 
+            };
+        }
+        
+        // Update arrow orientation
+        function updateArrows() {
+            if (!arrow || !targetArrow) return;
+            
+            // Phone orientation mapping (critical fix):
+            // Beta = 0°: Phone flat on table (screen up)
+            // Beta = 90°: Phone vertical (like taking a photo)
+            // Beta > 90°: Phone tilted forward (top toward user, back pointing down)
+            // Beta < 90°: Phone tilted backward (top away from user, back pointing up)
+            
+            // CORRECTED: For back of phone pointing angle
+            // When beta = 90°, back points horizontally (elevation = 0°)
+            // When beta = 126°, back points down at -36° (correct for Melbourne→China)
+            // When beta < 90°, back points upward (positive elevation)
+            
+            const phoneBackElevation = 90 - deviceBeta; // FIXED: Correct sign convention
+            
+            // Hide arrow if pointing to sky (back of phone pointing upward)
+            if (phoneBackElevation > 0) {
+                arrow.visible = false;
+                targetArrow.visible = false;
+                document.getElementById('pointing-up').style.display = 'block';
+                document.getElementById('phone-visual').style.display = 'block';
+                document.getElementById('accuracy').innerHTML = '📱 Tilt phone forward';
+                document.getElementById('accuracy').style.color = '#FF9800';
+                document.getElementById('direction-hint').innerHTML = 'The back of your phone needs to point downward';
+                return;
+            } else {
+                arrow.visible = true;
+                targetArrow.visible = true;
+                document.getElementById('pointing-up').style.display = 'none';
+                document.getElementById('phone-visual').style.display = 'none';
+            }
+            
+            // Calculate target direction (verified mathematics for hemisphere-agnostic calculation)
+            const target = calculateThroughEarthVector(userLat, userLon, targetLat, targetLon);
+            
+            // Update target arrow (red) - shows correct direction through Earth
+            // Elevation is negative when pointing down, so we need to handle the rotation correctly
+            targetArrow.rotation.x = (-target.elevation) * Math.PI / 180; // Negative elevation means tilt forward
+            targetArrow.rotation.z = -target.azimuth * Math.PI / 180;
+            
+            // Update device arrow (green) - where back of phone is actually pointing
+            arrow.rotation.x = (-phoneBackElevation) * Math.PI / 180; // Match the sign convention
+            arrow.rotation.z = -deviceAlpha * Math.PI / 180;
+            
+            // Calculate accuracy
+            let azimuthDiff = Math.abs(target.azimuth - deviceAlpha);
+            if (azimuthDiff > 180) azimuthDiff = 360 - azimuthDiff;
+            
+            const elevationDiff = Math.abs(target.elevation - phoneBackElevation);
+            const totalError = Math.sqrt(azimuthDiff * azimuthDiff + elevationDiff * elevationDiff);
+            const accuracy = Math.max(0, 100 - totalError);
+            
+            // Update arrow color based on accuracy
+            const hue = accuracy / 100 * 0.33; // 0 (red) to 0.33 (green)
+            arrow.material.color.setHSL(hue, 1, 0.5);
+            arrow.material.emissive.setHSL(hue, 1, 0.3);
+            
+            // Update UI with clear information
+            document.getElementById('distance').innerHTML = 
+                `📍 ${targetName}: ${target.distance.toFixed(0)} km through Earth`;
+            document.getElementById('accuracy').innerHTML = `Accuracy: ${accuracy.toFixed(0)}%`;
+            document.getElementById('accuracy').style.color = 
+                accuracy > 80 ? '#4CAF50' : accuracy > 50 ? '#FFC107' : '#f44336';
+            
+            // Direction hints with correct orientations
+            let hint = '';
+            if (accuracy > 80) {
+                hint = '✅ Perfect! Your phone\'s back is pointing through Earth to ' + targetName;
+            } else {
+                if (azimuthDiff > 15) {
+                    const turnDir = ((target.azimuth - deviceAlpha + 540) % 360 - 180) > 0 ? 'right ➡️' : 'left ⬅️';
+                    hint += `Turn ${turnDir} `;
+                }
+                if (elevationDiff > 15) {
+                    // Fixed: If target elevation is more negative (pointing more down), tilt forward
+                    const tiltDir = target.elevation < phoneBackElevation ? 'forward ⬇️' : 'backward ⬆️';
+                    hint += `Tilt phone ${tiltDir}`;
+                }
+            }
+            document.getElementById('direction-hint').innerHTML = hint;
+            
+            // Show angle information for debugging/learning
+            document.getElementById('angle-info').style.display = 'block';
+            document.getElementById('target-angles').textContent = 
+                `Az: ${target.azimuth.toFixed(0)}° El: ${target.elevation.toFixed(0)}°`;
+            document.getElementById('phone-angles').textContent = 
+                `Az: ${deviceAlpha.toFixed(0)}° El: ${phoneBackElevation.toFixed(0)}°`;
+        }
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Smooth camera rotation
+            camera.position.x = Math.sin(Date.now() * 0.0001) * 0.5;
+            camera.position.y = Math.cos(Date.now() * 0.0001) * 0.5;
+            camera.lookAt(0, 0, 0);
+            
+            updateArrows();
+            renderer.render(scene, camera);
+        }
+        
+        // Get user location
+        function getUserLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        userLat = position.coords.latitude;
+                        userLon = position.coords.longitude;
+                        hasLocation = true;
+                        document.getElementById('user-location').textContent = 
+                            `${userLat.toFixed(4)}°, ${userLon.toFixed(4)}° (GPS active)`;
+                        document.getElementById('location-status').className = 'status-dot active';
+                    },
+                    error => {
+                        let errorMsg = '';
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMsg = "permission denied";
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMsg = "unavailable";
+                                break;
+                            case error.TIMEOUT:
+                                errorMsg = "timeout";
+                                break;
+                            default:
+                                errorMsg = "error";
+                        }
+                        
+                        document.getElementById('user-location').innerHTML = 
+                            `Melbourne (${errorMsg}) <button onclick="getUserLocation()" style="margin-left: 10px; padding: 2px 8px; background: rgba(255,255,255,0.2); border: 1px solid white; border-radius: 3px; color: white; cursor: pointer;">Retry</button>`;
+                        document.getElementById('location-status').className = 'status-dot inactive';
+                    },
+                    { 
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0 
+                    }
+                );
+            } else {
+                document.getElementById('user-location').textContent = 'Melbourne (no GPS support)';
+                document.getElementById('location-status').className = 'status-dot inactive';
+            }
+        }
+        
+        // Handle device orientation
+        function handleOrientation(event) {
+            if (event.alpha !== null && event.beta !== null && event.gamma !== null) {
+                deviceAlpha = event.alpha; // Compass direction
+                deviceBeta = event.beta;   // Front-back tilt
+                deviceGamma = event.gamma; // Left-right tilt
+                
+                if (!hasOrientation) {
+                    hasOrientation = true;
+                    document.getElementById('orientation-status').className = 'status-dot active';
+                    document.getElementById('orientation-text').textContent = 'Active';
+                }
+            }
+        }
+        
+        // Set target country
+        function setTarget(name, lat, lon) {
+            targetName = name;
+            targetLat = lat;
+            targetLon = lon;
+            
+            // Update button states
+            document.querySelectorAll('.country-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.textContent.includes(name)) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            // Special message for Melbourne to China (our test case)
+            if (hasLocation && Math.abs(userLat - (-37.8136)) < 1 && Math.abs(userLon - 144.9631) < 1 && name === 'China') {
+                console.log('Melbourne → China: Should be ~332° azimuth (northwest), ~-37° elevation (down)');
+            }
+        }
+        
+        // Request permissions for iOS
+        function requestPermission() {
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(response => {
+                        if (response == 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                window.addEventListener('deviceorientation', handleOrientation);
+            }
+        }
+        
+        // Initialize
+        window.addEventListener('load', () => {
+            initThree();
+            getUserLocation();
+            requestPermission();
+            setTarget('China', 35.8617, 104.1954);
+            
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / (window.innerHeight * 0.6);
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight * 0.6);
+            });
+        });
+        
+        // Add click handler for iOS permission
+        document.addEventListener('click', function() {
+            requestPermission();
+        }, { once: true });
+    </script>
+</body>
+</html>
