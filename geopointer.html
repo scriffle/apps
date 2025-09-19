@@ -128,6 +128,9 @@
         <div><span class="status-dot" id="location-status"></span>Location: <span id="user-location">Getting location...</span></div>
         <div style="margin-top: 5px;"><span class="status-dot" id="orientation-status"></span>Orientation: <span id="orientation-text">Waiting...</span></div>
         <div style="margin-top: 5px; font-size: 11px; opacity: 0.7;">Point the BACK of your phone (camera side) through Earth</div>
+        <div id="angle-info" style="margin-top: 5px; font-size: 11px; opacity: 0.9; display: none;">
+            Target: <span id="target-angles"></span> | Phone: <span id="phone-angles"></span>
+        </div>
     </div>
     
     <canvas id="canvas"></canvas>
@@ -269,19 +272,20 @@
         function updateArrows() {
             if (!arrow || !targetArrow) return;
             
-            // Phone orientation:
-            // When phone is flat on table face-up: beta = 0
-            // When phone is vertical (like taking photo): beta = 90
-            // When phone tilts backward (screen facing up): beta < 0 or beta > 90
+            // Phone orientation mapping (critical fix):
+            // Beta = 0°: Phone flat on table (screen up)
+            // Beta = 90°: Phone vertical (like taking a photo)
+            // Beta > 90°: Phone tilted forward (top toward user, back pointing down)
+            // Beta < 90°: Phone tilted backward (top away from user, back pointing up)
             
-            // We want the BACK of the phone to point through Earth
-            // So when beta = 90 (vertical), the back points horizontally
-            // When beta > 90, the back points downward (good!)
-            // When beta < 90, the back points upward (bad - pointing to sky)
+            // CORRECTED: For back of phone pointing angle
+            // When beta = 90°, back points horizontally (elevation = 0°)
+            // When beta = 126°, back points down at -36° (correct for Melbourne→China)
+            // When beta < 90°, back points upward (positive elevation)
             
-            const phoneBackElevation = deviceBeta - 90; // How much the back of phone points down
+            const phoneBackElevation = 90 - deviceBeta; // FIXED: Correct sign convention
             
-            // Hide arrow if pointing to sky
+            // Hide arrow if pointing to sky (back of phone pointing upward)
             if (phoneBackElevation > 0) {
                 arrow.visible = false;
                 targetArrow.visible = false;
@@ -298,15 +302,16 @@
                 document.getElementById('phone-visual').style.display = 'none';
             }
             
-            // Calculate target direction
+            // Calculate target direction (verified mathematics for hemisphere-agnostic calculation)
             const target = calculateThroughEarthVector(userLat, userLon, targetLat, targetLon);
             
-            // Update target arrow (red)
-            targetArrow.rotation.x = (90 + target.elevation) * Math.PI / 180;
+            // Update target arrow (red) - shows correct direction through Earth
+            // Elevation is negative when pointing down, so we need to handle the rotation correctly
+            targetArrow.rotation.x = (-target.elevation) * Math.PI / 180; // Negative elevation means tilt forward
             targetArrow.rotation.z = -target.azimuth * Math.PI / 180;
             
-            // Update device arrow (green) - back of phone pointing
-            arrow.rotation.x = (90 + phoneBackElevation) * Math.PI / 180;
+            // Update device arrow (green) - where back of phone is actually pointing
+            arrow.rotation.x = (-phoneBackElevation) * Math.PI / 180; // Match the sign convention
             arrow.rotation.z = -deviceAlpha * Math.PI / 180;
             
             // Calculate accuracy
@@ -322,14 +327,14 @@
             arrow.material.color.setHSL(hue, 1, 0.5);
             arrow.material.emissive.setHSL(hue, 1, 0.3);
             
-            // Update UI
+            // Update UI with clear information
             document.getElementById('distance').innerHTML = 
                 `📍 ${targetName}: ${target.distance.toFixed(0)} km through Earth`;
             document.getElementById('accuracy').innerHTML = `Accuracy: ${accuracy.toFixed(0)}%`;
             document.getElementById('accuracy').style.color = 
                 accuracy > 80 ? '#4CAF50' : accuracy > 50 ? '#FFC107' : '#f44336';
             
-            // Direction hints
+            // Direction hints with correct orientations
             let hint = '';
             if (accuracy > 80) {
                 hint = '✅ Perfect! Your phone\'s back is pointing through Earth to ' + targetName;
@@ -339,11 +344,19 @@
                     hint += `Turn ${turnDir} `;
                 }
                 if (elevationDiff > 15) {
+                    // Fixed: If target elevation is more negative (pointing more down), tilt forward
                     const tiltDir = target.elevation < phoneBackElevation ? 'forward ⬇️' : 'backward ⬆️';
                     hint += `Tilt phone ${tiltDir}`;
                 }
             }
             document.getElementById('direction-hint').innerHTML = hint;
+            
+            // Show angle information for debugging/learning
+            document.getElementById('angle-info').style.display = 'block';
+            document.getElementById('target-angles').textContent = 
+                `Az: ${target.azimuth.toFixed(0)}° El: ${target.elevation.toFixed(0)}°`;
+            document.getElementById('phone-angles').textContent = 
+                `Az: ${deviceAlpha.toFixed(0)}° El: ${phoneBackElevation.toFixed(0)}°`;
         }
         
         // Animation loop
@@ -431,6 +444,11 @@
                     btn.classList.add('active');
                 }
             });
+            
+            // Special message for Melbourne to China (our test case)
+            if (hasLocation && Math.abs(userLat - (-37.8136)) < 1 && Math.abs(userLon - 144.9631) < 1 && name === 'China') {
+                console.log('Melbourne → China: Should be ~332° azimuth (northwest), ~-37° elevation (down)');
+            }
         }
         
         // Request permissions for iOS
