@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Point Through Earth</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        #canvas {
+            width: 100%;
+            height: 60vh;
+        }
+        
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            z-index: 100;
+        }
+        
+        #target-info {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .country-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid white;
+            color: white;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .country-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+        
+        .country-btn.active {
+            background: rgba(76, 175, 80, 0.8);
+        }
+        
+        #distance {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        #accuracy {
+            font-size: 18px;
+            color: #4CAF50;
+        }
+        
+        .error {
+            background: rgba(244, 67, 54, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            max-width: 90%;
+        }
+        
+        #compass {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 100px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <div style="font-size: 12px; opacity: 0.8;">Your Location: <span id="user-location">Getting location...</span></div>
+        <div style="font-size: 14px; margin-top: 5px;">Orientation: α=<span id="alpha">0</span>° β=<span id="beta">0</span>° γ=<span id="gamma">0</span>°</div>
+    </div>
+    
+    <canvas id="canvas"></canvas>
+    <div id="compass">🧭</div>
+    
+    <div id="target-info">
+        <div style="font-size: 16px; margin-bottom: 10px;">Select a target country:</div>
+        <div>
+            <button class="country-btn" onclick="setTarget('China', 35.8617, 104.1954)">🇨🇳 China</button>
+            <button class="country-btn" onclick="setTarget('USA', 37.0902, -95.7129)">🇺🇸 USA</button>
+            <button class="country-btn" onclick="setTarget('UK', 55.3781, -3.4360)">🇬🇧 UK</button>
+            <button class="country-btn" onclick="setTarget('Brazil', -14.2350, -51.9253)">🇧🇷 Brazil</button>
+            <button class="country-btn" onclick="setTarget('Japan', 36.2048, 138.2529)">🇯🇵 Japan</button>
+            <button class="country-btn" onclick="setTarget('Egypt', 26.8206, 30.8025)">🇪🇬 Egypt</button>
+        </div>
+        <div id="distance"></div>
+        <div id="accuracy"></div>
+        <div style="font-size: 12px; margin-top: 10px; opacity: 0.7;">Point your phone through the Earth!</div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        let scene, camera, renderer, arrow, targetArrow;
+        let userLat = -37.8136; // Melbourne default
+        let userLon = 144.9631;
+        let targetLat = 35.8617; // China default
+        let targetLon = 104.1954;
+        let targetName = "China";
+        let deviceAlpha = 0, deviceBeta = 0, deviceGamma = 0;
+        
+        // Initialize Three.js
+        function initThree() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x764ba2, 1, 20);
+            
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / (window.innerHeight * 0.6), 0.1, 1000);
+            camera.position.z = 5;
+            
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: document.getElementById('canvas'),
+                antialias: true,
+                alpha: true 
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight * 0.6);
+            renderer.setClearColor(0x000000, 0);
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 0.5);
+            scene.add(directionalLight);
+            
+            // Create main arrow (device orientation)
+            const arrowGeometry = new THREE.ConeGeometry(0.5, 2, 8);
+            const arrowMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0x00ff00,
+                emissive: 0x00ff00,
+                emissiveIntensity: 0.2,
+                shininess: 100
+            });
+            arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
+            scene.add(arrow);
+            
+            // Create target arrow (shows correct direction)
+            const targetArrowMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xff0000,
+                emissive: 0xff0000,
+                emissiveIntensity: 0.3,
+                opacity: 0.3,
+                transparent: true
+            });
+            targetArrow = new THREE.Mesh(arrowGeometry, targetArrowMaterial);
+            scene.add(targetArrow);
+            
+            // Add grid for reference
+            const gridHelper = new THREE.GridHelper(10, 10, 0xffffff, 0xffffff);
+            gridHelper.material.opacity = 0.1;
+            gridHelper.material.transparent = true;
+            gridHelper.rotation.x = Math.PI / 2;
+            scene.add(gridHelper);
+            
+            animate();
+        }
+        
+        // Calculate vector through Earth
+        function calculateThroughEarthVector(lat1, lon1, lat2, lon2) {
+            // Convert to radians
+            const phi1 = lat1 * Math.PI / 180;
+            const lambda1 = lon1 * Math.PI / 180;
+            const phi2 = lat2 * Math.PI / 180;
+            const lambda2 = lon2 * Math.PI / 180;
+            
+            // Convert to Cartesian coordinates (assuming unit sphere)
+            const x1 = Math.cos(phi1) * Math.cos(lambda1);
+            const y1 = Math.cos(phi1) * Math.sin(lambda1);
+            const z1 = Math.sin(phi1);
+            
+            const x2 = Math.cos(phi2) * Math.cos(lambda2);
+            const y2 = Math.cos(phi2) * Math.sin(lambda2);
+            const z2 = Math.sin(phi2);
+            
+            // Vector from point 1 to point 2 through Earth
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const dz = z2 - z1;
+            
+            // Convert to local tangent plane coordinates
+            // East-North-Up coordinate system
+            const east = [-Math.sin(lambda1), Math.cos(lambda1), 0];
+            const north = [-Math.sin(phi1) * Math.cos(lambda1), -Math.sin(phi1) * Math.sin(lambda1), Math.cos(phi1)];
+            const up = [Math.cos(phi1) * Math.cos(lambda1), Math.cos(phi1) * Math.sin(lambda1), Math.sin(phi1)];
+            
+            // Project vector onto local coordinates
+            const localEast = dx * east[0] + dy * east[1] + dz * east[2];
+            const localNorth = dx * north[0] + dy * north[1] + dz * north[2];
+            const localUp = dx * up[0] + dy * up[1] + dz * up[2];
+            
+            // Calculate angles
+            const azimuth = Math.atan2(localEast, localNorth) * 180 / Math.PI;
+            const horizDist = Math.sqrt(localEast * localEast + localNorth * localNorth);
+            const elevation = Math.atan2(-localUp, horizDist) * 180 / Math.PI; // Negative because we're pointing down
+            
+            // Calculate straight-line distance through Earth
+            const distance = Math.sqrt(dx * dx + dy * dy + dz * dz) * 6371; // Earth radius in km
+            
+            return { azimuth, elevation, distance };
+        }
+        
+        // Update arrow orientation
+        function updateArrows() {
+            if (!arrow || !targetArrow) return;
+            
+            // Calculate target direction
+            const target = calculateThroughEarthVector(userLat, userLon, targetLat, targetLon);
+            
+            // Update target arrow (red) - shows where to point
+            targetArrow.rotation.x = (90 + target.elevation) * Math.PI / 180;
+            targetArrow.rotation.z = -target.azimuth * Math.PI / 180;
+            
+            // Update device arrow (green) - shows where phone is pointing
+            // Combine device orientation with calculated angles
+            const phoneElevation = deviceBeta - 90; // Phone vertical angle
+            const phoneAzimuth = deviceAlpha; // Phone compass heading
+            
+            arrow.rotation.x = phoneElevation * Math.PI / 180;
+            arrow.rotation.z = -phoneAzimuth * Math.PI / 180;
+            
+            // Calculate accuracy (how close the angles are)
+            const elevDiff = Math.abs(phoneElevation - (90 + target.elevation));
+            const azDiff = Math.min(Math.abs(phoneAzimuth - target.azimuth), 
+                                   360 - Math.abs(phoneAzimuth - target.azimuth));
+            const totalDiff = Math.sqrt(elevDiff * elevDiff + azDiff * azDiff);
+            const accuracy = Math.max(0, 100 - totalDiff * 2);
+            
+            // Update UI
+            document.getElementById('distance').innerHTML = `📍 ${targetName}: ${target.distance.toFixed(0)} km through Earth`;
+            document.getElementById('accuracy').innerHTML = `Accuracy: ${accuracy.toFixed(0)}%`;
+            document.getElementById('accuracy').style.color = accuracy > 80 ? '#4CAF50' : 
+                                                               accuracy > 50 ? '#FFC107' : '#f44336';
+            
+            // Update arrow colors based on accuracy
+            if (arrow.material) {
+                const hue = accuracy / 100 * 0.33; // 0 (red) to 0.33 (green)
+                arrow.material.color.setHSL(hue, 1, 0.5);
+                arrow.material.emissive.setHSL(hue, 1, 0.3);
+            }
+        }
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Smooth camera movement
+            camera.position.x = Math.sin(Date.now() * 0.0001) * 0.5;
+            camera.position.y = Math.cos(Date.now() * 0.0001) * 0.5;
+            camera.lookAt(0, 0, 0);
+            
+            updateArrows();
+            renderer.render(scene, camera);
+        }
+        
+        // Get user location
+        function getUserLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        userLat = position.coords.latitude;
+                        userLon = position.coords.longitude;
+                        document.getElementById('user-location').textContent = 
+                            `${userLat.toFixed(4)}°, ${userLon.toFixed(4)}°`;
+                    },
+                    error => {
+                        console.log("Using default location (Melbourne)");
+                        document.getElementById('user-location').textContent = 
+                            `Melbourne (default): ${userLat.toFixed(4)}°, ${userLon.toFixed(4)}°`;
+                    }
+                );
+            }
+        }
+        
+        // Handle device orientation
+        function handleOrientation(event) {
+            deviceAlpha = event.alpha || 0; // Compass direction
+            deviceBeta = event.beta || 0;   // Front-back tilt
+            deviceGamma = event.gamma || 0; // Left-right tilt
+            
+            document.getElementById('alpha').textContent = Math.round(deviceAlpha);
+            document.getElementById('beta').textContent = Math.round(deviceBeta);
+            document.getElementById('gamma').textContent = Math.round(deviceGamma);
+            
+            document.getElementById('compass').style.display = 'none';
+        }
+        
+        // Set target country
+        function setTarget(name, lat, lon) {
+            targetName = name;
+            targetLat = lat;
+            targetLon = lon;
+            
+            // Update button states
+            document.querySelectorAll('.country-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.textContent.includes(name)) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+        
+        // Request permissions for iOS
+        function requestPermission() {
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(response => {
+                        if (response == 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                // Non-iOS devices
+                window.addEventListener('deviceorientation', handleOrientation);
+            }
+        }
+        
+        // Initialize
+        window.addEventListener('load', () => {
+            initThree();
+            getUserLocation();
+            requestPermission();
+            
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / (window.innerHeight * 0.6);
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight * 0.6);
+            });
+        });
+        
+        // Add click handler for iOS permission
+        document.addEventListener('click', function() {
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                requestPermission();
+            }
+        }, { once: true });
+    </script>
+</body>
+</html>
