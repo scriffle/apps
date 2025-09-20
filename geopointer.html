@@ -143,7 +143,8 @@
         <div><span class="status-dot" id="location-status"></span><strong>Location:</strong> <span id="user-location">Initializing...</span></div>
         <div><span class="status-dot" id="orientation-status"></span><strong>Sensors:</strong> <span id="sensor-status">Waiting...</span></div>
         <div id="instructions">
-            📱 Hold phone and tilt TOP away from you to point camera down through Earth
+            📱 Hold phone and tilt TOP away from you to point camera down through Earth<br>
+            🧭 3D view is fixed: North is marked with red arrow
         </div>
     </div>
     
@@ -211,14 +212,15 @@
             scene = new THREE.Scene();
             scene.fog = new THREE.Fog(0x203a43, 1, 50);
             
-            // Camera setup
+            // Camera setup - FIXED position, no rotation
             camera = new THREE.PerspectiveCamera(
                 60,
                 window.innerWidth / (window.innerHeight * 0.65),
                 0.1,
                 100
             );
-            camera.position.set(10, 8, 10);
+            // Fixed camera position - viewing from southeast, looking northwest
+            camera.position.set(8, 6, 8);
             camera.lookAt(0, 0, 0);
             
             // Renderer setup
@@ -284,6 +286,32 @@
             const ringMesh = new THREE.Mesh(ring, ringMaterial);
             ringMesh.rotation.x = -Math.PI / 2;
             scene.add(ringMesh);
+            
+            // Add North indicator
+            const northGeometry = new THREE.ConeGeometry(0.2, 0.5, 4);
+            const northMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const northMarker = new THREE.Mesh(northGeometry, northMaterial);
+            northMarker.position.set(0, 0, -4); // North is negative Z
+            northMarker.rotation.x = Math.PI / 2;
+            scene.add(northMarker);
+            
+            // Add "N" text sprite (optional)
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('N', 32, 32);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, opacity: 0.8 });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.position.set(0, 1, -4);
+            sprite.scale.set(1, 1, 1);
+            scene.add(sprite);
             
             animate();
         }
@@ -363,15 +391,31 @@
                 phoneArrow.visible = true;
             }
             
-            // Update arrow rotations
-            // Convert elevation to Three.js rotation (0=up, PI/2=horizontal, PI=down)
-            const targetRotX = (Math.PI / 2) - (target.elevation * Math.PI / 180);
-            targetArrow.rotation.x = targetRotX;
-            targetArrow.rotation.y = -target.azimuth * Math.PI / 180;
+            // Update arrow rotations using direction vectors
+            // Target arrow - points in the calculated direction
+            const targetDir = new THREE.Vector3();
+            const targetAzRad = target.azimuth * Math.PI / 180;
+            const targetElRad = target.elevation * Math.PI / 180;
             
-            const phoneRotX = (Math.PI / 2) - (cameraElevation * Math.PI / 180);
-            phoneArrow.rotation.x = phoneRotX;
-            phoneArrow.rotation.y = -deviceAlpha * Math.PI / 180;
+            // Convert spherical to Cartesian (azimuth from North, elevation from horizontal)
+            targetDir.x = Math.cos(targetElRad) * Math.sin(targetAzRad);  // East
+            targetDir.y = Math.sin(targetElRad);  // Up
+            targetDir.z = -Math.cos(targetElRad) * Math.cos(targetAzRad); // North (negative Z)
+            
+            targetArrow.lookAt(targetDir);
+            targetArrow.rotateX(Math.PI / 2); // Cone default points up, rotate to point forward
+            
+            // Phone arrow - points where camera is aiming
+            const phoneDir = new THREE.Vector3();
+            const phoneAzRad = deviceAlpha * Math.PI / 180;
+            const phoneElRad = cameraElevation * Math.PI / 180;
+            
+            phoneDir.x = Math.cos(phoneElRad) * Math.sin(phoneAzRad);  // East
+            phoneDir.y = Math.sin(phoneElRad);  // Up
+            phoneDir.z = -Math.cos(phoneElRad) * Math.cos(phoneAzRad); // North (negative Z)
+            
+            phoneArrow.lookAt(phoneDir);
+            phoneArrow.rotateX(Math.PI / 2); // Cone default points up, rotate to point forward
             
             // Calculate accuracy
             let azimuthDiff = Math.abs(target.azimuth - deviceAlpha);
@@ -422,12 +466,11 @@
         function animate() {
             requestAnimationFrame(animate);
             
-            // Rotate camera around scene
-            const time = Date.now() * 0.0003;
-            camera.position.x = Math.sin(time) * 15;
-            camera.position.z = Math.cos(time) * 15;
-            camera.position.y = 8 + Math.sin(time * 2) * 2;
-            camera.lookAt(0, 0, 0);
+            // Camera is FIXED - no rotation!
+            // The 3D scene is aligned with the real world:
+            // - North is toward negative Z
+            // - East is toward positive X
+            // - Up is toward positive Y
             
             updateVisualization();
             renderer.render(scene, camera);
