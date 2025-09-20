@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DVD Screensaver '98</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #2a0845 0%, #000428 50%, #004e92 100%);
+            overflow: hidden;
+            cursor: crosshair;
+        }
+        
+        /* Retro 90's styled header */
+        .header {
+            background: linear-gradient(to bottom, #c0c0c0, #808080);
+            border-bottom: 3px solid #000;
+            border-top: 2px solid #fff;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf;
+        }
+        
+        .title {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 14px;
+            color: #000080;
+            text-shadow: 2px 2px 0px #c0c0c0;
+            flex-grow: 1;
+        }
+        
+        /* Windows 95 style button */
+        .control-btn {
+            background: #c0c0c0;
+            border: 2px solid;
+            border-color: #ffffff #808080 #808080 #ffffff;
+            padding: 4px 12px;
+            font-family: 'MS Sans Serif', sans-serif;
+            font-size: 11px;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+        
+        .control-btn:active {
+            border-color: #808080 #ffffff #ffffff #808080;
+            padding: 5px 11px 3px 13px;
+        }
+        
+        /* Screen container */
+        #screen {
+            position: relative;
+            width: 100vw;
+            height: calc(100vh - 50px);
+            background: #000;
+            border: 8px ridge #4a4a4a;
+            box-shadow: inset 0 0 50px rgba(0, 255, 0, 0.1);
+        }
+        
+        /* DVD Logo */
+        #dvd-logo {
+            position: absolute;
+            width: 150px;
+            height: 75px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Arial Black', sans-serif;
+            font-size: 32px;
+            font-weight: 900;
+            font-style: italic;
+            border-radius: 10px;
+            transition: none;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+            border: 2px solid currentColor;
+            z-index: 10;
+        }
+        
+        /* Stats display */
+        .stats {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            text-shadow: 0 0 5px #00ff00;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border: 1px solid #00ff00;
+            z-index: 10;
+        }
+        
+        .stats div {
+            margin: 5px 0;
+        }
+        
+        /* Debug screen */
+        .debug-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            text-shadow: 0 0 3px #00ff00;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 15px;
+            border: 1px solid #00ff00;
+            display: none;
+            min-width: 250px;
+            z-index: 10;
+        }
+        
+        .debug-panel.active {
+            display: block;
+        }
+        
+        .debug-panel h3 {
+            font-size: 12px;
+            margin-bottom: 10px;
+            color: #ffff00;
+            text-transform: uppercase;
+            border-bottom: 1px solid #00ff00;
+            padding-bottom: 5px;
+        }
+        
+        .debug-panel div {
+            margin: 3px 0;
+            font-size: 10px;
+        }
+        
+        .debug-value {
+            color: #00ffff;
+        }
+        
+        /* Corner hit celebration */
+        @keyframes celebrate {
+            0% { transform: scale(1) rotate(0deg); }
+            50% { transform: scale(1.5) rotate(180deg); }
+            100% { transform: scale(1) rotate(360deg); }
+        }
+        
+        .celebrating {
+            animation: celebrate 1s ease-in-out;
+        }
+        
+        /* Retro scanlines effect */
+        #screen::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 255, 0, 0.03) 2px,
+                rgba(0, 255, 0, 0.03) 4px
+            );
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        /* Mute indicator styling */
+        .mute-indicator {
+            margin-left: 10px;
+            color: #ff0000;
+            font-size: 10px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        /* Audio test button */
+        .audio-test {
+            background: #ff6600;
+            border-color: #ffaa44 #cc3300 #cc3300 #ffaa44;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <span class="title">🖥️ DVD SCREENSAVER '98 ™</span>
+        <button class="control-btn" onclick="togglePause()">PAUSE</button>
+        <button class="control-btn" onclick="toggleMute()">
+            <span id="muteText">MUTE</span>
+        </button>
+        <button class="control-btn audio-test" onclick="testAudio()">TEST AUDIO</button>
+        <button class="control-btn" onclick="toggleDebug()">DEBUG</button>
+        <button class="control-btn" onclick="resetStats()">RESET</button>
+        <span class="mute-indicator" id="muteIndicator"></span>
+    </div>
+    
+    <div id="screen">
+        <div id="dvd-logo">DVD</div>
+        
+        <div class="stats">
+            <div>EDGE HITS: <span id="edgeHits">0</span></div>
+            <div>CORNER HITS: <span id="cornerHits">0</span></div>
+            <div>TIME: <span id="timer">00:00</span></div>
+        </div>
+        
+        <div class="debug-panel" id="debugPanel">
+            <h3>:: DEBUG MONITOR ::</h3>
+            <div>POSITION X: <span class="debug-value" id="debugX">0</span></div>
+            <div>POSITION Y: <span class="debug-value" id="debugY">0</span></div>
+            <div>VELOCITY X: <span class="debug-value" id="debugDX">0</span></div>
+            <div>VELOCITY Y: <span class="debug-value" id="debugDY">0</span></div>
+            <div>SCREEN W: <span class="debug-value" id="debugWidth">0</span></div>
+            <div>SCREEN H: <span class="debug-value" id="debugHeight">0</span></div>
+            <div>LOGO W: <span class="debug-value" id="debugLogoW">150</span></div>
+            <div>LOGO H: <span class="debug-value" id="debugLogoH">75</span></div>
+            <div>COLOR IDX: <span class="debug-value" id="debugColor">0</span></div>
+            <div>FPS: <span class="debug-value" id="debugFPS">0</span></div>
+            <div>AUDIO: <span class="debug-value" id="debugAudio">READY</span></div>
+            <div>LAST HIT: <span class="debug-value" id="debugLastHit">NONE</span></div>
+            <div>FRAME: <span class="debug-value" id="debugFrame">0</span></div>
+        </div>
+    </div>
+    
+    <script>
+        const screen = document.getElementById('screen');
+        const logo = document.getElementById('dvd-logo');
+        const edgeHitsElement = document.getElementById('edgeHits');
+        const cornerHitsElement = document.getElementById('cornerHits');
+        const timerElement = document.getElementById('timer');
+        const muteIndicator = document.getElementById('muteIndicator');
+        const debugPanel = document.getElementById('debugPanel');
+        
+        // Debug elements
+        const debugX = document.getElementById('debugX');
+        const debugY = document.getElementById('debugY');
+        const debugDX = document.getElementById('debugDX');
+        const debugDY = document.getElementById('debugDY');
+        const debugWidth = document.getElementById('debugWidth');
+        const debugHeight = document.getElementById('debugHeight');
+        const debugColor = document.getElementById('debugColor');
+        const debugFPS = document.getElementById('debugFPS');
+        const debugAudio = document.getElementById('debugAudio');
+        const debugLastHit = document.getElementById('debugLastHit');
+        const debugFrame = document.getElementById('debugFrame');
+        
+        // DVD colors array (retro colors)
+        const colors = [
+            '#FF0080', '#00FF00', '#00FFFF', '#FF00FF', 
+            '#FFFF00', '#FF8C00', '#00CED1', '#FF1493',
+            '#7FFF00', '#FF6347', '#1E90FF', '#FFD700'
+        ];
+        
+        // Initialize Web Audio API context
+        let audioContext = null;
+        
+        // Function to initialize audio context on user interaction
+        function initAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                debugAudio.textContent = 'INITIALIZED';
+            }
+        }
+        
+        // Screen dimensions
+        let screenRect = screen.getBoundingClientRect();
+        let screenWidth = screenRect.width;
+        let screenHeight = screenRect.height;
+        
+        // Logo dimensions
+        const logoWidth = 150;
+        const logoHeight = 75;
+        
+        // Position and velocity
+        let x = Math.random() * (screenWidth - logoWidth);
+        let y = Math.random() * (screenHeight - logoHeight);
+        let dx = 2.5; // Horizontal velocity
+        let dy = 1.8; // Vertical velocity (different to increase corner hit chances)
+        
+        // Stats
+        let edgeHits = 0;
+        let cornerHits = 0;
+        let startTime = Date.now();
+        let isPaused = false;
+        let isMuted = false;
+        let showDebug = false;
+        let frameCount = 0;
+        let lastFrameTime = Date.now();
+        let fps = 0;
+        
+        // Color index
+        let currentColorIndex = 0;
+        
+        // Enhanced beep sound with multiple tones
+        function playBeep(frequency = 800, duration = 100) {
+            if (!audioContext) {
+                initAudioContext();
+            }
+            
+            if (!audioContext || isMuted) return;
+            
+            try {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                // Create a more interesting sound
+                oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(frequency * 0.5, audioContext.currentTime + duration / 1000);
+                oscillator.type = 'square';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration / 1000);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + duration / 1000);
+                
+                debugAudio.textContent = 'PLAYING';
+                setTimeout(() => {
+                    debugAudio.textContent = 'READY';
+                }, duration);
+            } catch (e) {
+                console.error('Audio error:', e);
+                debugAudio.textContent = 'ERROR';
+            }
+        }
+        
+        // Play collision sound - always use beep for reliability
+        function playCollisionSound() {
+            if (isMuted) {
+                debugAudio.textContent = 'MUTED';
+                return;
+            }
+            
+            // Try to play actual audio file first
+            const audio = new Audio('piprdrop.mp3');
+            audio.volume = 0.5;
+            audio.play().catch(() => {
+                // Fallback to beep if file doesn't exist
+                playBeep(600 + Math.random() * 400, 80);
+            });
+        }
+        
+        // Test audio function
+        function testAudio() {
+            initAudioContext();
+            playBeep(1000, 200);
+        }
+        
+        // Change logo color
+        function changeColor() {
+            currentColorIndex = (currentColorIndex + 1) % colors.length;
+            logo.style.color = colors[currentColorIndex];
+            logo.style.borderColor = colors[currentColorIndex];
+            logo.style.filter = `drop-shadow(0 0 10px ${colors[currentColorIndex]})`;
+            debugColor.textContent = currentColorIndex;
+        }
+        
+        // Check for corner hit
+        function checkCornerHit(hitLeft, hitRight, hitTop, hitBottom) {
+            return (hitLeft || hitRight) && (hitTop || hitBottom);
+        }
+        
+        // Update debug info
+        function updateDebugInfo() {
+            if (showDebug) {
+                debugX.textContent = Math.floor(x);
+                debugY.textContent = Math.floor(y);
+                debugDX.textContent = dx.toFixed(2);
+                debugDY.textContent = dy.toFixed(2);
+                debugWidth.textContent = Math.floor(screenWidth);
+                debugHeight.textContent = Math.floor(screenHeight);
+                debugFrame.textContent = frameCount;
+                
+                // Calculate FPS
+                if (frameCount % 30 === 0) {
+                    const now = Date.now();
+                    fps = Math.round(30000 / (now - lastFrameTime));
+                    lastFrameTime = now;
+                    debugFPS.textContent = fps;
+                }
+            }
+        }
+        
+        // Animation loop
+        function animate() {
+            if (!isPaused) {
+                frameCount++;
+                
+                // Update position
+                x += dx;
+                y += dy;
+                
+                let hitEdge = false;
+                let hitLeft = false, hitRight = false, hitTop = false, hitBottom = false;
+                let hitType = "";
+                
+                // Check boundaries and reverse direction if hit
+                if (x <= 0) {
+                    x = 0;
+                    dx = Math.abs(dx);
+                    hitEdge = true;
+                    hitLeft = true;
+                    hitType = "LEFT";
+                }
+                if (x >= screenWidth - logoWidth) {
+                    x = screenWidth - logoWidth;
+                    dx = -Math.abs(dx);
+                    hitEdge = true;
+                    hitRight = true;
+                    hitType = "RIGHT";
+                }
+                if (y <= 0) {
+                    y = 0;
+                    dy = Math.abs(dy);
+                    hitEdge = true;
+                    hitTop = true;
+                    hitType = hitType ? hitType + "+TOP" : "TOP";
+                }
+                if (y >= screenHeight - logoHeight) {
+                    y = screenHeight - logoHeight;
+                    dy = -Math.abs(dy);
+                    hitEdge = true;
+                    hitBottom = true;
+                    hitType = hitType ? hitType + "+BOTTOM" : "BOTTOM";
+                }
+                
+                // Handle edge hit
+                if (hitEdge) {
+                    changeColor();
+                    playCollisionSound();
+                    edgeHits++;
+                    edgeHitsElement.textContent = edgeHits;
+                    debugLastHit.textContent = hitType;
+                    
+                    // Check for corner hit
+                    if (checkCornerHit(hitLeft, hitRight, hitTop, hitBottom)) {
+                        cornerHits++;
+                        cornerHitsElement.textContent = cornerHits;
+                        logo.classList.add('celebrating');
+                        setTimeout(() => logo.classList.remove('celebrating'), 1000);
+                        debugLastHit.textContent = "CORNER!";
+                        // Special sound for corner
+                        setTimeout(() => playBeep(1200, 150), 100);
+                    }
+                }
+                
+                // Update logo position
+                logo.style.left = x + 'px';
+                logo.style.top = y + 'px';
+                
+                // Update debug info
+                updateDebugInfo();
+            }
+            
+            // Update timer
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const seconds = (elapsed % 60).toString().padStart(2, '0');
+            timerElement.textContent = `${minutes}:${seconds}`;
+            
+            requestAnimationFrame(animate);
+        }
+        
+        // Control functions
+        function togglePause() {
+            isPaused = !isPaused;
+            event.target.textContent = isPaused ? 'PLAY' : 'PAUSE';
+        }
+        
+        function toggleMute() {
+            isMuted = !isMuted;
+            document.getElementById('muteText').textContent = isMuted ? 'UNMUTE' : 'MUTE';
+            muteIndicator.textContent = isMuted ? '[MUTED]' : '';
+            debugAudio.textContent = isMuted ? 'MUTED' : 'READY';
+        }
+        
+        function toggleDebug() {
+            showDebug = !showDebug;
+            debugPanel.classList.toggle('active');
+        }
+        
+        function resetStats() {
+            edgeHits = 0;
+            cornerHits = 0;
+            startTime = Date.now();
+            frameCount = 0;
+            edgeHitsElement.textContent = '0';
+            cornerHitsElement.textContent = '0';
+            debugLastHit.textContent = 'NONE';
+        }
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            screenRect = screen.getBoundingClientRect();
+            screenWidth = screenRect.width;
+            screenHeight = screenRect.height;
+            // Adjust position if logo is out of bounds after resize
+            x = Math.min(x, screenWidth - logoWidth);
+            y = Math.min(y, screenHeight - logoHeight);
+        });
+        
+        // Initialize audio context on first user interaction
+        document.addEventListener('click', initAudioContext, { once: true });
+        
+        // Initialize
+        changeColor();
+        animate();
+    </script>
+</body>
+</html>
