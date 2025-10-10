@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Physics Linearization Tool</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #1a1a1a;
+            margin: 0;
+            padding: 2vh;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+        }
+
+        .container {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 2vh;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            width: 95vw;
+            max-width: 1400px;
+            height: 95vh;
+            display: flex;
+            flex-direction: column;
+            gap: 2vh;
+        }
+
+        .title {
+            font-size: clamp(1.2rem, 3vh, 1.8rem);
+            font-weight: 600;
+            color: #ffffff;
+            margin: 0;
+            text-align: center;
+        }
+
+        .charts-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2vw;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .chart-container {
+            position: relative;
+            background: #333;
+            padding: 1vh;
+            border-radius: 8px;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1vw;
+            padding: 1vh;
+            align-items: center;
+            justify-content: center;
+        }
+
+        select {
+            min-height: 44px;
+            padding: 0.5vh 1vw;
+            border-radius: 8px;
+            border: 2px solid #444;
+            background: #333;
+            color: #ffffff;
+            font-size: clamp(0.9rem, 1.5vh, 1.1rem);
+            cursor: pointer;
+            flex: 1;
+            max-width: 300px;
+        }
+
+        select:hover {
+            background: #444;
+        }
+
+        button {
+            min-height: 44px;
+            border: none;
+            border-radius: 8px;
+            padding: 1vh 2vw;
+            font-size: clamp(0.8rem, 2vh, 1.2rem);
+            font-weight: 500;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        #next-btn {
+            background: #2196F3;
+        }
+
+        #check-btn {
+            background: #4CAF50;
+        }
+
+        button:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        @keyframes glowGreen {
+            0% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.6); }
+            25% { box-shadow: 0 0 30px 10px rgba(255, 255, 255, 0.6); }
+            50% { box-shadow: 0 0 50px 15px rgba(76, 175, 80, 0.8); }
+            75% { box-shadow: 0 0 30px 10px rgba(255, 255, 255, 0.6); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.6); }
+        }
+
+        @keyframes glowRed {
+            0% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.6); }
+            25% { box-shadow: 0 0 30px 10px rgba(255, 255, 255, 0.6); }
+            50% { box-shadow: 0 0 50px 15px rgba(244, 67, 54, 0.8); }
+            75% { box-shadow: 0 0 30px 10px rgba(255, 255, 255, 0.6); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.6); }
+        }
+
+        .correct {
+            animation: glowGreen 2s ease-out;
+        }
+
+        .incorrect {
+            animation: glowRed 2s ease-out;
+        }
+
+        @media (max-width: 768px) {
+            .charts-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .container {
+                height: auto;
+                min-height: 95vh;
+            }
+            
+            .chart-container {
+                height: 40vh;
+            }
+            
+            .controls {
+                flex-direction: column;
+            }
+            
+            select {
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title" id="experiment-title">Physics Linearization Practice</h1>
+        
+        <div class="charts-container">
+            <div class="chart-container">
+                <canvas id="original-plot"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="linearized-plot"></canvas>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <select id="function-select">
+                <option value="">Select a function...</option>
+            </select>
+            <button id="check-btn">Check</button>
+            <button id="next-btn">Next</button>
+        </div>
+    </div>
+
+    <script>
+        // Keep all the existing experimental data and linearization functions
+        const experimentalData = {
+    // 1. Linear Relationship (y = x)
+    linear1: {
+        name: "Current vs Voltage (Ohm's Law)",
+        units: ["volts", "amperes"],
+        correctFunction: "linear",
+        data: [
+            [0.5, 0.104], [1.0, 0.201], [1.5, 0.308], [2.0, 0.395], [2.5, 0.512],
+            [3.0, 0.592], [3.5, 0.708], [4.0, 0.805], [4.5, 0.897], [5.0, 1.002],
+            [5.5, 1.108], [6.0, 1.204], [6.5, 1.307], [7.0, 1.392], [7.5, 1.509],
+            [8.0, 1.605], [8.5, 1.708], [9.0, 1.802], [9.5, 1.908], [10.0, 2.205]
+        ]
+    },
+    linear2: {
+        name: "Force vs Extension (Hooke's Law)",
+        units: ["newtons", "meters"],
+        correctFunction: "linear",
+        data: [
+            [1, 0.052], [2, 0.098], [3, 0.151], [4, 0.202], [5, 0.248],
+            [6, 0.302], [7, 0.349], [8, 0.398], [9, 0.452], [10, 0.501],
+            [11, 0.548], [12, 0.602], [13, 0.651], [14, 0.698], [15, 0.752],
+            [16, 0.798], [17, 0.852], [18, 0.901], [19, 0.948], [20, 1.102]
+        ]
+    },
+
+    // 2. Square Relationship (y = x²)
+    square1: {
+        name: "Spring Energy vs Extension",
+        units: ["meters", "joules"],
+        correctFunction: "square",
+        data: [
+            [0.05, 0.0028], [0.10, 0.0097], [0.15, 0.0235], [0.20, 0.0412], [0.25, 0.0658],
+            [0.30, 0.0923], [0.35, 0.128], [0.40, 0.167], [0.45, 0.213], [0.50, 0.262],
+            [0.55, 0.315], [0.60, 0.378], [0.65, 0.441], [0.70, 0.512], [0.75, 0.590],
+            [0.80, 0.672], [0.85, 0.758], [0.90, 0.851], [0.95, 0.947], [1.00, 1.150]
+        ]
+    },
+    square2: {
+        name: "Kinetic Energy vs Velocity",
+        units: ["m/s", "joules"],
+        correctFunction: "square",
+        data: [
+            [1, 0.52], [2, 1.95], [3, 4.41], [4, 7.89], [5, 12.8],
+            [6, 18.3], [7, 24.9], [8, 32.1], [9, 41.2], [10, 51.3],
+            [11, 61.5], [12, 72.8], [13, 85.9], [14, 98.7], [15, 115],
+            [16, 129], [17, 147], [18, 167], [19, 185], [20, 205]
+        ]
+    },
+
+    // 3. Square Root Relationship (y = √x)
+    squareRoot1: {
+        name: "Pendulum Period vs Length",
+        units: ["meters", "seconds"],
+        correctFunction: "squareRoot",
+        data: [
+            [0.25, 1.05], [0.50, 1.46], [0.75, 1.78], [1.00, 2.05], [1.25, 2.29],
+            [1.50, 2.48], [1.75, 2.69], [2.00, 2.88], [2.25, 3.05], [2.50, 3.21],
+            [2.75, 3.37], [3.00, 3.52], [3.25, 3.67], [3.50, 3.81], [3.75, 3.94],
+            [4.00, 4.08], [4.25, 4.21], [4.50, 4.32], [4.75, 4.47], [5.00, 4.85]
+        ]
+    },
+    squareRoot2: {
+        name: "Terminal Velocity vs Mass",
+        units: ["kg", "m/s"],
+        correctFunction: "squareRoot",
+        data: [
+            [0.1, 3.24], [0.2, 4.58], [0.3, 5.61], [0.4, 6.48], [0.5, 7.25],
+            [0.6, 7.94], [0.7, 8.57], [0.8, 9.15], [0.9, 9.71], [1.0, 10.2],
+            [1.1, 10.7], [1.2, 11.2], [1.3, 11.7], [1.4, 12.1], [1.5, 12.5],
+            [1.6, 13.0], [1.7, 13.4], [1.8, 13.8], [1.9, 14.2], [2.0, 15.1]
+        ]
+    },
+
+    // 4. Inverse Relationship (y = 1/x)
+    inverse1: {
+        name: "Gas Pressure vs Volume",
+        units: ["m³", "kPa"],
+        correctFunction: "inverse",
+        data: [
+            [1.0, 101.3], [1.2, 84.2], [1.4, 72.1], [1.6, 63.3], [1.8, 56.3],
+            [2.0, 50.7], [2.2, 46.0], [2.4, 42.2], [2.6, 39.0], [2.8, 36.2],
+            [3.0, 33.8], [3.2, 31.7], [3.4, 29.8], [3.6, 28.1], [3.8, 26.7],
+            [4.0, 25.3], [4.2, 24.1], [4.4, 23.0], [4.6, 22.0], [4.8, 18.5]
+        ]
+    },
+    inverse2: {
+        name: "Magnetic Field vs Distance",
+        units: ["meters", "microTesla"],
+        correctFunction: "inverse",
+        data: [
+            [0.1, 985], [0.2, 492], [0.3, 328], [0.4, 246], [0.5, 197],
+            [0.6, 164], [0.7, 141], [0.8, 123], [0.9, 109], [1.0, 98.5],
+            [1.1, 89.5], [1.2, 82.1], [1.3, 75.8], [1.4, 70.4], [1.5, 65.7],
+            [1.6, 61.6], [1.7, 57.9], [1.8, 54.7], [1.9, 51.8], [2.0, 43.5]
+        ]
+    },
+
+    // 5. Inverse Square Relationship (y = 1/x²)
+    inverseSquare1: {
+        name: "Light Intensity vs Distance",
+        units: ["meters", "lux"],
+        correctFunction: "inverseSquare",
+        data: [
+            [0.5, 410.3], [1.0, 95.8], [1.5, 46.2], [2.0, 23.1], [2.5, 16.4],
+            [3.0, 10.8], [3.5, 8.4], [4.0, 6.7], [4.5, 5.2], [5.0, 4.2],
+            [5.5, 3.1], [6.0, 2.9], [6.5, 2.3], [7.0, 2.2], [7.5, 1.9],
+            [8.0, 1.7], [8.5, 1.5], [9.0, 1.4], [9.5, 1.3], [10.0, 0.85]
+        ]
+    },
+    inverseSquare2: {
+        name: "Gravitational Force vs Distance",
+        units: ["meters", "microNewtons"],
+        correctFunction: "inverseSquare",
+        data: [
+            [0.1, 9850], [0.15, 4410], [0.2, 2530], [0.25, 1580], [0.3, 1120],
+            [0.35, 827], [0.4, 651], [0.45, 498], [0.5, 412], [0.55, 335],
+            [0.6, 292], [0.65, 248], [0.7, 218], [0.75, 189], [0.8, 164],
+            [0.85, 147], [0.9, 132], [0.95, 118], [1.0, 98.5], [1.1, 89.2]
+        ]
+    },
+
+    // 6. Inverse Cube Relationship (y = 1/x³)
+    inverseCube1: {
+        name: "Tidal Force vs Distance",
+        units: ["meters", "microNewtons"],
+        correctFunction: "inverseCube",
+        data: [
+            [1.0, 0.992], [1.2, 0.578], [1.4, 0.364], [1.6, 0.244], [1.8, 0.171],
+            [2.0, 0.124], [2.2, 0.093], [2.4, 0.072], [2.6, 0.056], [2.8, 0.045],
+            [3.0, 0.037], [3.2, 0.031], [3.4, 0.026], [3.6, 0.022], [3.8, 0.019],
+            [4.0, 0.016], [4.2, 0.014], [4.4, 0.012], [4.6, 0.010], [4.8, 0.013]
+        ]
+    },
+    inverseCube2: {
+        name: "Magnetic Dipole Field",
+        units: ["cm", "milliTesla"],
+        correctFunction: "inverseCube",
+        data: [
+            [1.0, 1000], [1.5, 296], [2.0, 125], [2.5, 64], [3.0, 37.0],
+            [3.5, 23.4], [4.0, 15.6], [4.5, 10.9], [5.0, 8.0], [5.5, 6.0],
+            [6.0, 4.6], [6.5, 3.6], [7.0, 2.9], [7.5, 2.4], [8.0, 2.0],
+            [8.5, 1.7], [9.0, 1.4], [9.5, 1.2], [10.0, 1.0], [10.5, 1.3]
+        ]
+    },
+
+    // 7. Cubic Relationship (y = x³)
+    cubic1: {
+        name: "Stellar Luminosity vs Mass",
+        units: ["solar masses", "solar luminosities"],
+        correctFunction: "cubic",
+        data: [
+            [0.5, 0.127], [0.6, 0.221], [0.7, 0.352], [0.8, 0.523], [0.9, 0.745],
+            [1.0, 1.021], [1.1, 1.359], [1.2, 1.765], [1.3, 2.242], [1.4, 2.799],
+            [1.5, 3.443], [1.6, 4.182], [1.7, 5.011], [1.8, 5.949], [1.9, 6.996],
+            [2.0, 8.160], [2.1, 9.446], [2.2, 10.861], [2.3, 12.410], [2.4, 15.200]
+        ]
+    },
+    cubic2: {
+        name: "Flow Rate vs Pipe Radius",
+        units: ["cm", "L/min"],
+        correctFunction: "cubic",
+        data: [
+            [0.2, 0.008], [0.3, 0.027], [0.4, 0.064], [0.5, 0.125], [0.6, 0.216],
+            [0.7, 0.343], [0.8, 0.512], [0.9, 0.729], [1.0, 1.000], [1.1, 1.331],
+            [1.2, 1.728], [1.3, 2.197], [1.4, 2.744], [1.5, 3.375], [1.6, 4.096],
+            [1.7, 4.913], [1.8, 5.832], [1.9, 6.859], [2.0, 8.000], [2.1, 10.648]
+        ]
+    },
+
+    // 8. Natural Log Relationship (y = ln x)
+    naturalLog1: {
+        name: "Entropy vs Volume",
+        units: ["m³", "J/K"],
+        correctFunction: "naturalLog",
+        data: [
+            [1.0, 0.001], [1.5, 0.405], [2.0, 0.693], [2.5, 0.916], [3.0, 1.099],
+            [3.5, 1.253], [4.0, 1.386], [4.5, 1.504], [5.0, 1.609], [5.5, 1.705],
+            [6.0, 1.792], [6.5, 1.872], [7.0, 1.946], [7.5, 2.015], [8.0, 2.079],
+            [8.5, 2.140], [9.0, 2.197], [9.5, 2.251], [10.0, 2.303], [10.5, 2.351]
+        ]
+    },
+    naturalLog2: {
+        name: "pH vs Concentration",
+        units: ["mol/L", "pH"],
+        correctFunction: "naturalLog",
+        data: [
+            [0.001, 3.02], [0.002, 2.71], [0.005, 2.32], [0.01, 2.01], [0.02, 1.71],
+            [0.05, 1.32], [0.1, 1.01], [0.2, 0.71], [0.3, 0.53], [0.4, 0.41],
+            [0.5, 0.31], [0.6, 0.23], [0.7, 0.16], [0.8, 0.10], [0.9, 0.05],
+            [1.0, 0.00], [2.0, -0.29], [5.0, -0.69], [10.0, -0.99], [20.0, -1.45]
+        ]
+    },
+
+    // 9. Exponential Relationship (y = e^x)
+    exponential1: {
+        name: "Capacitor Discharge",
+        units: ["seconds", "volts"],
+        correctFunction: "exponential",
+        data: [
+            [0.0, 12.1], [0.5, 7.42], [1.0, 4.52], [1.5, 2.76], [2.0, 1.69],
+            [2.5, 1.03], [3.0, 0.63], [3.5, 0.39], [4.0, 0.24], [4.5, 0.15],
+            [5.0, 0.09], [5.5, 0.06], [6.0, 0.04], [6.5, 0.02], [7.0, 0.015],
+            [7.5, 0.009], [8.0, 0.006], [8.5, 0.004], [9.0, 0.003], [9.5, 0.005]
+        ]
+    },
+    exponential2: {
+        name: "Radioactive Decay",
+        units: ["hours", "counts/min"],
+        correctFunction: "exponential",
+        data: [
+            [0, 1000], [1, 707], [2, 499], [3, 352], [4, 249],
+            [5, 176], [6, 124], [7, 88], [8, 62], [9, 44],
+            [10, 31], [11, 22], [12, 15], [13, 11], [14, 7.8],
+            [15, 5.5], [16, 3.9], [17, 2.8], [18, 2.0], [19, 2.8]
+        ]
+    },
+
+    // 10. Sine Relationship (y = sin x)
+    // removed
+};
+
+        const linearizationFunctions = [
+            { id: 'linear', label: 'Linear (y = x)', transform: (x, y) => [x, y] },
+            { id: 'square', label: 'Square (y = x²)', transform: (x, y) => [x * x, y] },
+            { id: 'squareRoot', label: 'Square Root (y = √x)', transform: (x, y) => [Math.sqrt(x), y] },
+            { id: 'inverse', label: 'Inverse (y = 1/x)', transform: (x, y) => [1/x, y] },
+            { id: 'inverseSquare', label: 'Inverse Square (y = 1/x²)', transform: (x, y) => [1/(x * x), y] },
+            { id: 'inverseCube', label: 'Inverse Cube (y = 1/x³)', transform: (x, y) => [1/(x * x * x), y] },
+            { id: 'cubic', label: 'Cubic (y = x³)', transform: (x, y) => [x * x * x, y] },
+            { id: 'naturalLog', label: 'Natural Log (y = ln x)', transform: (x, y) => [Math.log(x), y] },
+            { id: 'exponential', label: 'Exponential (y = eˣ)', transform: (x, y) => [x, Math.log(y)] },
+        ];
+
+        // Global variables
+        let currentExperiment = null;
+        let originalPlot = null;
+        let linearizedPlot = null;
+
+        function init() {
+            setupEventListeners();
+            populateDropdown();
+            selectRandomExperiment();
+
+            window.addEventListener('resize', () => {
+                if (originalPlot) originalPlot.resize();
+                if (linearizedPlot) linearizedPlot.resize();
+            });
+        }
+
+        function setupEventListeners() {
+            document.getElementById('next-btn').addEventListener('click', selectRandomExperiment);
+            document.getElementById('check-btn').addEventListener('click', checkAnswer);
+            document.getElementById('function-select').addEventListener('change', handleFunctionSelect);
+        }
+
+        function populateDropdown() {
+            const select = document.getElementById('function-select');
+            linearizationFunctions.forEach(func => {
+                const option = document.createElement('option');
+                option.value = func.id;
+                option.textContent = func.label;
+                select.appendChild(option);
+            });
+        }
+
+        // Keep all other functions exactly the same (calculateSmoothCurve, calculateRegression, etc.)
+        function calculateSmoothCurve(data) {
+    const sortedData = [...data].sort((a, b) => a.x - b.x);
+    const points = [];
+    const windowSize = 3;
+    
+    // Add first point unchanged
+    points.push({
+        x: sortedData[0].x,
+        y: sortedData[0].y
+    });
+    
+    // Calculate moving average for middle points
+    for (let i = 1; i < sortedData.length - 1; i++) {
+        const windowStart = Math.max(0, i - Math.floor(windowSize/2));
+        const windowEnd = Math.min(sortedData.length - 1, i + Math.floor(windowSize/2));
+        
+        let sum = 0;
+        for (let j = windowStart; j <= windowEnd; j++) {
+            sum += sortedData[j].y;
+        }
+        const average = sum / (windowEnd - windowStart + 1);
+        
+        points.push({
+            x: sortedData[i].x,
+            y: average
+        });
+    }
+    
+    // Add last point unchanged
+    points.push({
+        x: sortedData[sortedData.length - 1].x,
+        y: sortedData[sortedData.length - 1].y
+    });
+    
+    return points;
+}
+
+        function calculateRegression(data) {
+            const n = data.length;
+            const sumX = data.reduce((sum, p) => sum + p.x, 0);
+            const sumY = data.reduce((sum, p) => sum + p.y, 0);
+            const sumXY = data.reduce((sum, p) => sum + p.x * p.y, 0);
+            const sumX2 = data.reduce((sum, p) => sum + p.x * p.x, 0);
+            
+            const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+            const intercept = (sumY - slope * sumX) / n;
+            
+            const minX = Math.min(...data.map(p => p.x));
+            const maxX = Math.max(...data.map(p => p.x));
+            
+            return [
+                { x: minX, y: slope * minX + intercept },
+                { x: maxX, y: slope * maxX + intercept }
+            ];
+        }
+
+        function selectRandomExperiment() {
+            const experimentTypes = Object.keys(experimentalData);
+            const randomKey = experimentTypes[Math.floor(Math.random() * experimentTypes.length)];
+            currentExperiment = experimentalData[randomKey];
+            
+            document.getElementById('experiment-title').textContent = currentExperiment.name;
+            document.getElementById('function-select').value = '';
+            document.querySelector('.container').classList.remove('correct', 'incorrect');
+            
+            updatePlots();
+        }
+
+        function updatePlots() {
+            if (originalPlot) originalPlot.destroy();
+            if (linearizedPlot) linearizedPlot.destroy();
+
+            const originalData = currentExperiment.data.map(([x, y]) => ({x, y}));
+            const smoothCurve = calculateSmoothCurve(originalData);
+
+            const originalCtx = document.getElementById('original-plot').getContext('2d');
+            originalPlot = new Chart(originalCtx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Raw Data',
+                        data: originalData,
+                        backgroundColor: 'rgba(54, 162, 235, 0.7)'
+                    }, {
+                        label: 'Trend Line',
+                        data: smoothCurve,
+                        type: 'line',
+                        borderColor: 'rgba(75, 192, 192, 0.8)',
+                        fill: false,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Original Data',
+                            font: { size: 16, weight: 'bold' },
+                            color: '#ffffff'
+                        },
+                        legend: {
+                            labels: {
+                                font: { size: 14 },
+                                color: '#ffffff'
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: currentExperiment.units[0],
+                                font: { size: 14, weight: 'bold' },
+                                color: '#ffffff'
+                            },
+                            ticks: {
+                                color: '#ffffff',
+                                font: { size: 12 }
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: currentExperiment.units[1],
+                                font: { size: 14, weight: 'bold' },
+                                color: '#ffffff'
+                            },
+                            ticks: {
+                                color: '#ffffff',
+                                font: { size: 12 }
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            const linearizedCtx = document.getElementById('linearized-plot').getContext('2d');
+            linearizedPlot = new Chart(linearizedCtx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Linearized Data',
+                        data: [],
+                        backgroundColor: 'rgba(255, 99, 132, 0.7)'
+                    }, {
+                        label: 'Best Fit Line',
+                        data: [],
+                        type: 'line',
+                        borderColor: 'rgba(75, 192, 192, 0.8)',
+                        fill: false,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Linearized Data',
+                            font: { size: 16, weight: 'bold' },
+                            color: '#ffffff'
+                        },
+                        legend: {
+                            labels: {
+                                font: { size: 14 },
+                                color: '#ffffff'
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Transformed X',
+                                font: { size: 14, weight: 'bold' },
+                                color: '#ffffff'
+                            },
+                            ticks: {
+                                color: '#ffffff',
+                                font: { size: 12 }
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Transformed Y',
+                                font: { size: 14, weight: 'bold' },
+                                color: '#ffffff'
+                            },
+                            ticks: {
+                                color: '#ffffff',
+                                font: { size: 12 }
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function handleFunctionSelect(event) {
+            const functionId = event.target.value;
+            if (!functionId) return;
+            
+            const transformer = linearizationFunctions.find(f => f.id === functionId).transform;
+            
+            const transformedData = currentExperiment.data.map(([x, y]) => {
+                const [transformedX, transformedY] = transformer(x, y);
+                return {x: transformedX, y: transformedY};
+            });
+
+            const regressionLine = calculateRegression(transformedData);
+
+            linearizedPlot.data.datasets[0].data = transformedData;
+            linearizedPlot.data.datasets[1].data = regressionLine;
+            linearizedPlot.update();
+        }
+
+        function checkAnswer() {
+            const selectedFunction = document.getElementById('function-select').value;
+            const container = document.querySelector('.container');
+            
+            if (!selectedFunction) return;
+
+            const isCorrect = selectedFunction === currentExperiment.correctFunction;
+            
+            container.classList.remove('correct', 'incorrect');
+            void container.offsetWidth; // Trigger reflow for animation reset
+            container.classList.add(isCorrect ? 'correct' : 'incorrect');
+        }
+
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
