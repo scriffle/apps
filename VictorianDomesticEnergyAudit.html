@@ -50,10 +50,38 @@
         .progress-bar {
             background: white;
             padding: 15px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
             border-bottom: 2px solid #e0e0e0;
+        }
+
+        .progress-nav {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+
+        .nav-arrows {
+            display: flex;
+            gap: 5px;
+        }
+
+        .arrow-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.2em;
+            padding: 5px 10px;
+            color: #2E7D32;
+            transition: color 0.3s;
+        }
+
+        .arrow-btn:hover {
+            color: #1B5E20;
+        }
+
+        .arrow-btn:disabled {
+            color: #ccc;
+            cursor: not-allowed;
         }
 
         .progress-indicator {
@@ -61,11 +89,41 @@
             color: #666;
         }
 
+        .page-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+        .page-tab {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: all 0.3s;
+            color: #666;
+        }
+
+        .page-tab:hover {
+            background: #e0e0e0;
+        }
+
+        .page-tab.active {
+            background: #2E7D32;
+            color: white;
+            border-color: #2E7D32;
+            font-weight: 600;
+        }
+
         .save-indicator {
             font-size: 0.85em;
             color: #2E7D32;
             opacity: 0;
             transition: opacity 0.3s;
+            margin-left: auto;
         }
 
         .save-indicator.show {
@@ -533,6 +591,16 @@
             h2 {
                 font-size: 1.4em;
             }
+
+            .page-tabs {
+                max-height: 100px;
+                overflow-y: auto;
+            }
+
+            .page-tab {
+                font-size: 0.75em;
+                padding: 4px 8px;
+            }
         }
     </style>
 </head>
@@ -544,12 +612,17 @@
         </header>
 
         <div class="progress-bar no-print">
-            <div class="progress-indicator">
-                <button onclick="prevPage()" style="background: none; border: none; cursor: pointer; font-size: 1.2em; padding: 0 10px; color: #2E7D32;" title="Previous page">&lt;</button>
-                <button onclick="nextPage()" style="background: none; border: none; cursor: pointer; font-size: 1.2em; padding: 0 10px; color: #2E7D32;" title="Next page">&gt;</button>
-                Page <span id="currentPage">1</span> of 14
+            <div class="progress-nav">
+                <div class="nav-arrows">
+                    <button class="arrow-btn" id="prevBtn" onclick="prevPage()" title="Previous page">&lt;</button>
+                    <button class="arrow-btn" id="nextBtn" onclick="nextPage()" title="Next page">&gt;</button>
+                </div>
+                <div class="progress-indicator">
+                    Page <span id="currentPage">1</span> of 15
+                </div>
+                <div class="save-indicator" id="saveIndicator">Progress Saved</div>
             </div>
-            <div class="save-indicator" id="saveIndicator">Progress Saved</div>
+            <div class="page-tabs" id="pageTabs"></div>
         </div>
 
         <div class="content">
@@ -1035,7 +1108,7 @@
 
                 <div class="navigation">
                     <button class="btn-secondary" onclick="prevPage()">Back</button>
-                    <button class="btn-primary" onclick="calculateResults()">Calculate Results</button>
+                    <button class="btn-primary" onclick="nextPage()">View Results</button>
                 </div>
             </div>
 
@@ -1044,6 +1117,10 @@
                 <h2>Your Energy Audit Results</h2>
                 <div class="page-intro">
                     <p>Here is a summary of your household energy consumption and carbon dioxide emissions.</p>
+                </div>
+
+                <div id="incompleteWarning" class="warning-box" style="display: none;">
+                    <p><strong>Note:</strong> Some major fields have not been completed. Results may use default or average values for missing information. For accurate results, please complete all pages before Page 9.</p>
                 </div>
 
                 <div class="results-summary" id="resultsSummary"></div>
@@ -1369,6 +1446,43 @@
 
                 <div class="navigation">
                     <button class="btn-secondary" onclick="prevPage()">Back</button>
+                    <button class="btn-primary" onclick="nextPage()">Data Utilities</button>
+                </div>
+            </div>
+
+            <!-- PAGE 15: Data Utilities -->
+            <div class="page" data-page="15">
+                <h2>Data Utilities</h2>
+                <div class="page-intro">
+                    <p>Manage your audit data: export to save a backup, import previously saved data, or reset to start a new audit.</p>
+                </div>
+
+                <div class="improvement-item">
+                    <h3>Export Audit Data</h3>
+                    <p>Download your current audit data as a JSON file. You can save this file and import it later to continue your work or share it with your teacher.</p>
+                    <button class="btn-primary" onclick="exportData()" style="margin-top: 15px;">Download Data File</button>
+                </div>
+
+                <div class="improvement-item">
+                    <h3>Import Audit Data</h3>
+                    <p>Load previously saved audit data from a JSON file. This will replace your current data.</p>
+                    <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importData(event)">
+                    <button class="btn-primary" onclick="document.getElementById('importFile').click()" style="margin-top: 15px;">Choose File to Import</button>
+                    <div id="importStatus" style="margin-top: 10px; color: #2E7D32; font-weight: 600;"></div>
+                </div>
+
+                <div class="improvement-item" style="border-left-color: #d32f2f;">
+                    <h3>Reset All Data</h3>
+                    <p>Clear all entered data and start a new audit. This action cannot be undone. Consider exporting your data first.</p>
+                    <button class="btn-secondary" onclick="confirmReset()" style="margin-top: 15px; background: #d32f2f;">Reset All Data</button>
+                </div>
+
+                <div class="info-box" style="margin-top: 30px;">
+                    <p><strong>Data Storage:</strong> Your audit data is stored locally in your browser. Clearing your browser data will remove your audit. Use the export function to create a backup.</p>
+                </div>
+
+                <div class="navigation">
+                    <button class="btn-secondary" onclick="prevPage()">Back</button>
                     <button class="btn-primary" onclick="goToPage(1)">Start New Audit</button>
                 </div>
             </div>
@@ -1435,6 +1549,8 @@
             initializeEventListeners();
             renderVehicles();
             updateSliderLabels();
+            createPageTabs();
+            updateNavigationButtons();
         });
 
         function initializeEventListeners() {
@@ -1717,7 +1833,7 @@
 
         // Navigation
         function nextPage() {
-            if (currentPage < 14) {
+            if (currentPage < 15) {
                 goToPage(currentPage + 1);
             }
         }
@@ -1738,7 +1854,51 @@
                 targetPage.classList.add('active');
                 currentPage = pageNum;
                 document.getElementById('currentPage').textContent = currentPage;
+                updatePageTabs();
+                updateNavigationButtons();
                 window.scrollTo(0, 0);
+                
+                // Auto-calculate when going to results page
+                if (pageNum === 9) {
+                    calculateResults();
+                }
+            }
+        }
+
+        function createPageTabs() {
+            const pageNames = [
+                'Welcome', 'Home', 'Heating', 'Hot Water', 'Transport', 
+                'Building', 'Renewable', 'Behaviors', 'Results', 'Improvements',
+                'Details', 'Report', 'Methods', 'References', 'Utilities'
+            ];
+
+            const tabsContainer = document.getElementById('pageTabs');
+            tabsContainer.innerHTML = pageNames.map((name, index) => {
+                const pageNum = index + 1;
+                return `<div class="page-tab ${pageNum === 1 ? 'active' : ''}" onclick="goToPage(${pageNum})">${pageNum}. ${name}</div>`;
+            }).join('');
+        }
+
+        function updatePageTabs() {
+            document.querySelectorAll('.page-tab').forEach((tab, index) => {
+                if (index + 1 === currentPage) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+        }
+
+        function updateNavigationButtons() {
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            
+            if (prevBtn) {
+                prevBtn.disabled = currentPage === 1;
+            }
+            
+            if (nextBtn) {
+                nextBtn.disabled = currentPage === 15;
             }
         }
 
@@ -1765,8 +1925,28 @@
             calculateSolar();
             calculateCO2();
 
-            goToPage(9);
             displayResults();
+            checkDataCompleteness();
+        }
+
+        function checkDataCompleteness() {
+            const majorFields = [
+                auditData.dwellingType,
+                auditData.floorArea,
+                auditData.buildingAge,
+                auditData.heatingType,
+                auditData.coolingType,
+                auditData.hotWaterType
+            ];
+
+            const isIncomplete = majorFields.some(field => !field || field === '');
+            const warningDiv = document.getElementById('incompleteWarning');
+            
+            if (isIncomplete) {
+                warningDiv.style.display = 'block';
+            } else {
+                warningDiv.style.display = 'none';
+            }
         }
 
         function getMultiplier(category, value) {
@@ -2570,21 +2750,80 @@
         }
 
         function emailReport() {
-            const totalEnergy = results.electricity + results.gas + results.transportPetrol + results.transportDiesel;
-            
-            const subject = encodeURIComponent('Victorian Household Energy Audit Results');
-            const body = encodeURIComponent(`
+            // First, export the data as JSON file
+            const dataStr = JSON.stringify(auditData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `energy-audit-${auditData.studentName || 'data'}-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            // Small delay to ensure download starts, then open email
+            setTimeout(() => {
+                const totalEnergy = results.electricity + results.gas + results.transportPetrol + results.transportDiesel;
+                const perCapita = totalEnergy / auditData.occupants;
+                const transport = results.transportPetrol + results.transportDiesel;
+
+                // Victorian benchmarks
+                const benchmarks = {
+                    totalEnergy: 21096,
+                    electricity: 4615,
+                    gas: 16481,
+                    transport: 10700,
+                    co2: 7500,
+                    perCapita: 8100
+                };
+
+                // Calculate differences
+                const diffTotal = Math.round(totalEnergy - benchmarks.totalEnergy);
+                const diffElec = Math.round(results.electricity - benchmarks.electricity);
+                const diffGas = Math.round(results.gas - benchmarks.gas);
+                const diffTransport = Math.round(transport - benchmarks.transport);
+                const diffCO2 = Math.round(results.co2 - benchmarks.co2);
+                const diffPerCapita = Math.round(perCapita - benchmarks.perCapita);
+
+                const pctTotal = ((diffTotal / benchmarks.totalEnergy) * 100).toFixed(0);
+                const pctElec = ((diffElec / benchmarks.electricity) * 100).toFixed(0);
+                const pctGas = ((diffGas / benchmarks.gas) * 100).toFixed(0);
+                const pctTransport = ((diffTransport / benchmarks.transport) * 100).toFixed(0);
+                const pctCO2 = ((diffCO2 / benchmarks.co2) * 100).toFixed(0);
+                const pctPerCapita = ((diffPerCapita / benchmarks.perCapita) * 100).toFixed(0);
+                
+                const subject = encodeURIComponent('Victorian Household Energy Audit Results');
+                const body = encodeURIComponent(`
 Household Energy Audit Report
 Student: ${auditData.studentName || 'Not provided'}
 Postcode: ${auditData.postcode || 'Not provided'}
 Date: ${new Date().toLocaleDateString('en-AU')}
 
+NOTE: A JSON data file has been downloaded. Please attach it to this email.
+
 SUMMARY
 Total Energy Use: ${Math.round(totalEnergy).toLocaleString()} kWh/year
 Electricity: ${Math.round(results.electricity).toLocaleString()} kWh/year
 Natural Gas: ${Math.round(results.gas).toLocaleString()} kWh/year
-Transport: ${Math.round(results.transportPetrol + results.transportDiesel).toLocaleString()} kWh/year
+Transport: ${Math.round(transport).toLocaleString()} kWh/year
 CO₂ Emissions: ${Math.round(results.co2).toLocaleString()} kg/year
+Per Person: ${Math.round(perCapita).toLocaleString()} kWh/year
+
+COMPARISON TO VICTORIAN AVERAGES
+Category | Your Household | Victorian Average | Difference
+
+Total Energy: ${Math.round(totalEnergy).toLocaleString()} kWh | ${benchmarks.totalEnergy.toLocaleString()} kWh | ${diffTotal > 0 ? '+' : ''}${diffTotal.toLocaleString()} kWh (${pctTotal}% ${diffTotal > 0 ? 'above' : 'below'} average)
+
+Electricity: ${Math.round(results.electricity).toLocaleString()} kWh | ${benchmarks.electricity.toLocaleString()} kWh | ${diffElec > 0 ? '+' : ''}${diffElec.toLocaleString()} kWh (${Math.abs(pctElec)}% ${diffElec > 0 ? 'above' : 'below'} average)
+
+Natural Gas: ${Math.round(results.gas).toLocaleString()} kWh | ${benchmarks.gas.toLocaleString()} kWh | ${diffGas > 0 ? '+' : ''}${diffGas.toLocaleString()} kWh (${Math.abs(pctGas)}% ${diffGas > 0 ? 'above' : 'below'} average)
+
+Transport: ${Math.round(transport).toLocaleString()} kWh | ${benchmarks.transport.toLocaleString()} kWh | ${diffTransport > 0 ? '+' : ''}${diffTransport.toLocaleString()} kWh (${Math.abs(pctTransport)}% ${diffTransport > 0 ? 'above' : 'below'} average)
+
+CO₂ Emissions: ${Math.round(results.co2).toLocaleString()} kg | ${benchmarks.co2.toLocaleString()} kg | ${diffCO2 > 0 ? '+' : ''}${diffCO2.toLocaleString()} kg (${Math.abs(pctCO2)}% ${diffCO2 > 0 ? 'above' : 'below'} average)
+
+Per Person: ${Math.round(perCapita).toLocaleString()} kWh | ${benchmarks.perCapita.toLocaleString()} kWh | ${diffPerCapita > 0 ? '+' : ''}${diffPerCapita.toLocaleString()} kWh (${Math.abs(pctPerCapita)}% ${diffPerCapita > 0 ? 'above' : 'below'} average)
 
 HOUSEHOLD DETAILS
 Dwelling Type: ${auditData.dwellingType || 'Not specified'}
@@ -2601,9 +2840,10 @@ Appliances: ${Math.round(results.breakdown.baseLoad || 0).toLocaleString()} kWh
 Transport: ${Math.round(results.transportPetrol + results.transportDiesel + results.transportElectric).toLocaleString()} kWh
 
 Generated by Victorian Household Energy Audit Tool
-            `);
+                `);
 
-            window.location.href = `mailto:?subject=${subject}&body=${body}`;
+                window.location.href = `mailto:?subject=${subject}&body=${body}`;
+            }, 500);
         }
 
         function toggleExpand(header) {
@@ -2611,6 +2851,133 @@ Generated by Victorian Household Energy Audit Tool
             content.classList.toggle('show');
             const arrow = header.querySelector('span:last-child');
             arrow.textContent = content.classList.contains('show') ? '▲' : '▼';
+        }
+
+        // Data Utilities
+        function exportData() {
+            const dataStr = JSON.stringify(auditData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `energy-audit-${auditData.studentName || 'data'}-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    
+                    // Validate that it's the right structure
+                    if (importedData.studentName !== undefined && importedData.occupants !== undefined) {
+                        auditData = importedData;
+                        saveData();
+                        populateForm();
+                        renderVehicles();
+                        updateSliderLabels();
+                        
+                        const status = document.getElementById('importStatus');
+                        status.textContent = 'Data imported successfully.';
+                        status.style.color = '#2E7D32';
+                        
+                        setTimeout(() => {
+                            status.textContent = '';
+                        }, 3000);
+                    } else {
+                        throw new Error('Invalid data format');
+                    }
+                } catch (error) {
+                    const status = document.getElementById('importStatus');
+                    status.textContent = 'Error: Invalid file format.';
+                    status.style.color = '#d32f2f';
+                }
+            };
+            reader.readAsText(file);
+            
+            // Reset file input
+            event.target.value = '';
+        }
+
+        function confirmReset() {
+            if (confirm('Are you sure you want to reset all data? This action cannot be undone.\n\nConsider exporting your data first if you want to save it.')) {
+                resetData();
+            }
+        }
+
+        function resetData() {
+            // Clear localStorage
+            localStorage.removeItem('victorianEnergyAudit');
+            
+            // Reset auditData to defaults
+            auditData = {
+                studentName: '',
+                postcode: '',
+                dwellingType: '',
+                occupants: 3,
+                floorArea: '',
+                buildingAge: '',
+                heatingType: '',
+                heatingUsage: '',
+                coolingType: '',
+                coolingUsage: '',
+                hotWaterType: '',
+                showerLength: '',
+                cooktopType: '',
+                ovenType: '',
+                vehicles: [],
+                alternativeTransport: {
+                    ebike: false,
+                    publicTransport: false,
+                    bicycle: false,
+                    walking: false
+                },
+                wfhDays: 0,
+                insulation: {
+                    ceilingInsulation: 'none',
+                    wallInsulation: 'none',
+                    doubleGlazing: 'none',
+                    draftSealing: 'poor'
+                },
+                features: {
+                    swimmingPool: false,
+                    poolHeating: false,
+                    spa: false,
+                    workshop: false
+                },
+                solarPV: 'none',
+                battery: 'none',
+                greenPower: 0,
+                behaviors: {
+                    lightsOff: 2,
+                    standbyOff: 1,
+                    coldWashing: 2,
+                    airDry: 2,
+                    closeCurtains: 2,
+                    thermostat: 1
+                },
+                energyEfforts: ''
+            };
+            
+            // Reset results
+            results = {};
+            
+            // Reload form
+            populateForm();
+            renderVehicles();
+            updateSliderLabels();
+            
+            // Go to first page
+            goToPage(1);
+            
+            alert('All data has been reset. You can now start a new audit.');
         }
     </script>
 </body>
