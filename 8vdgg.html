@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Van de Graaff Generator Simulation</title>
+<style>
+:root {
+  --bg: #0b1020;
+  --fg: #e6f0ff;
+  --muted: #9fb1d4;
+  --accent: #6ee7ff;
+  --panel: #111936;
+  --panel2: #0e1530;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  background: radial-gradient(1200px 600px at 10% -10%, #1c2750 0%, #0b1020 50%),
+              radial-gradient(1200px 800px at 110% 110%, #08122b 0%, #0b1020 60%);
+  color: var(--fg);
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  padding: 16px 20px;
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid rgba(110, 231, 255, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.header-content {
+  flex: 1;
+  min-width: 300px;
+}
+
+h1 {
+  font-size: 20px;
+  letter-spacing: 0.3px;
+  color: var(--accent);
+  margin: 0 0 4px 0;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+button {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+#powerBtn {
+  background: linear-gradient(135deg, #6ee7ff 0%, #6dffa7 100%);
+  color: #0b1020;
+  box-shadow: 0 4px 12px rgba(110, 231, 255, 0.3);
+}
+
+#powerBtn.off {
+  background: linear-gradient(135deg, #ff6e6e 0%, #ff9a6d 100%);
+  box-shadow: 0 4px 12px rgba(255, 110, 110, 0.3);
+}
+
+#resetBtn {
+  background: linear-gradient(135deg, #9fb1d4 0%, #7a8cb8 100%);
+  color: #0b1020;
+  box-shadow: 0 4px 12px rgba(159, 177, 212, 0.3);
+}
+
+button:hover {
+  transform: translateY(-2px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+#container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  position: relative;
+  min-height: 0;
+}
+
+canvas {
+  display: block;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--panel), var(--panel2));
+  border: 1px solid #1a2550;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.instructions {
+  position: fixed;
+  left: 30px;
+  bottom: 30px;
+  font-size: 13px;
+  color: #cdd9ff;
+  background: rgba(8, 12, 28, 0.75);
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(120, 150, 255, 0.2);
+  backdrop-filter: blur(4px);
+  max-width: 280px;
+  line-height: 1.5;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.instructions strong {
+  color: var(--accent);
+}
+
+.stats {
+  position: fixed;
+  right: 30px;
+  bottom: 30px;
+  font-size: 12px;
+  color: #cdd9ff;
+  background: rgba(8, 12, 28, 0.75);
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(120, 150, 255, 0.2);
+  backdrop-filter: blur(4px);
+  text-align: right;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.stats div {
+  margin: 4px 0;
+}
+
+.status-indicator {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #6dffa7;
+  box-shadow: 0 0 10px rgba(109, 255, 167, 0.6);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.status-indicator.off {
+  background: #ff6e6e;
+  box-shadow: 0 0 10px rgba(255, 110, 110, 0.6);
+  animation: none;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="header-content">
+    <h1>⚡ Van de Graaff Generator</h1>
+    <div class="subtitle">Side view: Electrons accumulate on the dome and discharge to the grounding rod</div>
+  </div>
+  <div class="controls">
+    <button id="powerBtn" class="off">Turn ON</button>
+    <button id="resetBtn">Reset</button>
+  </div>
+</header>
+<div id="container">
+  <canvas id="canvas"></canvas>
+  <div class="instructions">
+    <strong>Instructions:</strong><br>
+    • <strong>Turn ON/OFF</strong> the generator<br>
+    • When ON, electrons flow onto dome<br>
+    • <strong>Drag the handle</strong> to move the rod anywhere<br>
+    • At high charge, <strong>electron wind</strong> flows into air<br>
+    • Electrons repel each other → spread on dome
+  </div>
+  <div class="stats">
+    <div>Status: <span class="status-indicator off" id="statusLight"></span> <strong id="status">OFF</strong></div>
+    <div>Electrons: <strong id="eCount">0</strong></div>
+    <div>Charge: <strong id="charge">0</strong></div>
+    <div>Wind: <strong id="wind">0</strong></div>
+    <div>Discharges: <strong id="sparks">0</strong></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  
+  const COULOMB_K = 12000;
+  const SOFTENING = 6;
+  const DAMPING = 0.97;
+  const BROWNIAN_FORCE = 120;
+  const MAX_FORCE = 8000;
+  const DT = 0.014;
+  const ELECTRON_RADIUS = 2.5;
+  const ELECTRON_ADD_RATE = 0.15;
+  const MAX_ELECTRONS = 300;
+  const DISCHARGE_DISTANCE = 120;
+  const SPARK_DISTANCE = 80;
+  const FIXED_DOME_RADIUS = 70;
+  
+  let isOn = false;
+  let domeX, domeY, domeRadius;
+  let columnX, columnY, columnWidth, columnHeight;
+  let handleX, handleY;
+  let rodX, rodY, rodRadius = 20;
+  let rodDragging = false;
+  let handleLength = 120;
+  let electrons = [];
+  let windElectrons = [];
+  let sparks = [];
+  let totalSparks = 0;
+  let electronAccumulator = 0;
+  let beltOffset = 0;
+  let windAccumulator = 0;
+  let glowPulse = 0;
+  
+  function resize() {
+    const container = canvas.parentElement;
+    const maxWidth = container.clientWidth - 40;
+    const maxHeight = container.clientHeight - 40;
+    
+    const width = Math.min(1200, Math.max(500, maxWidth));
+    const height = Math.min(800, Math.max(400, maxHeight));
+    
+    canvas.width = width;
+    canvas.height = height;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    
+    columnWidth = 60;
+    columnHeight = height * 0.35;
+    columnX = width * 0.5 - columnWidth / 2;
+    columnY = height * 0.2;
+    
+    domeRadius = FIXED_DOME_RADIUS;
+    domeX = width * 0.5;
+    domeY = columnY - domeRadius * 0.6;
+    
+    if (handleX === undefined) {
+      const startAngle = Math.PI / 2;
+      const startDist = domeRadius * 2.5;
+      rodX = domeX + Math.cos(startAngle) * startDist;
+      rodY = domeY + Math.sin(startAngle) * startDist;
+      handleX = rodX + Math.cos(startAngle) * handleLength;
+      handleY = rodY + Math.sin(startAngle) * handleLength;
+    } else {
+      updateRodPosition();
+    }
+  }
+  
+  function updateRodPosition() {
+    const dx = handleX - domeX;
+    const dy = handleY - domeY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    if (dist > 0) {
+      const angle = Math.atan2(dy, dx);
+      const rodDist = dist - handleLength;
+      rodX = domeX + Math.cos(angle) * rodDist;
+      rodY = domeY + Math.sin(angle) * rodDist;
+    }
+  }
+  
+  function togglePower() {
+    isOn = !isOn;
+    const btn = document.getElementById('powerBtn');
+    const statusLight = document.getElementById('statusLight');
+    const statusText = document.getElementById('status');
+    
+    if (isOn) {
+      btn.textContent = 'Turn OFF';
+      btn.classList.remove('off');
+      statusLight.classList.remove('off');
+      statusText.textContent = 'ON';
+    } else {
+      btn.textContent = 'Turn ON';
+      btn.classList.add('off');
+      statusLight.classList.add('off');
+      statusText.textContent = 'OFF';
+    }
+  }
+  
+  function addElectron() {
+    if (electrons.length >= MAX_ELECTRONS || !isOn) return;
+    
+    const angle = Math.random() * Math.PI - Math.PI / 2;
+    const r = domeRadius * 0.8;
+    electrons.push({
+      x: domeX + Math.cos(angle) * r,
+      y: domeY + Math.sin(angle) * r,
+      vx: (Math.random() - 0.5) * 50,
+      vy: (Math.random() - 0.5) * 50
+    });
+  }
+  
+  function reset() {
+    electrons = [];
+    windElectrons = [];
+    sparks = [];
+    electronAccumulator = 0;
+    windAccumulator = 0;
+    totalSparks = 0;
+  }
+  
+  function updatePhysics() {
+    const soft2 = SOFTENING * SOFTENING;
+    glowPulse = (glowPulse + 0.05) % (Math.PI * 2);
+    
+    if (isOn) {
+      electronAccumulator += ELECTRON_ADD_RATE;
+      while (electronAccumulator >= 1 && electrons.length < MAX_ELECTRONS) {
+        addElectron();
+        electronAccumulator -= 1;
+      }
+      beltOffset = (beltOffset + 2) % 20;
+      
+      const chargeRatio = electrons.length / MAX_ELECTRONS;
+      if (chargeRatio > 0.75) {
+        const windRate = (chargeRatio - 0.75) * 1.2;
+        windAccumulator += windRate;
+        
+        while (windAccumulator >= 1 && electrons.length > 0) {
+          const randomIdx = Math.floor(Math.random() * electrons.length);
+          const e = electrons[randomIdx];
+          const dx = e.x - domeX;
+          const dy = e.y - domeY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const speed = 150 + Math.random() * 100;
+          
+          windElectrons.push({
+            x: e.x, y: e.y,
+            vx: (dx / dist) * speed,
+            vy: (dy / dist) * speed,
+            life: 1.0
+          });
+          
+          electrons.splice(randomIdx, 1);
+          windAccumulator -= 1;
+        }
+      }
+    }
+    
+    const centerToCenterDist = Math.hypot(domeX - rodX, domeY - rodY);
+    const surfaceToSurfaceDist = centerToCenterDist - domeRadius - rodRadius;
+    const shouldDischarge = surfaceToSurfaceDist < DISCHARGE_DISTANCE;
+    
+    for (let i = electrons.length - 1; i >= 0; i--) {
+      const e = electrons[i];
+      let fx = 0, fy = 0;
+      
+      for (let j = 0; j < electrons.length; j++) {
+        if (i === j) continue;
+        const other = electrons[j];
+        const dx = e.x - other.x;
+        const dy = e.y - other.y;
+        const r2 = dx * dx + dy * dy + soft2;
+        const r = Math.sqrt(r2);
+        const forceMag = Math.min(MAX_FORCE, COULOMB_K / r2);
+        fx += forceMag * (dx / r);
+        fy += forceMag * (dy / r);
+      }
+      
+      const dx = e.x - domeX;
+      const dy = e.y - domeY;
+      const distFromCenter = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distFromCenter > 0) {
+        const diff = distFromCenter - domeRadius;
+        const springK = 1500;
+        fx -= springK * diff * (dx / distFromCenter);
+        fy -= springK * diff * (dy / distFromCenter);
+      }
+      
+      if (shouldDischarge) {
+        const toRodX = rodX - e.x;
+        const toRodY = rodY - e.y;
+        const distToRodCenter = Math.sqrt(toRodX * toRodX + toRodY * toRodY);
+        const distToSurface = distToRodCenter - rodRadius;
+        
+        if (distToSurface < SPARK_DISTANCE) {
+          const angleToElectron = Math.atan2(e.y - rodY, e.x - rodX);
+          const sparkEndX = rodX + Math.cos(angleToElectron) * rodRadius;
+          const sparkEndY = rodY + Math.sin(angleToElectron) * rodRadius;
+          
+          sparks.push({x1: e.x, y1: e.y, x2: sparkEndX, y2: sparkEndY, life: 1.0});
+          electrons.splice(i, 1);
+          totalSparks++;
+          continue;
+        }
+      }
+      
+      fx += (Math.random() - 0.5) * BROWNIAN_FORCE;
+      fy += (Math.random() - 0.5) * BROWNIAN_FORCE;
+      e.vx = (e.vx + fx * DT) * DAMPING;
+      e.vy = (e.vy + fy * DT) * DAMPING;
+      e.x += e.vx * DT;
+      e.y += e.vy * DT;
+    }
+    
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      sparks[i].life -= 0.08;
+      if (sparks[i].life <= 0) sparks.splice(i, 1);
+    }
+    
+    for (let i = windElectrons.length - 1; i >= 0; i--) {
+      const w = windElectrons[i];
+      w.x += w.vx * DT;
+      w.y += w.vy * DT;
+      w.life -= 0.012;
+      if (w.life <= 0) windElectrons.splice(i, 1);
+    }
+  }
+  
+  function render() {
+    ctx.fillStyle = 'rgba(17, 25, 54, 0.4)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#3a4a6a';
+    const baseY = columnY + columnHeight;
+    ctx.fillRect(columnX - 60, baseY, columnWidth + 120, 15);
+    
+    ctx.save();
+    const cableEndX = columnX + columnWidth / 2;
+    const cableEndY = baseY;
+    const dx = handleX - cableEndX;
+    const dy = handleY - cableEndY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const sagAmount = Math.min(dist * 0.3, 80);
+    const controlX = (handleX + cableEndX) / 2 + dy * 0.1;
+    const controlY = (handleY + cableEndY) / 2 + sagAmount;
+    
+    ctx.strokeStyle = '#555566';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(handleX, handleY);
+    ctx.quadraticCurveTo(controlX, controlY, cableEndX, cableEndY);
+    ctx.stroke();
+    
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(handleX, handleY);
+    ctx.quadraticCurveTo(controlX - 1, controlY - 1, cableEndX, cableEndY);
+    ctx.stroke();
+    ctx.restore();
+    
+    ctx.save();
+    const colGrad = ctx.createLinearGradient(columnX, 0, columnX + columnWidth, 0);
+    colGrad.addColorStop(0, '#4a5a7a');
+    colGrad.addColorStop(0.5, '#5a6a8a');
+    colGrad.addColorStop(1, '#4a5a7a');
+    ctx.fillStyle = colGrad;
+    ctx.fillRect(columnX, columnY, columnWidth, columnHeight);
+    
+    if (isOn) {
+      ctx.strokeStyle = 'rgba(110, 231, 255, 0.4)';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([10, 10]);
+      ctx.lineDashOffset = -beltOffset;
+      ctx.beginPath();
+      ctx.moveTo(columnX + columnWidth / 2, columnY + columnHeight);
+      ctx.lineTo(columnX + columnWidth / 2, columnY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+    
+    ctx.save();
+    const domeGrad = ctx.createRadialGradient(domeX - domeRadius * 0.3, domeY - domeRadius * 0.3, domeRadius * 0.2, domeX, domeY, domeRadius);
+    domeGrad.addColorStop(0, '#f0f0f8');
+    domeGrad.addColorStop(0.5, '#c8c8e0');
+    domeGrad.addColorStop(1, '#9090b8');
+    ctx.fillStyle = domeGrad;
+    ctx.beginPath();
+    ctx.arc(domeX, domeY, domeRadius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(domeX - domeRadius * 0.25, domeY - domeRadius * 0.25, domeRadius * 0.5, Math.PI, Math.PI * 1.8);
+    ctx.stroke();
+    ctx.restore();
+    
+    ctx.save();
+    const rodAngle = Math.atan2(handleY - rodY, handleX - rodX);
+    ctx.strokeStyle = '#8888aa';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(rodX, rodY);
+    ctx.lineTo(handleX, handleY);
+    ctx.stroke();
+    
+    ctx.save();
+    ctx.translate(handleX, handleY);
+    ctx.rotate(rodAngle);
+    const glowIntensity = 0.5 + Math.sin(glowPulse) * 0.3;
+    ctx.shadowBlur = 15 + Math.sin(glowPulse) * 10;
+    ctx.shadowColor = `rgba(110, 231, 255, ${glowIntensity})`;
+    ctx.fillStyle = '#6a5a4a';
+    ctx.fillRect(-25, -8, 40, 16);
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#8a7a6a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-25, -8, 40, 16);
+    ctx.restore();
+    
+    const rodGrad = ctx.createRadialGradient(rodX - rodRadius * 0.3, rodY - rodRadius * 0.3, rodRadius * 0.2, rodX, rodY, rodRadius);
+    rodGrad.addColorStop(0, '#f8f8ff');
+    rodGrad.addColorStop(1, '#b0b0d0');
+    ctx.fillStyle = rodGrad;
+    ctx.beginPath();
+    ctx.arc(rodX, rodY, rodRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    
+    ctx.save();
+    for (const spark of sparks) {
+      const alpha = spark.life;
+      ctx.strokeStyle = `rgba(110, 231, 255, ${alpha})`;
+      ctx.lineWidth = 3;
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = `rgba(110, 231, 255, ${alpha * 0.8})`;
+      ctx.beginPath();
+      ctx.moveTo(spark.x1, spark.y1);
+      for (let i = 1; i <= 5; i++) {
+        const t = i / 5;
+        const x = spark.x1 + (spark.x2 - spark.x1) * t + (Math.random() - 0.5) * 15;
+        const y = spark.y1 + (spark.y2 - spark.y1) * t + (Math.random() - 0.5) * 15;
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(spark.x2, spark.y2);
+      ctx.stroke();
+    }
+    ctx.restore();
+    
+    ctx.save();
+    for (const e of electrons) {
+      const grd = ctx.createRadialGradient(e.x - ELECTRON_RADIUS * 0.6, e.y - ELECTRON_RADIUS * 0.6, ELECTRON_RADIUS * 0.3, e.x, e.y, ELECTRON_RADIUS);
+      grd.addColorStop(0, '#c7f3ff');
+      grd.addColorStop(1, '#6ee7ff');
+      ctx.fillStyle = grd;
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = 'rgba(110, 231, 255, 0.6)';
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, ELECTRON_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    
+    ctx.save();
+    for (const w of windElectrons) {
+      const alpha = w.life;
+      const grd = ctx.createRadialGradient(w.x - ELECTRON_RADIUS * 0.6, w.y - ELECTRON_RADIUS * 0.6, ELECTRON_RADIUS * 0.3, w.x, w.y, ELECTRON_RADIUS * 1.2);
+      grd.addColorStop(0, `rgba(199, 243, 255, ${alpha})`);
+      grd.addColorStop(1, `rgba(110, 231, 255, ${alpha * 0.5})`);
+      ctx.fillStyle = grd;
+      ctx.shadowBlur = 8 * alpha;
+      ctx.shadowColor = `rgba(110, 231, 255, ${alpha * 0.6})`;
+      ctx.beginPath();
+      ctx.arc(w.x, w.y, ELECTRON_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(110, 231, 255, ${alpha * 0.3})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(w.x, w.y);
+      ctx.lineTo(w.x - w.vx * 0.02, w.y - w.vy * 0.02);
+      ctx.stroke();
+    }
+    ctx.restore();
+    
+    document.getElementById('eCount').textContent = electrons.length;
+    document.getElementById('charge').textContent = (electrons.length * 0.1).toFixed(1) + ' nC';
+    document.getElementById('wind').textContent = windElectrons.length;
+    document.getElementById('sparks').textContent = totalSparks;
+  }
+  
+  function animate() {
+    updatePhysics();
+    render();
+    requestAnimationFrame(animate);
+  }
+  
+  function getPointer(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY};
+  }
+  
+  function isInHandle(x, y) {
+    const rodAngle = Math.atan2(handleY - rodY, handleX - rodX);
+    const dx = x - handleX, dy = y - handleY;
+    const cos = Math.cos(-rodAngle), sin = Math.sin(-rodAngle);
+    const rx = dx * cos - dy * sin, ry = dx * sin + dy * cos;
+    return rx >= -25 && rx <= 15 && ry >= -8 && ry <= 8;
+  }
+  
+  canvas.addEventListener('mousedown', (e) => {
+    const pos = getPointer(e);
+    if (isInHandle(pos.x, pos.y)) {
+      rodDragging = true;
+      canvas.style.cursor = 'grabbing';
+    }
+  });
+  
+  canvas.addEventListener('mousemove', (e) => {
+    const pos = getPointer(e);
+    if (isInHandle(pos.x, pos.y)) {
+      canvas.style.cursor = rodDragging ? 'grabbing' : 'grab';
+    } else {
+      canvas.style.cursor = 'crosshair';
+    }
+    if (rodDragging) {
+      handleX = Math.max(0, Math.min(canvas.width, pos.x));
+      handleY = Math.max(0, Math.min(canvas.height, pos.y));
+      updateRodPosition();
+    }
+  });
+  
+  canvas.addEventListener('mouseup', (e) => {
+    rodDragging = false;
+    const pos = getPointer(e);
+    canvas.style.cursor = isInHandle(pos.x, pos.y) ? 'grab' : 'crosshair';
+  });
+  
+  window.addEventListener('mouseup', () => {
+    if (rodDragging) {
+      rodDragging = false;
+      canvas.style.cursor = 'crosshair';
+    }
+  });
+  
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const pos = getPointer(e);
+    if (isInHandle(pos.x, pos.y)) rodDragging = true;
+  });
+  
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (rodDragging) {
+      const pos = getPointer(e);
+      handleX = Math.max(0, Math.min(canvas.width, pos.x));
+      handleY = Math.max(0, Math.min(canvas.height, pos.y));
+      updateRodPosition();
+    }
+  });
+  
+  canvas.addEventListener('touchend', () => {rodDragging = false;});
+  window.addEventListener('resize', resize);
+  document.getElementById('powerBtn').addEventListener('click', togglePower);
+  document.getElementById('resetBtn').addEventListener('click', reset);
+  
+  canvas.style.cursor = 'crosshair';
+  resize();
+  animate();
+})();
+</script>
+</body>
+</html>
