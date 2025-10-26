@@ -70,6 +70,7 @@
             font-weight: bold;
             color: #92400e;
             z-index: 10;
+            pointer-events: none;
         }
         @media (min-width: 640px) {
             .plate-label { font-size: 0.75rem; }
@@ -83,10 +84,17 @@
             justify-content: center;
             color: white;
             box-shadow: 0 4px 12px rgba(59, 130, 246, 0.5);
-            pointer-events: none;
             will-change: transform;
             user-select: none;
             -webkit-user-select: none;
+            cursor: grab;
+            touch-action: none;
+            pointer-events: auto;
+        }
+        .electron.dragging {
+            cursor: grabbing;
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.8);
+            z-index: 100;
         }
         .status-display {
             background: white;
@@ -202,12 +210,15 @@
             boundaryRepulsion: 150,
             exitSpeed: 20
         };
+        
         var electrons = [];
         var nextId = 0;
         var animationFrameId = null;
         var plateElement = null;
         var plateBounds = null;
         var jostleUntil = 0;
+        var draggedElectron = null;
+        var dragOffset = { x: 0, y: 0 };
 
         function Electron(id, x, y, status) {
             this.id = id;
@@ -220,6 +231,7 @@
             this.targetX = x;
             this.targetY = y;
         }
+
         Electron.prototype.createDOMElement = function(size, emoji) {
             var el = document.createElement('div');
             el.className = 'electron';
@@ -228,8 +240,19 @@
             el.style.fontSize = (size * 0.6) + 'px';
             el.textContent = emoji;
             this.element = el;
+            
+            var self = this;
+            el.addEventListener('mousedown', function(e) {
+                startDrag(e, self);
+            });
+            el.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                startDrag(e.touches[0], self);
+            });
+            
             return el;
         };
+
         Electron.prototype.updatePosition = function() {
             if (this.element) {
                 var offsetX = this.x - this.element.offsetWidth / 2;
@@ -238,29 +261,78 @@
             }
         };
 
+        function startDrag(e, electron) {
+            if (electron.status !== 'settled') return;
+            draggedElectron = electron;
+            var rect = plateElement.getBoundingClientRect();
+            dragOffset.x = e.clientX - rect.left - electron.x;
+            dragOffset.y = e.clientY - rect.top - electron.y;
+            electron.element.classList.add('dragging');
+            electron.vx = 0;
+            electron.vy = 0;
+            jostleUntil = Date.now() + 1000;
+        }
+
+        function handleDragMove(e) {
+            if (!draggedElectron) return;
+            var rect = plateElement.getBoundingClientRect();
+            var newX = e.clientX - rect.left - dragOffset.x;
+            var newY = e.clientY - rect.top - dragOffset.y;
+            var size = 48;
+            newX = Math.max(size/2, Math.min(plateBounds.width - size/2, newX));
+            newY = Math.max(size/2, Math.min(plateBounds.height - size/2, newY));
+            draggedElectron.x = newX;
+            draggedElectron.y = newY;
+            draggedElectron.vx = 0;
+            draggedElectron.vy = 0;
+        }
+
+        function handleDragEnd() {
+            if (draggedElectron) {
+                draggedElectron.element.classList.remove('dragging');
+                draggedElectron = null;
+            }
+        }
+
         function init() {
             plateElement = document.getElementById('capacitorPlate');
             updatePlateBounds();
+            
             for (var i = 0; i < 3; i++) {
                 var x = plateBounds.width * (0.25 + i * 0.25);
                 var y = plateBounds.height / 2;
                 electrons.push(new Electron(nextId++, x, y, 'settled'));
             }
+            
             render();
             startPhysicsLoop();
+            
             window.addEventListener('resize', updatePlateBounds);
+            
             var btnAdd = document.getElementById('btnAdd');
             var btnRemove = document.getElementById('btnRemove');
+            
             btnAdd.addEventListener('click', addElectron);
             btnAdd.addEventListener('touchend', function(e) {
                 e.preventDefault();
                 addElectron();
             });
+            
             btnRemove.addEventListener('click', removeElectron);
             btnRemove.addEventListener('touchend', function(e) {
                 e.preventDefault();
                 removeElectron();
             });
+            
+            document.addEventListener('mousemove', handleDragMove);
+            document.addEventListener('mouseup', handleDragEnd);
+            document.addEventListener('touchmove', function(e) {
+                if (draggedElectron) {
+                    e.preventDefault();
+                    handleDragMove(e.touches[0]);
+                }
+            }, { passive: false });
+            document.addEventListener('touchend', handleDragEnd);
         }
 
         function updatePlateBounds() {
@@ -277,6 +349,7 @@
             var dy = e2.y - e1.y;
             var distSq = dx * dx + dy * dy;
             var minDist = 48;
+            
             if (distSq < minDist * minDist) {
                 var force = CONFIG.coulombConstant / (minDist * minDist);
                 var angle = Math.atan2(dy, dx);
@@ -285,6 +358,7 @@
                     fy: -Math.sin(angle) * force
                 };
             }
+            
             var force = CONFIG.coulombConstant / distSq;
             var dist = Math.sqrt(distSq);
             return {
@@ -297,6 +371,7 @@
             var margin = plateBounds.padding;
             var fx = 0;
             var fy = 0;
+            
             if (electron.x < margin) {
                 fx += CONFIG.boundaryRepulsion / (electron.x + 1);
             }
@@ -309,6 +384,7 @@
             if (electron.y > plateBounds.height - margin) {
                 fy -= CONFIG.boundaryRepulsion / (plateBounds.height - electron.y + 1);
             }
+            
             return { fx: fx, fy: fy };
         }
 
@@ -316,10 +392,15 @@
             var settledElectrons = electrons.filter(function(e) { return e.status === 'settled'; });
             var isJostling = Date.now() < jostleUntil;
             var forceMultiplier = isJostling ? CONFIG.jostleMultiplier : 1;
+            
             for (var i = 0; i < settledElectrons.length; i++) {
                 var e1 = settledElectrons[i];
+                
+                if (draggedElectron && e1.id === draggedElectron.id) continue;
+                
                 var totalFx = 0;
                 var totalFy = 0;
+                
                 for (var j = 0; j < settledElectrons.length; j++) {
                     var e2 = settledElectrons[j];
                     if (e1.id !== e2.id) {
@@ -328,30 +409,38 @@
                         totalFy += force.fy * forceMultiplier;
                     }
                 }
+                
                 var boundaryForce = calculateBoundaryForce(e1);
                 totalFx += boundaryForce.fx;
                 totalFy += boundaryForce.fy;
+                
                 e1.vx += totalFx * 0.01;
                 e1.vy += totalFy * 0.01;
+                
                 e1.vx *= CONFIG.damping;
                 e1.vy *= CONFIG.damping;
+                
                 var speed = Math.sqrt(e1.vx * e1.vx + e1.vy * e1.vy);
                 if (speed > CONFIG.maxSpeed) {
                     e1.vx = (e1.vx / speed) * CONFIG.maxSpeed;
                     e1.vy = (e1.vy / speed) * CONFIG.maxSpeed;
                 }
+                
                 e1.x += e1.vx;
                 e1.y += e1.vy;
+                
                 var size = 48;
                 e1.x = Math.max(size/2, Math.min(plateBounds.width - size/2, e1.x));
                 e1.y = Math.max(size/2, Math.min(plateBounds.height - size/2, e1.y));
             }
+            
             var enteringElectrons = electrons.filter(function(e) { return e.status === 'entering'; });
             for (var k = 0; k < enteringElectrons.length; k++) {
                 var e = enteringElectrons[k];
                 var dx = e.targetX - e.x;
                 var dy = e.targetY - e.y;
                 var dist = Math.sqrt(dx * dx + dy * dy);
+                
                 if (dist < 5) {
                     e.status = 'settled';
                     e.x = e.targetX;
@@ -363,6 +452,7 @@
                     e.y += dy * 0.1;
                 }
             }
+            
             var exitingElectrons = electrons.filter(function(e) { return e.status === 'exiting'; });
             for (var m = 0; m < exitingElectrons.length; m++) {
                 var ex = exitingElectrons[m];
@@ -402,6 +492,7 @@
         function updateAllElectronEmojis() {
             var activeCount = electrons.filter(function(e) { return e.status !== 'exiting'; }).length;
             var emoji = getEmoji(activeCount);
+            
             for (var i = 0; i < electrons.length; i++) {
                 var electron = electrons[i];
                 if (electron.element && electron.status !== 'exiting') {
@@ -412,23 +503,28 @@
 
         function render() {
             plateElement.innerHTML = '<div class="plate-label">CAPACITOR PLATE</div>';
+            
             var size = getElectronSize(electrons.length);
             var emoji = getEmoji(electrons.length);
+            
             for (var i = 0; i < electrons.length; i++) {
                 var electron = electrons[i];
                 var el = electron.createDOMElement(size, emoji);
                 plateElement.appendChild(el);
                 electron.updatePosition();
             }
+            
             document.getElementById('electronCount').textContent = electrons.length;
             document.getElementById('moodDisplay').textContent = getMood(electrons.length);
         }
 
         function physicsLoop() {
             updatePhysics();
+            
             for (var i = 0; i < electrons.length; i++) {
                 electrons[i].updatePosition();
             }
+            
             electrons = electrons.filter(function(e) {
                 if (e.status === 'exiting') {
                     var offScreen = e.x < -100 || e.x > plateBounds.width + 100 || e.y < -100 || e.y > plateBounds.height + 100;
@@ -439,6 +535,7 @@
                 }
                 return true;
             });
+            
             animationFrameId = requestAnimationFrame(physicsLoop);
         }
 
@@ -450,26 +547,32 @@
 
         function addElectron() {
             if (electrons.length >= 32) return;
+            
             var bestX = plateBounds.width / 2;
             var bestY = plateBounds.height / 2;
             var maxMinDist = 0;
+            
             for (var i = 0; i < 20; i++) {
                 var testX = plateBounds.padding + Math.random() * (plateBounds.width - 2 * plateBounds.padding);
                 var testY = plateBounds.padding + Math.random() * (plateBounds.height - 2 * plateBounds.padding);
+                
                 var minDist = Infinity;
                 for (var j = 0; j < electrons.length; j++) {
                     var e = electrons[j];
                     var dist = Math.sqrt(Math.pow(e.x - testX, 2) + Math.pow(e.y - testY, 2));
                     minDist = Math.min(minDist, dist);
                 }
+                
                 if (minDist > maxMinDist) {
                     maxMinDist = minDist;
                     bestX = testX;
                     bestY = testY;
                 }
             }
+            
             var side = Math.floor(Math.random() * 4);
             var startX, startY;
+            
             if (side === 0) {
                 startX = bestX;
                 startY = -50;
@@ -483,12 +586,16 @@
                 startX = -50;
                 startY = bestY;
             }
+            
             var electron = new Electron(nextId++, startX, startY, 'entering');
             electron.targetX = bestX;
             electron.targetY = bestY;
             electrons.push(electron);
+            
             jostleUntil = Date.now() + 1500;
+            
             render();
+            
             setTimeout(function() {
                 updateAllElectronEmojis();
             }, 50);
@@ -496,17 +603,23 @@
 
         function removeElectron() {
             if (electrons.length <= 1) return;
+            
             var settledElectrons = electrons.filter(function(e) { return e.status === 'settled'; });
             if (settledElectrons.length === 0) return;
+            
             var randomElectron = settledElectrons[Math.floor(Math.random() * settledElectrons.length)];
+            
             var angle = Math.random() * Math.PI * 2;
             randomElectron.vx = Math.cos(angle) * CONFIG.exitSpeed;
             randomElectron.vy = Math.sin(angle) * CONFIG.exitSpeed - 10;
             randomElectron.status = 'exiting';
+            
             jostleUntil = Date.now() + 1000;
+            
             setTimeout(function() {
                 updateAllElectronEmojis();
             }, 50);
+            
             setTimeout(function() {
                 var activeCount = electrons.filter(function(e) { return e.status !== 'exiting'; }).length;
                 document.getElementById('electronCount').textContent = activeCount;
