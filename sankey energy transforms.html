@@ -1219,7 +1219,7 @@
             const outputEnergy = totalInput * efficiency;
             const totalLoss = totalInput - outputEnergy;
 
-            // Calculate loss distribution
+            // Calculate loss distribution - MUST conserve energy!
             const losses = data.losses;
             const heatSources = losses.heat.length;
             const soundSources = losses.sound.length;
@@ -1234,17 +1234,24 @@
             let lightLoss = 0;
 
             if (totalSources > 0) {
-                // Distribute losses proportionally
-                directHeat = (heatSources / totalSources) * totalLoss * 0.7; // 70% direct
-                soundLoss = (soundSources / totalSources) * totalLoss * 0.15; // 15% sound
-                vibrationLoss = (vibrationSources / totalSources) * totalLoss * 0.15; // 15% vibration
-                lightLoss = (lightSources / totalSources) * totalLoss * 0.05; // 5% light
+                // Distribute losses proportionally - ensures conservation
+                const totalWeight = heatSources * 0.7 + soundSources * 0.15 + vibrationSources * 0.15 + lightSources * 0.05;
+                
+                if (totalWeight > 0) {
+                    directHeat = (heatSources * 0.7 / totalWeight) * totalLoss;
+                    soundLoss = (soundSources * 0.15 / totalWeight) * totalLoss;
+                    vibrationLoss = (vibrationSources * 0.15 / totalWeight) * totalLoss;
+                    lightLoss = (lightSources * 0.05 / totalWeight) * totalLoss;
+                } else {
+                    directHeat = totalLoss;
+                }
             } else {
                 directHeat = totalLoss;
             }
 
-            // Calculate final heat (direct + cascaded)
-            const finalHeat = directHeat + soundLoss + vibrationLoss + lightLoss;
+            // Final heat equals total loss (all intermediate losses cascade to heat)
+            // This ensures: outputEnergy + totalLoss = totalInput (always 100% or 1000J)
+            const finalHeat = totalLoss;
 
             // Layout parameters
             const nodeWidth = 120;
