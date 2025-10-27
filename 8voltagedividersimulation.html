@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voltage Divider Simulator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            padding: 10px;
+            min-height: 100vh;
+            color: #333;
+            transition: background 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            max-width: 1100px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 20px;
+        }
+        
+        .mode-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .mode-btn {
+            flex: 1;
+            padding: 8px;
+            font-size: 14px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .mode-btn.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .landscape-grid {
+            display: grid;
+            grid-template-columns: 180px 1fr;
+            gap: 12px;
+        }
+        
+        .circuit-display {
+            background: #f8f9ff;
+            border-radius: 8px;
+            padding: 12px;
+            border: 2px solid #667eea;
+        }
+        
+        .circuit-diagram {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        
+        .component {
+            background: white;
+            padding: 8px;
+            border-radius: 5px;
+            border: 2px solid #333;
+            font-weight: bold;
+            text-align: center;
+            width: 100%;
+            font-size: 11px;
+            line-height: 1.3;
+        }
+        
+        .component.sensor {
+            background: #ffd93d;
+            border-color: #f39c12;
+        }
+        
+        .component.resistor {
+            background: #74b9ff;
+            border-color: #0984e3;
+        }
+        
+        .voltage-label {
+            background: #00b894;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .wire {
+            width: 3px;
+            height: 12px;
+            background: #333;
+        }
+        
+        .vout-indicator {
+            background: #e74c3c;
+            color: white;
+            padding: 6px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: white;
+            padding: 6px 8px;
+            border-radius: 5px;
+            margin-bottom: 8px;
+            border: 1px solid #ddd;
+            font-size: 11px;
+            position: relative;
+        }
+        
+        .toggle-row label {
+            font-weight: bold;
+            color: #667eea;
+            margin: 0;
+        }
+        
+        .toggle-hint {
+            position: absolute;
+            top: -45px;
+            right: 10px;
+            background: #ff4757;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(255, 71, 87, 0.4);
+            animation: toggleHintBounce 1s ease-in-out infinite;
+            z-index: 100;
+        }
+        
+        .toggle-hint::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            right: 20px;
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 8px solid #ff4757;
+        }
+        
+        @keyframes toggleHintBounce {
+            0%, 100% { 
+                top: -45px;
+            }
+            50% { 
+                top: -55px;
+            }
+        }
+        
+        .toggle-hint.hidden {
+            display: none !important;
+        }
+        
+        .switch {
+            position: relative;
+            width: 45px;
+            height: 24px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider-toggle {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .3s;
+            border-radius: 24px;
+        }
+        
+        .slider-toggle:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider-toggle {
+            background-color: #667eea;
+        }
+        
+        input:checked + .slider-toggle:before {
+            transform: translateX(21px);
+        }
+        
+        .readings {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 6px;
+        }
+        
+        .reading {
+            background: white;
+            padding: 6px;
+            border-radius: 5px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+        
+        .reading-label {
+            font-size: 10px;
+            color: #666;
+            margin-bottom: 2px;
+        }
+        
+        .reading-value {
+            font-size: 14px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .graph-section {
+            background: #f8f9ff;
+            border-radius: 8px;
+            padding: 12px;
+            border: 2px solid #667eea;
+        }
+        
+        .graph-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        
+        #sensorGraph {
+            width: 100%;
+            height: 240px;
+            background: white;
+            border-radius: 5px;
+            border: 2px solid #ddd;
+            margin-bottom: 10px;
+        }
+        
+        .slider-control-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            position: relative;
+            margin-bottom: 10px;
+        }
+        
+        .slider-control-row label {
+            font-weight: bold;
+            color: #667eea;
+            font-size: 12px;
+            white-space: nowrap;
+            margin: 0;
+        }
+        
+        .slider-control-row input[type="range"] {
+            flex: 1;
+            height: 30px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            cursor: pointer;
+        }
+        
+        .slider-control-row input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 8px;
+            background: #333;
+            border-radius: 4px;
+            border: 1px solid #000;
+        }
+        
+        .slider-control-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #667eea;
+            border-radius: 50%;
+            cursor: pointer;
+            margin-top: -6px;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .slider-control-row input[type="range"]::-moz-range-track {
+            width: 100%;
+            height: 8px;
+            background: #333;
+            border-radius: 4px;
+            border: 1px solid #000;
+        }
+        
+        .slider-control-row input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #667eea;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .slider-value {
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+            min-width: 60px;
+            text-align: right;
+        }
+        
+        .slider-control-row .slide-hint {
+            position: absolute;
+            top: -45px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ff4757;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(255, 71, 87, 0.4);
+            animation: slideHintBounce 1s ease-in-out infinite;
+            z-index: 100;
+        }
+        
+        .slider-control-row .slide-hint::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 8px solid #ff4757;
+        }
+        
+        @keyframes slideHintBounce {
+            0%, 100% { 
+                top: -45px;
+            }
+            50% { 
+                top: -55px;
+            }
+        }
+        
+        .slide-hint.hidden {
+            display: none !important;
+        }
+        
+        .output-device {
+            text-align: center;
+            padding: 15px;
+            background: #4a4a4a;
+            color: #aaa;
+            border-radius: 8px;
+            border: 2px solid #333;
+            transition: all 0.3s;
+        }
+        
+        .output-device.on.light {
+            background: #ffd93d;
+            color: #333;
+            border-color: #f39c12;
+            animation: glow-light 1s ease-in-out infinite alternate;
+        }
+        
+        .output-device.on.heater {
+            background: #ff4757;
+            color: white;
+            border-color: #ee5a6f;
+            animation: glow-heater 1s ease-in-out infinite alternate;
+        }
+        
+        .output-device.on.aircon {
+            background: #0abde3;
+            color: white;
+            border-color: #48dbfb;
+            animation: glow-aircon 1s ease-in-out infinite alternate;
+        }
+        
+        @keyframes glow-light {
+            from {
+                box-shadow: 0 0 15px #ffd93d;
+            }
+            to {
+                box-shadow: 0 0 30px #ffd93d, 0 0 40px #f39c12;
+            }
+        }
+        
+        @keyframes glow-heater {
+            from {
+                box-shadow: 0 0 15px #ff4757;
+            }
+            to {
+                box-shadow: 0 0 30px #ff4757, 0 0 40px #ee5a6f;
+            }
+        }
+        
+        @keyframes glow-aircon {
+            from {
+                box-shadow: 0 0 15px #0abde3;
+            }
+            to {
+                box-shadow: 0 0 30px #0abde3, 0 0 40px #48dbfb;
+            }
+        }
+        
+        .device-icon {
+            font-size: 40px;
+            margin-bottom: 8px;
+        }
+        
+        .device-name {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        
+        .device-status {
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚡ Voltage Divider Simulator ⚡</h1>
+        
+        <div class="mode-selector">
+            <button class="mode-btn active" onclick="setMode('ldr')">💡 Light Sensor</button>
+            <button class="mode-btn" onclick="setMode('thermistor')">🌡️ Temp Sensor</button>
+        </div>
+        
+        <div class="landscape-grid">
+            <div class="circuit-display">
+                <div class="circuit-diagram">
+                    <div class="voltage-label">12V</div>
+                    <div class="wire"></div>
+                    
+                    <div class="component sensor">
+                        <div id="sensorName">LDR</div>
+                        <div id="sensorResistance">5000Ω</div>
+                    </div>
+                    
+                    <div class="wire"></div>
+                    <div class="vout-indicator" id="voutDisplay">6.0V</div>
+                    <div class="wire"></div>
+                    
+                    <div class="component resistor">
+                        <div>Fixed R</div>
+                        <div>5000Ω</div>
+                    </div>
+                    
+                    <div class="wire"></div>
+                    <div class="voltage-label">0V</div>
+                </div>
+                
+                <div class="toggle-row">
+                    <div class="toggle-hint" id="toggleHint">👈 Switch Me!</div>
+                    <label>Vout:</label>
+                    <label class="switch">
+                        <input type="checkbox" id="voutToggle" onchange="handleToggleChange()">
+                        <span class="slider-toggle"></span>
+                    </label>
+                </div>
+                <div style="text-align: center; font-size: 10px; margin-bottom: 8px;" id="voutPosition">Normal</div>
+                
+                <div class="readings">
+                    <div class="reading">
+                        <div class="reading-label">Sensor R</div>
+                        <div class="reading-value" id="sensorResDisplay">5000Ω</div>
+                    </div>
+                    <div class="reading">
+                        <div class="reading-label">Vout</div>
+                        <div class="reading-value" id="voutReading">6.0V</div>
+                    </div>
+                    <div class="reading">
+                        <div class="reading-label">V Sensor</div>
+                        <div class="reading-value" id="v1Reading">6.0V</div>
+                    </div>
+                    <div class="reading">
+                        <div class="reading-label">V Resistor</div>
+                        <div class="reading-value" id="v2Reading">6.0V</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="graph-section">
+                <div class="graph-title" id="graphTitle">Negative Input Transducer: LDR</div>
+                <canvas id="sensorGraph"></canvas>
+                
+                <div class="slider-control-row" id="lightSliderRow">
+                    <div class="slide-hint" id="sliderHint">👆 Slide Me!</div>
+                    <label>☀️ Light Level:</label>
+                    <input type="range" id="lightSlider" min="0" max="100" value="50" oninput="handleSliderInput()">
+                    <span class="slider-value" id="lightValue">Medium</span>
+                </div>
+                
+                <div class="slider-control-row" id="tempSliderRow" style="display: none;">
+                    <div class="slide-hint" id="sliderHintTemp">👆 Slide Me!</div>
+                    <label>🌡️ Temperature:</label>
+                    <input type="range" id="tempSlider" min="-10" max="40" value="15" oninput="handleSliderInput()">
+                    <span class="slider-value" id="tempValue">15°C</span>
+                </div>
+                
+                <div class="output-device" id="outputDevice">
+                    <div class="device-icon" id="deviceIcon">💡</div>
+                    <div class="device-name" id="deviceName">Street Light</div>
+                    <div class="device-status" id="deviceStatus">OFF</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let currentMode = 'ldr';
+        const fixedResistance = 5000;
+        const supplyVoltage = 12;
+        const thresholdVoltage = 6;
+        let canvas, ctx;
+        let sliderUsed = false;
+        let toggleUsed = false;
+        
+        function handleSliderInput() {
+            if (!sliderUsed) {
+                sliderUsed = true;
+                document.getElementById('sliderHint').classList.add('hidden');
+                document.getElementById('sliderHintTemp').classList.add('hidden');
+            }
+            updateCircuit();
+        }
+        
+        function handleToggleChange() {
+            if (!toggleUsed) {
+                toggleUsed = true;
+                document.getElementById('toggleHint').classList.add('hidden');
+            }
+            updateCircuit();
+        }
+        
+        function initCanvas() {
+            canvas = document.getElementById('sensorGraph');
+            ctx = canvas.getContext('2d');
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+        }
+        
+        function drawGraph() {
+            const width = canvas.width;
+            const height = canvas.height;
+            const padding = 40;
+            const graphWidth = width - 2 * padding;
+            const graphHeight = height - 2 * padding;
+            
+            ctx.clearRect(0, 0, width, height);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+            
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, height - padding);
+            ctx.lineTo(width - padding, height - padding);
+            ctx.stroke();
+            
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 5; i++) {
+                const y = padding + (graphHeight / 5) * i;
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(width - padding, y);
+                ctx.stroke();
+            }
+            
+            ctx.strokeStyle = '#667eea';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            
+            if (currentMode === 'ldr') {
+                document.getElementById('graphTitle').textContent = 'Negative Input Transducer: LDR';
+                
+                for (let i = 0; i <= 100; i++) {
+                    const light = i;
+                    const resistance = 10000 - (light * 99);
+                    const x = padding + (light / 100) * graphWidth;
+                    const y = height - padding - ((resistance - 100) / 9900) * graphHeight;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.stroke();
+                
+                const currentLight = parseInt(document.getElementById('lightSlider').value);
+                const currentResistance = 10000 - (currentLight * 99);
+                const markerX = padding + (currentLight / 100) * graphWidth;
+                const markerY = height - padding - ((currentResistance - 100) / 9900) * graphHeight;
+                
+                ctx.fillStyle = '#e74c3c';
+                ctx.beginPath();
+                ctx.arc(markerX, markerY, 6, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                ctx.fillStyle = '#333';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Light Level', width / 2, height - 5);
+                
+                ctx.save();
+                ctx.translate(15, height / 2);
+                ctx.rotate(-Math.PI / 2);
+                ctx.fillText('Resistance (Ω)', 0, 0);
+                ctx.restore();
+                
+                ctx.font = '10px Arial';
+                ctx.fillText('Dark', padding, height - padding + 15);
+                ctx.fillText('Bright', width - padding, height - padding + 15);
+                ctx.textAlign = 'right';
+                ctx.fillText('10kΩ', padding - 5, padding + 5);
+                ctx.fillText('100Ω', padding - 5, height - padding + 5);
+                
+            } else {
+                document.getElementById('graphTitle').textContent = 'Negative Input Transducer: Thermistor';
+                
+                for (let i = 0; i <= 50; i++) {
+                    const temp = -10 + i;
+                    const resistance = 10000 - ((temp + 10) * 190);
+                    const x = padding + (i / 50) * graphWidth;
+                    const y = height - padding - ((resistance - 500) / 9500) * graphHeight;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.stroke();
+                
+                const currentTemp = parseInt(document.getElementById('tempSlider').value);
+                const currentResistance = 10000 - ((currentTemp + 10) * 190);
+                const markerX = padding + ((currentTemp + 10) / 50) * graphWidth;
+                const markerY = height - padding - ((currentResistance - 500) / 9500) * graphHeight;
+                
+                ctx.fillStyle = '#e74c3c';
+                ctx.beginPath();
+                ctx.arc(markerX, markerY, 6, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                ctx.fillStyle = '#333';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Temperature (°C)', width / 2, height - 5);
+                
+                ctx.save();
+                ctx.translate(15, height / 2);
+                ctx.rotate(-Math.PI / 2);
+                ctx.fillText('Resistance (Ω)', 0, 0);
+                ctx.restore();
+                
+                ctx.font = '10px Arial';
+                ctx.fillText('-10°C', padding, height - padding + 15);
+                ctx.fillText('40°C', width - padding, height - padding + 15);
+                ctx.textAlign = 'right';
+                ctx.fillText('10kΩ', padding - 5, padding + 5);
+                ctx.fillText('500Ω', padding - 5, height - padding + 5);
+            }
+        }
+        
+        function setMode(mode) {
+            currentMode = mode;
+            
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            if (mode === 'ldr') {
+                document.getElementById('lightSliderRow').style.display = 'flex';
+                document.getElementById('tempSliderRow').style.display = 'none';
+            } else {
+                document.getElementById('lightSliderRow').style.display = 'none';
+                document.getElementById('tempSliderRow').style.display = 'flex';
+            }
+            
+            updateCircuit();
+        }
+        
+        function updateEnvironment(mode, value) {
+            const body = document.body;
+            
+            if (mode === 'ldr') {
+                if (value < 20) {
+                    body.style.background = `linear-gradient(135deg, #0c1445 0%, #1a1a2e 100%)`;
+                } else if (value < 40) {
+                    body.style.background = `linear-gradient(135deg, #2c3e50 0%, #3498db 100%)`;
+                } else if (value < 70) {
+                    body.style.background = `linear-gradient(135deg, #74b9ff 0%, #a29bfe 100%)`;
+                } else {
+                    body.style.background = `linear-gradient(135deg, #fdcb6e 0%, #ffeaa7 100%)`;
+                }
+            } else {
+                if (value < 5) {
+                    body.style.background = `linear-gradient(135deg, #0984e3 0%, #74b9ff 100%)`;
+                } else if (value < 15) {
+                    body.style.background = `linear-gradient(135deg, #74b9ff 0%, #a29bfe 100%)`;
+                } else if (value < 25) {
+                    body.style.background = `linear-gradient(135deg, #a29bfe 0%, #fd79a8 100%)`;
+                } else if (value < 32) {
+                    body.style.background = `linear-gradient(135deg, #fd79a8 0%, #fdcb6e 100%)`;
+                } else {
+                    body.style.background = `linear-gradient(135deg, #ff7675 0%, #d63031 100%)`;
+                }
+            }
+        }
+        
+        function updateCircuit() {
+            const isInverted = document.getElementById('voutToggle').checked;
+            let sensorResistance;
+            let inputValue;
+            let inputDescription;
+            
+            if (currentMode === 'ldr') {
+                const lightLevel = parseInt(document.getElementById('lightSlider').value);
+                inputValue = lightLevel;
+                
+                sensorResistance = 10000 - (lightLevel * 99);
+                
+                if (lightLevel < 25) {
+                    inputDescription = 'Dark';
+                } else if (lightLevel < 75) {
+                    inputDescription = 'Medium';
+                } else {
+                    inputDescription = 'Bright';
+                }
+                
+                document.getElementById('lightValue').textContent = inputDescription;
+                document.getElementById('sensorName').textContent = 'LDR';
+                
+                updateEnvironment('ldr', lightLevel);
+            } else {
+                const temp = parseInt(document.getElementById('tempSlider').value);
+                inputValue = temp;
+                inputDescription = temp + '°C';
+                
+                sensorResistance = 10000 - ((temp + 10) * 190);
+                
+                document.getElementById('tempValue').textContent = inputDescription;
+                document.getElementById('sensorName').textContent = 'Thermistor';
+                
+                updateEnvironment('thermistor', temp);
+            }
+            
+            const totalResistance = sensorResistance + fixedResistance;
+            const current = supplyVoltage / totalResistance;
+            const voltageAcrossSensor = current * sensorResistance;
+            const voltageAcrossResistor = current * fixedResistance;
+            
+            let vout;
+            if (!isInverted) {
+                vout = voltageAcrossSensor;
+            } else {
+                vout = voltageAcrossResistor;
+            }
+            
+            document.getElementById('sensorResistance').textContent = `${Math.round(sensorResistance)}Ω`;
+            document.getElementById('sensorResDisplay').textContent = `${Math.round(sensorResistance)}Ω`;
+            document.getElementById('voutDisplay').textContent = `${vout.toFixed(1)}V`;
+            document.getElementById('voutReading').textContent = `${vout.toFixed(1)}V`;
+            document.getElementById('v1Reading').textContent = `${voltageAcrossSensor.toFixed(1)}V`;
+            document.getElementById('v2Reading').textContent = `${voltageAcrossResistor.toFixed(1)}V`;
+            
+            document.getElementById('voutPosition').textContent = isInverted ? 'Inverted' : 'Normal';
+            
+            const deviceOn = vout >= thresholdVoltage;
+            const outputDevice = document.getElementById('outputDevice');
+            
+            outputDevice.classList.remove('on', 'light', 'heater', 'aircon');
+            
+            if (deviceOn) {
+                outputDevice.classList.add('on');
+                document.getElementById('deviceStatus').textContent = 'ON ✓';
+            } else {
+                document.getElementById('deviceStatus').textContent = 'OFF ✗';
+            }
+            
+            if (currentMode === 'ldr') {
+                if (!isInverted) {
+                    document.getElementById('deviceIcon').textContent = '💡';
+                    document.getElementById('deviceName').textContent = 'Street Light';
+                    if (deviceOn) outputDevice.classList.add('light');
+                } else {
+                    document.getElementById('deviceIcon').textContent = '🚪';
+                    document.getElementById('deviceName').textContent = 'Gate';
+                    document.getElementById('deviceStatus').textContent = deviceOn ? 'OPEN ✓' : 'CLOSED ✗';
+                    if (deviceOn) outputDevice.classList.add('light');
+                }
+            } else {
+                if (!isInverted) {
+                    document.getElementById('deviceIcon').textContent = '🔥';
+                    document.getElementById('deviceName').textContent = 'Heater';
+                    if (deviceOn) outputDevice.classList.add('heater');
+                } else {
+                    document.getElementById('deviceIcon').textContent = '❄️';
+                    document.getElementById('deviceName').textContent = 'Air Conditioner';
+                    if (deviceOn) outputDevice.classList.add('aircon');
+                }
+            }
+            
+            drawGraph();
+        }
+        
+        window.addEventListener('load', () => {
+            initCanvas();
+            updateCircuit();
+        });
+        
+        window.addEventListener('resize', () => {
+            initCanvas();
+            drawGraph();
+        });
+    </script>
+</body>
+</html>
