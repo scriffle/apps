@@ -45,6 +45,44 @@
             max-width: 400px;
             margin-left: auto;
             margin-right: auto;
+            position: relative;
+        }
+        
+        .mode-hint {
+            position: absolute;
+            top: -50px;
+            right: 0;
+            background: #ff4757;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(255, 71, 87, 0.4);
+            animation: modeHintBounce 1s ease-in-out infinite;
+            z-index: 100;
+        }
+        
+        .mode-hint::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            right: 50px;
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 8px solid #ff4757;
+        }
+        
+        @keyframes modeHintBounce {
+            0%, 100% { 
+                top: -50px;
+            }
+            50% { 
+                top: -60px;
+            }
         }
         
         .mode-btn {
@@ -186,10 +224,6 @@
             50% { 
                 top: -55px;
             }
-        }
-        
-        .toggle-hint.hidden {
-            display: none !important;
         }
         
         .switch {
@@ -400,10 +434,6 @@
             }
         }
         
-        .slide-hint.hidden {
-            display: none !important;
-        }
-        
         .output-device {
             text-align: center;
             padding: 15px;
@@ -412,6 +442,18 @@
             border-radius: 8px;
             border: 2px solid #333;
             transition: all 0.3s;
+        }
+        
+        .device-description {
+            text-align: center;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            border: 2px solid #ddd;
+            margin-top: 10px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #333;
         }
         
         .output-device.on.light {
@@ -484,6 +526,7 @@
         <h1>⚡ Voltage Divider Simulator ⚡</h1>
         
         <div class="mode-selector">
+            <div class="mode-hint" id="modeHint" style="display: none;">👉 Switch this</div>
             <button class="mode-btn active" onclick="setMode('ldr')">💡 Light Sensor</button>
             <button class="mode-btn" onclick="setMode('thermistor')">🌡️ Temp Sensor</button>
         </div>
@@ -513,7 +556,7 @@
                 </div>
                 
                 <div class="toggle-row">
-                    <div class="toggle-hint" id="toggleHint">👈 Switch Me!</div>
+                    <div class="toggle-hint" id="toggleHint" style="display: none;">👈 Switch me</div>
                     <label>Vout:</label>
                     <label class="switch">
                         <input type="checkbox" id="voutToggle" onchange="handleToggleChange()">
@@ -547,14 +590,14 @@
                 <canvas id="sensorGraph"></canvas>
                 
                 <div class="slider-control-row" id="lightSliderRow">
-                    <div class="slide-hint" id="sliderHint">👆 Slide Me!</div>
+                    <div class="slide-hint" id="sliderHint" style="display: none;">👆 Slide me</div>
                     <label>☀️ Light Level:</label>
                     <input type="range" id="lightSlider" min="0" max="100" value="50" oninput="handleSliderInput()">
                     <span class="slider-value" id="lightValue">Medium</span>
                 </div>
                 
                 <div class="slider-control-row" id="tempSliderRow" style="display: none;">
-                    <div class="slide-hint" id="sliderHintTemp">👆 Slide Me!</div>
+                    <div class="slide-hint" id="sliderHintTemp" style="display: none;">👆 Slide me</div>
                     <label>🌡️ Temperature:</label>
                     <input type="range" id="tempSlider" min="-10" max="40" value="15" oninput="handleSliderInput()">
                     <span class="slider-value" id="tempValue">15°C</span>
@@ -564,6 +607,10 @@
                     <div class="device-icon" id="deviceIcon">💡</div>
                     <div class="device-name" id="deviceName">Street Light</div>
                     <div class="device-status" id="deviceStatus">OFF</div>
+                </div>
+                
+                <div class="device-description" id="deviceDescription">
+                    The street light turns on when it is dark and the LDR resistance is high.
                 </div>
             </div>
         </div>
@@ -577,12 +624,35 @@
         let canvas, ctx;
         let sliderUsed = false;
         let toggleUsed = false;
+        let modeChanged = false;
+        
+        // Hint timing management
+        let sliderHintTimer = null;
+        let modeHintTimer = null;
+        let toggleHintTimer = null;
+        let sliderHintShown = false;
+        let modeHintShown = false;
+        let toggleHintShown = false;
         
         function handleSliderInput() {
             if (!sliderUsed) {
                 sliderUsed = true;
-                document.getElementById('sliderHint').classList.add('hidden');
-                document.getElementById('sliderHintTemp').classList.add('hidden');
+                // Cancel the slider hint timer if it hasn't shown yet
+                if (sliderHintTimer && !sliderHintShown) {
+                    clearTimeout(sliderHintTimer);
+                    sliderHintTimer = null;
+                }
+                // Hide the slider hint
+                document.getElementById('sliderHint').style.display = 'none';
+                document.getElementById('sliderHintTemp').style.display = 'none';
+                
+                // Start timer for mode hint (10 seconds after slider use)
+                if (!modeHintShown && !modeChanged) {
+                    modeHintTimer = setTimeout(() => {
+                        document.getElementById('modeHint').style.display = 'block';
+                        modeHintShown = true;
+                    }, 10000);
+                }
             }
             updateCircuit();
         }
@@ -590,7 +660,13 @@
         function handleToggleChange() {
             if (!toggleUsed) {
                 toggleUsed = true;
-                document.getElementById('toggleHint').classList.add('hidden');
+                // Cancel the toggle hint timer if it hasn't shown yet
+                if (toggleHintTimer && !toggleHintShown) {
+                    clearTimeout(toggleHintTimer);
+                    toggleHintTimer = null;
+                }
+                // Hide the toggle hint
+                document.getElementById('toggleHint').style.display = 'none';
             }
             updateCircuit();
         }
@@ -728,6 +804,25 @@
         }
         
         function setMode(mode) {
+            if (!modeChanged && mode === 'thermistor') {
+                modeChanged = true;
+                // Cancel the mode hint timer if it hasn't shown yet
+                if (modeHintTimer && !modeHintShown) {
+                    clearTimeout(modeHintTimer);
+                    modeHintTimer = null;
+                }
+                // Hide the mode hint
+                document.getElementById('modeHint').style.display = 'none';
+                
+                // Start timer for toggle hint (15 seconds after mode change)
+                if (!toggleHintShown && !toggleUsed) {
+                    toggleHintTimer = setTimeout(() => {
+                        document.getElementById('toggleHint').style.display = 'block';
+                        toggleHintShown = true;
+                    }, 15000);
+                }
+            }
+            
             currentMode = mode;
             
             document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -750,28 +845,70 @@
             const body = document.body;
             
             if (mode === 'ldr') {
-                if (value < 20) {
-                    body.style.background = `linear-gradient(135deg, #0c1445 0%, #1a1a2e 100%)`;
-                } else if (value < 40) {
-                    body.style.background = `linear-gradient(135deg, #2c3e50 0%, #3498db 100%)`;
-                } else if (value < 70) {
-                    body.style.background = `linear-gradient(135deg, #74b9ff 0%, #a29bfe 100%)`;
+                // Light mode: 0 (dark) to 100 (bright)
+                // Smooth gradient from dark blue/black → dawn blue → light blue/purple → bright yellow
+                const normalized = value / 100;
+                
+                let color1, color2;
+                
+                if (normalized <= 0.33) {
+                    // Dark to dawn (0-33)
+                    const t = normalized / 0.33;
+                    color1 = interpolateColor([12, 20, 69], [44, 62, 80], t);
+                    color2 = interpolateColor([26, 26, 46], [52, 152, 219], t);
+                } else if (normalized <= 0.66) {
+                    // Dawn to cloudy day (33-66)
+                    const t = (normalized - 0.33) / 0.33;
+                    color1 = interpolateColor([44, 62, 80], [116, 185, 255], t);
+                    color2 = interpolateColor([52, 152, 219], [162, 155, 254], t);
                 } else {
-                    body.style.background = `linear-gradient(135deg, #fdcb6e 0%, #ffeaa7 100%)`;
+                    // Cloudy to bright sunny (66-100)
+                    const t = (normalized - 0.66) / 0.34;
+                    color1 = interpolateColor([116, 185, 255], [253, 203, 110], t);
+                    color2 = interpolateColor([162, 155, 254], [255, 234, 167], t);
                 }
+                
+                body.style.background = `linear-gradient(135deg, rgb(${color1[0]},${color1[1]},${color1[2]}) 0%, rgb(${color2[0]},${color2[1]},${color2[2]}) 100%)`;
+                
             } else {
-                if (value < 5) {
-                    body.style.background = `linear-gradient(135deg, #0984e3 0%, #74b9ff 100%)`;
-                } else if (value < 15) {
-                    body.style.background = `linear-gradient(135deg, #74b9ff 0%, #a29bfe 100%)`;
-                } else if (value < 25) {
-                    body.style.background = `linear-gradient(135deg, #a29bfe 0%, #fd79a8 100%)`;
-                } else if (value < 32) {
-                    body.style.background = `linear-gradient(135deg, #fd79a8 0%, #fdcb6e 100%)`;
+                // Temperature mode: -10°C (cold) to 40°C (hot)
+                // Smooth gradient from icy blue → cool blue → neutral → warm orange → hot red
+                const normalized = (value + 10) / 50; // normalize -10 to 40 into 0 to 1
+                
+                let color1, color2;
+                
+                if (normalized <= 0.3) {
+                    // Very cold to cold (-10 to 5°C)
+                    const t = normalized / 0.3;
+                    color1 = interpolateColor([9, 132, 227], [116, 185, 255], t);
+                    color2 = interpolateColor([116, 185, 255], [174, 214, 241], t);
+                } else if (normalized <= 0.5) {
+                    // Cold to mild (5 to 15°C)
+                    const t = (normalized - 0.3) / 0.2;
+                    color1 = interpolateColor([116, 185, 255], [174, 214, 241], t);
+                    color2 = interpolateColor([174, 214, 241], [245, 246, 250], t);
+                } else if (normalized <= 0.7) {
+                    // Mild to warm (15 to 25°C)
+                    const t = (normalized - 0.5) / 0.2;
+                    color1 = interpolateColor([174, 214, 241], [255, 224, 178], t);
+                    color2 = interpolateColor([245, 246, 250], [253, 203, 110], t);
                 } else {
-                    body.style.background = `linear-gradient(135deg, #ff7675 0%, #d63031 100%)`;
+                    // Warm to hot (25 to 40°C)
+                    const t = (normalized - 0.7) / 0.3;
+                    color1 = interpolateColor([255, 224, 178], [255, 118, 117], t);
+                    color2 = interpolateColor([253, 203, 110], [214, 48, 49], t);
                 }
+                
+                body.style.background = `linear-gradient(135deg, rgb(${color1[0]},${color1[1]},${color1[2]}) 0%, rgb(${color2[0]},${color2[1]},${color2[2]}) 100%)`;
             }
+        }
+        
+        function interpolateColor(color1, color2, t) {
+            return [
+                Math.round(color1[0] + (color2[0] - color1[0]) * t),
+                Math.round(color1[1] + (color2[1] - color1[1]) * t),
+                Math.round(color1[2] + (color2[2] - color1[2]) * t)
+            ];
         }
         
         function updateCircuit() {
@@ -848,21 +985,25 @@
                 if (!isInverted) {
                     document.getElementById('deviceIcon').textContent = '💡';
                     document.getElementById('deviceName').textContent = 'Street Light';
+                    document.getElementById('deviceDescription').textContent = 'The street light turns on when it is dark and the LDR resistance is high.';
                     if (deviceOn) outputDevice.classList.add('light');
                 } else {
                     document.getElementById('deviceIcon').textContent = '🚪';
                     document.getElementById('deviceName').textContent = 'Gate';
                     document.getElementById('deviceStatus').textContent = deviceOn ? 'OPEN ✓' : 'CLOSED ✗';
+                    document.getElementById('deviceDescription').textContent = 'The gate opens when it is bright and the LDR resistance is low.';
                     if (deviceOn) outputDevice.classList.add('light');
                 }
             } else {
                 if (!isInverted) {
                     document.getElementById('deviceIcon').textContent = '🔥';
                     document.getElementById('deviceName').textContent = 'Heater';
+                    document.getElementById('deviceDescription').textContent = 'The heater turns on when it is cold and the thermistor resistance is high.';
                     if (deviceOn) outputDevice.classList.add('heater');
                 } else {
                     document.getElementById('deviceIcon').textContent = '❄️';
                     document.getElementById('deviceName').textContent = 'Air Conditioner';
+                    document.getElementById('deviceDescription').textContent = 'The air conditioner turns on when it is hot and the thermistor resistance is low.';
                     if (deviceOn) outputDevice.classList.add('aircon');
                 }
             }
@@ -873,6 +1014,14 @@
         window.addEventListener('load', () => {
             initCanvas();
             updateCircuit();
+            
+            // Start the hint sequence: show slider hint after 10 seconds
+            sliderHintTimer = setTimeout(() => {
+                if (!sliderUsed) {
+                    document.getElementById('sliderHint').style.display = 'block';
+                    sliderHintShown = true;
+                }
+            }, 10000);
         });
         
         window.addEventListener('resize', () => {
