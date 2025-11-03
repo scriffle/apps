@@ -1,204 +1,278 @@
-# Frugal Five - Curriculum Data Structure
+# VastVocab - Dynamic Curriculum Word Game
 
-## ✅ What's Been Created
+## 🎯 What's Been Built
 
-### 8 Curriculum JSON Files (100 categories × 10 words each = 1000 words per file)
+A complete refactoring of the Frugal Five word game with dynamic curriculum loading, maintaining 100% of the original gameplay mechanics.
 
-1. **VCE Biology Year 11 Unit 1 AOS 2** - Cell Biology
-   - Path: `curricula/vce/biology/year-11/unit-01/area-of-study-02/cell-biology.json`
-   - Colors: Blue-green theme
-   - 100 categories covering cellular structures, functions, and processes
+### Files Created:
 
-2. **VCE Specialist Mathematics Year 12 Unit 3** - Complex Numbers
-   - Path: `curricula/vce/specialist-mathematics/year-12/unit-03/complex-numbers.json`
-   - Colors: Purple theme
-   - 100 categories covering complex number operations and applications
+1. **vastvocab.html** - Main game application
+2. **generate-manifest.html** - Manifest generator tool
+3. **css/styles.css** - Complete styles with dynamic theming
+4. **js/storage-manager.js** - localStorage per-curriculum tracking
+5. **js/curriculum-loader.js** - Manifest and JSON loading
+6. **js/game-engine.js** - Pure game logic (curriculum-agnostic)
+7. **js/ui-controller.js** - DOM manipulation and curriculum selector
 
-3. **HSC Physics Year 12 Module 6** - Electromagnetism
-   - Path: `curricula/hsc/physics/year-12/module-06/electromagnetism.json`
-   - Colors: Dark blue theme
-   - 100 categories covering electromagnetic induction and related topics
+## 🚀 Quick Start
 
-4. **HSC Chemistry Year 11 Module 2** - Quantitative Chemistry
-   - Path: `curricula/hsc/chemistry/year-11/module-02/quantitative-chemistry.json`
-   - Colors: Orange-red theme
-   - 100 categories covering mole concept, stoichiometry, and calculations
+### Step 1: Generate Manifest
 
-5. **Victorian Curriculum Years 7-8 Science** - Forces
-   - Path: `curricula/vic-curriculum/years-07-08/science/topics/forces.json`
-   - Colors: Teal theme
-   - 100 categories covering types of forces, Newton's laws, and motion
+1. Place all 8 JSON files in the same directory as `generate-manifest.html`
+2. Start a local server:
+   ```bash
+   python -m http.server 8000
+   ```
+3. Open: `http://localhost:8000/generate-manifest.html`
+4. Click "Generate Manifest"
+5. Click "Download manifest.json"
+6. Save the file to your project root
 
-6. **Victorian Curriculum Years 9-10 History** - Industrial Revolution
-   - Path: `curricula/vic-curriculum/years-09-10/history/topics/industrial-revolution.json`
-   - Colors: Brown theme
-   - 100 categories covering inventions, social changes, and impacts
+### Step 2: Run the Game
 
-7. **Australian Curriculum Year 9 Geography** - Climate Change
-   - Path: `curricula/australian-curriculum/year-09/geography/topics/climate-change.json`
-   - Colors: Green theme
-   - 100 categories covering greenhouse effect, impacts, and solutions
+1. Ensure your directory structure looks like this:
+   ```
+   /
+   ├── vastvocab.html
+   ├── manifest.json (generated)
+   ├── css/
+   │   └── styles.css
+   ├── js/
+   │   ├── storage-manager.js
+   │   ├── curriculum-loader.js
+   │   ├── game-engine.js
+   │   └── ui-controller.js
+   ├── forces.json
+   ├── electromagnetism.json
+   ├── climate-change.json
+   ├── cell-biology.json
+   ├── complex-numbers.json
+   ├── quantitative-chemistry.json
+   ├── industrial-revolution.json
+   └── world-war-2.json
+   ```
 
-8. **Australian Curriculum Year 10 Humanities** - World War 2
-   - Path: `curricula/australian-curriculum/year-10/humanities/topics/world-war-2.json`
-   - Colors: Red theme
-   - 100 categories covering causes, major events, and consequences
+2. Open: `http://localhost:8000/vastvocab.html`
 
-### Manifest File
+3. Select a curriculum from the dropdown or recent list
 
-- **manifest.json** - Central registry of all curricula
-  - Contains metadata for all 8 curricula
-  - Includes display names, paths, colors, and breadcrumbs
-  - Auto-generated display names from file paths
+4. Play!
 
-## 📁 Directory Structure
+## 🎮 How to Use
 
-```
-frugal-five-refactored/
-├── manifest.json (5KB)
-├── curricula/
-│   ├── vce/
-│   │   ├── biology/year-11/unit-01/area-of-study-02/cell-biology.json (18KB)
-│   │   └── specialist-mathematics/year-12/unit-03/complex-numbers.json (26KB)
-│   ├── hsc/
-│   │   ├── physics/year-12/module-06/electromagnetism.json (26KB)
-│   │   └── chemistry/year-11/module-02/quantitative-chemistry.json (26KB)
-│   ├── vic-curriculum/
-│   │   ├── years-07-08/science/topics/forces.json (26KB)
-│   │   └── years-09-10/history/topics/industrial-revolution.json (26KB)
-│   └── australian-curriculum/
-│       ├── year-09/geography/topics/climate-change.json (26KB)
-│       └── year-10/humanities/topics/world-war-2.json (26KB)
-├── js/ (empty - for future JavaScript files)
-└── css/ (empty - for future CSS files)
-```
+### For Teachers:
 
-## 🎨 Color Schemes
+**Class Starts:**
+1. Open vastvocab.html
+2. Select timer duration (2/3/4/5 minutes)
+3. Choose curriculum:
+   - Click "Change Topic" → Select framework → Subject → Year → Topic
+   - OR click "Recent ▼" → Pick from last 10 curricula
+4. Click "Start Game"
 
-Each curriculum has a unique 4-color Material Design palette:
+**During Gameplay:**
+- Selector controls are disabled
+- Focus on the game with students
 
-- **VCE Biology**: `#1e3c72 → #2a5298 → #00a86b → #008855` (Blue-green)
-- **VCE Specialist Maths**: `#4A148C → #6A1B9A → #8E24AA → #9C27B0` (Purple)
-- **HSC Physics**: `#0D47A1 → #1565C0 → #1976D2 → #1E88E5` (Deep blue)
-- **HSC Chemistry**: `#BF360C → #D84315 → #E64A19 → #FF5722` (Orange-red)
-- **Vic Curriculum Science**: `#004D40 → #00695C → #00897B → #26A69A` (Teal)
-- **Vic Curriculum History**: `#5D4037 → #6D4C41 → #795548 → #8D6E63` (Brown)
-- **Aus Curriculum Geography**: `#1B5E20 → #2E7D32 → #388E3C → #43A047` (Green)
-- **Aus Curriculum Humanities**: `#B71C1C → #C62828 → #D32F2F → #E53935` (Red)
+**After Game:**
+- Results shown
+- Click "New Game" to play again (same curriculum)
+- OR click "Change Topic" / "Recent" to switch curricula
 
-## 📊 Data Statistics
+### Gameplay Preserved 100%:
 
-- **Total curricula**: 8
-- **Total categories**: 800 (8 × 100)
-- **Total words**: 8,000 (800 × 10)
-- **Average file size**: ~24KB per curriculum
-- **Manifest size**: 5KB
-- **Total data size**: ~200KB
+✅ 5 words per game  
+✅ 10 letters maximum  
+✅ 3 wrong guesses limit  
+✅ Category reveal costs 2 letters  
+✅ First letter always shown  
+✅ Timer with customizable duration  
+✅ Progress tracking (100 categories before repeat)  
+✅ Game history with statistics  
+✅ All original animations and feedback  
 
-## 🔄 Next Steps
+## 📊 Features
 
-### 1. UI Development Required
+### Dynamic Curriculum Loading
+- Manifest-driven architecture
+- 8 sample curricula included
+- Expandable to hundreds of curricula
+- Per-curriculum progress tracking
+- Automatic color theming
 
-Create the following UI components:
+### Recent Selections
+- Last 10 played curricula
+- Shows: Name + Time played + Progress (47/100)
+- One-click access
 
-#### **Curriculum Selection Interface**
-- Radio buttons for framework selection (VCE, HSC, Vic Curriculum, Aus Curriculum)
-- Cascading dropdowns that adapt based on framework:
-  - VCE: Year → Subject → Unit → [AOS] → Topic
-  - HSC: Year → Subject → Module → Topic
-  - Vic Curriculum: Year Band → Subject → Topic
-  - Aus Curriculum: Year → Subject → Topic
-
-#### **Quick Access Section**
-- Display last 5 played curricula as clickable buttons
-- Show breadcrumb for each (e.g., "VCE > Biology > Year 11 > Unit 1 > AOS 2 > Cell Biology")
-
-#### **Settings Panel**
-- Timer duration selector (2, 3, 4, or 5 minutes)
-- Current curriculum display
-- Progress indicator per curriculum
-
-### 2. JavaScript Modules to Create
-
-#### `js/curriculum-loader.js`
-- Load manifest.json on app init
-- Fetch selected curriculum JSON
-- Cache curriculum in memory
-- Manage curriculum switching
-
-#### `js/game-engine.js`
-- Game logic (unchanged from original)
-- Progress tracking per curriculum
-- Score calculation
+### Settings
+- Timer: 2, 3, 4, or 5 minutes
+- Remembers last used
+- Per-curriculum progress tracking
 - Category cycling (1-100 before repeat)
 
-#### `js/ui-controller.js`
-- DOM manipulation
-- Dropdown population based on manifest
-- Color theme application (CSS variable updates)
-- Event handlers for curriculum selection
+### Statistics
+- Win rate
+- Best score per curriculum
+- Game history (last 100 games)
+- Detailed per-game breakdown
 
-### 3. CSS Updates
+## 🔧 Technical Details
 
-Apply color theming via CSS variables:
-```css
-:root {
-  --color-primary-dark: /* Color 1 */;
-  --color-primary: /* Color 2 */;
-  --color-secondary: /* Color 3 */;
-  --color-secondary-light: /* Color 4 */;
-}
+### Architecture:
+- **storage-manager.js**: All localStorage operations
+- **curriculum-loader.js**: Manifest parsing, JSON fetching
+- **game-engine.js**: Pure game logic (no DOM manipulation)
+- **ui-controller.js**: All DOM updates, event handling
+
+### Data Flow:
+```
+manifest.json → CurriculumLoader → GameEngine → UIController → DOM
+                       ↓
+                StorageManager (localStorage)
 ```
 
-### 4. LocalStorage Schema
+### Color Theming:
+Each curriculum's colors automatically apply via CSS variables:
+- `--color-primary-dark`
+- `--color-primary`
+- `--color-secondary`
+- `--color-secondary-light`
 
+### Storage Schema:
 ```javascript
 {
-  "settings": {
-    "timerDuration": 300,
-    "lastPlayedCurriculum": "vce-biology-y11-u01-aos02-cell-biology"
+  settings: {
+    timerDuration: 180,
+    lastCurriculumId: "vic-y78-science-forces"
   },
-  "recentCurricula": [
+  recent: [
     {
-      "id": "vce-biology-y11-u01-aos02-cell-biology",
-      "breadcrumb": "VCE > Biology > Year 11 > Unit 1 > AOS 2 > Cell Biology",
-      "lastPlayed": "2025-01-15T10:30:00Z"
+      id: "...",
+      breadcrumb: "...",
+      lastPlayed: "2025-11-03T..."
     }
   ],
-  "progress": {
-    "vce-biology-y11-u01-aos02-cell-biology": {
-      "usedCategories": [0, 5, 12, 23, ...],
-      "gamesPlayed": 15,
-      "bestScore": 8
+  progress: {
+    "curriculum-id": {
+      usedCategories: [0, 5, 12, ...],
+      gamesPlayed: 15,
+      bestScore: 8
     }
-  }
+  },
+  history: [
+    {
+      date: "...",
+      curriculumId: "...",
+      won: true,
+      score: 12,
+      category: "...",
+      wordsGuessed: 5,
+      totalWords: 5
+    }
+  ]
 }
 ```
 
-## ✅ Validation Checklist
+## 🔄 Adding New Curricula
 
-- [x] All 8 curriculum files created (100 categories each)
-- [x] Each category has exactly 10 words
-- [x] All words are lowercase
-- [x] All words are minimum 5 letters
-- [x] Manifest includes all curricula with proper metadata
-- [x] File paths match directory structure
-- [x] Color schemes follow Material Design
-- [x] Display names use proper capitalization
-- [x] Breadcrumbs are human-readable
+1. Add new JSON files to the directory (follow existing format)
+2. Re-run `generate-manifest.html`
+3. Download updated `manifest.json`
+4. Replace old manifest
+5. Refresh the game - new curricula appear automatically
 
-## 🚀 Deployment
+### JSON Format:
+```json
+{
+  "metadata": {
+    "id": "unique-id",
+    "framework": "framework-slug",
+    "frameworkName": "Display Name",
+    "breadcrumb": "Full > Path > Display",
+    "colors": ["#hex1", "#hex2", "#hex3", "#hex4"],
+    "path": "filename.json"
+  },
+  "categories": [
+    {
+      "category": "Category Name",
+      "words": ["word1", "word2", ..., "word10"]
+    }
+    // ... 100 categories
+  ]
+}
+```
 
-1. Copy entire `frugal-five-refactored/` folder to web server
-2. Ensure `manifest.json` is at root level
-3. Host on GitHub Pages or similar static host
-4. No backend required - pure client-side application
+## 🎨 Customization
 
-## 📝 Notes
+### Colors:
+Edit JSON metadata colors array (4 colors required)
 
-- Game logic remains **unchanged** from original
-- Timer presets: 2, 3, 4, 5 minutes (user selects)
-- Progress tracked separately per curriculum
-- Each curriculum can be played 100 times before categories repeat
-- Typical teacher uses 5-10 different curricula
-- Total data transfer per session: ~450KB (manifest + 5 curricula)
+### Timer Options:
+Modify `vastvocab.html` timer buttons data-duration values
+
+### Styling:
+Edit `css/styles.css` (CSS variables for easy theming)
+
+## 📝 Validation Checklist
+
+✅ Manifest generator creates valid manifest.json  
+✅ All 8 sample curricula load correctly  
+✅ Color theming applies automatically  
+✅ Recent list shows last 10 with details  
+✅ Progress tracks per-curriculum (100 categories)  
+✅ Settings persist (timer, last curriculum)  
+✅ Game history saves across all curricula  
+✅ Curriculum switching blocked during active game  
+✅ All original game mechanics preserved  
+✅ Statistics panel shows global + per-curriculum data  
+
+## 🐛 Troubleshooting
+
+**Manifest won't generate:**
+- Ensure running on local server (not file://)
+- Check all 8 JSON files are in same directory
+- Open browser console for errors
+
+**Game won't load:**
+- Verify manifest.json exists in root
+- Check console for 404 errors
+- Ensure all JS files in js/ directory
+- Verify CSS file in css/ directory
+
+**Curriculum doesn't load:**
+- Check JSON path in manifest matches actual file
+- Verify JSON has required metadata fields
+- Check browser console for parsing errors
+
+## 📦 Deployment
+
+1. Upload all files to web server
+2. Ensure proper directory structure
+3. No backend required - pure client-side
+4. Works offline after first load (browser cache)
+
+## 🎓 For Developers
+
+### Code Organization:
+- **StorageManager**: Pure data layer (no UI)
+- **CurriculumLoader**: Data fetching (no game logic)
+- **GameEngine**: Pure game logic (no DOM)
+- **UIController**: Coordinates everything, handles DOM
+
+### Extending:
+- Add new tools: Modify `UIController` event listeners
+- Change game rules: Edit `GameEngine` constants
+- Custom themes: Add CSS variables in `styles.css`
+- New storage features: Extend `StorageManager` methods
+
+## 📄 License
+
+Original game concept: Frugal Five Science
+Refactored by: VastVocab Team
+Date: November 2025
+
+---
+
+**Questions? Issues?**
+Check browser console for errors or open an issue in your repository.

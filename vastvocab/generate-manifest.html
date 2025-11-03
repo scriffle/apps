@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VastVocab - Manifest Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+        }
+        h1 {
+            color: #1e3c72;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        .info-box {
+            background: #e8f4f8;
+            border-left: 4px solid #2a5298;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }
+        .info-box h3 {
+            color: #2a5298;
+            margin-bottom: 10px;
+        }
+        .info-box ol {
+            margin-left: 20px;
+            line-height: 1.8;
+        }
+        .info-box code {
+            background: #fff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        .status {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            min-height: 100px;
+        }
+        .status-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .status-item:last-child {
+            border-bottom: none;
+        }
+        .success { color: #00a86b; font-weight: bold; }
+        .error { color: #ff5252; font-weight: bold; }
+        .warning { color: #ffc107; font-weight: bold; }
+        .btn {
+            padding: 12px 32px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 15px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #2a5298 0%, #1e3c72 100%);
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(42, 82, 152, 0.3);
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #00a86b 0%, #008855 100%);
+            color: white;
+        }
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 168, 107, 0.3);
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        .preview {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .preview pre {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #00a86b 0%, #008855 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📚 VastVocab Manifest Generator</h1>
+        <p class="subtitle">Generate manifest.json from your curriculum files</p>
+
+        <div class="info-box">
+            <h3>ℹ️ How to Use:</h3>
+            <ol>
+                <li>Ensure all JSON files are in the same directory as this file</li>
+                <li>Run a local server: <code>python -m http.server 8000</code></li>
+                <li>Open: <code>http://localhost:8000/generate-manifest.html</code></li>
+                <li>Click "Generate Manifest" below</li>
+                <li>Review the generated manifest</li>
+                <li>Click "Download manifest.json" to save</li>
+            </ol>
+        </div>
+
+        <div>
+            <button class="btn btn-primary" onclick="generateManifest()">Generate Manifest</button>
+            <button class="btn btn-success" id="downloadBtn" onclick="downloadManifest()" disabled>Download manifest.json</button>
+        </div>
+
+        <div id="status" class="status">
+            <p>Click "Generate Manifest" to scan curriculum files...</p>
+        </div>
+
+        <div id="statsContainer" style="display: none;">
+            <h3 style="color: #2a5298; margin-bottom: 15px;">📊 Statistics</h3>
+            <div class="stats" id="stats"></div>
+        </div>
+
+        <div id="preview" class="preview" style="display: none;">
+            <h3 style="color: #2a5298; margin-bottom: 15px;">Preview:</h3>
+            <pre id="manifestPreview"></pre>
+        </div>
+    </div>
+
+    <script>
+        // List of curriculum files to scan
+        const curriculumFiles = [
+            'forces.json',
+            'electromagnetism.json',
+            'climate-change.json',
+            'cell-biology.json',
+            'complex-numbers.json',
+            'quantitative-chemistry.json',
+            'industrial-revolution.json',
+            'world-war-2.json'
+        ];
+
+        let generatedManifest = null;
+
+        async function generateManifest() {
+            const statusDiv = document.getElementById('status');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const previewDiv = document.getElementById('preview');
+            const statsContainer = document.getElementById('statsContainer');
+            
+            statusDiv.innerHTML = '<p>🔄 Scanning curriculum files...</p>';
+            downloadBtn.disabled = true;
+            previewDiv.style.display = 'none';
+            statsContainer.style.display = 'none';
+
+            const curricula = [];
+            let successCount = 0;
+            let errorCount = 0;
+            const errors = [];
+
+            for (const filename of curriculumFiles) {
+                try {
+                    statusDiv.innerHTML += `<div class="status-item">Reading ${filename}...</div>`;
+                    
+                    const response = await fetch(filename);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // Validate metadata exists
+                    if (!data.metadata) {
+                        throw new Error('Missing metadata');
+                    }
+
+                    // Extract metadata
+                    const curriculumEntry = {
+                        id: data.metadata.id,
+                        framework: data.metadata.framework,
+                        frameworkName: data.metadata.frameworkName,
+                        breadcrumb: data.metadata.breadcrumb,
+                        colors: data.metadata.colors,
+                        path: filename,
+                        categoryCount: data.categories ? data.categories.length : 0
+                    };
+
+                    // Add framework-specific fields from breadcrumb parsing
+                    const parts = data.metadata.breadcrumb.split(' > ');
+                    if (data.metadata.framework === 'vce') {
+                        curriculumEntry.subject = parts[1]?.toLowerCase().replace(/\s+/g, '-');
+                        curriculumEntry.year = parts[2]?.toLowerCase().replace(/\s+/g, '-');
+                        curriculumEntry.unit = parts[3]?.toLowerCase().replace(/\s+/g, '-');
+                        if (parts.length > 5) {
+                            curriculumEntry.area = parts[4]?.toLowerCase().replace(/\s+/g, '-');
+                            curriculumEntry.topic = parts[5]?.toLowerCase().replace(/\s+/g, '-');
+                        } else {
+                            curriculumEntry.topic = parts[4]?.toLowerCase().replace(/\s+/g, '-');
+                        }
+                    } else if (data.metadata.framework === 'hsc') {
+                        curriculumEntry.subject = parts[1]?.toLowerCase().replace(/\s+/g, '-');
+                        curriculumEntry.year = parts[2]?.toLowerCase().replace(/\s+/g, '-');
+                        curriculumEntry.module = parts[3]?.toLowerCase().replace(/\s+/g, '-');
+                        curriculumEntry.topic = parts[4]?.toLowerCase().replace(/\s+/g, '-');
+                    } else if (data.metadata.framework === 'vic-curriculum') {
+                        curriculumEntry.yearBand = parts[1]?.toLowerCase().replace(/\s+/g, '-');
+                        curriculumEntry.subject = parts[2]?.toLowerCase().replace(/\s+/g, '-');
+                        curriculumEntry.topic = parts[3]?.toLowerCase().replace(/\s+/g, '-');
+                    } else if (data.metadata.framework === 'australian-curriculum') {
+                        curriculumEntry.year = parts[1]?.toLowerCase().replace(/\s+/g, '-');
+                        curriculumEntry.subject = parts[2]?.toLowerCase().replace(/\s+/g, '-');
+                        curriculumEntry.topic = parts[3]?.toLowerCase().replace(/\s+/g, '-');
+                    }
+
+                    curricula.push(curriculumEntry);
+                    successCount++;
+                    statusDiv.innerHTML += `<div class="status-item"><span class="success">✓ ${filename}</span> - ${curriculumEntry.categoryCount} categories</div>`;
+                    
+                } catch (error) {
+                    errorCount++;
+                    errors.push({ file: filename, error: error.message });
+                    statusDiv.innerHTML += `<div class="status-item"><span class="error">✗ ${filename}</span> - ${error.message}</div>`;
+                }
+            }
+
+            // Create manifest
+            generatedManifest = {
+                version: "1.0.0",
+                generated: new Date().toISOString(),
+                totalCurricula: curricula.length,
+                curricula: curricula
+            };
+
+            // Show results
+            const totalCategories = curricula.reduce((sum, c) => sum + c.categoryCount, 0);
+            const frameworks = [...new Set(curricula.map(c => c.framework))];
+
+            statusDiv.innerHTML += `<div class="status-item" style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #ddd;">
+                <span class="success">✓ Generation Complete</span><br>
+                ${successCount} curricula processed successfully${errorCount > 0 ? `, ${errorCount} errors` : ''}
+            </div>`;
+
+            // Show stats
+            statsContainer.style.display = 'block';
+            document.getElementById('stats').innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${curricula.length}</div>
+                    <div class="stat-label">Curricula</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${totalCategories}</div>
+                    <div class="stat-label">Categories</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${totalCategories * 10}</div>
+                    <div class="stat-label">Total Words</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${frameworks.length}</div>
+                    <div class="stat-label">Frameworks</div>
+                </div>
+            `;
+
+            // Show preview
+            previewDiv.style.display = 'block';
+            document.getElementById('manifestPreview').textContent = JSON.stringify(generatedManifest, null, 2);
+
+            // Enable download
+            if (successCount > 0) {
+                downloadBtn.disabled = false;
+            }
+        }
+
+        function downloadManifest() {
+            if (!generatedManifest) {
+                alert('Please generate the manifest first');
+                return;
+            }
+
+            const dataStr = JSON.stringify(generatedManifest, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'manifest.json';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            alert('✓ manifest.json downloaded successfully!\n\nMove this file to your project root directory.');
+        }
+    </script>
+</body>
+</html>
