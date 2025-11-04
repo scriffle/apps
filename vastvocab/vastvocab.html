@@ -1239,6 +1239,44 @@
     </div>
 
     <script>
+        // ===== VERSION CHECK - Clears old localStorage if structure changed =====
+        (function() {
+            const CURRENT_VERSION = '2.0'; // Increment when manifest/path structure changes
+            const storedVersion = localStorage.getItem('vastvocab_version');
+            
+            if (storedVersion !== CURRENT_VERSION) {
+                console.log('🔄 Clearing outdated localStorage (old version: ' + storedVersion + ')');
+                
+                // Clear curriculum-related data only, keep user preferences if possible
+                const keysToRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    // Clear vastvocab-specific keys except timer duration
+                    if (key && key.startsWith('vastvocab_') && key !== 'vastvocab_settings') {
+                        keysToRemove.push(key);
+                    }
+                }
+                keysToRemove.forEach(key => localStorage.removeItem(key));
+                
+                // Clear lastCurriculumId from settings but keep timer
+                try {
+                    const settings = localStorage.getItem('vastvocab_settings');
+                    if (settings) {
+                        const parsed = JSON.parse(settings);
+                        delete parsed.lastCurriculumId;
+                        localStorage.setItem('vastvocab_settings', JSON.stringify(parsed));
+                    }
+                } catch (e) {
+                    // If settings are corrupted, just remove them
+                    localStorage.removeItem('vastvocab_settings');
+                }
+                
+                // Set new version
+                localStorage.setItem('vastvocab_version', CURRENT_VERSION);
+                console.log('✅ localStorage cleared. Version updated to ' + CURRENT_VERSION);
+            }
+        })();
+
         // ===== STORAGE MANAGER =====
         const StorageManager = {
             KEYS: {
