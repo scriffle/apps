@@ -264,8 +264,8 @@
         </div>
 
         <div class="tabs">
-            <button class="tab active" onclick="showTab(0)">Full List</button>
-            <button class="tab" onclick="showTab(1)">Curriculum & Planning</button>
+            <button class="tab" onclick="showTab(0)">Full List</button>
+            <button class="tab active" onclick="showTab(1)">Curriculum & Planning</button>
             <button class="tab" onclick="showTab(2)">Assessment & Evaluation</button>
             <button class="tab" onclick="showTab(3)">Content Creation</button>
             <button class="tab" onclick="showTab(4)">Interactive Tools</button>
@@ -276,7 +276,7 @@
             <button class="tab" onclick="showTab(9)">Administrative</button>
         </div>
 
-        <div id="tab0" class="tab-content active">
+        <div id="tab0" class="tab-content">
             <div class="full-list-category">
                 <h3>Curriculum & Planning</h3>
                 
@@ -620,7 +620,7 @@
             </div>
         </div>
 
-        <div id="tab1" class="tab-content">
+        <div id="tab1" class="tab-content active">
             <div class="category-intro">
                 <h3>Curriculum & Planning</h3>
                 <p>Strategic planning tools for designing coherent, standards-aligned learning experiences</p>
@@ -1348,6 +1348,17 @@
     </div>
 
     <script>
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Restore tab selection from localStorage (default to tab 1 - Curriculum & Planning)
+            const savedTab = localStorage.getItem('selectedTab');
+            const tabToShow = savedTab !== null ? parseInt(savedTab) : 1;
+            showTab(tabToShow);
+            
+            // Restore expanded use cases from localStorage
+            restoreExpandedUseCases();
+        });
+
         function showTab(tabIndex) {
             // Hide all tab contents
             const tabContents = document.querySelectorAll('.tab-content');
@@ -1362,6 +1373,9 @@
             
             // Add active class to selected tab
             tabs[tabIndex].classList.add('active');
+            
+            // Save tab selection to localStorage
+            localStorage.setItem('selectedTab', tabIndex);
             
             // Scroll to top
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1392,6 +1406,67 @@
                 content.classList.add('active');
                 toggle.textContent = '▲';
             }
+            
+            // Save expanded state to localStorage
+            saveExpandedUseCases();
+        }
+
+        function saveExpandedUseCases() {
+            const expandedItems = {};
+            
+            // Loop through all tabs
+            for (let i = 0; i <= 9; i++) {
+                const tab = document.getElementById('tab' + i);
+                if (!tab) continue;
+                
+                const activeHeaders = tab.querySelectorAll('.use-case-header.active');
+                const expandedIndexes = [];
+                
+                activeHeaders.forEach(header => {
+                    // Get the index of this use case within its tab
+                    const allHeaders = tab.querySelectorAll('.use-case-header');
+                    const index = Array.from(allHeaders).indexOf(header);
+                    if (index !== -1) {
+                        expandedIndexes.push(index);
+                    }
+                });
+                
+                if (expandedIndexes.length > 0) {
+                    expandedItems['tab' + i] = expandedIndexes;
+                }
+            }
+            
+            localStorage.setItem('expandedUseCases', JSON.stringify(expandedItems));
+        }
+
+        function restoreExpandedUseCases() {
+            const saved = localStorage.getItem('expandedUseCases');
+            if (!saved) return;
+            
+            try {
+                const expandedItems = JSON.parse(saved);
+                
+                // Restore each expanded item
+                Object.keys(expandedItems).forEach(tabId => {
+                    const tab = document.getElementById(tabId);
+                    if (!tab) return;
+                    
+                    const headers = tab.querySelectorAll('.use-case-header');
+                    expandedItems[tabId].forEach(index => {
+                        if (headers[index]) {
+                            const header = headers[index];
+                            const content = header.nextElementSibling;
+                            const toggle = header.querySelector('.use-case-toggle');
+                            
+                            header.classList.add('active');
+                            content.classList.add('active');
+                            toggle.textContent = '▲';
+                        }
+                    });
+                });
+            } catch (e) {
+                console.error('Error restoring expanded use cases:', e);
+            }
         }
 
         // Add keyboard navigation
@@ -1403,6 +1478,9 @@
                     header.nextElementSibling.classList.remove('active');
                     header.querySelector('.use-case-toggle').textContent = '▼';
                 });
+                
+                // Save cleared state
+                saveExpandedUseCases();
             }
         });
     </script>
