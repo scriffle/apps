@@ -1068,14 +1068,14 @@
 
                     <div class="navigation">
                         <button class="nav-btn" id="prevBtn">← Previous</button>
-                        <button class="nav-btn" id="skipBtn">Skip</button>
+                        <button class="nav-btn" id="unansweredBtn">Earliest Unanswered</button>
                         <button class="nav-btn primary" id="nextBtn">Next →</button>
                     </div>
 
                     <div id="questionContainer"></div>
 
                     <div class="keyboard-hint">
-                        Keyboard shortcuts: T (True) | F (False) | ← → (Navigate)
+                        Keyboard shortcuts: T (True) | F (False) | ← → (Navigate) | U (Unanswered)
                     </div>
 
                     <div class="category-summary" id="categorySummary"></div>
@@ -1569,6 +1569,7 @@
                 renderCurrentQuestion();
                 updateProgress();
                 updateNextButton();
+                updateUnansweredButton();
                 renderCategorySummary();
                 updateFeedbackTab();
                 updateUtilityStats();
@@ -1726,6 +1727,7 @@
                 renderCurrentQuestion();
                 updateProgress();
                 updateNextButton();
+                updateUnansweredButton();
                 saveSubjectState();
             });
 
@@ -1737,8 +1739,8 @@
 
             // Navigation
             document.getElementById('prevBtn').addEventListener('click', () => navigateQuestion(-1));
-            document.getElementById('nextBtn').addEventListener('click', () => navigateQuestion(1));
-            document.getElementById('skipBtn').addEventListener('click', () => navigateQuestion(1));
+            document.getElementById('unansweredBtn').addEventListener('click', goToEarliestUnanswered);
+            // Note: nextBtn onclick is managed by updateNextButton() function
 
             // Keyboard shortcuts
             document.addEventListener('keydown', (e) => {
@@ -1756,7 +1758,11 @@
                         navigateQuestion(-1);
                         break;
                     case 'arrowright':
-                        navigateQuestion(1);
+                        // Mirror the next button behaviour
+                        handleNextAction();
+                        break;
+                    case 'u':
+                        goToEarliestUnanswered();
                         break;
                 }
             });
@@ -1908,6 +1914,7 @@
             renderCurrentQuestion();
             updateProgress();
             updateNextButton();
+            updateUnansweredButton();
             renderCategorySummary();
             updateFeedbackTab();
             updateUtilityStats();
@@ -1926,6 +1933,7 @@
             renderCurrentQuestion();
             updateProgress();
             updateNextButton();
+            updateUnansweredButton();
             saveSubjectState();
         }
 
@@ -1947,6 +1955,7 @@
                 renderCurrentQuestion();
                 updateProgress();
                 updateNextButton();
+                updateUnansweredButton();
                 saveSubjectState();
             }
         }
@@ -1970,12 +1979,99 @@
                 // Last question but more categories exist
                 nextBtn.textContent = 'Next Category →';
                 nextBtn.disabled = false;
-                nextBtn.onclick = advanceToNextCategory;
+                nextBtn.onclick = handleNextAction;
             } else {
                 // Normal navigation
                 nextBtn.textContent = 'Next →';
                 nextBtn.disabled = false;
-                nextBtn.onclick = () => navigateQuestion(1);
+                nextBtn.onclick = handleNextAction;
+            }
+        }
+
+        function handleNextAction() {
+            // Centralised logic for "next" action (used by button and keyboard)
+            if (!subjectData) return;
+
+            const questions = getCategoryQuestions();
+            const totalCategories = subjectData.categories.length;
+            const currentCat = subjectState.currentQuestionCategory;
+            const isLastQuestion = subjectState.currentQuestionIndex >= questions.length - 1;
+            const isLastCategory = currentCat >= totalCategories - 1;
+
+            if (isLastQuestion && isLastCategory) {
+                // Do nothing - at the very end
+                return;
+            } else if (isLastQuestion && !isLastCategory) {
+                // Advance to next category
+                advanceToNextCategory();
+            } else {
+                // Normal navigation
+                navigateQuestion(1);
+            }
+        }
+
+        function findEarliestUnanswered() {
+            // Returns { categoryIndex, questionIndex } of earliest unanswered, or null if all answered
+            if (!subjectData) return null;
+
+            for (let catIndex = 0; catIndex < subjectData.categories.length; catIndex++) {
+                const categoryQuestions = randomisedQuestions[catIndex] || [];
+                
+                for (let qIndex = 0; qIndex < categoryQuestions.length; qIndex++) {
+                    const q = categoryQuestions[qIndex];
+                    const responseKey = getResponseKey(q.conceptId, q.questionIndex);
+                    
+                    if (!subjectState.responses[responseKey]) {
+                        return { categoryIndex: catIndex, questionIndex: qIndex };
+                    }
+                }
+            }
+            
+            return null; // All answered
+        }
+
+        function goToEarliestUnanswered() {
+            const earliest = findEarliestUnanswered();
+            
+            if (!earliest) return; // All answered, button should be disabled
+            
+            const categoryChanged = earliest.categoryIndex !== subjectState.currentQuestionCategory;
+            
+            // Update state
+            subjectState.currentQuestionCategory = earliest.categoryIndex;
+            subjectState.currentQuestionIndex = earliest.questionIndex;
+            
+            // Update dropdown if category changed
+            if (categoryChanged) {
+                document.getElementById('questionCategorySelect').value = earliest.categoryIndex;
+            }
+            
+            // Re-render
+            renderCurrentQuestion();
+            updateProgress();
+            updateNextButton();
+            updateUnansweredButton();
+            saveSubjectState();
+        }
+
+        function updateUnansweredButton() {
+            const btn = document.getElementById('unansweredBtn');
+            if (!btn || !subjectData) return;
+
+            const earliest = findEarliestUnanswered();
+            
+            if (earliest) {
+                btn.disabled = false;
+                // Show which category it will go to if different
+                if (earliest.categoryIndex !== subjectState.currentQuestionCategory) {
+                    const catName = subjectData.categories[earliest.categoryIndex].name;
+                    btn.textContent = `Earliest Unanswered (${catName})`;
+                } else {
+                    btn.textContent = 'Earliest Unanswered';
+                }
+            } else {
+                btn.disabled = true;
+                btn.textContent = 'All Answered ✓';
             }
         }
 
@@ -2245,6 +2341,7 @@
             renderCurrentQuestion();
             updateProgress();
             updateNextButton();
+            updateUnansweredButton();
             renderCategorySummary();
             updateFeedbackTab();
             updateUtilityStats();
