@@ -1821,44 +1821,60 @@
 
     // ==================== REVIEW SCREEN ====================
     function showReview(filter = 'current') {
+      // Guard: need topic data loaded
+      if (!APP.topicData) {
+        showToast('Load a topic first');
+        return;
+      }
+      
       document.getElementById('topicContent').classList.remove('active');
       const reviewScreen = document.getElementById('reviewScreen');
       reviewScreen.classList.add('active');
       
-      // Calculate scores
+      // Calculate scores - always show all tabs for the filtered rounds
       let totalCorrect = 0;
       let totalQuestions = 0;
       const tabScores = {};
       
-      for (let round = 1; round <= 3; round++) {
-        APP.topicData.tabs.forEach(tab => {
-          const key = `round${round}_${tab.id}`;
-          const state = APP.tabStates[key];
-          
-          if (filter === 'current' && round !== APP.currentRound) return;
-          if (filter !== 'current' && filter !== 'total' && parseInt(filter) !== round) return;
-          
-          if (state) {
-            const content = APP.topicData.content[`round${round}`]?.[tab.id];
-            if (content) {
-              let tabTotal = 0;
-              content.sentences.forEach(s => {
-                tabTotal += Object.keys(s.questions).length;
-              });
-              
-              totalQuestions += tabTotal;
-              totalCorrect += state.bestScore || 0;
-              
-              if (!tabScores[tab.id]) {
-                tabScores[tab.id] = { correct: 0, total: 0, attempts: 0 };
-              }
+      // Determine which rounds to include
+      const roundsToShow = [];
+      if (filter === 'current') {
+        roundsToShow.push(APP.currentRound);
+      } else if (filter === 'total') {
+        roundsToShow.push(1, 2, 3);
+      } else {
+        roundsToShow.push(parseInt(filter));
+      }
+      
+      // Calculate scores for each tab across selected rounds
+      APP.topicData.tabs.forEach(tab => {
+        if (!tabScores[tab.id]) {
+          tabScores[tab.id] = { correct: 0, total: 0, attempts: 0, hasData: false };
+        }
+        
+        roundsToShow.forEach(round => {
+          const content = APP.topicData.content[`round${round}`]?.[tab.id];
+          if (content) {
+            let tabTotal = 0;
+            content.sentences.forEach(s => {
+              tabTotal += Object.keys(s.questions).length;
+            });
+            
+            tabScores[tab.id].total += tabTotal;
+            totalQuestions += tabTotal;
+            
+            // Get state if exists
+            const key = `round${round}_${tab.id}`;
+            const state = APP.tabStates[key];
+            if (state && state.attempts > 0) {
               tabScores[tab.id].correct += state.bestScore || 0;
-              tabScores[tab.id].total += tabTotal;
               tabScores[tab.id].attempts += state.attempts || 0;
+              tabScores[tab.id].hasData = true;
+              totalCorrect += state.bestScore || 0;
             }
           }
         });
-      }
+      });
       
       const pct = totalQuestions > 0 ? Math.round(totalCorrect / totalQuestions * 100) : 0;
       
@@ -1869,30 +1885,44 @@
         </div>
         
         <div class="review-tabs">
-          <button class="review-tab ${filter === 'current' ? 'active' : ''}" onclick="showReview('current')">Current Round</button>
+          <button class="review-tab ${filter === 'current' ? 'active' : ''}" onclick="showReview('current')">Round ${APP.currentRound}</button>
           <button class="review-tab ${filter === '1' ? 'active' : ''}" onclick="showReview('1')">Round 1</button>
           <button class="review-tab ${filter === '2' ? 'active' : ''}" onclick="showReview('2')">Round 2</button>
           <button class="review-tab ${filter === '3' ? 'active' : ''}" onclick="showReview('3')">Round 3</button>
-          <button class="review-tab ${filter === 'total' ? 'active' : ''}" onclick="showReview('total')">Total</button>
+          <button class="review-tab ${filter === 'total' ? 'active' : ''}" onclick="showReview('total')">All Rounds</button>
         </div>
         
         <h3 style="margin-bottom:12px;">Tab Breakdown</h3>
       `;
       
-      // Tab breakdown
+      // Tab breakdown - always show all tabs
       APP.topicData.tabs.forEach(tab => {
         const score = tabScores[tab.id];
-        if (score) {
-          const tabPct = score.total > 0 ? Math.round(score.correct / score.total * 100) : 0;
-          const isComplete = score.correct === score.total;
-          
-          html += `
-            <div class="review-section ${isComplete ? 'success' : 'error'}">
-              <h3>${isComplete ? '✓' : '○'} ${tab.icon} ${tab.label}</h3>
-              <div class="review-detail">Score: ${score.correct}/${score.total} (${tabPct}%) | Attempts: ${score.attempts}</div>
-            </div>
-          `;
+        const tabPct = score.total > 0 ? Math.round(score.correct / score.total * 100) : 0;
+        const isComplete = score.correct === score.total && score.total > 0;
+        const notStarted = !score.hasData;
+        
+        let statusClass = 'error';
+        let statusIcon = '○';
+        if (isComplete) {
+          statusClass = 'success';
+          statusIcon = '✓';
+        } else if (notStarted) {
+          statusClass = '';
+          statusIcon = '—';
         }
+        
+        html += `
+          <div class="review-section ${statusClass}">
+            <h3>${statusIcon} ${tab.icon} ${tab.label}</h3>
+            <div class="review-detail">
+              ${notStarted 
+                ? 'Not attempted yet' 
+                : `Score: ${score.correct}/${score.total} (${tabPct}%) | Attempts: ${score.attempts}`
+              }
+            </div>
+          </div>
+        `;
       });
       
       // Concept errors
@@ -1904,24 +1934,40 @@
         html += '<h3 style="margin:20px 0 12px;">Concepts to Review</h3>';
         
         sortedErrors.forEach(([conceptId, data]) => {
-          const concept = APP.topicData.concepts[conceptId];
+          const concept = APP.topicData.concepts?.[conceptId];
           if (concept) {
             html += `
               <div class="review-section error">
-                <h3>⚠ ${concept.name} <span class="error-count">${data.count} errors</span></h3>
-                <div class="review-detail">${concept.correct}</div>
-                <div class="review-detail" style="color:var(--error)">Your answers: ${[...new Set(data.wrongAnswers)].join(', ')}</div>
+                <h3>⚠ ${concept.name} <span class="error-count">${data.count} error${data.count > 1 ? 's' : ''}</span></h3>
+                <div class="review-detail">${concept.correct || ''}</div>
+                <div class="review-detail" style="color:var(--error)">Your answers: ${[...new Set(data.wrongAnswers.filter(a => a))].join(', ') || 'None selected'}</div>
                 ${concept.persistent ? `<div class="review-detail" style="font-style:italic;">→ ${concept.persistent.action}</div>` : ''}
+              </div>
+            `;
+          } else {
+            // Concept not in concepts object - show basic info
+            html += `
+              <div class="review-section error">
+                <h3>⚠ ${conceptId.replace(/_/g, ' ')} <span class="error-count">${data.count} error${data.count > 1 ? 's' : ''}</span></h3>
+                <div class="review-detail" style="color:var(--error)">Your answers: ${[...new Set(data.wrongAnswers.filter(a => a))].join(', ') || 'None selected'}</div>
               </div>
             `;
           }
         });
+      } else {
+        html += `
+          <div style="text-align:center; color:var(--text-muted); padding:20px;">
+            ${totalCorrect === 0 ? 'Submit some answers to see your performance breakdown.' : 'No errors recorded yet. Great work!'}
+          </div>
+        `;
       }
       
       html += `
         <div class="review-actions">
           <button class="btn btn-primary" onclick="closeReview()">Continue Learning</button>
-          ${APP.currentRound >= 3 ? '<button class="btn btn-secondary" onclick="resetTopic()">Start Over</button>' : ''}
+          ${APP.currentRound >= 3 && totalCorrect === totalQuestions && totalQuestions > 0 
+            ? '<button class="btn btn-success">🎉 Topic Complete!</button>' 
+            : ''}
         </div>
       `;
       
