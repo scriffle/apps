@@ -1,1401 +1,1987 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouCantFakeThis</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-primary: #0a0a0f;
-            --bg-secondary: #12121a;
-            --bg-tertiary: #1a1a24;
-            --bg-card: #16161f;
-            --text-primary: #e8e8ed;
-            --text-secondary: #9898a8;
-            --text-muted: #5a5a6e;
-            --accent-primary: #667eea;
-            --accent-secondary: #764ba2;
-            --accent-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --success: #34d399;
-            --error: #f87171;
-            --warning: #fbbf24;
-            --border: #2a2a3a;
-            --dropdown-unfilled: #3d3a28;
-            --dropdown-filled: #1e3a5f;
-            --dropdown-correct: #1a4d3a;
-            --dropdown-incorrect: #4d1a1a;
-            --radius-sm: 4px;
-            --radius-md: 8px;
-            --radius-lg: 12px;
-            --shadow: 0 4px 20px rgba(0,0,0,0.4);
-            --font-mono: 'JetBrains Mono', monospace;
-            --font-sans: 'Source Sans 3', sans-serif;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: var(--font-sans);
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-            line-height: 1.6;
-        }
-
-        /* State Selection Screen */
-        .state-selection {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-            background: 
-                radial-gradient(ellipse at 20% 20%, rgba(102, 126, 234, 0.1) 0%, transparent 50%),
-                radial-gradient(ellipse at 80% 80%, rgba(118, 75, 162, 0.1) 0%, transparent 50%),
-                var(--bg-primary);
-        }
-
-        .state-selection h1 {
-            font-family: var(--font-mono);
-            font-size: clamp(2rem, 5vw, 3.5rem);
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-            background: var(--accent-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .state-selection .tagline {
-            color: var(--text-secondary);
-            font-size: 1.1rem;
-            margin-bottom: 3rem;
-            font-family: var(--font-mono);
-        }
-
-        .state-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 1.5rem;
-            max-width: 900px;
-            width: 100%;
-        }
-
-        .state-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            padding: 2rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .state-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: var(--card-color, var(--accent-gradient));
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        .state-card:hover {
-            transform: translateY(-4px);
-            border-color: var(--card-color, var(--accent-primary));
-            box-shadow: var(--shadow);
-        }
-
-        .state-card:hover::before {
-            opacity: 1;
-        }
-
-        .state-card.disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .state-card.disabled:hover {
-            transform: none;
-        }
-
-        .state-card .icon {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-        }
-
-        .state-card .name {
-            font-family: var(--font-mono);
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin-bottom: 0.25rem;
-        }
-
-        .state-card .region {
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .state-card .description {
-            color: var(--text-muted);
-            font-size: 0.85rem;
-        }
-
-        .state-card .coming-soon {
-            position: absolute;
-            top: 1rem;
-            right: 1rem;
-            background: var(--bg-tertiary);
-            color: var(--text-muted);
-            font-size: 0.7rem;
-            padding: 0.25rem 0.5rem;
-            border-radius: var(--radius-sm);
-            font-family: var(--font-mono);
-            text-transform: uppercase;
-        }
-
-        /* Main Application */
-        .app-container {
-            display: none;
-            min-height: 100vh;
-            flex-direction: column;
-        }
-
-        .app-container.active {
-            display: flex;
-        }
-
-        /* Header */
-        .app-header {
-            background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border);
-            padding: 1rem 2rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .app-logo {
-            font-family: var(--font-mono);
-            font-weight: 700;
-            font-size: 1.25rem;
-            background: var(--accent-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            cursor: pointer;
-        }
-
-        .header-info {
-            display: flex;
-            align-items: center;
-            gap: 1.5rem;
-            font-size: 0.9rem;
-        }
-
-        .header-info .round-badge {
-            background: var(--accent-gradient);
-            padding: 0.35rem 0.75rem;
-            border-radius: var(--radius-sm);
-            font-family: var(--font-mono);
-            font-weight: 600;
-        }
-
-        .header-info .score {
-            color: var(--text-secondary);
-            font-family: var(--font-mono);
-        }
-
-        .change-state-btn {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text-secondary);
-            padding: 0.5rem 1rem;
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            font-family: var(--font-mono);
-            font-size: 0.8rem;
-            transition: all 0.2s ease;
-        }
-
-        .change-state-btn:hover {
-            border-color: var(--accent-primary);
-            color: var(--text-primary);
-        }
-
-        /* Selection Panel */
-        .selection-panel {
-            background: var(--bg-secondary);
-            padding: 1.5rem 2rem;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .selection-row {
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
-            align-items: flex-end;
-        }
-
-        .select-group {
-            display: flex;
-            flex-direction: column;
-            gap: 0.35rem;
-            min-width: 180px;
-            flex: 1;
-        }
-
-        .select-group label {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            font-family: var(--font-mono);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .select-group select {
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border);
-            color: var(--text-primary);
-            padding: 0.6rem 0.8rem;
-            border-radius: var(--radius-sm);
-            font-family: var(--font-sans);
-            font-size: 0.95rem;
-            cursor: pointer;
-            transition: border-color 0.2s ease;
-        }
-
-        .select-group select:hover {
-            border-color: var(--accent-primary);
-        }
-
-        .select-group select:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .load-topic-btn {
-            background: var(--accent-gradient);
-            border: none;
-            color: white;
-            padding: 0.6rem 1.5rem;
-            border-radius: var(--radius-sm);
-            font-family: var(--font-mono);
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            white-space: nowrap;
-        }
-
-        .load-topic-btn:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-
-        .load-topic-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* Main Content Area */
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            padding: 0;
-        }
-
-        /* Tab Navigation */
-        .tab-navigation {
-            display: flex;
-            background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border);
-            padding: 0 2rem;
-            gap: 0.5rem;
-            overflow-x: auto;
-        }
-
-        .tab-btn {
-            background: transparent;
-            border: none;
-            color: var(--text-secondary);
-            padding: 1rem 1.25rem;
-            font-family: var(--font-sans);
-            font-size: 0.95rem;
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            white-space: nowrap;
-        }
-
-        .tab-btn:hover {
-            color: var(--text-primary);
-        }
-
-        .tab-btn.active {
-            color: var(--text-primary);
-            border-bottom-color: var(--accent-primary);
-        }
-
-        .tab-btn .tab-icon {
-            font-family: var(--font-mono);
-            font-size: 0.85rem;
-            opacity: 0.7;
-        }
-
-        .tab-btn .round-indicators {
-            display: flex;
-            gap: 0.2rem;
-            margin-left: 0.5rem;
-        }
-
-        .tab-btn .round-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: var(--text-muted);
-        }
-
-        .tab-btn .round-dot.complete {
-            background: var(--success);
-        }
-
-        /* Content Area */
-        .content-area {
-            flex: 1;
-            padding: 2rem;
-            max-width: 900px;
-            margin: 0 auto;
-            width: 100%;
-        }
-
-        .content-header {
-            margin-bottom: 2rem;
-        }
-
-        .content-header h2 {
-            font-family: var(--font-mono);
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .content-header .instructions {
-            color: var(--text-secondary);
-        }
-
-        /* Cloze Sentences */
-        .cloze-container {
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-        }
-
-        .cloze-sentence {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-md);
-            padding: 1.5rem;
-            line-height: 2;
-            font-size: 1.05rem;
-        }
-
-        .cloze-dropdown {
-            display: inline-block;
-            position: relative;
-        }
-
-        .cloze-dropdown select {
-            appearance: none;
-            background: var(--dropdown-unfilled);
-            border: 2px solid var(--border);
-            color: var(--text-primary);
-            padding: 0.3rem 2rem 0.3rem 0.6rem;
-            border-radius: var(--radius-sm);
-            font-family: var(--font-mono);
-            font-size: 0.9rem;
-            cursor: pointer;
-            min-width: 120px;
-            transition: all 0.2s ease;
-        }
-
-        .cloze-dropdown select:hover {
-            border-color: var(--accent-primary);
-        }
-
-        .cloze-dropdown select.filled {
-            background: var(--dropdown-filled);
-        }
-
-        .cloze-dropdown select.correct {
-            background: var(--dropdown-correct);
-            border-color: var(--success);
-        }
-
-        .cloze-dropdown select.incorrect {
-            background: var(--dropdown-incorrect);
-            border-color: var(--error);
-        }
-
-        .cloze-dropdown::after {
-            content: '▼';
-            position: absolute;
-            right: 0.6rem;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 0.6rem;
-            color: var(--text-muted);
-            pointer-events: none;
-        }
-
-        /* Control Panel */
-        .control-panel {
-            background: var(--bg-secondary);
-            border-top: 1px solid var(--border);
-            padding: 1rem 2rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .control-left {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .reset-btn {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text-secondary);
-            padding: 0.5rem 1rem;
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            font-family: var(--font-mono);
-            font-size: 0.85rem;
-            transition: all 0.2s ease;
-        }
-
-        .reset-btn:hover {
-            border-color: var(--error);
-            color: var(--error);
-        }
-
-        .control-center {
-            display: flex;
-            align-items: center;
-            gap: 1.5rem;
-            font-family: var(--font-mono);
-            font-size: 0.9rem;
-        }
-
-        .score-display {
-            color: var(--text-secondary);
-        }
-
-        .score-display .score-value {
-            color: var(--text-primary);
-            font-weight: 600;
-        }
-
-        .attempt-display {
-            color: var(--text-muted);
-        }
-
-        .control-right {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .submit-btn {
-            background: var(--accent-gradient);
-            border: none;
-            color: white;
-            padding: 0.6rem 1.5rem;
-            border-radius: var(--radius-sm);
-            font-family: var(--font-mono);
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .submit-btn:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-
-        .submit-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* Feedback Toast */
-        .feedback-toast {
-            position: fixed;
-            bottom: 100px;
-            left: 50%;
-            transform: translateX(-50%) translateY(20px);
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-md);
-            padding: 1rem 1.5rem;
-            box-shadow: var(--shadow);
-            opacity: 0;
-            pointer-events: none;
-            transition: all 0.3s ease;
-            font-family: var(--font-mono);
-            z-index: 100;
-        }
-
-        .feedback-toast.visible {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-            pointer-events: auto;
-        }
-
-        .feedback-toast.success {
-            border-color: var(--success);
-        }
-
-        .feedback-toast.error {
-            border-color: var(--error);
-        }
-
-        /* Tooltip */
-        .tooltip {
-            position: fixed;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 0.5rem 0.75rem;
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            max-width: 250px;
-            box-shadow: var(--shadow);
-            z-index: 1000;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s ease;
-        }
-
-        .tooltip.visible {
-            opacity: 1;
-        }
-
-        /* Placeholder/Loading States */
-        .placeholder-message {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 400px;
-            color: var(--text-muted);
-            text-align: center;
-        }
-
-        .placeholder-message .icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            opacity: 0.5;
-        }
-
-        .placeholder-message h3 {
-            font-family: var(--font-mono);
-            font-size: 1.25rem;
-            margin-bottom: 0.5rem;
-            color: var(--text-secondary);
-        }
-
-        /* Utility Tabs (placeholder) */
-        .utility-tabs {
-            display: flex;
-            gap: 0.5rem;
-            padding: 0.5rem 2rem;
-            background: var(--bg-tertiary);
-            border-bottom: 1px solid var(--border);
-        }
-
-        .utility-tab {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text-muted);
-            padding: 0.4rem 0.8rem;
-            border-radius: var(--radius-sm);
-            font-family: var(--font-mono);
-            font-size: 0.75rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .utility-tab:hover {
-            border-color: var(--text-muted);
-            color: var(--text-secondary);
-        }
-
-        .utility-tab.active {
-            background: var(--bg-card);
-            border-color: var(--accent-primary);
-            color: var(--text-primary);
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .app-header {
-                padding: 1rem;
-            }
-
-            .selection-panel {
-                padding: 1rem;
-            }
-
-            .select-group {
-                min-width: 100%;
-            }
-
-            .tab-navigation {
-                padding: 0 1rem;
-            }
-
-            .content-area {
-                padding: 1rem;
-            }
-
-            .control-panel {
-                padding: 1rem;
-                flex-direction: column;
-                align-items: stretch;
-            }
-
-            .control-center {
-                justify-content: center;
-            }
-
-            .control-right {
-                justify-content: center;
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouCantFakeThis - Educational Review Platform</title>
+  <style>
+    :root {
+      --primary: #667eea;
+      --secondary: #764ba2;
+      --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --success: #10b981;
+      --error: #ef4444;
+      --warning: #f59e0b;
+      --bg: #f8fafc;
+      --bg-card: #ffffff;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --unfilled: #fffacd;
+      --filled: #add8e6;
+      --correct: #90ee90;
+      --incorrect: #ffcccb;
+      --radius: 8px;
+      --shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      background: var(--gradient);
+      color: white;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-height: 48px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo {
+      font-weight: 700;
+      font-size: 1.1rem;
+      white-space: nowrap;
+    }
+
+    .header-info {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 0.85rem;
+      opacity: 0.95;
+    }
+
+    .header-info span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn {
+      padding: 6px 12px;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .btn-primary {
+      background: white;
+      color: var(--primary);
+    }
+
+    .btn-primary:hover {
+      background: #f1f5f9;
+    }
+
+    .btn-secondary {
+      background: rgba(255,255,255,0.2);
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255,255,255,0.3);
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #059669;
+    }
+
+    .btn-danger {
+      background: var(--error);
+      color: white;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Main Layout */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Navigation Breadcrumb */
+    .nav-bar {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 16px;
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+      font-size: 0.9rem;
+    }
+
+    .breadcrumb-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .breadcrumb-item select {
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: white;
+      font-size: 0.85rem;
+      cursor: pointer;
+      max-width: 180px;
+    }
+
+    .breadcrumb-item select:disabled {
+      background: #f1f5f9;
+      cursor: not-allowed;
+    }
+
+    .breadcrumb-sep {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    .load-btn {
+      margin-left: 8px;
+    }
+
+    /* Tabs */
+    .tabs-container {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 16px;
+      display: none;
+    }
+
+    .tabs-container.active {
+      display: block;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+    }
+
+    .tab {
+      padding: 10px 16px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+
+    .tab:hover {
+      color: var(--text);
+    }
+
+    .tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    .tab-icon {
+      font-weight: 600;
+    }
+
+    .tab-progress {
+      display: flex;
+      gap: 3px;
+      margin-left: 4px;
+    }
+
+    .progress-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+    }
+
+    .progress-dot.complete {
+      background: var(--success);
+    }
+
+    .progress-dot.current {
+      background: var(--primary);
+    }
+
+    /* Content Area */
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .welcome-screen, .state-select-screen, .topic-content, .review-screen {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* State Selection */
+    .state-select-screen {
+      text-align: center;
+      padding: 40px 20px;
+    }
+
+    .state-select-screen h1 {
+      font-size: 1.8rem;
+      margin-bottom: 8px;
+    }
+
+    .state-select-screen p {
+      color: var(--text-muted);
+      margin-bottom: 24px;
+    }
+
+    .state-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .state-card {
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .state-card:hover {
+      border-color: var(--primary);
+      box-shadow: var(--shadow);
+    }
+
+    .state-card.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .state-card .icon {
+      font-size: 2rem;
+      margin-bottom: 8px;
+    }
+
+    .state-card .name {
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+
+    .state-card .region {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    /* Welcome Screen */
+    .welcome-screen {
+      text-align: center;
+      padding: 40px 20px;
+    }
+
+    .welcome-screen h2 {
+      font-size: 1.5rem;
+      margin-bottom: 8px;
+    }
+
+    .welcome-screen p {
+      color: var(--text-muted);
+    }
+
+    /* Topic Content */
+    .topic-content {
+      display: none;
+    }
+
+    .topic-content.active {
+      display: block;
+    }
+
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: var(--primary);
+    }
+
+    .section-instructions {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 16px;
+    }
+
+    .sentence {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      margin-bottom: 12px;
+      line-height: 1.8;
+      font-size: 0.95rem;
+    }
+
+    .cloze-dropdown {
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      background: var(--unfilled);
+      transition: all 0.2s;
+      min-width: 120px;
+      max-width: 200px;
+    }
+
+    .cloze-dropdown.filled {
+      background: var(--filled);
+    }
+
+    .cloze-dropdown.correct {
+      background: var(--correct);
+      border-color: var(--success);
+    }
+
+    .cloze-dropdown.incorrect {
+      background: var(--incorrect);
+      border-color: var(--error);
+    }
+
+    .feedback-inline {
+      display: none;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 4px;
+      padding: 8px 12px;
+      margin-top: 8px;
+      font-size: 0.85rem;
+    }
+
+    .feedback-inline.show {
+      display: block;
+    }
+
+    .feedback-inline .error-label {
+      color: var(--error);
+      font-weight: 600;
+    }
+
+    .feedback-inline .fix {
+      color: var(--text);
+      margin-top: 4px;
+    }
+
+    .feedback-inline .action {
+      color: var(--text-muted);
+      font-style: italic;
+      margin-top: 4px;
+    }
+
+    /* Control Panel */
+    .control-panel {
+      background: var(--bg-card);
+      border-top: 1px solid var(--border);
+      padding: 12px 16px;
+      display: none;
+    }
+
+    .control-panel.active {
+      display: block;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .control-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .control-center {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 0.9rem;
+    }
+
+    .score-display {
+      font-weight: 600;
+    }
+
+    .attempt-display {
+      color: var(--text-muted);
+    }
+
+    .control-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .feedback-summary {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 8px;
+      text-align: center;
+    }
+
+    .feedback-summary.success {
+      color: var(--success);
+    }
+
+    .feedback-summary.error {
+      color: var(--error);
+    }
+
+    /* Review Screen */
+    .review-screen {
+      display: none;
+      padding: 20px;
+    }
+
+    .review-screen.active {
+      display: block;
+    }
+
+    .review-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .review-header h2 {
+      font-size: 1.5rem;
+      margin-bottom: 8px;
+    }
+
+    .review-score {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .review-tabs {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .review-tab {
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: white;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .review-tab.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .review-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .review-section h3 {
+      font-size: 1rem;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .review-section.success h3 {
+      color: var(--success);
+    }
+
+    .review-section.error h3 {
+      color: var(--error);
+    }
+
+    .error-count {
+      background: var(--error);
+      color: white;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+    }
+
+    .review-detail {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .review-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 24px;
+    }
+
+    /* Utilities Panel */
+    .utilities-panel {
+      position: fixed;
+      top: 0;
+      right: -320px;
+      width: 320px;
+      height: 100%;
+      background: var(--bg-card);
+      box-shadow: -4px 0 20px rgba(0,0,0,0.1);
+      transition: right 0.3s;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .utilities-panel.open {
+      right: 0;
+    }
+
+    .utilities-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .utilities-header h3 {
+      font-size: 1.1rem;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--text-muted);
+    }
+
+    .utilities-content {
+      padding: 16px;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .utility-section {
+      margin-bottom: 20px;
+    }
+
+    .utility-section h4 {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .utility-btn {
+      width: 100%;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      text-align: left;
+    }
+
+    .utility-btn.confirm {
+      background: var(--warning);
+      color: white;
+    }
+
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.3);
+      z-index: 999;
+      display: none;
+    }
+
+    .overlay.show {
+      display: block;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--text);
+      color: white;
+      padding: 12px 24px;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      z-index: 2000;
+      opacity: 0;
+      transition: all 0.3s;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    /* Tooltip */
+    .tooltip {
+      position: fixed;
+      background: var(--text);
+      color: white;
+      padding: 8px 12px;
+      border-radius: var(--radius);
+      font-size: 0.8rem;
+      max-width: 250px;
+      z-index: 3000;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .tooltip.show {
+      opacity: 1;
+    }
+
+    .tooltip::before {
+      content: '';
+      position: absolute;
+      bottom: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 6px solid var(--text);
+    }
+
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-muted);
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .header {
+        padding: 8px 12px;
+      }
+      
+      .header-info {
+        display: none;
+      }
+
+      .breadcrumb-item select {
+        max-width: 120px;
+      }
+
+      .tabs {
+        gap: 0;
+      }
+
+      .tab {
+        padding: 8px 12px;
+        font-size: 0.8rem;
+      }
+
+      .tab-label {
+        display: none;
+      }
+
+      .control-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .control-center {
+        justify-content: center;
+      }
+
+      .control-right {
+        justify-content: center;
+      }
+    }
+  </style>
 </head>
 <body>
-    <!-- State Selection Screen -->
-    <div class="state-selection" id="stateSelection">
-        <h1>YouCantFakeThis</h1>
-        <p class="tagline">Master concepts through spaced repetition</p>
-        <div class="state-grid" id="stateGrid">
-            <!-- Populated by JS -->
-        </div>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">📚 YouCantFakeThis</div>
+      <div class="header-info" id="headerInfo">
+        <span id="roundDisplay"></span>
+        <span id="totalScoreDisplay"></span>
+      </div>
     </div>
-
-    <!-- Main Application -->
-    <div class="app-container" id="appContainer">
-        <!-- Header -->
-        <header class="app-header">
-            <div class="app-logo" onclick="showStateSelection()">YouCantFakeThis</div>
-            <div class="header-info" id="headerInfo">
-                <span class="round-badge" id="roundBadge">Round 1 of 3</span>
-                <span class="score" id="totalScore">Total: 0/0</span>
-            </div>
-            <button class="change-state-btn" onclick="showStateSelection()">Change Curriculum</button>
-        </header>
-
-        <!-- Selection Panel -->
-        <div class="selection-panel">
-            <div class="selection-row">
-                <div class="select-group">
-                    <label>Subject</label>
-                    <select id="subjectSelect" onchange="onSubjectChange()">
-                        <option value="">Select subject...</option>
-                    </select>
-                </div>
-                <div class="select-group">
-                    <label>Unit</label>
-                    <select id="unitSelect" onchange="onUnitChange()" disabled>
-                        <option value="">Select unit...</option>
-                    </select>
-                </div>
-                <div class="select-group">
-                    <label>Area of Study</label>
-                    <select id="aosSelect" onchange="onAOSChange()" disabled>
-                        <option value="">Select AOS...</option>
-                    </select>
-                </div>
-                <div class="select-group">
-                    <label>Topic</label>
-                    <select id="topicSelect" onchange="onTopicChange()" disabled>
-                        <option value="">Select topic...</option>
-                    </select>
-                </div>
-                <button class="load-topic-btn" id="loadTopicBtn" onclick="loadTopic()" disabled>
-                    Load Topic
-                </button>
-            </div>
-        </div>
-
-        <!-- Utility Tabs (placeholder) -->
-        <div class="utility-tabs">
-            <button class="utility-tab active">Content</button>
-            <button class="utility-tab">Review</button>
-            <button class="utility-tab">Progress</button>
-            <button class="utility-tab">Settings</button>
-        </div>
-
-        <!-- Tab Navigation -->
-        <nav class="tab-navigation" id="tabNavigation">
-            <!-- Populated by JS -->
-        </nav>
-
-        <!-- Main Content -->
-        <main class="main-content">
-            <div class="content-area" id="contentArea">
-                <div class="placeholder-message">
-                    <div class="icon">📚</div>
-                    <h3>Select a Topic</h3>
-                    <p>Choose a subject, unit, area of study, and topic to begin</p>
-                </div>
-            </div>
-        </main>
-
-        <!-- Control Panel -->
-        <div class="control-panel" id="controlPanel" style="display: none;">
-            <div class="control-left">
-                <button class="reset-btn" onclick="resetSection()">Reset Section</button>
-            </div>
-            <div class="control-center">
-                <span class="score-display">Score: <span class="score-value" id="tabScore">0/0</span></span>
-                <span class="attempt-display" id="attemptDisplay">Attempt 1</span>
-            </div>
-            <div class="control-right">
-                <button class="submit-btn" id="submitBtn" onclick="submitAnswers()">Submit</button>
-            </div>
-        </div>
+    <div class="header-right">
+      <button class="btn btn-secondary" id="reviewBtn" style="display:none;">Review</button>
+      <button class="btn btn-secondary" id="utilitiesBtn">⚙️</button>
     </div>
+  </header>
 
-    <!-- Feedback Toast -->
-    <div class="feedback-toast" id="feedbackToast"></div>
+  <!-- Navigation -->
+  <nav class="nav-bar" id="navBar" style="display:none;">
+    <div class="breadcrumb" id="breadcrumb"></div>
+  </nav>
 
-    <!-- Tooltip -->
-    <div class="tooltip" id="tooltip"></div>
+  <!-- Tabs -->
+  <div class="tabs-container" id="tabsContainer">
+    <div class="tabs" id="tabs"></div>
+  </div>
 
-    <script>
-        // ============================================
-        // STATE MANAGEMENT
-        // ============================================
-        const STORAGE_PREFIX = 'ycft_';
+  <!-- Main Content -->
+  <main class="main">
+    <div class="content" id="content">
+      <!-- State Selection Screen -->
+      <div class="state-select-screen" id="stateSelectScreen">
+        <h1>Welcome to YouCantFakeThis</h1>
+        <p>Select your curriculum to get started</p>
+        <div class="state-grid" id="stateGrid"></div>
+      </div>
+
+      <!-- Welcome Screen (after state selected) -->
+      <div class="welcome-screen" id="welcomeScreen" style="display:none;">
+        <h2>Select a Topic</h2>
+        <p>Use the navigation above to choose a subject, unit, area of study, and topic.</p>
+      </div>
+
+      <!-- Topic Content -->
+      <div class="topic-content" id="topicContent"></div>
+
+      <!-- Review Screen -->
+      <div class="review-screen" id="reviewScreen"></div>
+
+      <!-- Loading -->
+      <div class="loading" id="loadingScreen" style="display:none;">
+        <div class="spinner"></div>
+        <p>Loading...</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Control Panel -->
+  <div class="control-panel" id="controlPanel">
+    <div class="control-row">
+      <div class="control-left">
+        <button class="btn btn-secondary" id="resetSectionBtn">Reset Section</button>
+      </div>
+      <div class="control-center">
+        <span class="score-display" id="scoreDisplay">Score: 0/0</span>
+        <span class="attempt-display" id="attemptDisplay">Attempt 1</span>
+      </div>
+      <div class="control-right">
+        <button class="btn btn-success" id="submitBtn">Submit</button>
+      </div>
+    </div>
+    <div class="feedback-summary" id="feedbackSummary"></div>
+  </div>
+
+  <!-- Utilities Panel -->
+  <div class="overlay" id="overlay"></div>
+  <div class="utilities-panel" id="utilitiesPanel">
+    <div class="utilities-header">
+      <h3>Utilities</h3>
+      <button class="close-btn" id="closeUtilities">&times;</button>
+    </div>
+    <div class="utilities-content">
+      <div class="utility-section">
+        <h4>Current Topic</h4>
+        <button class="btn utility-btn" id="resetTopicBtn">Reset Topic Progress</button>
+      </div>
+      <div class="utility-section">
+        <h4>Curriculum</h4>
+        <button class="btn utility-btn" id="changeCurriculumBtn">Change Curriculum</button>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">⚠️ Changing curriculum will clear all progress</p>
+      </div>
+      <div class="utility-section">
+        <h4>Data</h4>
+        <button class="btn utility-btn" id="exportBtn">Export Progress</button>
+        <button class="btn utility-btn" id="clearAllBtn">Clear All Data</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Tooltip -->
+  <div class="tooltip" id="tooltip"></div>
+
+  <script>
+    // ==================== APP STATE ====================
+    const APP = {
+      // Data
+      states: null,
+      studyManifest: null,
+      topicManifest: null,
+      topicData: null,
+      
+      // Current selections
+      currentState: null,
+      currentSubject: null,
+      currentUnit: null,
+      currentAOS: null,
+      currentTopic: null,
+      
+      // Topic state
+      currentRound: 1,
+      currentTab: null,
+      tabStates: {},
+      errorTracking: {},
+      
+      // UI state
+      submitted: false,
+      tooltipTimeout: null,
+      
+      // Base path for JSON files (adjust as needed)
+      basePath: './'
+    };
+
+    // ==================== LOCAL STORAGE ====================
+    const Storage = {
+      prefix: 'ycft_',
+      
+      get(key) {
+        try {
+          const item = localStorage.getItem(this.prefix + key);
+          return item ? JSON.parse(item) : null;
+        } catch { return null; }
+      },
+      
+      set(key, value) {
+        try {
+          localStorage.setItem(this.prefix + key, JSON.stringify(value));
+        } catch (e) {
+          console.error('Storage error:', e);
+        }
+      },
+      
+      remove(key) {
+        localStorage.removeItem(this.prefix + key);
+      },
+      
+      getTopicKey(topicId) {
+        return `${APP.currentState}_${APP.currentSubject}_${topicId}`;
+      },
+      
+      saveTopicProgress(topicId, data) {
+        this.set(`topic_${this.getTopicKey(topicId)}`, data);
+      },
+      
+      loadTopicProgress(topicId) {
+        return this.get(`topic_${this.getTopicKey(topicId)}`);
+      },
+      
+      clearTopicProgress(topicId) {
+        this.remove(`topic_${this.getTopicKey(topicId)}`);
+      },
+      
+      clearAll() {
+        const keys = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key.startsWith(this.prefix)) {
+            keys.push(key);
+          }
+        }
+        keys.forEach(k => localStorage.removeItem(k));
+      }
+    };
+
+    // ==================== UTILITIES ====================
+    function showToast(message, duration = 3000) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), duration);
+    }
+
+    function showLoading(show) {
+      document.getElementById('loadingScreen').style.display = show ? 'block' : 'none';
+    }
+
+    async function fetchJSON(path) {
+      try {
+        const response = await fetch(APP.basePath + path);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return await response.json();
+      } catch (e) {
+        console.error('Fetch error:', path, e);
+        return null;
+      }
+    }
+
+    function shuffleArray(arr) {
+      const shuffled = [...arr];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      return shuffled;
+    }
+
+    // ==================== INITIALIZATION ====================
+    async function init() {
+      // Load states
+      APP.states = await fetchJSON('states.json');
+      if (!APP.states) {
+        document.getElementById('stateGrid').innerHTML = '<p style="color:var(--error)">Failed to load curriculum data. Please check that states.json exists.</p>';
+        return;
+      }
+      
+      // Check for saved state
+      const savedState = Storage.get('currentState');
+      if (savedState) {
+        await selectState(savedState, true);
+      } else {
+        renderStateSelection();
+      }
+      
+      // Setup event listeners
+      setupEventListeners();
+      
+      // EASTER EGG: Debug mode with q+w+e
+      const debugKeys = new Set();
+      document.addEventListener('keydown', e => {
+        debugKeys.add(e.key.toLowerCase());
+        if (debugKeys.has('q') && debugKeys.has('w') && debugKeys.has('e')) {
+          activateDebugMode();
+        }
+      });
+      document.addEventListener('keyup', e => debugKeys.delete(e.key.toLowerCase()));
+    }
+
+    function setupEventListeners() {
+      // Utilities panel
+      document.getElementById('utilitiesBtn').onclick = () => toggleUtilities(true);
+      document.getElementById('closeUtilities').onclick = () => toggleUtilities(false);
+      document.getElementById('overlay').onclick = () => toggleUtilities(false);
+      
+      // Utility buttons
+      document.getElementById('resetSectionBtn').onclick = resetSection;
+      document.getElementById('resetTopicBtn').onclick = resetTopic;
+      document.getElementById('changeCurriculumBtn').onclick = changeCurriculum;
+      document.getElementById('exportBtn').onclick = exportProgress;
+      document.getElementById('clearAllBtn').onclick = clearAllData;
+      
+      // Submit button
+      document.getElementById('submitBtn').onclick = submitAnswers;
+      
+      // Review button
+      document.getElementById('reviewBtn').onclick = () => showReview();
+      
+      // Keyboard shortcuts
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') toggleUtilities(false);
+        if (e.key === 'Enter' && e.ctrlKey) submitAnswers();
+      });
+      
+      // Tooltip handling
+      document.addEventListener('mousemove', () => {
+        clearTimeout(APP.tooltipTimeout);
+        document.getElementById('tooltip').classList.remove('show');
+      });
+    }
+
+    function toggleUtilities(open) {
+      document.getElementById('utilitiesPanel').classList.toggle('open', open);
+      document.getElementById('overlay').classList.toggle('show', open);
+    }
+
+    // ==================== STATE SELECTION ====================
+    function renderStateSelection() {
+      const grid = document.getElementById('stateGrid');
+      grid.innerHTML = APP.states.states.map(state => `
+        <div class="state-card ${state.active ? '' : 'disabled'}" 
+             data-state-id="${state.id}" 
+             onclick="${state.active ? `selectState('${state.id}')` : ''}">
+          <div class="icon">${state.icon}</div>
+          <div class="name">${state.name}</div>
+          <div class="region">${state.region}</div>
+          ${!state.active ? '<div style="font-size:0.8rem;color:var(--warning);margin-top:4px;">Coming Soon</div>' : ''}
+        </div>
+      `).join('');
+    }
+
+    async function selectState(stateId, isReload = false) {
+      const state = APP.states.states.find(s => s.id === stateId);
+      if (!state || !state.active) return;
+      
+      APP.currentState = stateId;
+      Storage.set('currentState', stateId);
+      
+      // Load study manifest
+      showLoading(true);
+      APP.studyManifest = await fetchJSON(state.path);
+      showLoading(false);
+      
+      if (!APP.studyManifest) {
+        showToast('Failed to load curriculum data');
+        return;
+      }
+      
+      // Hide state selection, show navigation
+      document.getElementById('stateSelectScreen').style.display = 'none';
+      document.getElementById('navBar').style.display = 'block';
+      document.getElementById('welcomeScreen').style.display = 'block';
+      
+      // Render breadcrumb
+      renderBreadcrumb();
+      
+      // Restore previous selections if reloading
+      if (isReload) {
+        const savedSubject = Storage.get('currentSubject');
+        if (savedSubject) {
+          await selectSubject(savedSubject);
+        }
+      }
+    }
+
+    // ==================== NAVIGATION ====================
+    function renderBreadcrumb() {
+      const bc = document.getElementById('breadcrumb');
+      
+      // State display
+      const state = APP.states.states.find(s => s.id === APP.currentState);
+      
+      let html = `
+        <div class="breadcrumb-item">
+          <span>${state.icon} ${state.name}</span>
+        </div>
+        <span class="breadcrumb-sep">›</span>
+        <div class="breadcrumb-item">
+          <select id="subjectSelect" onchange="selectSubject(this.value)">
+            <option value="">Select Subject</option>
+            ${APP.studyManifest.subjects.map(s => 
+              `<option value="${s.id}" ${s.status !== 'available' ? 'disabled' : ''} ${APP.currentSubject === s.id ? 'selected' : ''}>
+                ${s.icon} ${s.name}${s.status !== 'available' ? ' (Coming Soon)' : ''}
+              </option>`
+            ).join('')}
+          </select>
+        </div>
+      `;
+      
+      // Unit select
+      if (APP.currentSubject && APP.topicManifest) {
+        html += `
+          <span class="breadcrumb-sep">›</span>
+          <div class="breadcrumb-item">
+            <select id="unitSelect" onchange="selectUnit(this.value)">
+              <option value="">Select Unit</option>
+              ${APP.topicManifest.units.map(u => 
+                `<option value="${u.id}" ${APP.currentUnit === u.id ? 'selected' : ''}>${u.code}</option>`
+              ).join('')}
+            </select>
+          </div>
+        `;
+      }
+      
+      // AOS select
+      if (APP.currentUnit) {
+        const unit = APP.topicManifest.units.find(u => u.id === APP.currentUnit);
+        if (unit) {
+          html += `
+            <span class="breadcrumb-sep">›</span>
+            <div class="breadcrumb-item">
+              <select id="aosSelect" onchange="selectAOS(this.value)">
+                <option value="">Select AOS</option>
+                ${unit.areasOfStudy.map(a => 
+                  `<option value="${a.id}" ${APP.currentAOS === a.id ? 'selected' : ''}>${a.code}</option>`
+                ).join('')}
+              </select>
+            </div>
+          `;
+        }
+      }
+      
+      // Topic select
+      if (APP.currentAOS) {
+        const unit = APP.topicManifest.units.find(u => u.id === APP.currentUnit);
+        const aos = unit?.areasOfStudy.find(a => a.id === APP.currentAOS);
+        if (aos) {
+          html += `
+            <span class="breadcrumb-sep">›</span>
+            <div class="breadcrumb-item">
+              <select id="topicSelect" onchange="selectTopicFromMenu(this.value)">
+                <option value="">Select Topic</option>
+                ${aos.topics.map(t => 
+                  `<option value="${t.id}" ${t.status !== 'available' ? 'disabled' : ''} ${APP.currentTopic === t.id ? 'selected' : ''}>
+                    ${t.code}. ${t.name}${t.status !== 'available' ? ' (Coming Soon)' : ''}
+                  </option>`
+                ).join('')}
+              </select>
+            </div>
+            <button class="btn btn-primary load-btn" id="loadTopicBtn" onclick="loadSelectedTopic()" 
+                    ${!APP.currentTopic ? 'disabled' : ''}>Load Topic</button>
+          `;
+        }
+      }
+      
+      bc.innerHTML = html;
+    }
+
+    async function selectSubject(subjectId) {
+      if (!subjectId) return;
+      
+      APP.currentSubject = subjectId;
+      APP.currentUnit = null;
+      APP.currentAOS = null;
+      APP.currentTopic = null;
+      
+      Storage.set('currentSubject', subjectId);
+      
+      // Load topic manifest
+      const subject = APP.studyManifest.subjects.find(s => s.id === subjectId);
+      if (!subject) return;
+      
+      showLoading(true);
+      APP.topicManifest = await fetchJSON(`${APP.currentState}/${subject.path}`);
+      showLoading(false);
+      
+      if (!APP.topicManifest) {
+        showToast('Failed to load subject data');
+        return;
+      }
+      
+      // Update theme colors
+      if (APP.topicManifest.colorTheme) {
+        document.documentElement.style.setProperty('--primary', APP.topicManifest.colorTheme.primary);
+        document.documentElement.style.setProperty('--secondary', APP.topicManifest.colorTheme.secondary);
+        document.documentElement.style.setProperty('--gradient', APP.topicManifest.colorTheme.gradient);
+        document.querySelector('.header').style.background = APP.topicManifest.colorTheme.gradient;
+      }
+      
+      renderBreadcrumb();
+    }
+
+    function selectUnit(unitId) {
+      APP.currentUnit = unitId || null;
+      APP.currentAOS = null;
+      APP.currentTopic = null;
+      renderBreadcrumb();
+    }
+
+    function selectAOS(aosId) {
+      APP.currentAOS = aosId || null;
+      APP.currentTopic = null;
+      renderBreadcrumb();
+    }
+
+    function selectTopicFromMenu(topicId) {
+      APP.currentTopic = topicId || null;
+      const btn = document.getElementById('loadTopicBtn');
+      if (btn) btn.disabled = !topicId;
+    }
+
+    async function loadSelectedTopic() {
+      if (!APP.currentTopic) return;
+      
+      const unit = APP.topicManifest.units.find(u => u.id === APP.currentUnit);
+      const aos = unit?.areasOfStudy.find(a => a.id === APP.currentAOS);
+      const topic = aos?.topics.find(t => t.id === APP.currentTopic);
+      
+      if (!topic || topic.status !== 'available') {
+        showToast('Topic not available');
+        return;
+      }
+      
+      // Load topic data
+      showLoading(true);
+      const subject = APP.studyManifest.subjects.find(s => s.id === APP.currentSubject);
+      APP.topicData = await fetchJSON(`${APP.currentState}/${APP.currentSubject}/${topic.filename}`);
+      showLoading(false);
+      
+      if (!APP.topicData) {
+        showToast('Failed to load topic');
+        return;
+      }
+      
+      // Load saved progress
+      const savedProgress = Storage.loadTopicProgress(APP.topicData.metadata.id);
+      if (savedProgress) {
+        APP.currentRound = savedProgress.currentRound || 1;
+        APP.tabStates = savedProgress.tabStates || {};
+        APP.errorTracking = savedProgress.errorTracking || {};
+      } else {
+        APP.currentRound = 1;
+        APP.tabStates = {};
+        APP.errorTracking = {};
+      }
+      
+      // Initialize tab states for current round
+      APP.topicData.tabs.forEach(tab => {
+        const key = `round${APP.currentRound}_${tab.id}`;
+        if (!APP.tabStates[key]) {
+          APP.tabStates[key] = {
+            selections: {},
+            results: {},
+            submitted: false,
+            attempts: 0,
+            bestScore: 0,
+            complete: false
+          };
+        }
+      });
+      
+      // Set first tab
+      APP.currentTab = APP.topicData.tabs[0].id;
+      
+      // Render
+      document.getElementById('welcomeScreen').style.display = 'none';
+      document.getElementById('reviewScreen').style.display = 'none';
+      document.getElementById('tabsContainer').classList.add('active');
+      document.getElementById('controlPanel').classList.add('active');
+      document.getElementById('reviewBtn').style.display = 'inline-flex';
+      
+      renderTabs();
+      renderContent();
+      updateHeader();
+    }
+
+    // ==================== TABS ====================
+    function renderTabs() {
+      const tabsEl = document.getElementById('tabs');
+      
+      tabsEl.innerHTML = APP.topicData.tabs.map(tab => {
+        const isActive = tab.id === APP.currentTab;
         
-        let appState = {
-            currentCurriculum: null,
-            currentSubject: null,
-            currentUnit: null,
-            currentAOS: null,
-            currentTopic: null,
-            currentRound: 1,
-            currentTab: null,
-            topicData: null,
-            manifestData: {},
-            tabStates: {},
-            submitted: false
-        };
+        // Calculate progress dots
+        const dots = [1, 2, 3].map(round => {
+          const key = `round${round}_${tab.id}`;
+          const state = APP.tabStates[key];
+          if (state?.complete) return 'complete';
+          if (round === APP.currentRound && tab.id === APP.currentTab) return 'current';
+          return '';
+        });
+        
+        return `
+          <button class="tab ${isActive ? 'active' : ''}" onclick="switchTab('${tab.id}')">
+            <span class="tab-icon">${tab.icon}</span>
+            <span class="tab-label">${tab.label}</span>
+            <div class="tab-progress">
+              ${dots.map(d => `<div class="progress-dot ${d}"></div>`).join('')}
+            </div>
+          </button>
+        `;
+      }).join('');
+    }
 
-        // ============================================
-        // LOCAL STORAGE HELPERS
-        // ============================================
-        function saveToStorage(key, value) {
-            localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
-        }
+    function switchTab(tabId) {
+      APP.currentTab = tabId;
+      APP.submitted = false;
+      renderTabs();
+      renderContent();
+      updateControlPanel();
+    }
 
-        function loadFromStorage(key, defaultValue = null) {
-            const stored = localStorage.getItem(STORAGE_PREFIX + key);
-            return stored ? JSON.parse(stored) : defaultValue;
-        }
-
-        // ============================================
-        // DATA LOADING
-        // ============================================
-        async function loadJSON(path) {
-            try {
-                const response = await fetch(path);
-                if (!response.ok) throw new Error(`Failed to load ${path}`);
-                return await response.json();
-            } catch (error) {
-                console.error('Load error:', error);
-                showToast(`Error loading data: ${error.message}`, 'error');
-                return null;
-            }
-        }
-
-        // ============================================
-        // STATE SELECTION
-        // ============================================
-        async function initApp() {
-            const savedCurriculum = loadFromStorage('curriculum');
+    // ==================== CONTENT RENDERING ====================
+    function renderContent() {
+      const container = document.getElementById('topicContent');
+      container.classList.add('active');
+      
+      const roundKey = `round${APP.currentRound}`;
+      const tabContent = APP.topicData.content[roundKey]?.[APP.currentTab];
+      
+      if (!tabContent) {
+        container.innerHTML = '<p>Content not available for this section.</p>';
+        return;
+      }
+      
+      const tabState = getTabState();
+      
+      let html = `
+        <div class="section-title">${tabContent.title}</div>
+        <div class="section-instructions">${tabContent.instructions}</div>
+      `;
+      
+      tabContent.sentences.forEach((sentence, sIdx) => {
+        html += `<div class="sentence" data-sentence="${sIdx}">`;
+        
+        // Parse sentence and insert dropdowns
+        let text = sentence.text;
+        const questionIds = Object.keys(sentence.questions);
+        
+        questionIds.forEach(qId => {
+          const q = sentence.questions[qId];
+          const placeholder = `{{${qId}}}`;
+          
+          // Build options
+          const options = shuffleOptionsWithCorrect(q.correct, q.distractors, `${sIdx}_${qId}`);
+          const selected = tabState.selections[qId] || '';
+          const result = tabState.results[qId];
+          
+          let selectClass = 'cloze-dropdown';
+          if (selected) selectClass += ' filled';
+          if (result === true) selectClass += ' correct';
+          if (result === false) selectClass += ' incorrect';
+          
+          const optionsHtml = options.map(opt => 
+            `<option value="${opt}" ${selected === opt ? 'selected' : ''}>${opt}</option>`
+          ).join('');
+          
+          const dropdown = `
+            <select class="${selectClass}" 
+                    data-question="${qId}" 
+                    data-concept="${q.concept}"
+                    data-correct="${q.correct}"
+                    data-tooltip="${q.tooltip}"
+                    onchange="handleSelection(this)">
+              <option value="">Select...</option>
+              ${optionsHtml}
+            </select>
+          `;
+          
+          text = text.replace(placeholder, dropdown);
+        });
+        
+        html += text;
+        
+        // Add inline feedback for incorrect answers
+        questionIds.forEach(qId => {
+          const q = sentence.questions[qId];
+          const result = tabState.results[qId];
+          const selected = tabState.selections[qId];
+          
+          if (result === false && selected) {
+            const concept = APP.topicData.concepts[q.concept];
+            const wrongFeedback = concept?.wrong?.[selected];
             
-            if (savedCurriculum) {
-                appState.currentCurriculum = savedCurriculum;
-                await loadCurriculumData(savedCurriculum);
-                showApp();
-            } else {
-                await loadStateSelection();
-            }
-        }
-
-        async function loadStateSelection() {
-            const statesData = await loadJSON('states.json');
-            if (!statesData) return;
-
-            const grid = document.getElementById('stateGrid');
-            grid.innerHTML = '';
-
-            statesData.states.forEach(state => {
-                const card = document.createElement('div');
-                card.className = `state-card ${!state.active ? 'disabled' : ''}`;
-                card.style.setProperty('--card-color', state.color);
-                card.innerHTML = `
-                    <div class="icon">${state.icon}</div>
-                    <div class="name">${state.name}</div>
-                    <div class="region">${state.region}</div>
-                    <div class="description">${state.description}</div>
-                    ${!state.active ? '<span class="coming-soon">Coming Soon</span>' : ''}
-                `;
-                
-                if (state.active) {
-                    card.onclick = () => selectState(state);
-                }
-                
-                grid.appendChild(card);
-            });
-
-            document.getElementById('stateSelection').style.display = 'flex';
-            document.getElementById('appContainer').classList.remove('active');
-        }
-
-        async function selectState(state) {
-            appState.currentCurriculum = state;
-            saveToStorage('curriculum', state);
-            await loadCurriculumData(state);
-            showApp();
-        }
-
-        function showStateSelection() {
-            document.getElementById('stateSelection').style.display = 'flex';
-            document.getElementById('appContainer').classList.remove('active');
-        }
-
-        function showApp() {
-            document.getElementById('stateSelection').style.display = 'none';
-            document.getElementById('appContainer').classList.add('active');
-        }
-
-        // ============================================
-        // CURRICULUM DATA LOADING
-        // ============================================
-        async function loadCurriculumData(curriculum) {
-            const studyManifest = await loadJSON(curriculum.path);
-            if (!studyManifest) return;
-            
-            appState.manifestData.study = studyManifest;
-            populateSubjects(studyManifest.subjects);
-        }
-
-        function populateSubjects(subjects) {
-            const select = document.getElementById('subjectSelect');
-            select.innerHTML = '<option value="">Select subject...</option>';
-            
-            subjects.forEach(subject => {
-                const option = document.createElement('option');
-                option.value = subject.id;
-                option.textContent = `${subject.icon} ${subject.name}`;
-                option.disabled = subject.status !== 'available';
-                if (subject.status !== 'available') {
-                    option.textContent += ' (Coming Soon)';
-                }
-                select.appendChild(option);
-            });
-        }
-
-        async function onSubjectChange() {
-            const subjectId = document.getElementById('subjectSelect').value;
-            resetSelections('subject');
-            
-            if (!subjectId) return;
-            
-            const subject = appState.manifestData.study.subjects.find(s => s.id === subjectId);
-            appState.currentSubject = subject;
-            
-            // Load topic manifest for this subject
-            const basePath = appState.currentCurriculum.path.replace('study-manifest.json', '');
-            const topicManifest = await loadJSON(basePath + subject.path);
-            if (!topicManifest) return;
-            
-            appState.manifestData.topics = topicManifest;
-            populateUnits(topicManifest.units);
-            document.getElementById('unitSelect').disabled = false;
-        }
-
-        function populateUnits(units) {
-            const select = document.getElementById('unitSelect');
-            select.innerHTML = '<option value="">Select unit...</option>';
-            
-            units.forEach(unit => {
-                const option = document.createElement('option');
-                option.value = unit.id;
-                option.textContent = `${unit.code}: ${unit.name}`;
-                select.appendChild(option);
-            });
-        }
-
-        function onUnitChange() {
-            const unitId = document.getElementById('unitSelect').value;
-            resetSelections('unit');
-            
-            if (!unitId) return;
-            
-            const unit = appState.manifestData.topics.units.find(u => u.id === unitId);
-            appState.currentUnit = unit;
-            
-            populateAOS(unit.areasOfStudy);
-            document.getElementById('aosSelect').disabled = false;
-        }
-
-        function populateAOS(areasOfStudy) {
-            const select = document.getElementById('aosSelect');
-            select.innerHTML = '<option value="">Select AOS...</option>';
-            
-            areasOfStudy.forEach(aos => {
-                const option = document.createElement('option');
-                option.value = aos.id;
-                option.textContent = `${aos.code}: ${aos.name}`;
-                select.appendChild(option);
-            });
-        }
-
-        function onAOSChange() {
-            const aosId = document.getElementById('aosSelect').value;
-            resetSelections('aos');
-            
-            if (!aosId) return;
-            
-            const aos = appState.currentUnit.areasOfStudy.find(a => a.id === aosId);
-            appState.currentAOS = aos;
-            
-            populateTopics(aos.topics);
-            document.getElementById('topicSelect').disabled = false;
-        }
-
-        function populateTopics(topics) {
-            const select = document.getElementById('topicSelect');
-            select.innerHTML = '<option value="">Select topic...</option>';
-            
-            topics.forEach(topic => {
-                const option = document.createElement('option');
-                option.value = topic.id;
-                option.textContent = `${topic.code}. ${topic.name}`;
-                option.disabled = topic.status !== 'available';
-                if (topic.status !== 'available') {
-                    option.textContent += ' (Coming Soon)';
-                }
-                select.appendChild(option);
-            });
-        }
-
-        function onTopicChange() {
-            const topicId = document.getElementById('topicSelect').value;
-            document.getElementById('loadTopicBtn').disabled = !topicId;
-            
-            if (topicId) {
-                appState.currentTopic = appState.currentAOS.topics.find(t => t.id === topicId);
-            } else {
-                appState.currentTopic = null;
-            }
-        }
-
-        function resetSelections(fromLevel) {
-            const levels = ['subject', 'unit', 'aos', 'topic'];
-            const startIndex = levels.indexOf(fromLevel) + 1;
-            
-            for (let i = startIndex; i < levels.length; i++) {
-                const selectId = levels[i] === 'aos' ? 'aosSelect' : `${levels[i]}Select`;
-                const select = document.getElementById(selectId);
-                select.innerHTML = `<option value="">Select ${levels[i]}...</option>`;
-                select.disabled = true;
-            }
-            
-            document.getElementById('loadTopicBtn').disabled = true;
-        }
-
-        // ============================================
-        // TOPIC LOADING & RENDERING
-        // ============================================
-        async function loadTopic() {
-            if (!appState.currentTopic) return;
-            
-            const basePath = appState.currentCurriculum.path.replace('study-manifest.json', '');
-            const subjectPath = appState.currentSubject.path.replace('topic-manifest.json', '');
-            const topicPath = basePath + subjectPath + appState.currentTopic.filename;
-            
-            const topicData = await loadJSON(topicPath);
-            if (!topicData) return;
-            
-            appState.topicData = topicData;
-            appState.currentRound = 1;
-            appState.tabStates = {};
-            appState.submitted = false;
-            
-            // Initialize tab states
-            topicData.tabs.forEach(tab => {
-                appState.tabStates[tab.id] = {
-                    selections: {},
-                    results: {},
-                    attempts: 0,
-                    submitted: false,
-                    complete: false
-                };
-            });
-            
-            renderTabs();
-            selectTab(topicData.tabs[0].id);
-            document.getElementById('controlPanel').style.display = 'flex';
-            updateHeaderInfo();
-        }
-
-        function renderTabs() {
-            const nav = document.getElementById('tabNavigation');
-            nav.innerHTML = '';
-            
-            appState.topicData.tabs.forEach(tab => {
-                const btn = document.createElement('button');
-                btn.className = 'tab-btn';
-                btn.dataset.tabId = tab.id;
-                btn.onclick = () => selectTab(tab.id);
-                
-                btn.innerHTML = `
-                    <span class="tab-icon">${tab.icon}</span>
-                    <span>${tab.label}</span>
-                    <span class="round-indicators">
-                        <span class="round-dot" data-round="1"></span>
-                        <span class="round-dot" data-round="2"></span>
-                        <span class="round-dot" data-round="3"></span>
-                    </span>
-                `;
-                
-                nav.appendChild(btn);
-            });
-        }
-
-        function selectTab(tabId) {
-            appState.currentTab = tabId;
-            
-            // Update tab buttons
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.tabId === tabId);
-            });
-            
-            renderTabContent();
-            updateControlPanel();
-        }
-
-        function renderTabContent() {
-            const roundKey = `round${appState.currentRound}`;
-            const tabContent = appState.topicData.content[roundKey][appState.currentTab];
-            const tabState = appState.tabStates[appState.currentTab];
-            
-            const contentArea = document.getElementById('contentArea');
-            
-            let html = `
-                <div class="content-header">
-                    <h2>${tabContent.title}</h2>
-                    <p class="instructions">${tabContent.instructions}</p>
-                </div>
-                <div class="cloze-container">
+            html += `
+              <div class="feedback-inline show" data-feedback="${qId}">
+                <div class="error-label">✗ ${concept?.name || q.concept}</div>
+                <div class="fix">${wrongFeedback?.fix || concept?.correct || 'Review this concept.'}</div>
+                <div class="action">→ ${wrongFeedback?.action || ''}</div>
+              </div>
             `;
-            
-            tabContent.sentences.forEach((sentence, sIndex) => {
-                html += `<div class="cloze-sentence">${renderSentence(sentence, sIndex, tabState)}</div>`;
-            });
-            
-            html += '</div>';
-            contentArea.innerHTML = html;
-            
-            // Attach event listeners
-            attachDropdownListeners();
-        }
-
-        function renderSentence(sentence, sIndex, tabState) {
-            let text = sentence.text;
-            
-            // Replace {{placeholder}} with dropdowns
-            Object.keys(sentence.questions).forEach(qId => {
-                const question = sentence.questions[qId];
-                const fullId = `${sIndex}-${qId}`;
-                const currentValue = tabState.selections[fullId] || '';
-                const result = tabState.results[fullId];
-                
-                let stateClass = '';
-                if (tabState.submitted) {
-                    stateClass = result === true ? 'correct' : result === false ? 'incorrect' : '';
-                } else if (currentValue) {
-                    stateClass = 'filled';
-                }
-                
-                // Build options
-                const options = [question.correct, ...question.distractors];
-                const shuffled = shuffleArray([...options], fullId);
-                
-                let optionsHtml = '<option value="">Select...</option>';
-                shuffled.forEach(opt => {
-                    const selected = currentValue === opt ? 'selected' : '';
-                    optionsHtml += `<option value="${escapeHtml(opt)}" ${selected}>${escapeHtml(opt)}</option>`;
-                });
-                
-                const dropdown = `
-                    <span class="cloze-dropdown">
-                        <select class="${stateClass}" 
-                                data-question-id="${fullId}" 
-                                data-concept="${question.concept}"
-                                data-correct="${escapeHtml(question.correct)}"
-                                data-tooltip="${escapeHtml(question.tooltip)}">
-                            ${optionsHtml}
-                        </select>
-                    </span>
-                `;
-                
-                text = text.replace(`{{${qId}}}`, dropdown);
-            });
-            
-            return text;
-        }
-
-        function attachDropdownListeners() {
-            document.querySelectorAll('.cloze-dropdown select').forEach(select => {
-                select.addEventListener('change', onDropdownChange);
-                select.addEventListener('mouseenter', onDropdownHover);
-                select.addEventListener('mouseleave', hideTooltip);
-            });
-        }
-
-        function onDropdownChange(e) {
-            const select = e.target;
-            const qId = select.dataset.questionId;
-            const value = select.value;
-            
-            appState.tabStates[appState.currentTab].selections[qId] = value;
-            
-            // Update visual state
-            if (!appState.tabStates[appState.currentTab].submitted) {
-                select.className = value ? 'filled' : '';
-            }
-            
-            updateControlPanel();
-        }
-
-        let tooltipTimeout = null;
-        
-        function onDropdownHover(e) {
-            const select = e.target;
-            const tabState = appState.tabStates[appState.currentTab];
-            
-            // Only show tooltip for incorrect answers
-            if (!tabState.submitted) return;
-            const qId = select.dataset.questionId;
-            if (tabState.results[qId] !== false) return;
-            
-            tooltipTimeout = setTimeout(() => {
-                showTooltip(select, select.dataset.tooltip);
-            }, 1200);
-        }
-
-        function showTooltip(element, text) {
-            const tooltip = document.getElementById('tooltip');
-            const rect = element.getBoundingClientRect();
-            
-            tooltip.textContent = text;
-            tooltip.style.left = `${rect.left}px`;
-            tooltip.style.top = `${rect.top - 40}px`;
-            tooltip.classList.add('visible');
-        }
-
-        function hideTooltip() {
-            clearTimeout(tooltipTimeout);
-            document.getElementById('tooltip').classList.remove('visible');
-        }
-
-        // ============================================
-        // SUBMISSION & GRADING
-        // ============================================
-        function submitAnswers() {
-            const tabState = appState.tabStates[appState.currentTab];
-            const roundKey = `round${appState.currentRound}`;
-            const tabContent = appState.topicData.content[roundKey][appState.currentTab];
-            
-            let correct = 0;
-            let total = 0;
-            
-            tabContent.sentences.forEach((sentence, sIndex) => {
-                Object.keys(sentence.questions).forEach(qId => {
-                    const fullId = `${sIndex}-${qId}`;
-                    const question = sentence.questions[qId];
-                    const userAnswer = tabState.selections[fullId];
-                    
-                    total++;
-                    const isCorrect = userAnswer === question.correct;
-                    tabState.results[fullId] = isCorrect;
-                    
-                    if (isCorrect) correct++;
-                });
-            });
-            
-            tabState.submitted = true;
-            tabState.attempts++;
-            
-            // Update visuals
-            document.querySelectorAll('.cloze-dropdown select').forEach(select => {
-                const qId = select.dataset.questionId;
-                const result = tabState.results[qId];
-                select.className = result === true ? 'correct' : result === false ? 'incorrect' : '';
-            });
-            
-            // Check if complete
-            if (correct === total) {
-                tabState.complete = true;
-                showToast(`Perfect! ${correct}/${total} correct`, 'success');
-            } else {
-                showToast(`${correct}/${total} correct - hover incorrect for hints`, 'error');
-            }
-            
-            updateControlPanel();
-            document.getElementById('submitBtn').textContent = 'Resubmit';
-        }
-
-        function resetSection() {
-            const tabState = appState.tabStates[appState.currentTab];
-            tabState.selections = {};
-            tabState.results = {};
-            tabState.submitted = false;
-            
-            renderTabContent();
-            updateControlPanel();
-            document.getElementById('submitBtn').textContent = 'Submit';
-        }
-
-        // ============================================
-        // UI UPDATES
-        // ============================================
-        function updateHeaderInfo() {
-            document.getElementById('roundBadge').textContent = `Round ${appState.currentRound} of 3`;
-        }
-
-        function updateControlPanel() {
-            const tabState = appState.tabStates[appState.currentTab];
-            const roundKey = `round${appState.currentRound}`;
-            const tabContent = appState.topicData.content[roundKey][appState.currentTab];
-            
-            // Count questions and correct answers
-            let total = 0;
-            let correct = 0;
-            let filled = 0;
-            
-            tabContent.sentences.forEach((sentence, sIndex) => {
-                Object.keys(sentence.questions).forEach(qId => {
-                    const fullId = `${sIndex}-${qId}`;
-                    total++;
-                    if (tabState.selections[fullId]) filled++;
-                    if (tabState.results[fullId] === true) correct++;
-                });
-            });
-            
-            document.getElementById('tabScore').textContent = tabState.submitted ? `${correct}/${total}` : `0/${total}`;
-            document.getElementById('attemptDisplay').textContent = `Attempt ${tabState.attempts + (tabState.submitted ? 0 : 1)}`;
-            document.getElementById('submitBtn').disabled = filled < total;
-        }
-
-        function showToast(message, type = 'info') {
-            const toast = document.getElementById('feedbackToast');
-            toast.textContent = message;
-            toast.className = `feedback-toast visible ${type}`;
-            
-            setTimeout(() => {
-                toast.classList.remove('visible');
-            }, 3000);
-        }
-
-        // ============================================
-        // UTILITIES
-        // ============================================
-        function shuffleArray(array, seed) {
-            // Seeded shuffle for consistent randomization per question
-            const seedNum = seed.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
-            let m = array.length, t, i;
-            let random = seedNum;
-            
-            while (m) {
-                random = (random * 9301 + 49297) % 233280;
-                i = Math.floor((random / 233280) * m--);
-                t = array[m];
-                array[m] = array[i];
-                array[i] = t;
-            }
-            
-            return array;
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // ============================================
-        // DEBUG MODE (q+w+e)
-        // ============================================
-        let debugKeys = { q: false, w: false, e: false };
-        
-        document.addEventListener('keydown', (e) => {
-            if (e.key in debugKeys) {
-                debugKeys[e.key] = true;
-                if (debugKeys.q && debugKeys.w && debugKeys.e) {
-                    activateDebugMode();
-                }
-            }
+          }
         });
         
-        document.addEventListener('keyup', (e) => {
-            if (e.key in debugKeys) {
-                debugKeys[e.key] = false;
-            }
-        });
-        
-        function activateDebugMode() {
-            console.log('Debug mode activated');
-            document.querySelectorAll('.cloze-dropdown select').forEach(select => {
-                select.value = select.dataset.correct;
-                select.dispatchEvent(new Event('change'));
-            });
-            showToast('Debug: All answers filled', 'success');
-        }
+        html += '</div>';
+      });
+      
+      container.innerHTML = html;
+      
+      // Setup tooltip listeners
+      container.querySelectorAll('.cloze-dropdown.incorrect').forEach(el => {
+        el.addEventListener('mouseenter', showDropdownTooltip);
+      });
+      
+      updateControlPanel();
+    }
 
-        // ============================================
-        // INIT
-        // ============================================
-        initApp();
-    </script>
+    function shuffleOptionsWithCorrect(correct, distractors, seed) {
+      // Use seed for consistent shuffling within session
+      const all = [correct, ...distractors];
+      return shuffleArray(all);
+    }
+
+    function handleSelection(select) {
+      const qId = select.dataset.question;
+      const tabState = getTabState();
+      
+      tabState.selections[qId] = select.value;
+      
+      // Update visual state
+      if (select.value) {
+        select.classList.add('filled');
+      } else {
+        select.classList.remove('filled');
+      }
+      
+      // Clear previous result if reselecting
+      if (tabState.submitted) {
+        select.classList.remove('correct', 'incorrect');
+        delete tabState.results[qId];
+        
+        // Hide feedback
+        const feedback = document.querySelector(`[data-feedback="${qId}"]`);
+        if (feedback) feedback.remove();
+      }
+      
+      saveProgress();
+      updateControlPanel();
+    }
+
+    function showDropdownTooltip(e) {
+      const tooltip = document.getElementById('tooltip');
+      const text = e.target.dataset.tooltip;
+      
+      if (!text) return;
+      
+      APP.tooltipTimeout = setTimeout(() => {
+        tooltip.textContent = text;
+        
+        const rect = e.target.getBoundingClientRect();
+        tooltip.style.left = rect.left + rect.width / 2 + 'px';
+        tooltip.style.top = rect.top - 10 + 'px';
+        tooltip.style.transform = 'translate(-50%, -100%)';
+        
+        tooltip.classList.add('show');
+      }, 1200);
+    }
+
+    // ==================== SUBMISSION ====================
+    function submitAnswers() {
+      const tabState = getTabState();
+      const roundKey = `round${APP.currentRound}`;
+      const tabContent = APP.topicData.content[roundKey]?.[APP.currentTab];
+      
+      if (!tabContent) return;
+      
+      tabState.attempts++;
+      tabState.submitted = true;
+      
+      let correct = 0;
+      let total = 0;
+      
+      // Grade all questions
+      tabContent.sentences.forEach(sentence => {
+        Object.entries(sentence.questions).forEach(([qId, q]) => {
+          total++;
+          const selected = tabState.selections[qId];
+          const isCorrect = selected === q.correct;
+          
+          tabState.results[qId] = isCorrect;
+          
+          if (isCorrect) {
+            correct++;
+          } else {
+            // Track error
+            trackError(q.concept, selected);
+          }
+        });
+      });
+      
+      // Update score
+      const score = correct;
+      if (score > tabState.bestScore) {
+        tabState.bestScore = score;
+      }
+      
+      // Check if complete
+      if (correct === total) {
+        tabState.complete = true;
+        checkRoundComplete();
+      }
+      
+      saveProgress();
+      renderContent();
+      updateControlPanel();
+      
+      // Show feedback summary
+      const summary = document.getElementById('feedbackSummary');
+      if (correct === total) {
+        summary.textContent = '✓ Perfect! All correct.';
+        summary.className = 'feedback-summary success';
+      } else {
+        summary.textContent = `${correct}/${total} correct. Hover over incorrect answers for hints.`;
+        summary.className = 'feedback-summary error';
+      }
+    }
+
+    function trackError(conceptId, wrongAnswer) {
+      if (!APP.errorTracking[conceptId]) {
+        APP.errorTracking[conceptId] = {
+          count: 0,
+          rounds: [],
+          wrongAnswers: []
+        };
+      }
+      
+      APP.errorTracking[conceptId].count++;
+      if (!APP.errorTracking[conceptId].rounds.includes(APP.currentRound)) {
+        APP.errorTracking[conceptId].rounds.push(APP.currentRound);
+      }
+      APP.errorTracking[conceptId].wrongAnswers.push(wrongAnswer);
+    }
+
+    function checkRoundComplete() {
+      // Check if all tabs in current round are complete
+      const allComplete = APP.topicData.tabs.every(tab => {
+        const key = `round${APP.currentRound}_${tab.id}`;
+        return APP.tabStates[key]?.complete;
+      });
+      
+      if (allComplete) {
+        if (APP.currentRound < 3) {
+          showToast(`Round ${APP.currentRound} complete! Moving to Round ${APP.currentRound + 1}`);
+          APP.currentRound++;
+          
+          // Initialize new round tab states
+          APP.topicData.tabs.forEach(tab => {
+            const key = `round${APP.currentRound}_${tab.id}`;
+            if (!APP.tabStates[key]) {
+              APP.tabStates[key] = {
+                selections: {},
+                results: {},
+                submitted: false,
+                attempts: 0,
+                bestScore: 0,
+                complete: false
+              };
+            }
+          });
+          
+          saveProgress();
+          renderTabs();
+          renderContent();
+          updateHeader();
+        } else {
+          showToast('🎉 Topic complete! View your review.');
+          showReview();
+        }
+      }
+    }
+
+    // ==================== CONTROL PANEL ====================
+    function updateControlPanel() {
+      const tabState = getTabState();
+      const roundKey = `round${APP.currentRound}`;
+      const tabContent = APP.topicData.content[roundKey]?.[APP.currentTab];
+      
+      if (!tabContent) return;
+      
+      // Count questions
+      let total = 0;
+      tabContent.sentences.forEach(s => {
+        total += Object.keys(s.questions).length;
+      });
+      
+      // Count correct
+      let correct = 0;
+      Object.values(tabState.results).forEach(r => {
+        if (r === true) correct++;
+      });
+      
+      document.getElementById('scoreDisplay').textContent = `Score: ${correct}/${total}`;
+      document.getElementById('attemptDisplay').textContent = `Attempt ${tabState.attempts || 1}`;
+      
+      // Update submit button
+      const submitBtn = document.getElementById('submitBtn');
+      if (tabState.complete) {
+        submitBtn.textContent = '✓ Complete';
+        submitBtn.disabled = true;
+      } else if (tabState.submitted) {
+        submitBtn.textContent = 'Resubmit';
+        submitBtn.disabled = false;
+      } else {
+        submitBtn.textContent = 'Submit';
+        submitBtn.disabled = false;
+      }
+    }
+
+    function updateHeader() {
+      document.getElementById('roundDisplay').textContent = `Round ${APP.currentRound}/3`;
+      
+      // Calculate total score
+      let totalCorrect = 0;
+      let totalQuestions = 0;
+      
+      Object.entries(APP.tabStates).forEach(([key, state]) => {
+        if (key.startsWith('round')) {
+          totalCorrect += state.bestScore || 0;
+          // Count questions for that tab
+          const [, round, tab] = key.match(/round(\d)_(.+)/) || [];
+          if (round && tab) {
+            const content = APP.topicData.content[`round${round}`]?.[tab];
+            if (content) {
+              content.sentences.forEach(s => {
+                totalQuestions += Object.keys(s.questions).length;
+              });
+            }
+          }
+        }
+      });
+      
+      if (totalQuestions > 0) {
+        const pct = Math.round(totalCorrect / totalQuestions * 100);
+        document.getElementById('totalScoreDisplay').textContent = `Total: ${totalCorrect}/${totalQuestions} (${pct}%)`;
+      }
+    }
+
+    // ==================== RESET FUNCTIONS ====================
+    function resetSection() {
+      const btn = document.getElementById('resetSectionBtn');
+      
+      if (btn.classList.contains('confirm')) {
+        // Actually reset
+        const tabState = getTabState();
+        tabState.selections = {};
+        tabState.results = {};
+        tabState.submitted = false;
+        tabState.complete = false;
+        // Keep attempts count
+        
+        saveProgress();
+        renderContent();
+        updateControlPanel();
+        
+        btn.textContent = 'Reset Section';
+        btn.classList.remove('confirm');
+        
+        document.getElementById('feedbackSummary').textContent = '';
+        showToast('Section reset');
+      } else {
+        // Ask for confirmation
+        btn.textContent = 'Confirm Reset?';
+        btn.classList.add('confirm');
+        
+        setTimeout(() => {
+          btn.textContent = 'Reset Section';
+          btn.classList.remove('confirm');
+        }, 3000);
+      }
+    }
+
+    function resetTopic() {
+      const btn = document.getElementById('resetTopicBtn');
+      
+      if (btn.classList.contains('confirm')) {
+        if (APP.topicData) {
+          Storage.clearTopicProgress(APP.topicData.metadata.id);
+          APP.currentRound = 1;
+          APP.tabStates = {};
+          APP.errorTracking = {};
+          
+          // Reinitialize
+          APP.topicData.tabs.forEach(tab => {
+            const key = `round1_${tab.id}`;
+            APP.tabStates[key] = {
+              selections: {},
+              results: {},
+              submitted: false,
+              attempts: 0,
+              bestScore: 0,
+              complete: false
+            };
+          });
+          
+          APP.currentTab = APP.topicData.tabs[0].id;
+          
+          renderTabs();
+          renderContent();
+          updateHeader();
+          updateControlPanel();
+          
+          document.getElementById('feedbackSummary').textContent = '';
+        }
+        
+        btn.textContent = 'Reset Topic Progress';
+        btn.classList.remove('confirm');
+        toggleUtilities(false);
+        showToast('Topic progress reset');
+      } else {
+        btn.textContent = 'Confirm Reset?';
+        btn.classList.add('confirm');
+        
+        setTimeout(() => {
+          btn.textContent = 'Reset Topic Progress';
+          btn.classList.remove('confirm');
+        }, 3000);
+      }
+    }
+
+    function changeCurriculum() {
+      const btn = document.getElementById('changeCurriculumBtn');
+      
+      if (btn.classList.contains('confirm')) {
+        Storage.clearAll();
+        location.reload();
+      } else {
+        btn.textContent = 'Confirm? All progress lost!';
+        btn.classList.add('confirm');
+        
+        setTimeout(() => {
+          btn.textContent = 'Change Curriculum';
+          btn.classList.remove('confirm');
+        }, 3000);
+      }
+    }
+
+    function clearAllData() {
+      const btn = document.getElementById('clearAllBtn');
+      
+      if (btn.classList.contains('confirm')) {
+        Storage.clearAll();
+        location.reload();
+      } else {
+        btn.textContent = 'Confirm? ALL data lost!';
+        btn.classList.add('confirm');
+        
+        setTimeout(() => {
+          btn.textContent = 'Clear All Data';
+          btn.classList.remove('confirm');
+        }, 3000);
+      }
+    }
+
+    function exportProgress() {
+      const data = {
+        exported: new Date().toISOString(),
+        currentState: APP.currentState,
+        currentSubject: APP.currentSubject,
+        topicProgress: {}
+      };
+      
+      // Gather all topic progress
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith('ycft_topic_')) {
+          data.topicProgress[key] = JSON.parse(localStorage.getItem(key));
+        }
+      }
+      
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `youcantfakethis-progress-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      showToast('Progress exported');
+    }
+
+    // ==================== REVIEW SCREEN ====================
+    function showReview(filter = 'current') {
+      document.getElementById('topicContent').classList.remove('active');
+      const reviewScreen = document.getElementById('reviewScreen');
+      reviewScreen.classList.add('active');
+      
+      // Calculate scores
+      let totalCorrect = 0;
+      let totalQuestions = 0;
+      const tabScores = {};
+      
+      for (let round = 1; round <= 3; round++) {
+        APP.topicData.tabs.forEach(tab => {
+          const key = `round${round}_${tab.id}`;
+          const state = APP.tabStates[key];
+          
+          if (filter === 'current' && round !== APP.currentRound) return;
+          if (filter !== 'current' && filter !== 'total' && parseInt(filter) !== round) return;
+          
+          if (state) {
+            const content = APP.topicData.content[`round${round}`]?.[tab.id];
+            if (content) {
+              let tabTotal = 0;
+              content.sentences.forEach(s => {
+                tabTotal += Object.keys(s.questions).length;
+              });
+              
+              totalQuestions += tabTotal;
+              totalCorrect += state.bestScore || 0;
+              
+              if (!tabScores[tab.id]) {
+                tabScores[tab.id] = { correct: 0, total: 0, attempts: 0 };
+              }
+              tabScores[tab.id].correct += state.bestScore || 0;
+              tabScores[tab.id].total += tabTotal;
+              tabScores[tab.id].attempts += state.attempts || 0;
+            }
+          }
+        });
+      }
+      
+      const pct = totalQuestions > 0 ? Math.round(totalCorrect / totalQuestions * 100) : 0;
+      
+      let html = `
+        <div class="review-header">
+          <h2>Performance Review</h2>
+          <div class="review-score">${totalCorrect}/${totalQuestions} (${pct}%)</div>
+        </div>
+        
+        <div class="review-tabs">
+          <button class="review-tab ${filter === 'current' ? 'active' : ''}" onclick="showReview('current')">Current Round</button>
+          <button class="review-tab ${filter === '1' ? 'active' : ''}" onclick="showReview('1')">Round 1</button>
+          <button class="review-tab ${filter === '2' ? 'active' : ''}" onclick="showReview('2')">Round 2</button>
+          <button class="review-tab ${filter === '3' ? 'active' : ''}" onclick="showReview('3')">Round 3</button>
+          <button class="review-tab ${filter === 'total' ? 'active' : ''}" onclick="showReview('total')">Total</button>
+        </div>
+        
+        <h3 style="margin-bottom:12px;">Tab Breakdown</h3>
+      `;
+      
+      // Tab breakdown
+      APP.topicData.tabs.forEach(tab => {
+        const score = tabScores[tab.id];
+        if (score) {
+          const tabPct = score.total > 0 ? Math.round(score.correct / score.total * 100) : 0;
+          const isComplete = score.correct === score.total;
+          
+          html += `
+            <div class="review-section ${isComplete ? 'success' : 'error'}">
+              <h3>${isComplete ? '✓' : '○'} ${tab.icon} ${tab.label}</h3>
+              <div class="review-detail">Score: ${score.correct}/${score.total} (${tabPct}%) | Attempts: ${score.attempts}</div>
+            </div>
+          `;
+        }
+      });
+      
+      // Concept errors
+      const sortedErrors = Object.entries(APP.errorTracking)
+        .sort((a, b) => b[1].count - a[1].count)
+        .slice(0, 5);
+      
+      if (sortedErrors.length > 0) {
+        html += '<h3 style="margin:20px 0 12px;">Concepts to Review</h3>';
+        
+        sortedErrors.forEach(([conceptId, data]) => {
+          const concept = APP.topicData.concepts[conceptId];
+          if (concept) {
+            html += `
+              <div class="review-section error">
+                <h3>⚠ ${concept.name} <span class="error-count">${data.count} errors</span></h3>
+                <div class="review-detail">${concept.correct}</div>
+                <div class="review-detail" style="color:var(--error)">Your answers: ${[...new Set(data.wrongAnswers)].join(', ')}</div>
+                ${concept.persistent ? `<div class="review-detail" style="font-style:italic;">→ ${concept.persistent.action}</div>` : ''}
+              </div>
+            `;
+          }
+        });
+      }
+      
+      html += `
+        <div class="review-actions">
+          <button class="btn btn-primary" onclick="closeReview()">Continue Learning</button>
+          ${APP.currentRound >= 3 ? '<button class="btn btn-secondary" onclick="resetTopic()">Start Over</button>' : ''}
+        </div>
+      `;
+      
+      reviewScreen.innerHTML = html;
+    }
+
+    function closeReview() {
+      document.getElementById('reviewScreen').classList.remove('active');
+      document.getElementById('topicContent').classList.add('active');
+    }
+
+    // ==================== HELPERS ====================
+    function getTabState() {
+      const key = `round${APP.currentRound}_${APP.currentTab}`;
+      if (!APP.tabStates[key]) {
+        APP.tabStates[key] = {
+          selections: {},
+          results: {},
+          submitted: false,
+          attempts: 0,
+          bestScore: 0,
+          complete: false
+        };
+      }
+      return APP.tabStates[key];
+    }
+
+    function saveProgress() {
+      if (APP.topicData) {
+        Storage.saveTopicProgress(APP.topicData.metadata.id, {
+          currentRound: APP.currentRound,
+          tabStates: APP.tabStates,
+          errorTracking: APP.errorTracking
+        });
+      }
+    }
+
+    // EASTER EGG: Debug mode
+    function activateDebugMode() {
+      console.log('🎮 Debug mode activated!');
+      showToast('🎮 Debug mode: Auto-filling correct answers');
+      
+      // Fill all dropdowns with correct answers
+      document.querySelectorAll('.cloze-dropdown').forEach(select => {
+        const correct = select.dataset.correct;
+        if (correct) {
+          select.value = correct;
+          select.classList.add('filled');
+          
+          const tabState = getTabState();
+          tabState.selections[select.dataset.question] = correct;
+        }
+      });
+      
+      saveProgress();
+      updateControlPanel();
+    }
+
+    // ==================== INIT ====================
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
 </body>
 </html>
