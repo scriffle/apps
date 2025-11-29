@@ -247,6 +247,17 @@
       background: var(--primary);
     }
 
+    /* Tab pulse animation - invitation to click next */
+    @keyframes tabPulse {
+      0% { background-color: transparent; }
+      50% { background-color: rgba(255, 255, 200, 0.8); }
+      100% { background-color: transparent; }
+    }
+
+    .tab.pulse {
+      animation: tabPulse 1.2s ease-in-out 3;
+    }
+
     /* Content Area */
     .content {
       flex: 1;
@@ -1528,6 +1539,9 @@
     }
 
     function switchTab(tabId) {
+      // Stop any pulsing invitation
+      stopTabPulse();
+      
       APP.currentTab = tabId;
       APP.submitted = false;
       renderTabs();
@@ -1753,6 +1767,9 @@
       if (correct === total) {
         tabState.complete = true;
         checkRoundComplete();
+        
+        // Pulse next tab after brief delay (if not switching rounds/completing)
+        setTimeout(() => pulseNextTab(), 400);
       }
       
       saveProgress();
@@ -1768,6 +1785,76 @@
         summary.textContent = `${correct}/${total} correct. Hover over incorrect answers for hints.`;
         summary.className = 'feedback-summary error';
       }
+    }
+    
+    function pulseNextTab() {
+      // Stop any existing pulse
+      stopTabPulse();
+      
+      const tabs = APP.topicData.tabs;
+      const currentTabIndex = tabs.findIndex(t => t.id === APP.currentTab);
+      
+      // Check if all rounds complete (topic finished)
+      let allRoundsComplete = true;
+      for (let r = 1; r <= 3; r++) {
+        tabs.forEach(tab => {
+          const key = `round${r}_${tab.id}`;
+          if (!APP.tabStates[key]?.complete) {
+            allRoundsComplete = false;
+          }
+        });
+      }
+      
+      if (allRoundsComplete) {
+        // Pulse the Review tab
+        pulseTab('_review');
+        return;
+      }
+      
+      // Find next incomplete tab in current round
+      for (let i = currentTabIndex + 1; i < tabs.length; i++) {
+        const key = `round${APP.currentRound}_${tabs[i].id}`;
+        if (!APP.tabStates[key]?.complete) {
+          pulseTab(tabs[i].id);
+          return;
+        }
+      }
+      
+      // Check from beginning of current round
+      for (let i = 0; i < currentTabIndex; i++) {
+        const key = `round${APP.currentRound}_${tabs[i].id}`;
+        if (!APP.tabStates[key]?.complete) {
+          pulseTab(tabs[i].id);
+          return;
+        }
+      }
+      
+      // Current round complete - pulse first tab (will be next round after checkRoundComplete)
+      pulseTab(tabs[0].id);
+    }
+    
+    function pulseTab(tabId) {
+      const tabsContainer = document.getElementById('tabs');
+      const tabButtons = tabsContainer.querySelectorAll('.tab');
+      
+      tabButtons.forEach(btn => {
+        // Match by tab id - check onclick attribute or data
+        const isReviewTab = btn.classList.contains('review-tab');
+        const btnTabId = isReviewTab ? '_review' : btn.getAttribute('onclick')?.match(/switchTab\('(.+)'\)/)?.[1];
+        
+        if (btnTabId === tabId) {
+          btn.classList.add('pulse');
+          
+          // Auto-scroll to make pulsing tab visible
+          btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+        }
+      });
+    }
+    
+    function stopTabPulse() {
+      document.querySelectorAll('.tab.pulse').forEach(el => {
+        el.classList.remove('pulse');
+      });
     }
 
     function trackError(conceptId, wrongAnswer) {
