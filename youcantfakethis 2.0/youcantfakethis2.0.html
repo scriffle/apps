@@ -401,6 +401,11 @@
       border-color: var(--error);
     }
 
+    .cloze-dropdown:disabled {
+      cursor: default;
+      opacity: 0.9;
+    }
+
     .feedback-inline {
       display: none;
       background: #fef2f2;
@@ -767,6 +772,43 @@
       color: white;
     }
 
+    .utility-input-group {
+      margin-bottom: 12px;
+    }
+
+    .utility-input-group label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .utility-input-group input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      box-sizing: border-box;
+    }
+
+    .utility-input-group input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .utility-input-group input.invalid {
+      border-color: var(--error);
+    }
+
+    .input-error {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--error);
+      margin-top: 4px;
+      min-height: 1em;
+    }
+
     .overlay {
       position: fixed;
       top: 0;
@@ -877,8 +919,8 @@
       </div>
     </div>
     <div class="header-right">
-      <button class="btn btn-secondary" id="utilitiesBtn">⚙️</button>
       <button class="btn btn-secondary" id="helpBtn">?</button>
+      <button class="btn btn-secondary" id="utilitiesBtn">⚙️</button>
     </div>
   </header>
 
@@ -972,10 +1014,23 @@
   <div class="overlay" id="overlay"></div>
   <div class="utilities-panel" id="utilitiesPanel">
     <div class="utilities-header">
-      <h3>Utilities</h3>
+      <h3>Settings</h3>
       <button class="close-btn" id="closeUtilities">&times;</button>
     </div>
     <div class="utilities-content">
+      <div class="utility-section">
+        <h4>Your Details</h4>
+        <div class="utility-input-group">
+          <label for="settingsName">Your Name</label>
+          <input type="text" id="settingsName" placeholder="Enter your name">
+        </div>
+        <div class="utility-input-group">
+          <label for="settingsEmail">Teacher's Email</label>
+          <input type="email" id="settingsEmail" placeholder="teacher@school.edu">
+          <span class="input-error" id="emailError"></span>
+        </div>
+        <button class="btn utility-btn" id="saveDetailsBtn">Save Details</button>
+      </div>
       <div class="utility-section">
         <h4>Current Topic</h4>
         <button class="btn utility-btn" id="resetTopicBtn">Reset Topic Progress</button>
@@ -983,7 +1038,7 @@
       <div class="utility-section">
         <h4>Curriculum</h4>
         <button class="btn utility-btn" id="changeCurriculumBtn">Change Curriculum</button>
-        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">⚠️ Changing curriculum will clear all progress</p>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">Changing curriculum will clear all progress</p>
       </div>
       <div class="utility-section">
         <h4>Data</h4>
@@ -1152,6 +1207,10 @@
       document.getElementById('helpBtn').onclick = () => toggleHelp(true);
       document.getElementById('closeHelp').onclick = () => toggleHelp(false);
       
+      // User details
+      document.getElementById('saveDetailsBtn').onclick = saveUserDetails;
+      document.getElementById('settingsEmail').addEventListener('input', validateEmailInput);
+      
       // Utility buttons
       document.getElementById('resetTopicBtn').onclick = resetTopic;
       document.getElementById('changeCurriculumBtn').onclick = changeCurriculum;
@@ -1168,11 +1227,59 @@
     function toggleUtilities(open) {
       document.getElementById('utilitiesPanel').classList.toggle('open', open);
       document.getElementById('overlay').classList.toggle('show', open);
+      
+      // Load saved values when opening
+      if (open) {
+        document.getElementById('settingsName').value = Storage.get('studentName') || '';
+        document.getElementById('settingsEmail').value = Storage.get('teacherEmail') || '';
+        document.getElementById('emailError').textContent = '';
+        document.getElementById('settingsEmail').classList.remove('invalid');
+      }
     }
     
     function toggleHelp(open) {
       document.getElementById('helpPanel').classList.toggle('open', open);
       document.getElementById('overlay').classList.toggle('show', open);
+    }
+    
+    function validateEmailInput() {
+      const emailInput = document.getElementById('settingsEmail');
+      const errorSpan = document.getElementById('emailError');
+      const email = emailInput.value.trim();
+      
+      if (email && !isValidEmail(email)) {
+        emailInput.classList.add('invalid');
+        errorSpan.textContent = 'Enter a valid email address';
+        return false;
+      } else {
+        emailInput.classList.remove('invalid');
+        errorSpan.textContent = '';
+        return true;
+      }
+    }
+    
+    function isValidEmail(email) {
+      return email.includes('@') && email.includes('.') && email.indexOf('@') < email.lastIndexOf('.');
+    }
+    
+    function saveUserDetails() {
+      const nameInput = document.getElementById('settingsName');
+      const emailInput = document.getElementById('settingsEmail');
+      const name = nameInput.value.trim();
+      const email = emailInput.value.trim();
+      
+      // Validate email if provided
+      if (email && !isValidEmail(email)) {
+        validateEmailInput();
+        emailInput.focus();
+        return;
+      }
+      
+      // Save values
+      Storage.set('studentName', name);
+      Storage.set('teacherEmail', email);
+      
+      showToast('Details saved');
     }
 
     // ==================== STATE SELECTION ====================
@@ -1555,6 +1662,9 @@
           if (result === true) selectClass += ' correct';
           if (result === false) selectClass += ' incorrect';
           
+          // Disable dropdown if tab is complete (allow viewing but not changing)
+          const isDisabled = tabState.complete ? 'disabled' : '';
+          
           const optionsHtml = options.map(opt => 
             `<option value="${opt}" ${selected === opt ? 'selected' : ''}>${opt}</option>`
           ).join('');
@@ -1564,7 +1674,8 @@
                     data-question="${qId}" 
                     data-concept="${q.concept}"
                     data-correct="${q.correct}"
-                    onchange="handleSelection(this)">
+                    onchange="handleSelection(this)"
+                    ${isDisabled}>
               <option value="">Select...</option>
               ${optionsHtml}
             </select>
@@ -2512,17 +2623,24 @@ ${new Date().toLocaleString()}`;
 
     // EASTER EGG: Debug mode - all correct
     function activateDebugMode() {
+      const tabState = getTabState();
+      
+      // Don't fill if tab is already complete
+      if (tabState.complete) {
+        showToast('Tab already complete');
+        return;
+      }
+      
       console.log('Debug mode activated');
       showToast('Debug mode: Auto-filling correct answers');
       
       // Fill all dropdowns with correct answers
-      document.querySelectorAll('.cloze-dropdown').forEach(select => {
+      document.querySelectorAll('.cloze-dropdown:not(:disabled)').forEach(select => {
         const correct = select.dataset.correct;
         if (correct) {
           select.value = correct;
           select.classList.add('filled');
           
-          const tabState = getTabState();
           tabState.selections[select.dataset.question] = correct;
         }
       });
@@ -2533,17 +2651,23 @@ ${new Date().toLocaleString()}`;
     
     // EASTER EGG: Debug mode - 2/3 correct, 1/3 wrong
     function activatePartialDebugMode() {
+      const tabState = getTabState();
+      
+      // Don't fill if tab is already complete
+      if (tabState.complete) {
+        showToast('Tab already complete');
+        return;
+      }
+      
       console.log('Partial debug mode activated');
       showToast('Debug mode: 2/3 correct, 1/3 wrong');
       
-      const dropdowns = document.querySelectorAll('.cloze-dropdown');
+      const dropdowns = document.querySelectorAll('.cloze-dropdown:not(:disabled)');
       let index = 0;
       
       dropdowns.forEach(select => {
         const correct = select.dataset.correct;
         if (correct) {
-          const tabState = getTabState();
-          
           // Every 3rd dropdown gets a wrong answer
           if (index % 3 === 2) {
             // Pick a wrong answer from the options
