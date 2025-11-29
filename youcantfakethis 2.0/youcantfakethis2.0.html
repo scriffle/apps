@@ -1227,12 +1227,32 @@
     }
 
     async function fetchJSON(path) {
+      const fullPath = APP.basePath + path;
       try {
-        const response = await fetch(APP.basePath + path);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return await response.json();
-      } catch (e) {
-        console.error('Fetch error:', path, e);
+        const response = await fetch(fullPath);
+        
+        if (!response.ok) {
+          const errorMsg = `Failed to load: ${path} (HTTP ${response.status})`;
+          console.error(errorMsg);
+          showToast(errorMsg, 5000);
+          return null;
+        }
+        
+        const text = await response.text();
+        
+        try {
+          return JSON.parse(text);
+        } catch (parseError) {
+          const errorMsg = `JSON parse error in: ${path}`;
+          console.error(errorMsg, parseError.message);
+          showToast(`${errorMsg} - ${parseError.message}`, 5000);
+          return null;
+        }
+        
+      } catch (networkError) {
+        const errorMsg = `Network error loading: ${path}`;
+        console.error(errorMsg, networkError);
+        showToast(`${errorMsg} - Check file exists and server is running`, 5000);
         return null;
       }
     }
@@ -1420,10 +1440,11 @@
       
       // State display
       const state = APP.states.states.find(s => s.id === APP.currentState);
+      const isAustralian = state.id.includes('AU');
       
       let html = `
         <div class="breadcrumb-item">
-          <span>${state.icon} ${state.name}</span>
+          <span><span id="stateFlag" data-original="${state.icon}" data-au="${isAustralian}">${state.icon}</span> ${state.name}</span>
         </div>
         <span class="breadcrumb-sep">›</span>
         <div class="breadcrumb-item">
@@ -2830,8 +2851,52 @@ ${new Date().toLocaleString()}`;
       updateControlPanel();
     }
 
+    // ==================== ABORIGINAL FLAG ACKNOWLEDGEMENT ====================
+    // Aboriginal flag: Black (top), Red (bottom), Yellow (circle)
+    const ABORIGINAL_FLAG = '🟨⬛🟥';
+    let flagSwapInterval = null;
+    
+    function startFlagSwapTimer() {
+      // Clear any existing interval
+      if (flagSwapInterval) clearInterval(flagSwapInterval);
+      
+      // Schedule random swap within each 5-minute window
+      function scheduleNextSwap() {
+        // Random delay between 0 and 5 minutes (300000ms)
+        const delay = Math.random() * 300000;
+        
+        setTimeout(() => {
+          swapToAboriginalFlag();
+        }, delay);
+      }
+      
+      // Start first swap schedule
+      scheduleNextSwap();
+      
+      // Repeat every 5 minutes
+      flagSwapInterval = setInterval(scheduleNextSwap, 300000);
+    }
+    
+    function swapToAboriginalFlag() {
+      const flagEl = document.getElementById('stateFlag');
+      if (!flagEl || flagEl.dataset.au !== 'true') return;
+      
+      const originalFlag = flagEl.dataset.original;
+      
+      // Swap to Aboriginal flag
+      flagEl.textContent = ABORIGINAL_FLAG;
+      
+      // Swap back after 2 seconds
+      setTimeout(() => {
+        if (flagEl) flagEl.textContent = originalFlag;
+      }, 2000);
+    }
+
     // ==================== INIT ====================
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', () => {
+      init();
+      startFlagSwapTimer();
+    });
   </script>
 </body>
 </html>
