@@ -1549,7 +1549,7 @@
       // Show feedback summary
       const summary = document.getElementById('feedbackSummary');
       if (correct === total) {
-        summary.textContent = '✓ Perfect! All correct.';
+        summary.textContent = 'All correct.';
         summary.className = 'feedback-summary success';
       } else {
         summary.textContent = `${correct}/${total} correct. Hover over incorrect answers for hints.`;
@@ -1582,7 +1582,7 @@
       
       if (allComplete) {
         if (APP.currentRound < 3) {
-          showToast(`Round ${APP.currentRound} complete! Moving to Round ${APP.currentRound + 1}`);
+          showToast(`Round ${APP.currentRound} complete. Moving to Round ${APP.currentRound + 1}`);
           APP.currentRound++;
           
           // Initialize new round tab states
@@ -1605,7 +1605,7 @@
           renderContent();
           updateHeader();
         } else {
-          showToast('🎉 Topic complete! View your review.');
+          showToast('Topic complete. View your review.');
           showReview();
         }
       }
@@ -1766,7 +1766,7 @@
         Storage.clearAll();
         location.reload();
       } else {
-        btn.textContent = 'Confirm? All progress lost!';
+        btn.textContent = 'Confirm? All progress will be cleared';
         btn.classList.add('confirm');
         
         setTimeout(() => {
@@ -1783,7 +1783,7 @@
         Storage.clearAll();
         location.reload();
       } else {
-        btn.textContent = 'Confirm? ALL data lost!';
+        btn.textContent = 'Confirm? All data will be cleared';
         btn.classList.add('confirm');
         
         setTimeout(() => {
@@ -1833,11 +1833,6 @@
       reviewScreen.style.display = ''; // Clear any inline style override
       reviewScreen.classList.add('active');
       
-      // Calculate scores - always show all tabs for the filtered rounds
-      let totalCorrect = 0;
-      let totalQuestions = 0;
-      const tabScores = {};
-      
       // Determine which rounds to include
       const roundsToShow = [];
       if (filter === 'current') {
@@ -1848,10 +1843,25 @@
         roundsToShow.push(parseInt(filter));
       }
       
-      // Calculate scores for each tab across selected rounds
+      // Calculate detailed scores for each tab across selected rounds
+      let totalQuestions = 0;
+      let totalAttempts = 0;
+      let totalErrors = 0;
+      let completedSections = 0;
+      let totalSections = 0;
+      const tabScores = {};
+      
       APP.topicData.tabs.forEach(tab => {
         if (!tabScores[tab.id]) {
-          tabScores[tab.id] = { correct: 0, total: 0, attempts: 0, hasData: false };
+          tabScores[tab.id] = { 
+            total: 0, 
+            attempts: 0, 
+            errors: 0, // Total wrong answers across all attempts
+            firstTryCorrect: 0, // Questions correct on first try
+            hasData: false,
+            complete: false,
+            roundData: {} 
+          };
         }
         
         roundsToShow.forEach(round => {
@@ -1864,26 +1874,69 @@
             
             tabScores[tab.id].total += tabTotal;
             totalQuestions += tabTotal;
+            totalSections++;
             
             // Get state if exists
             const key = `round${round}_${tab.id}`;
             const state = APP.tabStates[key];
             if (state && state.attempts > 0) {
-              tabScores[tab.id].correct += state.bestScore || 0;
-              tabScores[tab.id].attempts += state.attempts || 0;
+              tabScores[tab.id].attempts += state.attempts;
               tabScores[tab.id].hasData = true;
-              totalCorrect += state.bestScore || 0;
+              totalAttempts += state.attempts;
+              
+              // Calculate errors: (attempts - 1) * questions that weren't perfect first try
+              // Simpler: errors = total attempts needed beyond first try across all questions
+              const errorsThisSection = (state.attempts - 1) * tabTotal + (tabTotal - state.bestScore);
+              // Actually, let's use: extra attempts = attempts - 1 (since 1 attempt = perfect)
+              const extraAttempts = Math.max(0, state.attempts - 1);
+              tabScores[tab.id].errors += extraAttempts;
+              totalErrors += extraAttempts;
+              
+              // First try correct = bestScore if attempts === 1, else estimate
+              if (state.attempts === 1) {
+                tabScores[tab.id].firstTryCorrect += state.bestScore;
+              }
+              
+              if (state.complete) {
+                tabScores[tab.id].complete = true;
+                completedSections++;
+              }
+              
+              tabScores[tab.id].roundData[round] = {
+                attempts: state.attempts,
+                complete: state.complete
+              };
             }
           }
         });
       });
       
-      const pct = totalQuestions > 0 ? Math.round(totalCorrect / totalQuestions * 100) : 0;
+      // Calculate efficiency score: 100% = all correct first try, decreases with retries
+      // Formula: Questions / (Questions + Extra Attempts) * 100
+      const efficiencyScore = totalQuestions > 0 
+        ? Math.round((totalQuestions / (totalQuestions + totalErrors)) * 100) 
+        : 0;
       
+      // Check if topic is complete (all 3 rounds, all tabs)
+      let allRoundsComplete = true;
+      for (let r = 1; r <= 3; r++) {
+        APP.topicData.tabs.forEach(tab => {
+          const key = `round${r}_${tab.id}`;
+          const state = APP.tabStates[key];
+          if (!state || !state.complete) {
+            allRoundsComplete = false;
+          }
+        });
+      }
+      
+      // Build HTML
       let html = `
         <div class="review-header">
           <h2>Performance Review</h2>
-          <div class="review-score">${totalCorrect}/${totalQuestions} (${pct}%)</div>
+          <div class="review-score">${efficiencyScore}% Efficiency</div>
+          <div style="font-size:0.9rem;color:var(--text-muted);margin-top:4px;">
+            ${completedSections}/${totalSections} sections complete | ${totalAttempts} total attempts | ${totalErrors} retries needed
+          </div>
         </div>
         
         <div class="review-tabs">
@@ -1894,84 +1947,101 @@
           <button class="review-tab ${filter === 'total' ? 'active' : ''}" onclick="showReview('total')">All Rounds</button>
         </div>
         
-        <h3 style="margin-bottom:12px;">Tab Breakdown</h3>
+        <h3 style="margin-bottom:12px;">Section Breakdown</h3>
       `;
       
-      // Tab breakdown - always show all tabs
+      // Tab breakdown with attempt details
       APP.topicData.tabs.forEach(tab => {
         const score = tabScores[tab.id];
-        const tabPct = score.total > 0 ? Math.round(score.correct / score.total * 100) : 0;
-        const isComplete = score.correct === score.total && score.total > 0;
         const notStarted = !score.hasData;
         
-        let statusClass = 'error';
-        let statusIcon = '○';
-        if (isComplete) {
-          statusClass = 'success';
-          statusIcon = '✓';
-        } else if (notStarted) {
-          statusClass = '';
-          statusIcon = '—';
+        let statusClass = '';
+        let statusIcon = '—';
+        let statusText = 'Not attempted yet';
+        
+        if (score.hasData) {
+          if (score.complete || (score.attempts > 0 && score.errors === 0)) {
+            statusClass = 'success';
+            statusIcon = '✓';
+            if (score.attempts === roundsToShow.length) {
+              statusText = `Complete on first try (${score.attempts} attempt${score.attempts > 1 ? 's' : ''})`;
+            } else {
+              statusText = `Complete | ${score.attempts} attempt${score.attempts > 1 ? 's' : ''} | ${score.errors} retr${score.errors === 1 ? 'y' : 'ies'}`;
+            }
+          } else {
+            statusClass = 'error';
+            statusIcon = '○';
+            statusText = `In progress | ${score.attempts} attempt${score.attempts > 1 ? 's' : ''} | ${score.errors} retr${score.errors === 1 ? 'y' : 'ies'}`;
+          }
         }
         
         html += `
           <div class="review-section ${statusClass}">
             <h3>${statusIcon} ${tab.icon} ${tab.label}</h3>
-            <div class="review-detail">
-              ${notStarted 
-                ? 'Not attempted yet' 
-                : `Score: ${score.correct}/${score.total} (${tabPct}%) | Attempts: ${score.attempts}`
-              }
-            </div>
+            <div class="review-detail">${statusText}</div>
           </div>
         `;
       });
       
-      // Concept errors
+      // Concept errors section
       const sortedErrors = Object.entries(APP.errorTracking)
         .sort((a, b) => b[1].count - a[1].count)
         .slice(0, 5);
       
       if (sortedErrors.length > 0) {
-        html += '<h3 style="margin:20px 0 12px;">Concepts to Review</h3>';
+        html += '<h3 style="margin:20px 0 12px;">Concepts That Needed Work</h3>';
         
         sortedErrors.forEach(([conceptId, data]) => {
           const concept = APP.topicData.concepts?.[conceptId];
-          if (concept) {
-            html += `
-              <div class="review-section error">
-                <h3>⚠ ${concept.name} <span class="error-count">${data.count} error${data.count > 1 ? 's' : ''}</span></h3>
-                <div class="review-detail">${concept.correct || ''}</div>
-                <div class="review-detail" style="color:var(--error)">Your answers: ${[...new Set(data.wrongAnswers.filter(a => a))].join(', ') || 'None selected'}</div>
-                ${concept.persistent ? `<div class="review-detail" style="font-style:italic;">→ ${concept.persistent.action}</div>` : ''}
+          const conceptName = concept?.name || conceptId.replace(/_/g, ' ');
+          const correctInfo = concept?.correct || '';
+          
+          html += `
+            <div class="review-section error">
+              <h3>⚠ ${conceptName} <span class="error-count">${data.count} mistake${data.count > 1 ? 's' : ''}</span></h3>
+              ${correctInfo ? `<div class="review-detail">${correctInfo}</div>` : ''}
+              <div class="review-detail" style="color:var(--error)">
+                Incorrect answers tried: ${[...new Set(data.wrongAnswers.filter(a => a))].join(', ') || 'None'}
               </div>
-            `;
-          } else {
-            // Concept not in concepts object - show basic info
-            html += `
-              <div class="review-section error">
-                <h3>⚠ ${conceptId.replace(/_/g, ' ')} <span class="error-count">${data.count} error${data.count > 1 ? 's' : ''}</span></h3>
-                <div class="review-detail" style="color:var(--error)">Your answers: ${[...new Set(data.wrongAnswers.filter(a => a))].join(', ') || 'None selected'}</div>
-              </div>
-            `;
-          }
+              ${concept?.persistent ? `<div class="review-detail" style="font-style:italic;">→ ${concept.persistent.action}</div>` : ''}
+            </div>
+          `;
         });
+      } else if (totalAttempts > 0) {
+        html += `
+          <div style="text-align:center; color:var(--success); padding:20px; background:var(--bg-card); border-radius:var(--radius); margin-top:16px;">
+            No errors recorded. Well done.
+          </div>
+        `;
       } else {
         html += `
           <div style="text-align:center; color:var(--text-muted); padding:20px;">
-            ${totalCorrect === 0 ? 'Submit some answers to see your performance breakdown.' : 'No errors recorded yet. Great work!'}
+            Submit some answers to see your performance breakdown.
           </div>
         `;
       }
       
-      html += `
-        <div class="review-actions">
+      // Actions section
+      html += `<div class="review-actions">`;
+      
+      if (allRoundsComplete) {
+        html += `
+          <div style="width:100%; text-align:center; margin-bottom:16px;">
+            <div style="font-size:1.2rem; font-weight:600; color:var(--success);">Topic Complete</div>
+            <div style="color:var(--text-muted); font-size:0.9rem;">Final Efficiency: ${efficiencyScore}% | Total Retries: ${totalErrors}</div>
+          </div>
+          <button class="btn btn-primary" onclick="selectNextTopic()">Next Topic</button>
+          <button class="btn btn-success" onclick="showEmailResults()">Email Results</button>
+          <button class="btn btn-secondary" onclick="closeReview()">Review Again</button>
+        `;
+      } else {
+        html += `
           <button class="btn btn-primary" onclick="closeReview()">Continue Learning</button>
-          ${APP.currentRound >= 3 && totalCorrect === totalQuestions && totalQuestions > 0 
-            ? '<button class="btn btn-success">🎉 Topic Complete!</button>' 
-            : ''}
-        </div>
-      `;
+          <button class="btn btn-secondary" onclick="showEmailResults()">Email Progress</button>
+        `;
+      }
+      
+      html += `</div>`;
       
       reviewScreen.innerHTML = html;
     }
@@ -1979,6 +2049,249 @@
     function closeReview() {
       document.getElementById('reviewScreen').classList.remove('active');
       document.getElementById('topicContent').classList.add('active');
+    }
+    
+    // ==================== TOPIC COMPLETE FUNCTIONS ====================
+    function selectNextTopic() {
+      // Close review and reset to topic selection
+      document.getElementById('reviewScreen').classList.remove('active');
+      document.getElementById('topicContent').classList.remove('active');
+      document.getElementById('tabsContainer').classList.remove('active');
+      document.getElementById('controlPanel').classList.remove('active');
+      document.getElementById('reviewBtn').style.display = 'none';
+      document.getElementById('welcomeScreen').style.display = 'block';
+      
+      // Clear current topic state
+      APP.topicData = null;
+      APP.currentTab = null;
+      APP.tabStates = {};
+      APP.errorTracking = {};
+      
+      // Reset topic dropdown
+      const topicSelect = document.getElementById('topicSelect');
+      if (topicSelect) {
+        topicSelect.value = '';
+      }
+      APP.currentTopic = null;
+      
+      showToast('Select your next topic above');
+    }
+    
+    function showEmailResults() {
+      const reviewScreen = document.getElementById('reviewScreen');
+      const savedEmail = Storage.get('teacherEmail') || '';
+      
+      // Calculate summary stats
+      let totalQuestions = 0;
+      let totalAttempts = 0;
+      let totalErrors = 0;
+      let completedSections = 0;
+      
+      for (let r = 1; r <= 3; r++) {
+        APP.topicData.tabs.forEach(tab => {
+          const content = APP.topicData.content[`round${r}`]?.[tab.id];
+          if (content) {
+            let tabTotal = 0;
+            content.sentences.forEach(s => {
+              tabTotal += Object.keys(s.questions).length;
+            });
+            totalQuestions += tabTotal;
+            
+            const key = `round${r}_${tab.id}`;
+            const state = APP.tabStates[key];
+            if (state && state.attempts > 0) {
+              totalAttempts += state.attempts;
+              totalErrors += Math.max(0, state.attempts - 1);
+              if (state.complete) completedSections++;
+            }
+          }
+        });
+      }
+      
+      const efficiencyScore = totalQuestions > 0 
+        ? Math.round((totalQuestions / (totalQuestions + totalErrors)) * 100) 
+        : 0;
+      
+      const totalSections = APP.topicData.tabs.length * 3;
+      const isComplete = completedSections === totalSections;
+      
+      // Build email panel HTML
+      const emailPanelHtml = `
+        <div class="email-panel" id="emailPanel">
+          <h3>${isComplete ? 'Send Results' : 'Send Progress'} to Teacher</h3>
+          
+          <div style="margin:16px 0;">
+            <label style="display:block; font-size:0.85rem; color:var(--text-muted); margin-bottom:4px;">
+              Teacher's Email Address
+            </label>
+            <input type="email" id="teacherEmailInput" value="${savedEmail}" 
+                   placeholder="teacher@school.edu"
+                   style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius); font-size:0.95rem;">
+          </div>
+          
+          <div style="margin:16px 0;">
+            <label style="display:block; font-size:0.85rem; color:var(--text-muted); margin-bottom:4px;">
+              Your Name
+            </label>
+            <input type="text" id="studentNameInput" value="${Storage.get('studentName') || ''}" 
+                   placeholder="Your name"
+                   style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius); font-size:0.95rem;">
+          </div>
+          
+          <div style="background:var(--bg); padding:12px; border-radius:var(--radius); margin:16px 0; font-size:0.85rem;">
+            <strong>Summary to send:</strong><br>
+            Topic: ${APP.topicData.metadata.topicName}<br>
+            Status: ${isComplete ? 'Complete ✓' : 'In Progress'}<br>
+            Sections: ${completedSections}/${totalSections}<br>
+            Efficiency: ${efficiencyScore}%<br>
+            Total Attempts: ${totalAttempts}<br>
+            Retries Needed: ${totalErrors}
+            ${Object.keys(APP.errorTracking).length > 0 ? `<br>Concepts needing review: ${Object.keys(APP.errorTracking).length}` : ''}
+          </div>
+          
+          <div style="display:flex; gap:8px; justify-content:flex-end;">
+            <button class="btn btn-secondary" onclick="closeEmailPanel()">Cancel</button>
+            <button class="btn btn-success" onclick="sendEmail()">Send Email</button>
+          </div>
+        </div>
+      `;
+      
+      // Add email panel styles if not already present
+      if (!document.getElementById('emailPanelStyles')) {
+        const styles = document.createElement('style');
+        styles.id = 'emailPanelStyles';
+        styles.textContent = `
+          .email-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: var(--shadow);
+          }
+          .email-panel h3 {
+            margin-bottom: 12px;
+            color: var(--primary);
+          }
+        `;
+        document.head.appendChild(styles);
+      }
+      
+      // Insert email panel before review actions
+      const actionsDiv = reviewScreen.querySelector('.review-actions');
+      if (actionsDiv) {
+        // Remove existing email panel if any
+        const existingPanel = document.getElementById('emailPanel');
+        if (existingPanel) existingPanel.remove();
+        
+        actionsDiv.insertAdjacentHTML('beforebegin', emailPanelHtml);
+        document.getElementById('teacherEmailInput').focus();
+      }
+    }
+    
+    function closeEmailPanel() {
+      const panel = document.getElementById('emailPanel');
+      if (panel) panel.remove();
+    }
+    
+    function sendEmail() {
+      const emailInput = document.getElementById('teacherEmailInput');
+      const nameInput = document.getElementById('studentNameInput');
+      const email = emailInput.value.trim();
+      const studentName = nameInput.value.trim();
+      
+      if (!email) {
+        showToast('Please enter teacher\'s email address');
+        emailInput.focus();
+        return;
+      }
+      
+      if (!email.includes('@')) {
+        showToast('Please enter a valid email address');
+        emailInput.focus();
+        return;
+      }
+      
+      if (!studentName) {
+        showToast('Please enter your name');
+        nameInput.focus();
+        return;
+      }
+      
+      // Save for future use
+      Storage.set('teacherEmail', email);
+      Storage.set('studentName', studentName);
+      
+      // Calculate stats for email
+      let totalQuestions = 0;
+      let totalAttempts = 0;
+      let totalErrors = 0;
+      let completedSections = 0;
+      const totalSections = APP.topicData.tabs.length * 3;
+      
+      for (let r = 1; r <= 3; r++) {
+        APP.topicData.tabs.forEach(tab => {
+          const content = APP.topicData.content[`round${r}`]?.[tab.id];
+          if (content) {
+            content.sentences.forEach(s => {
+              totalQuestions += Object.keys(s.questions).length;
+            });
+            
+            const key = `round${r}_${tab.id}`;
+            const state = APP.tabStates[key];
+            if (state && state.attempts > 0) {
+              totalAttempts += state.attempts;
+              totalErrors += Math.max(0, state.attempts - 1);
+              if (state.complete) completedSections++;
+            }
+          }
+        });
+      }
+      
+      const efficiencyScore = totalQuestions > 0 
+        ? Math.round((totalQuestions / (totalQuestions + totalErrors)) * 100) 
+        : 0;
+      
+      const isComplete = completedSections === totalSections;
+      
+      // Build concepts needing review list
+      const conceptsList = Object.entries(APP.errorTracking)
+        .sort((a, b) => b[1].count - a[1].count)
+        .slice(0, 5)
+        .map(([conceptId, data]) => {
+          const concept = APP.topicData.concepts?.[conceptId];
+          return `- ${concept?.name || conceptId.replace(/_/g, ' ')}: ${data.count} mistake(s)`;
+        })
+        .join('\n');
+      
+      // Create email body
+      const subject = `YouCantFakeThis: ${studentName} - ${APP.topicData.metadata.topicName} ${isComplete ? '(Complete)' : '(In Progress)'}`;
+      const body = `Student: ${studentName}
+Topic: ${APP.topicData.metadata.topicName}
+Subject: ${APP.topicData.metadata.subject}
+Curriculum: ${APP.topicData.metadata.curriculum}
+
+STATUS: ${isComplete ? 'COMPLETE' : 'In Progress'}
+
+PERFORMANCE SUMMARY
+-------------------
+Sections Completed: ${completedSections}/${totalSections}
+Efficiency Score: ${efficiencyScore}%
+Total Attempts: ${totalAttempts}
+Retries Needed: ${totalErrors}
+
+${conceptsList ? `CONCEPTS NEEDING REVIEW\n-------------------\n${conceptsList}` : 'No errors recorded.'}
+
+---
+Sent from YouCantFakeThis Educational Platform
+${new Date().toLocaleString()}`;
+      
+      // Open email client
+      const mailtoLink = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.open(mailtoLink, '_blank');
+      
+      closeEmailPanel();
+      showToast('Opening email client...');
     }
 
     // ==================== HELPERS ====================
@@ -2009,8 +2322,8 @@
 
     // EASTER EGG: Debug mode
     function activateDebugMode() {
-      console.log('🎮 Debug mode activated!');
-      showToast('🎮 Debug mode: Auto-filling correct answers');
+      console.log('Debug mode activated');
+      showToast('Debug mode: Auto-filling correct answers');
       
       // Fill all dropdowns with correct answers
       document.querySelectorAll('.cloze-dropdown').forEach(select => {
