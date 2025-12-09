@@ -522,6 +522,44 @@
       opacity: 0.9;
     }
 
+    /* Dropdown Tooltip */
+    .dropdown-tooltip {
+      position: fixed;
+      background: #1f2937;
+      color: #f9fafb;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      max-width: 280px;
+      line-height: 1.4;
+      z-index: 3000;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity 0.15s ease, transform 0.15s ease;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .dropdown-tooltip.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .dropdown-tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 20px;
+      border: 6px solid transparent;
+      border-top-color: #1f2937;
+    }
+
+    .dropdown-tooltip.arrow-top::after {
+      top: -12px;
+      border-top-color: transparent;
+      border-bottom-color: #1f2937;
+    }
+
     .feedback-inline {
       display: none;
       background: #fef2f2;
@@ -1249,6 +1287,7 @@
 
   <!-- Toast -->
   <div class="toast" id="toast"></div>
+  <div class="dropdown-tooltip" id="dropdownTooltip"></div>
 
   <!-- Dropdown Tooltip -->
   <div class="dropdown-tooltip" id="dropdownTooltip"></div>
@@ -1277,6 +1316,11 @@
       
       // UI state
       submitted: false,
+      
+      // Tooltip state
+      tooltipTimeout: null,
+      tooltipTarget: null,
+      lastMousePos: { x: 0, y: 0 },
       
       // Base path for JSON files (adjust as needed)
       basePath: './'
@@ -1374,6 +1418,97 @@
         showToast(`${errorMsg} - Check file exists and server is running`, 5000);
         return null;
       }
+    }
+
+    // ==================== DROPDOWN TOOLTIP ====================
+    function initDropdownTooltips() {
+      const container = document.getElementById('topicContent');
+      
+      // Track mouse movement to detect stillness
+      container.addEventListener('mousemove', handleTooltipMouseMove);
+      container.addEventListener('mouseleave', hideDropdownTooltip);
+      
+      // Hide on any click (dropdown interaction)
+      container.addEventListener('mousedown', hideDropdownTooltip);
+    }
+    
+    function handleTooltipMouseMove(e) {
+      const dropdown = e.target.closest('.cloze-dropdown');
+      
+      // Clear any pending tooltip
+      clearTimeout(APP.tooltipTimeout);
+      hideDropdownTooltip();
+      
+      // If not over a dropdown, nothing to do
+      if (!dropdown) {
+        APP.tooltipTarget = null;
+        return;
+      }
+      
+      // Check if tooltip text exists
+      const tooltipText = dropdown.dataset.tooltip;
+      if (!tooltipText) {
+        APP.tooltipTarget = null;
+        return;
+      }
+      
+      // Track current position and target
+      APP.lastMousePos = { x: e.clientX, y: e.clientY };
+      APP.tooltipTarget = dropdown;
+      
+      // Set timeout to show tooltip after delay (mouse must stay still)
+      APP.tooltipTimeout = setTimeout(() => {
+        // Verify mouse is still over the same dropdown
+        if (APP.tooltipTarget === dropdown) {
+          showDropdownTooltip(dropdown, tooltipText);
+        }
+      }, 800); // 800ms delay
+    }
+    
+    function showDropdownTooltip(dropdown, text) {
+      const tooltip = document.getElementById('dropdownTooltip');
+      tooltip.textContent = text;
+      
+      // Position above the dropdown
+      const rect = dropdown.getBoundingClientRect();
+      const tooltipRect = tooltip.getBoundingClientRect();
+      
+      // Calculate position
+      let left = rect.left;
+      let top = rect.top - 8; // 8px gap above dropdown
+      
+      // Show tooltip to measure it
+      tooltip.style.left = left + 'px';
+      tooltip.style.top = '0px';
+      tooltip.classList.add('visible');
+      
+      // Now measure and adjust
+      const actualHeight = tooltip.offsetHeight;
+      top = rect.top - actualHeight - 8;
+      
+      // Keep within viewport horizontally
+      const maxLeft = window.innerWidth - tooltip.offsetWidth - 10;
+      if (left > maxLeft) left = maxLeft;
+      if (left < 10) left = 10;
+      
+      // If no room above, show below
+      if (top < 10) {
+        top = rect.bottom + 8;
+        tooltip.style.setProperty('--arrow-position', 'top');
+        // Move arrow to top
+        tooltip.style.cssText = `left: ${left}px; top: ${top}px;`;
+        tooltip.classList.add('visible', 'arrow-top');
+      } else {
+        tooltip.style.left = left + 'px';
+        tooltip.style.top = top + 'px';
+        tooltip.classList.remove('arrow-top');
+      }
+    }
+    
+    function hideDropdownTooltip() {
+      clearTimeout(APP.tooltipTimeout);
+      const tooltip = document.getElementById('dropdownTooltip');
+      tooltip.classList.remove('visible', 'arrow-top');
     }
 
     function shuffleArray(arr) {
@@ -1956,6 +2091,9 @@
       // Stop any pulsing invitation
       stopTabPulse();
       
+      // Hide any visible tooltip
+      hideDropdownTooltip();
+      
       APP.currentTab = tabId;
       APP.submitted = false;
       renderTabs();
@@ -2032,11 +2170,15 @@
             `<option value="${opt}" ${selected === opt ? 'selected' : ''}>${opt}</option>`
           ).join('');
           
+          // Escape tooltip text for HTML attribute
+          const tooltipText = (q.tooltip || '').replace(/"/g, '&quot;');
+          
           const dropdown = `
             <select class="${selectClass}" 
                     data-question="${qId}" 
                     data-concept="${q.concept}"
                     data-correct="${q.correct}"
+                    data-tooltip="${tooltipText}"
                     onchange="handleSelection(this)"
                     ${isDisabled}>
               <option value="">Select...</option>
@@ -2094,6 +2236,9 @@
       
       container.innerHTML = html;
       
+      // Initialize tooltip listeners for dropdowns
+      initDropdownTooltips();
+      
       updateControlPanel();
     }
 
@@ -2104,6 +2249,9 @@
     }
 
     function handleSelection(select) {
+      // Hide tooltip immediately on interaction
+      hideDropdownTooltip();
+      
       const qId = select.dataset.question;
       const tabState = getTabState();
       
