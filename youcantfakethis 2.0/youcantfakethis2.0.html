@@ -180,6 +180,122 @@
       font-size: 0.8rem;
     }
 
+    /* Custom Dropdown (for topic selector with tooltips) */
+    .custom-dropdown {
+      position: relative;
+      display: inline-block;
+    }
+
+    .custom-dropdown-trigger {
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: white;
+      font-size: 0.85rem;
+      cursor: pointer;
+      max-width: 220px;
+      min-width: 150px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .custom-dropdown-trigger:hover {
+      border-color: var(--primary);
+    }
+
+    .custom-dropdown-trigger .dropdown-arrow {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .custom-dropdown-trigger .dropdown-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .custom-dropdown-menu {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      min-width: 100%;
+      max-width: 300px;
+      max-height: 300px;
+      overflow-y: auto;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 1000;
+      display: none;
+    }
+
+    .custom-dropdown.open .custom-dropdown-menu {
+      display: block;
+    }
+
+    .custom-dropdown-option {
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      border-bottom: 1px solid var(--bg-secondary);
+    }
+
+    .custom-dropdown-option:last-child {
+      border-bottom: none;
+    }
+
+    .custom-dropdown-option:hover {
+      background: var(--bg-secondary);
+    }
+
+    .custom-dropdown-option.selected {
+      background: var(--primary);
+      color: white;
+    }
+
+    .custom-dropdown-option.disabled {
+      color: var(--text-muted);
+      cursor: not-allowed;
+      background: var(--bg-secondary);
+    }
+
+    .custom-dropdown-option.disabled:hover {
+      background: var(--bg-secondary);
+    }
+
+    .custom-dropdown-option .option-name {
+      font-weight: 500;
+    }
+
+    .custom-dropdown-option .option-status {
+      font-size: 0.75rem;
+      color: var(--warning);
+      margin-left: 4px;
+    }
+
+    /* Dropdown tooltip */
+    .dropdown-tooltip {
+      position: fixed;
+      background: var(--text);
+      color: white;
+      padding: 6px 10px;
+      border-radius: var(--radius);
+      font-size: 0.8rem;
+      max-width: 220px;
+      z-index: 2000;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    .dropdown-tooltip.show {
+      opacity: 1;
+    }
+
     /* Tabs */
     .tabs-container {
       background: var(--bg-card);
@@ -1134,6 +1250,9 @@
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 
+  <!-- Dropdown Tooltip -->
+  <div class="dropdown-tooltip" id="dropdownTooltip"></div>
+
   <script>
     // ==================== APP STATE ====================
     const APP = {
@@ -1492,28 +1611,52 @@
         }
       }
       
-      // Topic select
+      // Topic select (custom dropdown with tooltips)
       if (APP.currentAOS) {
         const unit = APP.topicManifest.units.find(u => u.id === APP.currentUnit);
         const aos = unit?.areasOfStudy.find(a => a.id === APP.currentAOS);
         if (aos) {
+          const selectedTopic = aos.topics.find(t => t.id === APP.currentTopic);
+          const displayText = selectedTopic 
+            ? `${selectedTopic.code}. ${selectedTopic.name}` 
+            : 'Select Topic';
+          
           html += `
             <span class="breadcrumb-sep">›</span>
             <div class="breadcrumb-item">
-              <select id="topicSelect" onchange="selectTopicFromMenu(this.value)">
-                <option value="">Select Topic</option>
-                ${aos.topics.map(t => 
-                  `<option value="${t.id}" ${t.status !== 'available' ? 'disabled' : ''} ${APP.currentTopic === t.id ? 'selected' : ''}>
-                    ${t.code}. ${t.name}${t.status !== 'available' ? ' (Coming Soon)' : ''}
-                  </option>`
-                ).join('')}
-              </select>
+              <div class="custom-dropdown" id="topicDropdown">
+                <div class="custom-dropdown-trigger" onclick="toggleTopicDropdown()">
+                  <span class="dropdown-text">${displayText}</span>
+                  <span class="dropdown-arrow">▼</span>
+                </div>
+                <div class="custom-dropdown-menu">
+                  <div class="custom-dropdown-option ${!APP.currentTopic ? 'selected' : ''}" 
+                       data-value="" 
+                       onclick="selectTopicOption('')">
+                    <span class="option-name">Select Topic</span>
+                  </div>
+                  ${aos.topics.map(t => `
+                    <div class="custom-dropdown-option ${t.status !== 'available' ? 'disabled' : ''} ${APP.currentTopic === t.id ? 'selected' : ''}" 
+                         data-value="${t.id}"
+                         data-subtitle="${t.subtitle || ''}"
+                         onclick="${t.status === 'available' ? `selectTopicOption('${t.id}')` : ''}"
+                         onmouseenter="showOptionTooltip(event, '${(t.subtitle || '').replace(/'/g, "\\'")}')"
+                         onmouseleave="hideOptionTooltip()">
+                      <span class="option-name">${t.code}. ${t.name}</span>
+                      ${t.status !== 'available' ? '<span class="option-status">(Coming Soon)</span>' : ''}
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
             </div>
           `;
         }
       }
       
       bc.innerHTML = html;
+      
+      // Close dropdown when clicking outside
+      document.addEventListener('click', closeTopicDropdownOnClickOutside);
     }
 
     async function selectSubject(subjectId) {
@@ -1572,6 +1715,84 @@
       returnToTopicSelection();
       
       renderBreadcrumb();
+    }
+
+    // Custom dropdown functions
+    let optionTooltipTimeout = null;
+    
+    function toggleTopicDropdown() {
+      const dropdown = document.getElementById('topicDropdown');
+      if (dropdown) {
+        dropdown.classList.toggle('open');
+      }
+    }
+    
+    function closeTopicDropdown() {
+      const dropdown = document.getElementById('topicDropdown');
+      if (dropdown) {
+        dropdown.classList.remove('open');
+      }
+      hideOptionTooltip();
+    }
+    
+    function closeTopicDropdownOnClickOutside(e) {
+      const dropdown = document.getElementById('topicDropdown');
+      if (dropdown && !dropdown.contains(e.target)) {
+        dropdown.classList.remove('open');
+        hideOptionTooltip();
+      }
+    }
+    
+    function selectTopicOption(topicId) {
+      closeTopicDropdown();
+      selectTopicFromMenu(topicId);
+    }
+    
+    function showOptionTooltip(event, subtitle) {
+      if (!subtitle) return;
+      
+      // Clear any pending tooltip
+      if (optionTooltipTimeout) {
+        clearTimeout(optionTooltipTimeout);
+      }
+      
+      const tooltip = document.getElementById('dropdownTooltip');
+      const option = event.target.closest('.custom-dropdown-option');
+      
+      // Store which option we're hovering
+      tooltip.dataset.targetOption = option?.dataset.value || '';
+      
+      // Show tooltip after delay
+      optionTooltipTimeout = setTimeout(() => {
+        // Check if still hovering same option
+        if (tooltip.dataset.targetOption !== (option?.dataset.value || '')) return;
+        
+        tooltip.textContent = subtitle;
+        
+        const rect = option.getBoundingClientRect();
+        tooltip.style.left = (rect.right + 8) + 'px';
+        tooltip.style.top = rect.top + 'px';
+        
+        // Check if tooltip would go off screen right
+        const tooltipRect = tooltip.getBoundingClientRect();
+        if (rect.right + 8 + 220 > window.innerWidth) {
+          // Position to the left instead
+          tooltip.style.left = (rect.left - 228) + 'px';
+        }
+        
+        tooltip.classList.add('show');
+      }, 800);
+    }
+    
+    function hideOptionTooltip() {
+      if (optionTooltipTimeout) {
+        clearTimeout(optionTooltipTimeout);
+        optionTooltipTimeout = null;
+      }
+      
+      const tooltip = document.getElementById('dropdownTooltip');
+      tooltip.classList.remove('show');
+      tooltip.dataset.targetOption = '';
     }
 
     async function selectTopicFromMenu(topicId) {
