@@ -560,6 +560,51 @@
       border-bottom-color: #1f2937;
     }
 
+    /* Selection popup menu */
+    .selection-menu {
+      position: fixed;
+      background: #1f2937;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      z-index: 3001;
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity 0.15s ease, transform 0.15s ease;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .selection-menu.visible {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .selection-menu-item {
+      display: block;
+      padding: 8px 14px;
+      color: #f9fafb;
+      font-size: 0.8rem;
+      cursor: pointer;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    .selection-menu-item:hover {
+      background: #374151;
+    }
+
+    .selection-menu-item:first-child {
+      border-radius: 6px 6px 0 0;
+    }
+
+    .selection-menu-item:last-child {
+      border-radius: 0 0 6px 6px;
+    }
+
     .feedback-inline {
       display: none;
       background: #fef2f2;
@@ -1287,10 +1332,15 @@
 
   <!-- Toast -->
   <div class="toast" id="toast"></div>
-  <div class="dropdown-tooltip" id="dropdownTooltip"></div>
-
+  
   <!-- Dropdown Tooltip -->
   <div class="dropdown-tooltip" id="dropdownTooltip"></div>
+  
+  <!-- Selection Menu -->
+  <div class="selection-menu" id="selectionMenu">
+    <button class="selection-menu-item" data-service="google">Google AI</button>
+    <button class="selection-menu-item" data-service="chatgpt">ChatGPT</button>
+  </div>
 
   <script>
     // ==================== APP STATE ====================
@@ -1321,6 +1371,10 @@
       tooltipTimeout: null,
       tooltipTarget: null,
       lastMousePos: { x: 0, y: 0 },
+      
+      // Selection menu state
+      selectionMenuTimeout: null,
+      selectionMenuHideTimeout: null,
       
       // Base path for JSON files (adjust as needed)
       basePath: './'
@@ -1526,6 +1580,129 @@
       tooltip.classList.remove('visible', 'arrow-top');
     }
 
+    // ==================== SELECTION MENU ====================
+    function initSelectionMenu() {
+      // Listen for selection changes
+      document.addEventListener('selectionchange', handleSelectionChange);
+      
+      // Hide menu on click elsewhere
+      document.addEventListener('mousedown', (e) => {
+        const menu = document.getElementById('selectionMenu');
+        if (!menu.contains(e.target)) {
+          hideSelectionMenu();
+        }
+      });
+      
+      // Hide menu on scroll
+      document.addEventListener('scroll', hideSelectionMenu, true);
+      
+      // Handle menu item clicks
+      document.getElementById('selectionMenu').addEventListener('click', (e) => {
+        const item = e.target.closest('.selection-menu-item');
+        if (item) {
+          const service = item.dataset.service;
+          handleSelectionMenuClick(service);
+        }
+      });
+    }
+    
+    function handleSelectionChange() {
+      // Clear any pending show timeout
+      clearTimeout(APP.selectionMenuTimeout);
+      clearTimeout(APP.selectionMenuHideTimeout);
+      
+      const selection = window.getSelection();
+      const selectedText = selection.toString().trim();
+      
+      // Hide menu if selection is too short or empty
+      if (selectedText.length < 3) {
+        // Small delay before hiding to prevent flicker
+        APP.selectionMenuHideTimeout = setTimeout(hideSelectionMenu, 100);
+        return;
+      }
+      
+      // Get selection position
+      if (selection.rangeCount === 0) return;
+      
+      const range = selection.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      
+      // Don't show if selection is collapsed or has no size
+      if (rect.width === 0 && rect.height === 0) {
+        hideSelectionMenu();
+        return;
+      }
+      
+      // Show menu after 1 second delay
+      APP.selectionMenuTimeout = setTimeout(() => {
+        // Re-check selection is still valid
+        const currentSelection = window.getSelection();
+        const currentText = currentSelection.toString().trim();
+        if (currentText.length >= 3) {
+          showSelectionMenu(rect);
+        }
+      }, 1000);
+    }
+    
+    function showSelectionMenu(selectionRect) {
+      const menu = document.getElementById('selectionMenu');
+      
+      // Position above the selection, centered
+      let left = selectionRect.left + (selectionRect.width / 2) - (menu.offsetWidth / 2);
+      let top = selectionRect.top - menu.offsetHeight - 8;
+      
+      // Keep within viewport
+      const maxLeft = window.innerWidth - menu.offsetWidth - 10;
+      if (left > maxLeft) left = maxLeft;
+      if (left < 10) left = 10;
+      
+      // If no room above, show below
+      if (top < 10) {
+        top = selectionRect.bottom + 8;
+      }
+      
+      menu.style.left = left + 'px';
+      menu.style.top = top + 'px';
+      menu.classList.add('visible');
+      
+      // Auto-hide after 5 seconds
+      clearTimeout(APP.selectionMenuHideTimeout);
+      APP.selectionMenuHideTimeout = setTimeout(hideSelectionMenu, 5000);
+    }
+    
+    function hideSelectionMenu() {
+      clearTimeout(APP.selectionMenuTimeout);
+      clearTimeout(APP.selectionMenuHideTimeout);
+      const menu = document.getElementById('selectionMenu');
+      menu.classList.remove('visible');
+    }
+    
+    function handleSelectionMenuClick(service) {
+      // Get current selection at time of click
+      const selection = window.getSelection();
+      const selectedText = selection.toString().trim();
+      
+      if (selectedText.length < 3) {
+        hideSelectionMenu();
+        return;
+      }
+      
+      const query = encodeURIComponent(selectedText + ' please explain this');
+      
+      let url;
+      if (service === 'google') {
+        url = `https://www.google.com/search?q=${query}&safe=active&ssui=on`;
+      } else if (service === 'chatgpt') {
+        url = `https://chatgpt.com/?q=${query}`;
+      }
+      
+      if (url) {
+        window.open(url, '_blank');
+      }
+      
+      hideSelectionMenu();
+    }
+
     function shuffleArray(arr) {
       const shuffled = [...arr];
       for (let i = shuffled.length - 1; i > 0; i--) {
@@ -1554,6 +1731,9 @@
       
       // Setup event listeners
       setupEventListeners();
+      
+      // Initialize selection menu
+      initSelectionMenu();
       
       // EASTER EGG: Debug mode with q+w+e (all correct) or w+e+r (2/3 correct)
       const debugKeys = new Set();
