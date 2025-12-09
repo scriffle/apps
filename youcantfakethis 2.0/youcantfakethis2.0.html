@@ -1452,6 +1452,21 @@
         return;
       }
       
+      // Check conditions for showing tooltip:
+      // 1. After submit has been pressed, OR
+      // 2. Dropdown has been opened AND is not currently filled with a selection
+      const tabState = getTabState();
+      const hasBeenOpened = dropdown.dataset.opened === 'true';
+      const isFilled = dropdown.classList.contains('filled');
+      const isSubmitted = tabState.submitted;
+      
+      const shouldShowTooltip = isSubmitted || (hasBeenOpened && !isFilled);
+      
+      if (!shouldShowTooltip) {
+        APP.tooltipTarget = null;
+        return;
+      }
+      
       // Track current position and target
       APP.lastMousePos = { x: e.clientX, y: e.clientY };
       APP.tooltipTarget = dropdown;
@@ -2030,7 +2045,8 @@
             submitted: false,
             attempts: 0,
             bestScore: 0,
-            complete: false
+            complete: false,
+            opened: {}
           };
         }
       });
@@ -2157,6 +2173,7 @@
           const options = shuffleOptionsWithCorrect(q.correct, q.distractors, `${sIdx}_${qId}`);
           const selected = tabState.selections[qId] || '';
           const result = tabState.results[qId];
+          const hasBeenOpened = tabState.opened?.[qId] || false;
           
           let selectClass = 'cloze-dropdown';
           if (selected) selectClass += ' filled';
@@ -2179,7 +2196,10 @@
                     data-concept="${q.concept}"
                     data-correct="${q.correct}"
                     data-tooltip="${tooltipText}"
+                    data-opened="${hasBeenOpened}"
                     onchange="handleSelection(this)"
+                    onclick="markDropdownOpened(this)"
+                    onfocus="markDropdownOpened(this)"
                     ${isDisabled}>
               <option value="">Select...</option>
               ${optionsHtml}
@@ -2282,6 +2302,23 @@
       
       saveProgress();
       updateControlPanel();
+    }
+
+    function markDropdownOpened(select) {
+      const qId = select.dataset.question;
+      const tabState = getTabState();
+      
+      // Initialize opened tracking if needed
+      if (!tabState.opened) {
+        tabState.opened = {};
+      }
+      
+      // Mark this dropdown as having been opened
+      if (!tabState.opened[qId]) {
+        tabState.opened[qId] = true;
+        select.dataset.opened = 'true';
+        saveProgress();
+      }
     }
 
     // ==================== SUBMISSION ====================
@@ -2454,7 +2491,8 @@
                 submitted: false,
                 attempts: 0,
                 bestScore: 0,
-                complete: false
+                complete: false,
+                opened: {}
               };
             }
           });
@@ -2558,6 +2596,7 @@
         tabState.results = {};
         tabState.submitted = false;
         tabState.complete = false;
+        tabState.opened = {}; // Clear opened tracking for fresh start
         // Keep attempts count
         
         saveProgress();
