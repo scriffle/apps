@@ -3807,35 +3807,108 @@ ${new Date().toLocaleString()}`;
       const topicsData = [];
       const curriculum = currentMetadata.curriculum;
       const subject = currentMetadata.subject;
+      const currentTopicId = currentMetadata.id;
       
-      // Get all localStorage keys for this curriculum/subject
-      const progressKeys = [];
+      // Build prefix for topic progress keys
+      const keyPrefix = `ycft_topic_${curriculum}_${subject}_`;
+      
+      // For scope 'topic', just use current topic data directly
+      if (scope === 'topic') {
+        // Use live APP state for current topic
+        const progressData = {
+          currentRound: APP.currentRound,
+          highestRoundReached: APP.highestRoundReached,
+          tabStates: APP.tabStates,
+          errorTracking: APP.errorTracking
+        };
+        
+        // Check if any progress exists
+        let hasProgress = false;
+        Object.values(APP.tabStates).forEach(state => {
+          if (state && state.attempts > 0) hasProgress = true;
+        });
+        
+        if (hasProgress) {
+          // Calculate stats
+          let sectionsComplete = 0;
+          let totalSections = 0;
+          let totalAttempts = 0;
+          let totalRetries = 0;
+          
+          Object.entries(APP.tabStates).forEach(([stateKey, state]) => {
+            if (stateKey.startsWith('round')) {
+              totalSections++;
+              if (state.complete) sectionsComplete++;
+              if (state.attempts > 0) {
+                totalAttempts += state.attempts;
+                totalRetries += Math.max(0, state.attempts - 1);
+              }
+            }
+          });
+          
+          topicsData.push({
+            topicId: currentTopicId,
+            topicInfo: {
+              name: currentMetadata.topicName,
+              unitId: currentMetadata.unit,
+              unitCode: unitInfo?.code || currentMetadata.unit,
+              unitName: unitInfo?.name || '',
+              aosId: currentMetadata.aos,
+              aosCode: aosInfo?.code || currentMetadata.aos,
+              aosName: aosInfo?.name || ''
+            },
+            progressData,
+            stats: {
+              sectionsComplete,
+              totalSections,
+              totalAttempts,
+              totalRetries,
+              isComplete: sectionsComplete === totalSections && totalSections > 0
+            }
+          });
+        }
+        
+        return topicsData;
+      }
+      
+      // For broader scopes, scan localStorage
+      const foundTopicIds = new Set();
+      
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.startsWith(`${curriculum}_${subject}_`) && key.endsWith('_progress')) {
-          progressKeys.push(key);
+        if (key && key.startsWith(keyPrefix)) {
+          const topicId = key.replace(keyPrefix, '');
+          foundTopicIds.add(topicId);
         }
       }
       
-      // For current topic, use live APP state
-      const currentTopicId = currentMetadata.id;
+      // Always include current topic if it has progress
+      let currentHasProgress = false;
+      Object.values(APP.tabStates).forEach(state => {
+        if (state && state.attempts > 0) currentHasProgress = true;
+      });
+      if (currentHasProgress) {
+        foundTopicIds.add(currentTopicId);
+      }
       
-      progressKeys.forEach(key => {
-        const topicId = key.replace(`${curriculum}_${subject}_`, '').replace('_progress', '');
-        
-        // Check if this topic matches the scope
-        let matches = false;
-        let topicInfo = null;
-        
+      // Process each found topic
+      foundTopicIds.forEach(topicId => {
         // Find topic info in manifest
+        let topicInfo = null;
+        let matchesScope = false;
+        
         if (APP.topicManifest) {
           APP.topicManifest.units.forEach(unit => {
             unit.areasOfStudy.forEach(aos => {
               aos.topics.forEach(topic => {
-                if (topic.id === topicId || `${unit.id}${aos.id}-${topic.id}` === topicId || 
-                    topicId.includes(topic.id)) {
+                // Match by topic ID (could be just number like "03" or full like "U3AOS2-03")
+                const fullTopicId = `${unit.id}${aos.id}-${topic.id}`;
+                if (topicId === topic.id || topicId === fullTopicId || 
+                    topicId.endsWith(`-${topic.id}`) || topic.id === topicId.split('-').pop()) {
+                  
                   topicInfo = {
-                    ...topic,
+                    name: topic.name,
+                    code: topic.code,
                     unitId: unit.id,
                     unitCode: unit.code,
                     unitName: unit.name,
@@ -3845,14 +3918,12 @@ ${new Date().toLocaleString()}`;
                   };
                   
                   // Check scope match
-                  if (scope === 'topic' && topicId === currentTopicId) {
-                    matches = true;
-                  } else if (scope === 'aos' && unit.id === currentMetadata.unit && aos.id === currentMetadata.aos) {
-                    matches = true;
+                  if (scope === 'aos' && unit.id === currentMetadata.unit && aos.id === currentMetadata.aos) {
+                    matchesScope = true;
                   } else if (scope === 'unit' && unit.id === currentMetadata.unit) {
-                    matches = true;
+                    matchesScope = true;
                   } else if (scope === 'subject') {
-                    matches = true;
+                    matchesScope = true;
                   }
                 }
               });
@@ -3860,7 +3931,7 @@ ${new Date().toLocaleString()}`;
           });
         }
         
-        if (!matches || !topicInfo) return;
+        if (!matchesScope || !topicInfo) return;
         
         // Get progress data
         let progressData;
@@ -3874,11 +3945,8 @@ ${new Date().toLocaleString()}`;
           };
         } else {
           // Load from localStorage
-          try {
-            progressData = JSON.parse(localStorage.getItem(key));
-          } catch (e) {
-            return;
-          }
+          progressData = Storage.get(`topic_${curriculum}_${subject}_${topicId}`);
+          if (!progressData) return;
         }
         
         if (!progressData || !progressData.tabStates) return;
@@ -3900,7 +3968,7 @@ ${new Date().toLocaleString()}`;
           }
         });
         
-        // Only include topics with progress
+        // Only include topics with actual progress (attempts > 0)
         if (totalAttempts === 0) return;
         
         topicsData.push({
