@@ -23,6 +23,11 @@
       --incorrect: #ffcccb;
       --radius: 8px;
       --shadow: 0 2px 8px rgba(0,0,0,0.1);
+      
+      /* Round background colors - very pale pastels */
+      --round1-bg: #fff8f0;  /* Pale orange/peach */
+      --round2-bg: #fff0f5;  /* Pale pink */
+      --round3-bg: #f0f8ff;  /* Pale blue */
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -532,6 +537,31 @@
       display: block;
     }
 
+    /* Round-specific background colors */
+    .topic-content.round-1 {
+      background: var(--round1-bg);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin: -16px;
+      margin-bottom: 0;
+    }
+
+    .topic-content.round-2 {
+      background: var(--round2-bg);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin: -16px;
+      margin-bottom: 0;
+    }
+
+    .topic-content.round-3 {
+      background: var(--round3-bg);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin: -16px;
+      margin-bottom: 0;
+    }
+
     .section-title {
       font-size: 1.1rem;
       font-weight: 600;
@@ -901,6 +931,44 @@
 
     .review-email-field.review-email-button button {
       white-space: nowrap;
+    }
+
+    .review-email-select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      background: var(--bg-card);
+      cursor: pointer;
+    }
+
+    .review-email-select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .review-email-field.review-email-checkbox {
+      flex: 0 0 auto;
+      min-width: auto;
+      display: flex;
+      align-items: flex-end;
+    }
+
+    .review-email-field.review-email-checkbox .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      padding: 8px 0;
+      color: var(--text);
+    }
+
+    .review-email-field.review-email-checkbox input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
     }
 
     .review-round-header {
@@ -2447,6 +2515,10 @@
       const container = document.getElementById('topicContent');
       container.classList.add('active');
       
+      // Apply round-specific background class
+      container.classList.remove('round-1', 'round-2', 'round-3');
+      container.classList.add(`round-${APP.currentRound}`);
+      
       const roundKey = `round${APP.currentRound}`;
       const tabContent = APP.topicData.content[roundKey]?.[APP.currentTab];
       
@@ -3157,6 +3229,9 @@
       const container = document.getElementById('topicContent');
       container.classList.add('active');
       
+      // Remove round-specific background for Review tab
+      container.classList.remove('round-1', 'round-2', 'round-3');
+      
       // Gather stats for all submitted sections
       let totalAttempts = 0;
       let totalRetries = 0;
@@ -3231,6 +3306,7 @@
       const metadata = APP.topicData.metadata;
       const unitInfo = APP.topicManifest?.units?.find(u => u.id === metadata.unit);
       const aosInfo = unitInfo?.areasOfStudy?.find(a => a.id === metadata.aos);
+      const subjectName = APP.studyManifest?.subjects?.find(s => s.id === metadata.subject)?.name || metadata.subject;
       
       // Build HTML - Start with email section
       let html = `
@@ -3246,6 +3322,21 @@
               <label for="reviewTeacherEmail">Teacher's Email</label>
               <input type="email" id="reviewTeacherEmail" value="${savedEmail.replace(/"/g, '&quot;')}" 
                      placeholder="teacher@school.edu" onchange="syncTeacherEmail(this)">
+            </div>
+            <div class="review-email-field">
+              <label for="reviewEmailScope">Include</label>
+              <select id="reviewEmailScope" class="review-email-select">
+                <option value="topic" selected>This Topic</option>
+                <option value="aos">All ${aosInfo?.code || 'AOS'}</option>
+                <option value="unit">All ${unitInfo?.code || 'Unit'}</option>
+                <option value="subject">All ${subjectName}</option>
+              </select>
+            </div>
+            <div class="review-email-field review-email-checkbox">
+              <label class="checkbox-label">
+                <input type="checkbox" id="reviewEmailVerbose">
+                <span>Verbose</span>
+              </label>
             </div>
             <div class="review-email-field review-email-button">
               <button class="btn btn-primary" onclick="sendReviewEmail()">
@@ -3653,8 +3744,13 @@ ${new Date().toLocaleString()}`;
     function sendReviewEmail() {
       const nameInput = document.getElementById('reviewStudentName');
       const emailInput = document.getElementById('reviewTeacherEmail');
+      const scopeSelect = document.getElementById('reviewEmailScope');
+      const verboseCheckbox = document.getElementById('reviewEmailVerbose');
+      
       const studentName = nameInput.value.trim();
       const email = emailInput.value.trim();
+      const scope = scopeSelect.value;
+      const verbose = verboseCheckbox.checked;
       
       // Validate
       if (!studentName) {
@@ -3683,80 +3779,281 @@ ${new Date().toLocaleString()}`;
       const metadata = APP.topicData.metadata;
       const unitInfo = APP.topicManifest?.units?.find(u => u.id === metadata.unit);
       const aosInfo = unitInfo?.areasOfStudy?.find(a => a.id === metadata.aos);
+      const subjectName = APP.studyManifest?.subjects?.find(s => s.id === metadata.subject)?.name || metadata.subject;
       
-      // Calculate stats
-      let totalQuestions = 0;
-      let totalAttempts = 0;
-      let totalErrors = 0;
-      let completedSections = 0;
-      const totalSections = APP.topicData.tabs.length * 3;
+      // Gather topics based on scope
+      const topicsData = gatherTopicsForScope(scope, metadata, unitInfo, aosInfo);
       
-      for (let r = 1; r <= 3; r++) {
-        APP.topicData.tabs.forEach(tab => {
-          const content = APP.topicData.content[`round${r}`]?.[tab.id];
-          if (content) {
-            content.sentences.forEach(s => {
-              totalQuestions += Object.keys(s.questions).length;
-            });
-            
-            const key = `round${r}_${tab.id}`;
-            const state = APP.tabStates[key];
-            if (state && state.attempts > 0) {
-              totalAttempts += state.attempts;
-              totalErrors += Math.max(0, state.attempts - 1);
-              if (state.complete) completedSections++;
-            }
-          }
-        });
+      if (topicsData.length === 0) {
+        showToast('No progress found for selected scope');
+        return;
       }
       
-      const efficiencyScore = totalQuestions > 0 
-        ? Math.round((totalQuestions / (totalQuestions + totalErrors)) * 100) 
-        : 0;
-      
-      const isComplete = completedSections === totalSections;
-      
-      // Build concepts needing review list
-      const conceptsList = Object.entries(APP.errorTracking)
-        .sort((a, b) => b[1].count - a[1].count)
-        .slice(0, 5)
-        .map(([conceptId, data]) => {
-          const concept = APP.topicData.concepts?.[conceptId];
-          return `- ${concept?.name || conceptId.replace(/_/g, ' ')}: ${data.count} error(s)`;
-        })
-        .join('\n');
-      
-      // Create email
-      const subject = `YouCantFakeThis: ${studentName} - ${metadata.topicName} ${isComplete ? '(Complete)' : '(In Progress)'}`;
-      const body = `Student: ${studentName}
-
-CURRICULUM DETAILS
-------------------
-Study: ${APP.studyManifest?.subjects?.find(s => s.id === metadata.subject)?.name || metadata.subject}
-Unit: ${unitInfo?.code || metadata.unit} - ${unitInfo?.name || ''}
-Area of Study: ${aosInfo?.code || metadata.aos} - ${aosInfo?.name || ''}
-Topic: ${metadata.topicName}
-
-STATUS: ${isComplete ? 'COMPLETE ✓' : 'In Progress'}
-
-PERFORMANCE SUMMARY
--------------------
-Sections Completed: ${completedSections}/${totalSections}
-Efficiency Score: ${efficiencyScore}%
-Total Attempts: ${totalAttempts}
-Retries Needed: ${totalErrors}
-
-${conceptsList ? `CONCEPTS NEEDING REVIEW\n----------------------\n${conceptsList}` : 'No errors recorded - all correct on first try!'}
-
----
-Sent from YouCantFakeThis Educational Platform
-${new Date().toLocaleString()}`;
+      // Build email content
+      const emailContent = buildScopedEmailContent(studentName, scope, topicsData, verbose, metadata, unitInfo, aosInfo, subjectName);
       
       // Open email client
-      const mailtoLink = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      const mailtoLink = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(emailContent.subject)}&body=${encodeURIComponent(emailContent.body)}`;
       window.open(mailtoLink, '_blank');
       
       showToast('Opening email client...');
+    }
+    
+    function gatherTopicsForScope(scope, currentMetadata, unitInfo, aosInfo) {
+      const topicsData = [];
+      const curriculum = currentMetadata.curriculum;
+      const subject = currentMetadata.subject;
+      
+      // Get all localStorage keys for this curriculum/subject
+      const progressKeys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(`${curriculum}_${subject}_`) && key.endsWith('_progress')) {
+          progressKeys.push(key);
+        }
+      }
+      
+      // For current topic, use live APP state
+      const currentTopicId = currentMetadata.id;
+      
+      progressKeys.forEach(key => {
+        const topicId = key.replace(`${curriculum}_${subject}_`, '').replace('_progress', '');
+        
+        // Check if this topic matches the scope
+        let matches = false;
+        let topicInfo = null;
+        
+        // Find topic info in manifest
+        if (APP.topicManifest) {
+          APP.topicManifest.units.forEach(unit => {
+            unit.areasOfStudy.forEach(aos => {
+              aos.topics.forEach(topic => {
+                if (topic.id === topicId || `${unit.id}${aos.id}-${topic.id}` === topicId || 
+                    topicId.includes(topic.id)) {
+                  topicInfo = {
+                    ...topic,
+                    unitId: unit.id,
+                    unitCode: unit.code,
+                    unitName: unit.name,
+                    aosId: aos.id,
+                    aosCode: aos.code,
+                    aosName: aos.name
+                  };
+                  
+                  // Check scope match
+                  if (scope === 'topic' && topicId === currentTopicId) {
+                    matches = true;
+                  } else if (scope === 'aos' && unit.id === currentMetadata.unit && aos.id === currentMetadata.aos) {
+                    matches = true;
+                  } else if (scope === 'unit' && unit.id === currentMetadata.unit) {
+                    matches = true;
+                  } else if (scope === 'subject') {
+                    matches = true;
+                  }
+                }
+              });
+            });
+          });
+        }
+        
+        if (!matches || !topicInfo) return;
+        
+        // Get progress data
+        let progressData;
+        if (topicId === currentTopicId) {
+          // Use live state for current topic
+          progressData = {
+            currentRound: APP.currentRound,
+            highestRoundReached: APP.highestRoundReached,
+            tabStates: APP.tabStates,
+            errorTracking: APP.errorTracking
+          };
+        } else {
+          // Load from localStorage
+          try {
+            progressData = JSON.parse(localStorage.getItem(key));
+          } catch (e) {
+            return;
+          }
+        }
+        
+        if (!progressData || !progressData.tabStates) return;
+        
+        // Calculate stats for this topic
+        let sectionsComplete = 0;
+        let totalSections = 0;
+        let totalAttempts = 0;
+        let totalRetries = 0;
+        
+        Object.entries(progressData.tabStates).forEach(([stateKey, state]) => {
+          if (stateKey.startsWith('round')) {
+            totalSections++;
+            if (state.complete) sectionsComplete++;
+            if (state.attempts > 0) {
+              totalAttempts += state.attempts;
+              totalRetries += Math.max(0, state.attempts - 1);
+            }
+          }
+        });
+        
+        // Only include topics with progress
+        if (totalAttempts === 0) return;
+        
+        topicsData.push({
+          topicId,
+          topicInfo,
+          progressData,
+          stats: {
+            sectionsComplete,
+            totalSections,
+            totalAttempts,
+            totalRetries,
+            isComplete: sectionsComplete === totalSections && totalSections > 0
+          }
+        });
+      });
+      
+      // Sort by unit, aos, topic
+      topicsData.sort((a, b) => {
+        if (a.topicInfo.unitId !== b.topicInfo.unitId) {
+          return a.topicInfo.unitId.localeCompare(b.topicInfo.unitId);
+        }
+        if (a.topicInfo.aosId !== b.topicInfo.aosId) {
+          return a.topicInfo.aosId.localeCompare(b.topicInfo.aosId);
+        }
+        return (a.topicInfo.code || '').localeCompare(b.topicInfo.code || '');
+      });
+      
+      return topicsData;
+    }
+    
+    function buildScopedEmailContent(studentName, scope, topicsData, verbose, metadata, unitInfo, aosInfo, subjectName) {
+      // Calculate aggregate stats
+      let totalSectionsComplete = 0;
+      let totalSectionsAll = 0;
+      let totalAttemptsAll = 0;
+      let totalRetriesAll = 0;
+      let topicsComplete = 0;
+      
+      topicsData.forEach(t => {
+        totalSectionsComplete += t.stats.sectionsComplete;
+        totalSectionsAll += t.stats.totalSections;
+        totalAttemptsAll += t.stats.totalAttempts;
+        totalRetriesAll += t.stats.totalRetries;
+        if (t.stats.isComplete) topicsComplete++;
+      });
+      
+      const overallEfficiency = totalSectionsAll > 0 
+        ? Math.round((totalSectionsAll / (totalSectionsAll + totalRetriesAll)) * 100) 
+        : 0;
+      
+      // Build scope description
+      let scopeDesc = '';
+      if (scope === 'topic') {
+        scopeDesc = `Topic: ${metadata.topicName}`;
+      } else if (scope === 'aos') {
+        scopeDesc = `${aosInfo?.code || metadata.aos}: ${aosInfo?.name || ''}`;
+      } else if (scope === 'unit') {
+        scopeDesc = `${unitInfo?.code || metadata.unit}: ${unitInfo?.name || ''}`;
+      } else {
+        scopeDesc = `All ${subjectName}`;
+      }
+      
+      const allComplete = topicsComplete === topicsData.length;
+      
+      // Subject line
+      const subject = `YouCantFakeThis: ${studentName} - ${scopeDesc} ${allComplete ? '(Complete)' : '(In Progress)'}`;
+      
+      // Body
+      let body = `Student: ${studentName}
+
+SCOPE: ${scopeDesc}
+Subject: ${subjectName}
+Curriculum: ${metadata.curriculum}
+
+OVERALL STATUS: ${allComplete ? 'ALL COMPLETE ✓' : 'In Progress'}
+
+SUMMARY
+-------
+Topics with Progress: ${topicsData.length}
+Topics Complete: ${topicsComplete}/${topicsData.length}
+Sections Complete: ${totalSectionsComplete}/${totalSectionsAll}
+Overall Efficiency: ${overallEfficiency}%
+Total Attempts: ${totalAttemptsAll}
+Total Retries: ${totalRetriesAll}
+
+`;
+
+      // Per-topic breakdown
+      body += `TOPIC BREAKDOWN\n---------------\n`;
+      
+      topicsData.forEach(t => {
+        const efficiency = t.stats.totalSections > 0 
+          ? Math.round((t.stats.totalSections / (t.stats.totalSections + t.stats.totalRetries)) * 100) 
+          : 0;
+        
+        body += `\n${t.stats.isComplete ? '✓' : '○'} ${t.topicInfo.name || t.topicId}`;
+        body += `\n  ${t.topicInfo.unitCode} > ${t.topicInfo.aosCode}`;
+        body += `\n  Sections: ${t.stats.sectionsComplete}/${t.stats.totalSections} | Efficiency: ${efficiency}% | Attempts: ${t.stats.totalAttempts}`;
+        
+        // Verbose: Add error tracking details
+        if (verbose && t.progressData.errorTracking) {
+          const errors = Object.entries(t.progressData.errorTracking);
+          if (errors.length > 0) {
+            body += `\n  \n  Concepts Needing Review:`;
+            errors
+              .sort((a, b) => b[1].count - a[1].count)
+              .forEach(([conceptId, data]) => {
+                const conceptName = conceptId.replace(/_/g, ' ');
+                body += `\n    • ${conceptName}: ${data.count} error(s)`;
+                
+                // Show wrong answers given
+                if (data.wrongAnswers && data.wrongAnswers.length > 0) {
+                  const uniqueWrong = [...new Set(data.wrongAnswers)].slice(0, 3);
+                  body += `\n      Incorrect responses: ${uniqueWrong.join(', ')}`;
+                }
+                
+                // Show which rounds
+                if (data.rounds && data.rounds.length > 0) {
+                  body += `\n      Occurred in Round(s): ${[...new Set(data.rounds)].join(', ')}`;
+                }
+              });
+          }
+        }
+        
+        body += `\n`;
+      });
+      
+      // Verbose: Aggregate persistent errors across all topics
+      if (verbose) {
+        const allErrors = {};
+        topicsData.forEach(t => {
+          if (t.progressData.errorTracking) {
+            Object.entries(t.progressData.errorTracking).forEach(([conceptId, data]) => {
+              if (!allErrors[conceptId]) {
+                allErrors[conceptId] = { count: 0, topics: [] };
+              }
+              allErrors[conceptId].count += data.count;
+              allErrors[conceptId].topics.push(t.topicInfo.name || t.topicId);
+            });
+          }
+        });
+        
+        const persistentErrors = Object.entries(allErrors)
+          .filter(([, data]) => data.count >= 2 || data.topics.length > 1)
+          .sort((a, b) => b[1].count - a[1].count);
+        
+        if (persistentErrors.length > 0) {
+          body += `\nPERSISTENT AREAS OF DIFFICULTY\n------------------------------\n`;
+          persistentErrors.forEach(([conceptId, data]) => {
+            body += `• ${conceptId.replace(/_/g, ' ')}: ${data.count} total errors across ${data.topics.length} topic(s)\n`;
+          });
+        }
+      }
+      
+      body += `\n---\nSent from YouCantFakeThis Educational Platform\n${new Date().toLocaleString()}`;
+      
+      return { subject, body };
     }
 
     // ==================== HELPERS ====================
