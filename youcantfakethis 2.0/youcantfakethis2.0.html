@@ -581,9 +581,14 @@
       border-color: var(--error);
     }
 
-    .cloze-dropdown:disabled {
-      cursor: default;
-      opacity: 0.9;
+    .cloze-dropdown.readonly {
+      cursor: help;
+      opacity: 0.85;
+    }
+
+    .cloze-dropdown.readonly:focus {
+      outline: 2px solid var(--primary);
+      outline-offset: 1px;
     }
 
     /* Dropdown Tooltip */
@@ -2432,9 +2437,7 @@
           if (selected) selectClass += ' filled';
           if (result === true) selectClass += ' correct';
           if (result === false) selectClass += ' incorrect';
-          
-          // Disable dropdown if tab is complete (allow viewing but not changing)
-          const isDisabled = tabState.complete ? 'disabled' : '';
+          if (tabState.complete) selectClass += ' readonly';
           
           const optionsHtml = options.map(opt => 
             `<option value="${opt}" ${selected === opt ? 'selected' : ''}>${opt}</option>`
@@ -2452,8 +2455,7 @@
                     data-opened="${hasBeenOpened}"
                     onchange="handleSelection(this)"
                     onclick="markDropdownOpened(this)"
-                    onfocus="markDropdownOpened(this)"
-                    ${isDisabled}>
+                    onfocus="markDropdownOpened(this)">
               <option value="">Select...</option>
               ${optionsHtml}
             </select>
@@ -2527,6 +2529,16 @@
       
       const qId = select.dataset.question;
       const tabState = getTabState();
+      
+      // If tab is complete (readonly), revert to the saved value
+      if (tabState.complete) {
+        const savedValue = tabState.selections[qId] || '';
+        if (select.value !== savedValue) {
+          select.value = savedValue;
+          showToast('This section is complete - view only');
+        }
+        return;
+      }
       
       tabState.selections[qId] = select.value;
       
@@ -3581,7 +3593,7 @@ ${new Date().toLocaleString()}`;
       showToast('Debug mode: Auto-filling correct answers');
       
       // Fill all dropdowns with correct answers
-      document.querySelectorAll('.cloze-dropdown:not(:disabled)').forEach(select => {
+      document.querySelectorAll('.cloze-dropdown:not(.readonly)').forEach(select => {
         const correct = select.dataset.correct;
         if (correct) {
           select.value = correct;
@@ -3608,7 +3620,7 @@ ${new Date().toLocaleString()}`;
       console.log('Partial debug mode activated');
       showToast('Debug mode: 2/3 correct, 1/3 wrong');
       
-      const dropdowns = document.querySelectorAll('.cloze-dropdown:not(:disabled)');
+      const dropdowns = document.querySelectorAll('.cloze-dropdown:not(.readonly)');
       let index = 0;
       
       dropdowns.forEach(select => {
