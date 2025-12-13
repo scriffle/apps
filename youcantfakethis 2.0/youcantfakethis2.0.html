@@ -2734,9 +2734,16 @@
       let correct = 0;
       let total = 0;
       
-      // Grade all questions
+      // Grade only questions that are ACTUALLY rendered (have placeholders in text)
       tabContent.sentences.forEach(sentence => {
+        // Find placeholders in the text
+        const placeholders = sentence.text.match(/\{\{(\w+)\}\}/g) || [];
+        const renderedQIds = placeholders.map(p => p.replace(/\{\{|\}\}/g, ''));
+        
         Object.entries(sentence.questions).forEach(([qId, q]) => {
+          // Only grade if this question has a placeholder in the text
+          if (!renderedQIds.includes(qId)) return;
+          
           total++;
           const selected = tabState.selections[qId];
           const isCorrect = selected === q.correct;
@@ -2928,20 +2935,28 @@
       
       if (!tabContent) return;
       
-      // Get all question IDs for this tab
+      // Get all question IDs that are ACTUALLY in the text (rendered as dropdowns)
       const questionIds = [];
       tabContent.sentences.forEach(s => {
-        Object.keys(s.questions).forEach(qId => questionIds.push(qId));
+        // Find placeholders in the text: {{d1}}, {{d2}}, etc.
+        const placeholders = s.text.match(/\{\{(\w+)\}\}/g) || [];
+        placeholders.forEach(p => {
+          const qId = p.replace(/\{\{|\}\}/g, '');
+          // Only count if this question is defined
+          if (s.questions[qId]) {
+            questionIds.push(qId);
+          }
+        });
       });
       const total = questionIds.length;
       
-      // Count filled dropdowns (only for questions in this tab)
+      // Count filled dropdowns (only for questions that are rendered)
       let filled = 0;
       questionIds.forEach(qId => {
         if (tabState.selections[qId]) filled++;
       });
       
-      // Count correct (only for questions in this tab)
+      // Count correct (only for questions that are rendered)
       let correct = 0;
       questionIds.forEach(qId => {
         if (tabState.results[qId] === true) correct++;
