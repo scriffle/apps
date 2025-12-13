@@ -419,11 +419,12 @@
     }
 
     .progress-dot.complete {
-      background: var(--success);
+      background: #10b981;
     }
 
     .progress-dot.current {
-      background: var(--primary);
+      background: #f59e0b;
+      box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
     }
 
     /* Tab pulse animation - invitation to click next */
@@ -1423,6 +1424,7 @@
       
       // Topic state
       currentRound: 1,
+      highestRoundReached: 1,
       currentTab: null,
       tabStates: {},
       errorTracking: {},
@@ -2270,10 +2272,12 @@
       const savedProgress = Storage.loadTopicProgress(APP.topicData.metadata.id);
       if (savedProgress) {
         APP.currentRound = savedProgress.currentRound || 1;
+        APP.highestRoundReached = savedProgress.highestRoundReached || savedProgress.currentRound || 1;
         APP.tabStates = savedProgress.tabStates || {};
         APP.errorTracking = savedProgress.errorTracking || {};
       } else {
         APP.currentRound = 1;
+        APP.highestRoundReached = 1;
         APP.tabStates = {};
         APP.errorTracking = {};
       }
@@ -2730,6 +2734,11 @@
           showToast(`Round ${APP.currentRound} complete. Moving to Round ${APP.currentRound + 1}`);
           APP.currentRound++;
           
+          // Update highest round reached
+          if (APP.currentRound > APP.highestRoundReached) {
+            APP.highestRoundReached = APP.currentRound;
+          }
+          
           // Initialize new round tab states
           APP.topicData.tabs.forEach(tab => {
             const key = `round${APP.currentRound}_${tab.id}`;
@@ -2751,6 +2760,8 @@
           renderContent();
           updateHeader();
         } else {
+          // All 3 rounds complete
+          APP.highestRoundReached = 3;
           showToast('Topic complete. View your review.');
           switchTab('_review');
         }
@@ -2847,26 +2858,21 @@
           return APP.tabStates[key]?.complete;
         });
         
-        // Check if this round has been started (any tab has attempts)
-        const roundStarted = APP.topicData.tabs.some(tab => {
-          const key = `round${round}_${tab.id}`;
-          return APP.tabStates[key]?.attempts > 0;
-        });
-        
         // Determine pill state
         let pillClass = 'round-pill';
         let clickable = false;
         let label = `R${round}`;
         
         if (round === APP.currentRound) {
+          // Current round - highlighted, not clickable
           pillClass += ' current';
-          label = `R${round}`;
         } else if (roundComplete) {
+          // Completed round - green with checkmark, clickable
           pillClass += ' complete';
           clickable = true;
           label = `R${round}<span class="pill-check">✓</span>`;
-        } else if (round < APP.currentRound || roundStarted) {
-          // Previous round or started - available to view
+        } else if (round <= APP.highestRoundReached) {
+          // Unlocked but not complete - available to navigate
           pillClass += ' available';
           clickable = true;
         } else {
@@ -2887,19 +2893,8 @@
     function switchRound(round) {
       if (round === APP.currentRound) return;
       
-      // Check if round is accessible (complete or current/previous)
-      const roundComplete = APP.topicData.tabs.every(tab => {
-        const key = `round${round}_${tab.id}`;
-        return APP.tabStates[key]?.complete;
-      });
-      
-      const roundStarted = APP.topicData.tabs.some(tab => {
-        const key = `round${round}_${tab.id}`;
-        return APP.tabStates[key]?.attempts > 0;
-      });
-      
-      // Only allow switching to completed rounds or rounds before current
-      if (!roundComplete && round > APP.currentRound && !roundStarted) {
+      // Allow switching to any round up to and including highestRoundReached
+      if (round > APP.highestRoundReached) {
         showToast('Complete current round first');
         return;
       }
@@ -3565,6 +3560,7 @@ ${new Date().toLocaleString()}`;
       if (APP.topicData) {
         Storage.saveTopicProgress(APP.topicData.metadata.id, {
           currentRound: APP.currentRound,
+          highestRoundReached: APP.highestRoundReached,
           tabStates: APP.tabStates,
           errorTracking: APP.errorTracking
         });
