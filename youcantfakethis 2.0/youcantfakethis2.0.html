@@ -75,6 +75,69 @@
       gap: 4px;
     }
 
+    /* Round Navigation Pills */
+    .round-pills {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .round-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border: 2px solid transparent;
+      transition: all 0.2s;
+      cursor: default;
+      min-width: 32px;
+    }
+
+    .round-pill.locked {
+      background: #e5e7eb;
+      color: #9ca3af;
+      border-color: #d1d5db;
+    }
+
+    .round-pill.available {
+      background: #dbeafe;
+      color: #1e40af;
+      border-color: #93c5fd;
+      cursor: pointer;
+    }
+
+    .round-pill.available:hover {
+      background: #bfdbfe;
+      border-color: #60a5fa;
+    }
+
+    .round-pill.current {
+      background: #fef3c7;
+      color: #92400e;
+      border-color: #f59e0b;
+      box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
+    }
+
+    .round-pill.complete {
+      background: #d1fae5;
+      color: #065f46;
+      border-color: #34d399;
+      cursor: pointer;
+    }
+
+    .round-pill.complete:hover {
+      background: #a7f3d0;
+      border-color: #10b981;
+    }
+
+    .round-pill .pill-check {
+      margin-left: 3px;
+      font-size: 0.7rem;
+    }
+
     .header-right {
       display: flex;
       align-items: center;
@@ -1196,7 +1259,7 @@
     <div class="header-left">
       <div class="logo">📚 YouCantFakeThis</div>
       <div class="header-info" id="headerInfo">
-        <span id="roundDisplay"></span>
+        <div class="round-pills" id="roundPills"></div>
         <span id="totalScoreDisplay"></span>
       </div>
     </div>
@@ -2153,7 +2216,7 @@
         document.getElementById('welcomeScreen').style.display = 'block';
         
         // Update header
-        document.getElementById('roundDisplay').textContent = '';
+        document.getElementById('roundPills').innerHTML = '';
         document.getElementById('totalScoreDisplay').textContent = '';
       }
     }
@@ -2304,6 +2367,12 @@
 
     // ==================== CONTENT RENDERING ====================
     function renderContent() {
+      // If on review tab, render review content instead
+      if (APP.currentTab === '_review') {
+        renderReviewContent();
+        return;
+      }
+      
       const container = document.getElementById('topicContent');
       container.classList.add('active');
       
@@ -2737,7 +2806,7 @@
     }
 
     function updateHeader() {
-      document.getElementById('roundDisplay').textContent = `Round ${APP.currentRound}/3`;
+      renderRoundPills();
       
       // Calculate total score
       let totalCorrect = 0;
@@ -2763,6 +2832,106 @@
         const pct = Math.round(totalCorrect / totalQuestions * 100);
         document.getElementById('totalScoreDisplay').textContent = `Total: ${totalCorrect}/${totalQuestions} (${pct}%)`;
       }
+    }
+    
+    function renderRoundPills() {
+      const container = document.getElementById('roundPills');
+      if (!container || !APP.topicData) return;
+      
+      let html = '';
+      
+      for (let round = 1; round <= 3; round++) {
+        // Check if this round is complete (all tabs complete)
+        const roundComplete = APP.topicData.tabs.every(tab => {
+          const key = `round${round}_${tab.id}`;
+          return APP.tabStates[key]?.complete;
+        });
+        
+        // Check if this round has been started (any tab has attempts)
+        const roundStarted = APP.topicData.tabs.some(tab => {
+          const key = `round${round}_${tab.id}`;
+          return APP.tabStates[key]?.attempts > 0;
+        });
+        
+        // Determine pill state
+        let pillClass = 'round-pill';
+        let clickable = false;
+        let label = `R${round}`;
+        
+        if (round === APP.currentRound) {
+          pillClass += ' current';
+          label = `R${round}`;
+        } else if (roundComplete) {
+          pillClass += ' complete';
+          clickable = true;
+          label = `R${round}<span class="pill-check">✓</span>`;
+        } else if (round < APP.currentRound || roundStarted) {
+          // Previous round or started - available to view
+          pillClass += ' available';
+          clickable = true;
+        } else {
+          // Future round - locked
+          pillClass += ' locked';
+        }
+        
+        if (clickable) {
+          html += `<button class="${pillClass}" onclick="switchRound(${round})">${label}</button>`;
+        } else {
+          html += `<span class="${pillClass}">${label}</span>`;
+        }
+      }
+      
+      container.innerHTML = html;
+    }
+    
+    function switchRound(round) {
+      if (round === APP.currentRound) return;
+      
+      // Check if round is accessible (complete or current/previous)
+      const roundComplete = APP.topicData.tabs.every(tab => {
+        const key = `round${round}_${tab.id}`;
+        return APP.tabStates[key]?.complete;
+      });
+      
+      const roundStarted = APP.topicData.tabs.some(tab => {
+        const key = `round${round}_${tab.id}`;
+        return APP.tabStates[key]?.attempts > 0;
+      });
+      
+      // Only allow switching to completed rounds or rounds before current
+      if (!roundComplete && round > APP.currentRound && !roundStarted) {
+        showToast('Complete current round first');
+        return;
+      }
+      
+      APP.currentRound = round;
+      
+      // Initialize tab states for this round if needed
+      APP.topicData.tabs.forEach(tab => {
+        const key = `round${APP.currentRound}_${tab.id}`;
+        if (!APP.tabStates[key]) {
+          APP.tabStates[key] = {
+            selections: {},
+            results: {},
+            submitted: false,
+            attempts: 0,
+            bestScore: 0,
+            complete: false,
+            opened: {}
+          };
+        }
+      });
+      
+      // Switch to first content tab (not review)
+      APP.currentTab = APP.topicData.tabs[0].id;
+      
+      saveProgress();
+      renderTabs();
+      renderContent();
+      updateHeader();
+      updateControlPanel();
+      
+      showToast(`Viewing Round ${round}`);
     }
 
     // ==================== RESET FUNCTIONS ====================
@@ -3364,6 +3533,19 @@ ${new Date().toLocaleString()}`;
 
     // ==================== HELPERS ====================
     function getTabState() {
+      // Review tab doesn't have a state - return a dummy state
+      if (APP.currentTab === '_review') {
+        return {
+          selections: {},
+          results: {},
+          submitted: false,
+          attempts: 0,
+          bestScore: 0,
+          complete: false,
+          opened: {}
+        };
+      }
+      
       const key = `round${APP.currentRound}_${APP.currentTab}`;
       if (!APP.tabStates[key]) {
         APP.tabStates[key] = {
@@ -3372,7 +3554,8 @@ ${new Date().toLocaleString()}`;
           submitted: false,
           attempts: 0,
           bestScore: 0,
-          complete: false
+          complete: false,
+          opened: {}
         };
       }
       return APP.tabStates[key];
