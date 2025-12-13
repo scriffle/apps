@@ -2625,23 +2625,27 @@
       }
       
       // Check if complete
-      if (correct === total) {
+      const isComplete = correct === total;
+      if (isComplete) {
         tabState.complete = true;
-        checkRoundComplete();
-        
-        // Pulse next tab after brief delay (if not switching rounds/completing)
-        setTimeout(() => pulseNextTab(), 400);
       }
       
       saveProgress();
       renderContent();
       updateControlPanel();
       
+      // Update tabs immediately to show green dot if complete
+      renderTabs();
+      
       // Show feedback summary
       const summary = document.getElementById('feedbackSummary');
-      if (correct === total) {
+      if (isComplete) {
         summary.textContent = 'All correct.';
         summary.className = 'feedback-summary success';
+        
+        // Check round completion and pulse next tab after brief delay
+        checkRoundComplete();
+        setTimeout(() => pulseNextTab(), 400);
       } else {
         summary.textContent = `${correct}/${total} correct. Review the feedback below.`;
         summary.className = 'feedback-summary error';
@@ -2788,22 +2792,23 @@
       
       if (!tabContent) return;
       
-      // Count questions
-      let total = 0;
+      // Get all question IDs for this tab
+      const questionIds = [];
       tabContent.sentences.forEach(s => {
-        total += Object.keys(s.questions).length;
+        Object.keys(s.questions).forEach(qId => questionIds.push(qId));
       });
+      const total = questionIds.length;
       
-      // Count filled dropdowns
+      // Count filled dropdowns (only for questions in this tab)
       let filled = 0;
-      Object.values(tabState.selections).forEach(v => {
-        if (v) filled++;
+      questionIds.forEach(qId => {
+        if (tabState.selections[qId]) filled++;
       });
       
-      // Count correct
+      // Count correct (only for questions in this tab)
       let correct = 0;
-      Object.values(tabState.results).forEach(r => {
-        if (r === true) correct++;
+      questionIds.forEach(qId => {
+        if (tabState.results[qId] === true) correct++;
       });
       
       document.getElementById('scoreDisplay').textContent = `Score: ${correct}/${total}`;
