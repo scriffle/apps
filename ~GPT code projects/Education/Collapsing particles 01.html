@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>2D Barnes–Hut N-Body (Compact, No Log/Export)</title>
+<style>
+  body {
+    font-family: sans-serif;
+    margin: 8px;
+  }
+  #controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  canvas {
+    border: 1px solid #444;
+    background: #111;
+    display: block;
+    margin-top: 6px;
+  }
+  label, button {
+    font-size: 0.85rem;
+  }
+  select, input[type="number"] {
+    width: 4.5em; /* Make menus a consistent width */
+    font-size: 0.85rem;
+  }
+  #progress-bar-container,
+  #progress-bar-container-replay {
+    width: 300px;
+    height: 20px;
+    border: 1px solid #ccc;
+    margin-top: 6px;
+    position: relative;
+    display: none;
+  }
+  #progress-bar,
+  #progress-bar-replay {
+    width: 0%;
+    height: 100%;
+    background-color: #4caf50;
+  }
+</style>
+</head>
+<body>
+
+<div id="controls">
+  <label>Particles:
+    <input type="number" id="numParticles" value="1000" min="1" max="100000">
+  </label>
+  <label>Steps:
+    <input type="number" id="numTimeSteps" value="40000" min="1">
+  </label>
+  <label>dt:
+    <input type="number" step="0.001" id="timeStep" value="0.1">
+  </label>
+  <label>Soft:
+    <input type="number" step="0.0001" id="softening" value="0.01">
+  </label>
+  <label>Theta:
+    <input type="number" step="0.1" id="theta" value="0.5">
+  </label>
+  <label>G:
+    <input type="number" step="0.1" id="gravConstant" value="1.0">
+  </label>
+  <label>Spread:
+    <input type="number" step="1" id="spread" value="700">
+  </label>
+  <label>Swirl:
+    <input type="number" step="0.1" id="angularBias" value="0">
+  </label>
+  <input type="checkbox" id="trackLargestMass">Largest
+  <input type="checkbox" id="simNoVisual">NoVisual
+  <button id="startSimBtn">Start</button>
+  <button id="stopSimBtn" disabled>Stop</button>
+  <button id="replaySimBtn" disabled>Replay</button>
+  <label>Playback:
+    <select id="playbackSpeed">
+      <option value="1">1x</option>
+      <option value="2">2x</option>
+      <option value="4">4x</option>
+      <option value="10">10x</option>
+      <option value="50">50x</option>
+    </select>
+  </label>
+</div>
+
+<div>
+  <strong>Count:</strong> <span id="particleCountSpan">0</span>
+</div>
+
+<!-- Main Simulation Progress Bar -->
+<div id="progress-bar-container">
+  <div id="progress-bar"></div>
+</div>
+<!-- Replay Progress Bar -->
+<div id="progress-bar-container-replay">
+  <div id="progress-bar-replay"></div>
+</div>
+
+<canvas id="simulationCanvas" width="800" height="800"></canvas>
+
+<script>
+/*****************************************************************************
+ * Globals & Defaults
+ ****************************************************************************/
+let particles = [];
+let numParticles = 1000;
+let numTimeSteps = 40000;
+let dt = 0.1;
+let softening = 0.01;
+let G = 1.0;
+let theta = 0.5;
+let spread = 700;
+let angularBias = 0;
+let running = false;
+let currentTimeStep = 0;
+
+// For replay:
+let timeStepsData = [];
+// store frames at some interval
+const KEYFRAME_INTERVAL = 10;
+
+// Canvas
+let simulationCanvas = null;
+let simCtx = null;
+let simulationRequestId = null;
+
+// collision radius scaling
+const radiusScaleFactor = 1.0; 
+const MIN_SCREEN_RADIUS = 1;  
+
+/*****************************************************************************
+ * Particle
+ ****************************************************************************/
+class Particle {
+  constructor(x, y, vx, vy, mass, radius) {
+    this.x = x;
+    this.y = y;
+    this.vx = vx;
+    this.vy = vy;
+    this.mass = mass;
+    this.radius = radius;
+    this.trail = [];
+  }
+}
+
+/*****************************************************************************
+ * Quadtree for Barnes-Hut
+ ****************************************************************************/
+class QuadTreeNode {
+  constructor(x, y, size) {
+    this.x = x;
+    this.y = y;
+    this.size = size;
+    this.children = [null, null, null, null];
+    this.mass = 0;
+    this.cx = 0;
+    this.cy = 0;
+    this.particle = null;
+  }
+
+  insert(p) {
+    if (
+      this.mass === 0 &&
+      this.children[0] === null && this.children[1] === null &&
+      this.children[2] === null && this.children[3] === null &&
+      this.particle === null
+    ) {
+      this.particle = p;
+      this.mass = p.mass;
+      this.cx = p.x;
+      this.cy = p.y;
+      return;
+    }
+
+    let totalMass = this.mass + p.mass;
+    this.cx = (this.cx * this.mass + p.x * p.mass) / totalMass;
+    this.cy = (this.cy * this.mass + p.y * p.mass) / totalMass;
+    this.mass = totalMass;
+
+    if (this.particle !== null) {
+      let oldP = this.particle;
+      this.particle = null;
+      this._subdivideAndInsert(oldP);
+    }
+    this._subdivideAndInsert(p);
+  }
+
+  _subdivideAndInsert(p) {
+    let mid = this.size / 2;
+    let index = 0;
+    let left = (p.x < this.x);
+    let top  = (p.y < this.y);
+
+    if (!left &&  top) index = 1;
+    if ( left && !top) index = 2;
+    if (!left && !top) index = 3;
+
+    if (this.children[index] === null) {
+      let childX = this.x + (left ? -mid/2 : mid/2);
+      let childY = this.y + (top  ? -mid/2 : mid/2);
+      this.children[index] = new QuadTreeNode(childX, childY, mid);
+    }
+    this.children[index].insert(p);
+  }
+
+  accumulateForce(px, py, pmass, axay) {
+    if (this.mass === 0) return;
+    let dx = this.cx - px;
+    let dy = this.cy - py;
+    let distSq = dx*dx + dy*dy + softening*softening;
+    let dist = Math.sqrt(distSq);
+    let ratio = this.size / dist;
+
+    // if far or leaf => single mass
+    if (
+      (this.children[0] === null && this.children[1] === null &&
+       this.children[2] === null && this.children[3] === null) ||
+      (ratio < theta)
+    ) {
+      let invDist3 = 1.0 / (distSq * dist);
+      let f = G * this.mass * pmass * invDist3;
+      axay[0] += f * dx;
+      axay[1] += f * dy;
+    } else {
+      for (let i=0; i<4; i++) {
+        if (this.children[i] !== null) {
+          this.children[i].accumulateForce(px, py, pmass, axay);
+        }
+      }
+    }
+  }
+}
+
+/*****************************************************************************
+ * Initialization & Collisions
+ ****************************************************************************/
+function initParticles() {
+  particles = [];
+  for (let i=0; i<numParticles; i++) {
+    let angle = 2*Math.PI*Math.random();
+    let r = spread*Math.sqrt(Math.random());
+    let x = r*Math.cos(angle);
+    let y = r*Math.sin(angle);
+
+    let vMag = angularBias*(r/spread);
+    let vx = -Math.sin(angle)*vMag;
+    let vy =  Math.cos(angle)*vMag;
+
+    let p = new Particle(x,y,vx,vy,1,1);
+    particles.push(p);
+  }
+  updateParticleCount();
+}
+
+function buildQuadTree() {
+  let size = spread*4; // cover ~ [-2spread..+2spread]
+  let root = new QuadTreeNode(0,0,size);
+  for (let p of particles) {
+    root.insert(p);
+  }
+  return root;
+}
+
+function handleCollisions() {
+  let merged = new Set();
+
+  for (let i=0; i<particles.length; i++) {
+    if (merged.has(i)) continue;
+    for (let j=i+1; j<particles.length; j++) {
+      if (merged.has(j)) continue;
+      let pi = particles[i];
+      let pj = particles[j];
+      let dx = pi.x - pj.x;
+      let dy = pi.y - pj.y;
+      let dist = Math.sqrt(dx*dx + dy*dy);
+
+      if (dist < (pi.radius + pj.radius)) {
+        let m1 = pi.mass, m2 = pj.mass;
+        let newM = m1+m2;
+        let newX = (pi.x*m1 + pj.x*m2)/newM;
+        let newY = (pi.y*m1 + pj.y*m2)/newM;
+        let newVx = (pi.vx*m1 + pj.vx*m2)/newM;
+        let newVy = (pi.vy*m1 + pj.vy*m2)/newM;
+
+        pi.mass = newM;
+        pi.x = newX;
+        pi.y = newY;
+        pi.vx = newVx;
+        pi.vy = newVy;
+        pi.radius = Math.cbrt(newM)*radiusScaleFactor;
+
+        merged.add(j);
+      }
+    }
+  }
+
+  if (merged.size>0) {
+    particles = particles.filter((_,idx)=>!merged.has(idx));
+    updateParticleCount();
+  }
+}
+
+/*****************************************************************************
+ * Stepping
+ ****************************************************************************/
+function stepSimulation(noVisualMode=false) {
+  let root = buildQuadTree();
+
+  for (let p of particles) {
+    let axay=[0,0];
+    root.accumulateForce(p.x,p.y,p.mass,axay);
+    p.vx += (axay[0]/p.mass)*dt;
+    p.vy += (axay[1]/p.mass)*dt;
+  }
+
+  // if noVisual => don't store trails
+  let trailMaxLen = (!noVisualMode && (particles.length<100)) ? Math.round(1/dt) : 0;
+
+  for (let p of particles) {
+    p.x += p.vx*dt;
+    p.y += p.vy*dt;
+    if (trailMaxLen>0) {
+      p.trail.push({x:p.x,y:p.y});
+      if(p.trail.length>trailMaxLen){
+        p.trail.shift();
+      }
+    }
+  }
+
+  handleCollisions();
+}
+
+/*****************************************************************************
+ * Drawing
+ ****************************************************************************/
+function drawParticles() {
+  simCtx.clearRect(0,0,simulationCanvas.width,simulationCanvas.height);
+
+  let track=document.getElementById("trackLargestMass").checked;
+  let largest=null;
+  if(track && particles.length>0){
+    largest=particles.reduce((acc,p)=>(p.mass>acc.mass?p:acc),particles[0]);
+  }
+
+  let scaleVal=simulationCanvas.width/(2*spread+100);
+  simCtx.save();
+  simCtx.translate(simulationCanvas.width/2,simulationCanvas.height/2);
+  if(largest){
+    simCtx.translate(-largest.x*scaleVal,-largest.y*scaleVal);
+  }
+
+  // draw trails if <100
+  if(particles.length<100){
+    simCtx.strokeStyle="rgba(255,255,255,0.3)";
+    simCtx.lineWidth=1;
+    for(let p of particles){
+      if(p.trail.length<2) continue;
+      simCtx.beginPath();
+      simCtx.moveTo(p.trail[0].x*scaleVal,p.trail[0].y*scaleVal);
+      for(let i=1;i<p.trail.length;i++){
+        simCtx.lineTo(p.trail[i].x*scaleVal,p.trail[i].y*scaleVal);
+      }
+      simCtx.stroke();
+    }
+  }
+
+  // draw all
+  simCtx.fillStyle="white";
+  for(let p of particles){
+    let sx=p.x*scaleVal;
+    let sy=p.y*scaleVal;
+    let sr=p.radius*scaleVal;
+    if(sr<MIN_SCREEN_RADIUS) sr=MIN_SCREEN_RADIUS;
+    simCtx.beginPath();
+    simCtx.arc(sx,sy,sr,0,2*Math.PI);
+    simCtx.fill();
+  }
+
+  // highlight top5 if >=100
+  if(particles.length>=100){
+    let top5=[...particles].sort((a,b)=>b.mass-a.mass).slice(0,5);
+    simCtx.strokeStyle="rgba(0,255,255,0.5)";
+    simCtx.lineWidth=2;
+    for(let ob of top5){
+      let sx=ob.x*scaleVal;
+      let sy=ob.y*scaleVal;
+      let sr=ob.radius*scaleVal+2;
+      if(sr<MIN_SCREEN_RADIUS) sr=MIN_SCREEN_RADIUS;
+      simCtx.beginPath();
+      simCtx.arc(sx,sy,sr,0,2*Math.PI);
+      simCtx.stroke();
+    }
+  }
+
+  simCtx.restore();
+}
+
+function updateParticleCount(){
+  document.getElementById("particleCountSpan").textContent=particles.length;
+}
+
+/*****************************************************************************
+ * Progress Bars
+ ****************************************************************************/
+function updateProgressBar(ratio){
+  document.getElementById("progress-bar").style.width=(ratio*100)+"%";
+}
+function showProgressBar(show){
+  const c=document.getElementById("progress-bar-container");
+  if(show){
+    c.style.display="block";
+    updateProgressBar(0);
+  } else {
+    c.style.display="none";
+  }
+}
+function updateReplayProgressBar(ratio){
+  document.getElementById("progress-bar-replay").style.width=(ratio*100)+"%";
+}
+function showReplayProgressBar(show){
+  const c=document.getElementById("progress-bar-container-replay");
+  if(show){
+    c.style.display="block";
+    updateReplayProgressBar(0);
+  } else {
+    c.style.display="none";
+  }
+}
+
+/*****************************************************************************
+ * Simulation
+ ****************************************************************************/
+function runSimulationNoVisual(){
+  const STEPS_PER_BATCH=200;  
+  function runBatch(){
+    let endStep=Math.min(currentTimeStep+STEPS_PER_BATCH,numTimeSteps);
+    while(currentTimeStep<endStep && running){
+      stepSimulation(true); // noVisualMode=true => no trails
+      if(currentTimeStep%KEYFRAME_INTERVAL===0){
+        storeCurrentState();
+      }
+      currentTimeStep++;
+      updateProgressBar(currentTimeStep/numTimeSteps);
+    }
+    if(currentTimeStep<numTimeSteps && running){
+      setTimeout(runBatch,1);
+    } else {
+      finishSimulation();
+    }
+  }
+  runBatch();
+}
+
+function runSimulationVisual(){
+  const STEPS_PER_BATCH=200;  
+  function runBatch(){
+    let endStep=Math.min(currentTimeStep+STEPS_PER_BATCH,numTimeSteps);
+    while(currentTimeStep<endStep && running){
+      stepSimulation(false); // do store trails if <100
+      if(currentTimeStep%KEYFRAME_INTERVAL===0){
+        storeCurrentState();
+      }
+      currentTimeStep++;
+      updateProgressBar(currentTimeStep/numTimeSteps);
+      drawParticles();
+    }
+    if(currentTimeStep<numTimeSteps && running){
+      setTimeout(runBatch,1);
+    } else {
+      finishSimulation();
+    }
+  }
+  runBatch();
+}
+
+/*****************************************************************************
+ * Replay
+ ****************************************************************************/
+function storeCurrentState(){
+  // store [x,y,radius] for each particle
+  let frameData=particles.map(p=>[p.x,p.y,p.radius,p.trail]);
+  timeStepsData.push(frameData);
+}
+
+function replayAnimation(){
+  showReplayProgressBar(true);
+  let speed=parseFloat(document.getElementById("playbackSpeed").value);
+  let stepIndex=0;
+  let totalFrames=timeStepsData.length;
+
+  cancelAnimationFrame(simulationRequestId);
+
+  function replayStep(){
+    if(stepIndex>=totalFrames){
+      showReplayProgressBar(false);
+      return;
+    }
+    simCtx.clearRect(0,0,simulationCanvas.width,simulationCanvas.height);
+
+    let frameData=timeStepsData[stepIndex];
+    // track largest?
+    let track=document.getElementById("trackLargestMass").checked;
+    let arr=frameData.map(d=>{
+      // d => [x,y,r, trail]
+      // approximate mass by r^3
+      let vol=d[2]*d[2]*d[2];
+      return {x:d[0], y:d[1], r:d[2], vol, trail:d[3]||[]};
+    });
+
+    let largest=null;
+    if(track && arr.length>0){
+      largest=arr.reduce((acc,o)=>(o.vol>acc.vol?o:acc),arr[0]);
+    }
+
+    let scaleVal=simulationCanvas.width/(2*spread+100);
+    simCtx.save();
+    simCtx.translate(simulationCanvas.width/2,simulationCanvas.height/2);
+    if(largest){
+      simCtx.translate(-largest.x*scaleVal,-largest.y*scaleVal);
+    }
+
+    // draw trails if <100
+    if(arr.length<100){
+      simCtx.strokeStyle="rgba(255,255,255,0.3)";
+      simCtx.lineWidth=1;
+      for(let p of arr){
+        if(p.trail.length<2) continue;
+        simCtx.beginPath();
+        simCtx.moveTo(p.trail[0].x*scaleVal,p.trail[0].y*scaleVal);
+        for(let i=1;i<p.trail.length;i++){
+          simCtx.lineTo(p.trail[i].x*scaleVal,p.trail[i].y*scaleVal);
+        }
+        simCtx.stroke();
+      }
+    }
+
+    // draw
+    simCtx.fillStyle="white";
+    for(let p of arr){
+      let sx=p.x*scaleVal;
+      let sy=p.y*scaleVal;
+      let sr=p.r*scaleVal;
+      if(sr<MIN_SCREEN_RADIUS) sr=MIN_SCREEN_RADIUS;
+      simCtx.beginPath();
+      simCtx.arc(sx,sy,sr,0,2*Math.PI);
+      simCtx.fill();
+    }
+
+    // highlight top 5 if >=100
+    if(arr.length>=100){
+      arr.sort((a,b)=>b.vol-a.vol);
+      let top5=arr.slice(0,5);
+      simCtx.strokeStyle="rgba(0,255,255,0.5)";
+      simCtx.lineWidth=2;
+      for(let ob of top5){
+        let sx=ob.x*scaleVal;
+        let sy=ob.y*scaleVal;
+        let sr=ob.r*scaleVal+2;
+        if(sr<MIN_SCREEN_RADIUS) sr=MIN_SCREEN_RADIUS;
+        simCtx.beginPath();
+        simCtx.arc(sx,sy,sr,0,2*Math.PI);
+        simCtx.stroke();
+      }
+    }
+
+    simCtx.restore();
+
+    updateReplayProgressBar(stepIndex/totalFrames);
+    stepIndex++;
+    setTimeout(replayStep,16/speed);
+  }
+  replayStep();
+}
+
+/*****************************************************************************
+ * Lifecycle
+ ****************************************************************************/
+function startSimulation(){
+  numParticles=parseInt(document.getElementById("numParticles").value);
+  numTimeSteps=parseInt(document.getElementById("numTimeSteps").value);
+  dt=parseFloat(document.getElementById("timeStep").value);
+  softening=parseFloat(document.getElementById("softening").value);
+  theta=parseFloat(document.getElementById("theta").value);
+  G=parseFloat(document.getElementById("gravConstant").value);
+  spread=parseFloat(document.getElementById("spread").value);
+  angularBias=parseFloat(document.getElementById("angularBias").value);
+
+  running=true;
+  currentTimeStep=0;
+  timeStepsData=[];
+
+  initParticles();
+  storeCurrentState();
+  showProgressBar(true);
+
+  document.getElementById("startSimBtn").disabled=true;
+  document.getElementById("stopSimBtn").disabled=false;
+  document.getElementById("replaySimBtn").disabled=true;
+
+  if(document.getElementById("simNoVisual").checked){
+    runSimulationNoVisual();
+  } else {
+    runSimulationVisual();
+  }
+}
+
+function stopSimulation(){
+  running=false;
+  if(simulationRequestId){
+    cancelAnimationFrame(simulationRequestId);
+    simulationRequestId=null;
+  }
+}
+
+function finishSimulation(){
+  running=false;
+  if(simulationRequestId){
+    cancelAnimationFrame(simulationRequestId);
+    simulationRequestId=null;
+  }
+  document.getElementById("startSimBtn").disabled=false;
+  document.getElementById("stopSimBtn").disabled=true;
+  document.getElementById("replaySimBtn").disabled=false;
+  showProgressBar(false);
+}
+
+window.onload=function(){
+  simulationCanvas=document.getElementById("simulationCanvas");
+  simCtx=simulationCanvas.getContext("2d");
+
+  document.getElementById("startSimBtn").addEventListener("click",startSimulation);
+  document.getElementById("stopSimBtn").addEventListener("click",stopSimulation);
+  document.getElementById("replaySimBtn").addEventListener("click",replayAnimation);
+};
+</script>
+</body>
+</html>

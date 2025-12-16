@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Einstein's Second Postulate Simulator</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #000;
+        }
+        canvas {
+            display: block;
+        }
+        .controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+        }
+        .control-group {
+            margin-bottom: 10px;
+        }
+        label {
+            margin-right: 5px;
+        }
+        .speech-bubble {
+            position: absolute;
+            background: #fff;
+            border-radius: .4em;
+            padding: 5px 10px;
+            font-size: 12px;
+            font-family: Arial, sans-serif;
+            color: #000;
+            z-index: 5;
+            white-space: nowrap;
+        }
+        .speech-bubble::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 0;
+            border: 5px solid transparent;
+        }
+        #speech1::after {
+            border-bottom-color: #fff;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #speech2::after {
+            border-bottom-color: #fff;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #speechLight::after {
+            border-top-color: #fff;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .button-container {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .reset-button, .randomize-button, .caveat-button {
+            padding: 5px 10px;
+            font-size: 14px;
+            font-family: Arial, sans-serif;
+            border: none;
+            border-radius: 5px;
+            color: #fff;
+            cursor: pointer;
+        }
+        .reset-button {
+            background-color: #007bff;
+        }
+        .randomize-button {
+            background-color: #28a745;
+        }
+        .caveat-button {
+            background-color: #ffc107;
+            color: #000;
+        }
+        /* Help button styling */
+        .help-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.8);
+            border: none;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 10;
+        }
+        /* Modal styling */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        .modal-content {
+            background-color: #fff;
+            margin: auto;
+            padding: 20px;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 600px;
+            font-family: Arial, sans-serif;
+            color: #000;
+        }
+        .modal-content h2 {
+            margin-top: 0;
+        }
+        .modal-content p {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        .close-button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <div class="control-group">
+            <label for="speed1">Object 1 Speed:</label>
+            <input type="range" id="speed1" min="0" max="9" value="0" step="0.1">
+            <label for="direction1">Direction:</label>
+            <input type="range" id="direction1" min="0" max="360" value="0" step="1">
+        </div>
+        <div class="control-group">
+            <label for="speed2">Object 2 Speed:</label>
+            <input type="range" id="speed2" min="0" max="9" value="0" step="0.1">
+            <label for="direction2">Direction:</label>
+            <input type="range" id="direction2" min="0" max="360" value="0" step="1">
+        </div>
+        <div class="control-group">
+            <label for="lightSourceSpeed">Light Source Speed:</label>
+            <input type="range" id="lightSourceSpeed" min="0" max="9" value="0" step="0.1">
+            <label for="lightSourceDirection">Direction:</label>
+            <input type="range" id="lightSourceDirection" min="0" max="360" value="0" step="1">
+        </div>
+        <div class="control-group">
+            <label for="speedOfLightChange">Speed of Light Adjustment:</label>
+            <input type="range" id="speedOfLightChange" min="-50" max="50" value="0" step="1">
+        </div>
+        <div class="button-container">
+            <button class="reset-button" id="resetButton">Reset</button>
+            <button class="randomize-button" id="randomizeButton">Randomize</button>
+            <button class="caveat-button" id="caveatButton">Caveat</button>
+        </div>
+    </div>
+    <button class="help-button" id="helpButton">?</button>
+    <div class="speech-bubble" id="speech1">I measure the speed of light as c</div>
+    <div class="speech-bubble" id="speech2">I measure the speed of light as c</div>
+    <div class="speech-bubble" id="speechLight">I measure the speed of light as c</div>
+    <canvas id="simulation"></canvas>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="modal">
+        <div class="modal-content">
+            <h2>Einstein's Second Postulate Simulation</h2>
+            <p>This simulation demonstrates Einstein's second postulate of special relativity, which states that the speed of light in a vacuum is the same for all observers, regardless of the motion of the light source or the observer.</p>
+            <p>The white circle represents a light source emitting photons in all directions at the speed of light. The red circles represent two massive objects that move slower than the speed of light.</p>
+            <p>You can adjust the speeds and directions of the red objects and the light source using the controls on the left. The speed of light can also be adjusted up or down by 50%.</p>
+            <button class="close-button" id="closeHelpButton">Close</button>
+        </div>
+    </div>
+
+    <!-- Caveat Modal -->
+    <div id="caveatModal" class="modal">
+        <div class="modal-content">
+            <h2>Important Caveat</h2>
+            <p>It's important to understand that we cannot actually see photons traveling through space as depicted in this simulation. The visualization of photons as moving yellow dots is purely for educational purposes.</p>
+            <p>In reality, the speed of light is an inherent property of photons, not something we can directly observe in transit. When we attempt to measure or detect a photon, we absorb it - effectively destroying it in the process of measurement.</p>
+            <p>However, through countless experiments and observations, physicists are confident that photons always travel at the speed of light (c) in a vacuum, regardless of the motion of the source or the observer's frame of reference. This fundamental principle is one of the cornerstones of Einstein's special theory of relativity.</p>
+            <button class="close-button" id="closeCaveatButton">Close</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simulation');
+        const ctx = canvas.getContext('2d');
+
+        // Resize canvas to fit the window
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Initial speed of light in pixels per second (takes 5 seconds to cross the width of the window)
+        const initialSpeedOfLight = canvas.width / 5;
+        let speedOfLight = initialSpeedOfLight;
+        let maxObjectSpeed = speedOfLight * 0.9; // Objects and light source move at most 90% of the speed of light
+
+        // Initialize objects with positions, directions, and velocities
+        let object1, object2, lightSource;
+        let photons = [];
+
+        function initializeObjects() {
+            object1 = { x: canvas.width * 0.2, y: canvas.height / 2, speed: 0, direction: 0 };
+            object2 = { x: canvas.width * 0.8, y: canvas.height / 2, speed: 0, direction: 0 };
+            lightSource = { x: canvas.width / 2, y: canvas.height / 2, speed: 0, direction: 0 };
+
+            photons = []; // Reset photons
+
+            document.getElementById('speed1').value = 0;
+            document.getElementById('direction1').value = 0;
+
+            document.getElementById('speed2').value = 0;
+            document.getElementById('direction2').value = 0;
+
+            document.getElementById('lightSourceSpeed').value = 0;
+            document.getElementById('lightSourceDirection').value = 0;
+            document.getElementById('speedOfLightChange').value = 0;
+        }
+
+        initializeObjects();
+
+        function randomizeObjects() {
+            initializeObjects(); // Reset first
+            object1.speed = Math.random() * maxObjectSpeed;
+            object1.direction = Math.random() * 2 * Math.PI;
+            document.getElementById('speed1').value = object1.speed / maxObjectSpeed * 10;
+            document.getElementById('direction1').value = object1.direction * 180 / Math.PI;
+
+            object2.speed = Math.random() * maxObjectSpeed;
+            object2.direction = Math.random() * 2 * Math.PI;
+            document.getElementById('speed2').value = object2.speed / maxObjectSpeed * 10;
+            document.getElementById('direction2').value = object2.direction * 180 / Math.PI;
+
+            lightSource.speed = Math.random() * maxObjectSpeed;
+            lightSource.direction = Math.random() * 2 * Math.PI;
+            document.getElementById('lightSourceSpeed').value = lightSource.speed / maxObjectSpeed * 10;
+            document.getElementById('lightSourceDirection').value = lightSource.direction * 180 / Math.PI;
+        }
+
+        // Update the speed of light based on the slider input
+        document.getElementById('speedOfLightChange').addEventListener('input', function() {
+            const changePercentage = parseFloat(this.value) / 100;
+            speedOfLight = initialSpeedOfLight * (1 + changePercentage);
+            maxObjectSpeed = speedOfLight * 0.9;
+
+            // Adjust current speeds proportionally and cap them at 90% of the new speed of light
+            object1.speed = Math.min(object1.speed, maxObjectSpeed);
+            object2.speed = Math.min(object2.speed, maxObjectSpeed);
+            lightSource.speed = Math.min(lightSource.speed, maxObjectSpeed);
+
+            document.getElementById('speed1').value = object1.speed / maxObjectSpeed * 10;
+            document.getElementById('speed2').value = object2.speed / maxObjectSpeed * 10;
+            document.getElementById('lightSourceSpeed').value = lightSource.speed / maxObjectSpeed * 10;
+
+            // Update the speed of all existing photons
+            photons.forEach(photon => {
+                const magnitude = Math.sqrt(photon.vx ** 2 + photon.vy ** 2);
+                photon.vx = (photon.vx / magnitude) * speedOfLight;
+                photon.vy = (photon.vy / magnitude) * speedOfLight;
+            });
+        });
+
+        // Update the speeds and directions based on the control inputs
+        document.getElementById('speed1').addEventListener('input', function() {
+            object1.speed = parseFloat(this.value) / 10 * maxObjectSpeed;
+        });
+
+        document.getElementById('direction1').addEventListener('input', function() {
+            object1.direction = parseFloat(this.value) * Math.PI / 180;
+        });
+
+        document.getElementById('speed2').addEventListener('input', function() {
+            object2.speed = parseFloat(this.value) / 10 * maxObjectSpeed;
+        });
+
+        document.getElementById('direction2').addEventListener('input', function() {
+            object2.direction = parseFloat(this.value) * Math.PI / 180;
+        });
+
+        document.getElementById('lightSourceSpeed').addEventListener('input', function() {
+            lightSource.speed = parseFloat(this.value) / 10 * maxObjectSpeed;
+        });
+
+        document.getElementById('lightSourceDirection').addEventListener('input', function() {
+            lightSource.direction = parseFloat(this.value) * Math.PI / 180;
+        });
+
+        // Reset button to reset positions, speeds, directions, and photons
+        document.getElementById('resetButton').addEventListener('click', function() {
+            initializeObjects();
+        });
+
+        // Randomize button to randomly set speeds and directions
+        document.getElementById('randomizeButton').addEventListener('click', function() {
+            randomizeObjects();
+        });
+
+        // Modal handling
+        const helpModal = document.getElementById('helpModal');
+        const caveatModal = document.getElementById('caveatModal');
+        const helpButton = document.getElementById('helpButton');
+        const caveatButton = document.getElementById('caveatButton');
+        const closeHelpButton = document.getElementById('closeHelpButton');
+        const closeCaveatButton = document.getElementById('closeCaveatButton');
+
+        helpButton.onclick = function() {
+            helpModal.style.display = "flex";
+        };
+
+        caveatButton.onclick = function() {
+            caveatModal.style.display = "flex";
+        };
+
+        closeHelpButton.onclick = function() {
+            helpModal.style.display = "none";
+        };
+
+        closeCaveatButton.onclick = function() {
+            caveatModal.style.display = "none";
+        };
+
+        // Close modals when clicking outside
+        window.onclick = function(event) {
+            if (event.target == helpModal) {
+                helpModal.style.display = "none";
+            }
+            if (event.target == caveatModal) {
+                caveatModal.style.display = "none";
+            }
+        };
+
+        // Function to emit photons with random directions, constant speed, and fading over 15 seconds
+        function emitRandomPhotons() {
+            const photons = [];
+            for (let i = 0; i < 10; i++) { // Emit a batch of photons each frame
+                const angle = Math.random() * 2 * Math.PI;
+                photons.push({
+                    x: lightSource.x,
+                    y: lightSource.y,
+                    vx: Math.cos(angle) * speedOfLight,
+                    vy: Math.sin(angle) * speedOfLight,
+                    age: 0,
+                    lifetime: 15 // Lifetime of 15 seconds
+                });
+            }
+            return photons;
+        }
+
+        // Animation loop
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update and draw photons
+            photons.forEach((photon, index) => {
+                photon.x += photon.vx * 0.016;
+                photon.y += photon.vy * 0.016;
+                photon.age += 0.016;
+
+                // Destroy photons that reach the edge of the display
+                if (photon.x < 0 || photon.x > canvas.width || photon.y < 0 || photon.y > canvas.height) {
+                    photons.splice(index, 1);
+                    return;
+                }
+
+                // Fade photons exponentially over time
+                const alpha = Math.exp(-photon.age / photon.lifetime);
+
+                ctx.fillStyle = `rgba(255, 255, 0, ${alpha})`;
+                ctx.fillRect(photon.x, photon.y, 2, 2);
+
+                // Remove photons that have exceeded their lifetime
+                if (photon.age >= photon.lifetime) {
+                    photons.splice(index, 1);
+                }
+            });
+
+            // Emit new random photons
+            photons = photons.concat(emitRandomPhotons());
+
+            // Update object positions
+            object1.x += object1.speed * Math.cos(object1.direction) * 0.016;
+            object1.y += object1.speed * Math.sin(object1.direction) * 0.016;
+
+            object2.x += object2.speed * Math.cos(object2.direction) * 0.016;
+            object2.y += object2.speed * Math.sin(object2.direction) * 0.016;
+
+            lightSource.x += lightSource.speed * Math.cos(lightSource.direction) * 0.016;
+            lightSource.y += lightSource.speed * Math.sin(lightSource.direction) * 0.016;
+
+            // Wrap objects and light source around the screen
+            if (object1.x > canvas.width) object1.x = 0;
+            if (object1.x < 0) object1.x = canvas.width;
+            if (object1.y > canvas.height) object1.y = 0;
+            if (object1.y < 0) object1.y = canvas.height;
+
+            if (object2.x > canvas.width) object2.x = 0;
+            if (object2.x < 0) object2.x = canvas.width;
+            if (object2.y > canvas.height) object2.y = 0;
+            if (object2.y < 0) object2.y = canvas.height;
+
+            if (lightSource.x > canvas.width) lightSource.x = 0;
+            if (lightSource.x < 0) lightSource.x = canvas.width;
+            if (lightSource.y > canvas.height) lightSource.y = 0;
+            if (lightSource.y < 0) lightSource.y = canvas.height;
+
+            // Draw objects
+            ctx.fillStyle = '#FF0000';
+            ctx.beginPath();
+            ctx.arc(object1.x, object1.y, 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(object2.x, object2.y, 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw light source
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(lightSource.x, lightSource.y, 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Position speech bubbles
+            const speech1 = document.getElementById('speech1');
+            speech1.style.left = `${object1.x - speech1.offsetWidth / 2}px`;
+            speech1.style.top = `${object1.y - 40}px`;
+
+            const speech2 = document.getElementById('speech2');
+            speech2.style.left = `${object2.x - speech2.offsetWidth / 2}px`;
+            speech2.style.top = `${object2.y - 40}px`;
+
+            const speechLight = document.getElementById('speechLight');
+            speechLight.style.left = `${lightSource.x - speechLight.offsetWidth / 2}px`;
+            speechLight.style.top = `${lightSource.y + 15}px`;
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>

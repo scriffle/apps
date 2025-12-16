@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASCII DOOM: Physics Nobel Edition</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        
+        #game-container {
+            text-align: center;
+        }
+        
+        #game {
+            background: #000;
+            border: 2px solid #0f0;
+            padding: 10px;
+            white-space: pre;
+            font-size: 12px;
+            line-height: 1;
+            letter-spacing: 2px;
+            display: inline-block;
+        }
+        
+        #hud {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #0f0;
+            text-align: left;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 10px;
+        }
+        
+        #message {
+            margin-top: 10px;
+            font-size: 16px;
+            color: #ff0;
+            height: 20px;
+        }
+        
+        #controls {
+            margin-top: 20px;
+            color: #888;
+            font-size: 12px;
+        }
+        
+        .flash {
+            animation: flash 0.1s;
+        }
+        
+        @keyframes flash {
+            0% { background: #f00; }
+            100% { background: #000; }
+        }
+        
+        .enemy-hit {
+            animation: enemyHit 0.2s;
+        }
+        
+        @keyframes enemyHit {
+            0% { color: #f00; }
+            100% { color: #0f0; }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="game"></div>
+        <div id="hud">
+            <span>HEALTH: <span id="health">100</span></span>
+            <span>AMMO: <span id="ammo">∞</span></span>
+            <span>SCORE: <span id="score">0</span></span>
+        </div>
+        <div id="message"></div>
+        <div id="controls">
+            WASD: Move | ←→: Look | Space: Shoot | R: Restart
+        </div>
+    </div>
+
+    <script>
+        const WIDTH = 80;
+        const HEIGHT = 24;
+        const FOV = Math.PI / 3;
+        const DEPTH = 16;
+        const SPEED = 0.1;
+        const TURN_SPEED = 0.05;
+        
+        // Nobel Prize winner enemies
+        const ENEMIES = [
+            { name: "Einstein", symbol: "E", health: 3, speed: 0.02, damage: 10, quote: "E=mc² hurts!" },
+            { name: "Curie", symbol: "C", health: 2, speed: 0.03, damage: 15, quote: "Radioactive decay!" },
+            { name: "Feynman", symbol: "F", health: 4, speed: 0.025, damage: 12, quote: "Quantum punch!" },
+            { name: "Bohr", symbol: "B", health: 3, speed: 0.03, damage: 8, quote: "Atomic model attack!" },
+            { name: "Heisenberg", symbol: "H", health: 5, speed: 0.02, damage: 20, quote: "Uncertainty principle!" },
+            { name: "Schrödinger", symbol: "S", health: 3, speed: 0.04, damage: 10, quote: "Cat paradox!" }
+        ];
+        
+        // Simple maze layout
+        const MAP = [
+            "####################################",
+            "#..................................#",
+            "#..................................#",
+            "#...######...####...######.........#",
+            "#...#....#...#..#...#....#.........#",
+            "#...#....#...#..#...#....#.........#",
+            "#...######...####...######.........#",
+            "#..................................#",
+            "#..................................#",
+            "#####...#########...###############",
+            "#...#...#.......#...#.............#",
+            "#...#...#.......#...#.............#",
+            "#...#...#.......#...#.............#",
+            "#...#####.......#####.............#",
+            "#..................................#",
+            "#..................................#",
+            "#...#########...#########...#######",
+            "#...#.......#...#.......#...#.....#",
+            "#...#.......#...#.......#...#.....#",
+            "#...#.......#...#.......#...#.....#",
+            "#...#########...#########...#######",
+            "#..................................#",
+            "#..................................#",
+            "####################################"
+        ];
+        
+        let player = { x: 5, y: 5, angle: 0, health: 100, score: 0 };
+        let enemies = [];
+        let bullets = [];
+        let message = "";
+        let messageTimer = 0;
+        let gameOver = false;
+        
+        // Initialize enemies
+        function initEnemies() {
+            enemies = [];
+            for (let i = 0; i < 10; i++) {
+                let x, y;
+                do {
+                    x = Math.floor(Math.random() * MAP[0].length);
+                    y = Math.floor(Math.random() * MAP.length);
+                } while (MAP[y][x] !== '.' || (Math.abs(x - player.x) < 5 && Math.abs(y - player.y) < 5));
+                
+                const enemyType = ENEMIES[Math.floor(Math.random() * ENEMIES.length)];
+                enemies.push({
+                    x, y,
+                    ...enemyType,
+                    maxHealth: enemyType.health,
+                    lastAttack: 0
+                });
+            }
+        }
+        
+        // Raycasting
+        function castRay(angle) {
+            let x = player.x;
+            let y = player.y;
+            const sin = Math.sin(angle);
+            const cos = Math.cos(angle);
+            
+            for (let d = 0; d < DEPTH; d += 0.1) {
+                x = player.x + cos * d;
+                y = player.y + sin * d;
+                
+                if (x < 0 || y < 0 || x >= MAP[0].length || y >= MAP.length) {
+                    return { distance: d, wall: true, enemy: null };
+                }
+                
+                if (MAP[Math.floor(y)][Math.floor(x)] === '#') {
+                    return { distance: d, wall: true, enemy: null };
+                }
+                
+                // Check for enemies
+                for (let enemy of enemies) {
+                    if (Math.abs(enemy.x - x) < 0.5 && Math.abs(enemy.y - y) < 0.5) {
+                        return { distance: d, wall: false, enemy: enemy };
+                    }
+                }
+            }
+            
+            return { distance: DEPTH, wall: false, enemy: null };
+        }
+        
+        // Render the game
+        function render() {
+            const screen = [];
+            for (let y = 0; y < HEIGHT; y++) {
+                screen[y] = [];
+                for (let x = 0; x < WIDTH; x++) {
+                    screen[y][x] = ' ';
+                }
+            }
+            
+            // Raycasting for each column
+            for (let x = 0; x < WIDTH; x++) {
+                const rayAngle = (player.angle - FOV / 2) + (x / WIDTH) * FOV;
+                const ray = castRay(rayAngle);
+                
+                const wallHeight = Math.floor((HEIGHT / ray.distance) * 2);
+                const wallStart = Math.floor((HEIGHT - wallHeight) / 2);
+                const wallEnd = wallStart + wallHeight;
+                
+                for (let y = 0; y < HEIGHT; y++) {
+                    if (y < wallStart) {
+                        // Ceiling
+                        screen[y][x] = '.';
+                    } else if (y >= wallEnd) {
+                        // Floor
+                        screen[y][x] = '_';
+                    } else if (ray.enemy) {
+                        // Enemy
+                        const healthPercent = ray.enemy.health / ray.enemy.maxHealth;
+                        if (healthPercent > 0.66) {
+                            screen[y][x] = ray.enemy.symbol;
+                        } else if (healthPercent > 0.33) {
+                            screen[y][x] = ray.enemy.symbol.toLowerCase();
+                        } else {
+                            screen[y][x] = '!';
+                        }
+                    } else if (ray.wall) {
+                        // Wall
+                        const shade = ray.distance < DEPTH / 3 ? '#' : 
+                                     ray.distance < DEPTH * 2 / 3 ? '=' : '+';
+                        screen[y][x] = shade;
+                    }
+                }
+            }
+            
+            // Add crosshair
+            screen[Math.floor(HEIGHT / 2)][Math.floor(WIDTH / 2)] = '+';
+            screen[Math.floor(HEIGHT / 2)][Math.floor(WIDTH / 2) - 1] = '-';
+            screen[Math.floor(HEIGHT / 2)][Math.floor(WIDTH / 2) + 1] = '-';
+            screen[Math.floor(HEIGHT / 2) - 1][Math.floor(WIDTH / 2)] = '|';
+            screen[Math.floor(HEIGHT / 2) + 1][Math.floor(WIDTH / 2)] = '|';
+            
+            // Convert to string
+            const display = screen.map(row => row.join('')).join('\n');
+            document.getElementById('game').textContent = display;
+            
+            // Update HUD
+            document.getElementById('health').textContent = player.health;
+            document.getElementById('score').textContent = player.score;
+            
+            // Update message
+            if (messageTimer > 0) {
+                document.getElementById('message').textContent = message;
+                messageTimer--;
+            } else {
+                document.getElementById('message').textContent = '';
+            }
+        }
+        
+        // Handle input
+        const keys = {};
+        
+        document.addEventListener('keydown', e => {
+            keys[e.key.toLowerCase()] = true;
+            if (e.key === ' ') e.preventDefault(); // Prevent space from scrolling
+        });
+        document.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+        
+        function shoot() {
+            const rayAngle = player.angle;
+            const ray = castRay(rayAngle);
+            
+            if (ray.enemy) {
+                ray.enemy.health--;
+                document.getElementById('game').classList.add('enemy-hit');
+                setTimeout(() => document.getElementById('game').classList.remove('enemy-hit'), 200);
+                
+                if (ray.enemy.health <= 0) {
+                    const index = enemies.indexOf(ray.enemy);
+                    enemies.splice(index, 1);
+                    player.score += 100;
+                    showMessage(`${ray.enemy.name} defeated! ${ray.enemy.quote}`);
+                    
+                    if (enemies.length === 0) {
+                        showMessage("LEVEL COMPLETE! More physicists incoming!");
+                        setTimeout(initEnemies, 2000);
+                    }
+                } else {
+                    showMessage(`Hit ${ray.enemy.name}!`);
+                }
+            }
+        }
+        
+        function showMessage(msg) {
+            message = msg;
+            messageTimer = 60;
+        }
+        
+        // Update game state
+        function update() {
+            if (gameOver) {
+                if (keys['r']) {
+                    restart();
+                }
+                return;
+            }
+            
+            // Player looking (turning)
+            if (keys['arrowleft']) {
+                player.angle -= TURN_SPEED;
+            }
+            if (keys['arrowright']) {
+                player.angle += TURN_SPEED;
+            }
+            
+            // Shooting
+            if (keys[' ']) {
+                if (!player.shotCooldown) {
+                    shoot();
+                    player.shotCooldown = 10; // Add cooldown to prevent rapid fire
+                }
+            }
+            
+            if (player.shotCooldown > 0) {
+                player.shotCooldown--;
+            }
+            
+            // Player movement
+            const moveSpeed = SPEED;
+            const newX = player.x + Math.cos(player.angle) * moveSpeed * (keys['w'] ? 1 : keys['s'] ? -1 : 0) +
+                        Math.cos(player.angle - Math.PI/2) * moveSpeed * (keys['a'] ? 1 : keys['d'] ? -1 : 0);
+            const newY = player.y + Math.sin(player.angle) * moveSpeed * (keys['w'] ? 1 : keys['s'] ? -1 : 0) +
+                        Math.sin(player.angle - Math.PI/2) * moveSpeed * (keys['a'] ? 1 : keys['d'] ? -1 : 0);
+            
+            if (MAP[Math.floor(newY)][Math.floor(newX)] !== '#') {
+                player.x = newX;
+                player.y = newY;
+            }
+            
+            // Update enemies
+            const time = Date.now();
+            for (let enemy of enemies) {
+                const dx = player.x - enemy.x;
+                const dy = player.y - enemy.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > 1) {
+                    // Move towards player
+                    const moveX = (dx / distance) * enemy.speed;
+                    const moveY = (dy / distance) * enemy.speed;
+                    
+                    const newEnemyX = enemy.x + moveX;
+                    const newEnemyY = enemy.y + moveY;
+                    
+                    if (MAP[Math.floor(newEnemyY)][Math.floor(newEnemyX)] !== '#') {
+                        enemy.x = newEnemyX;
+                        enemy.y = newEnemyY;
+                    }
+                } else if (distance < 1.5 && time - enemy.lastAttack > 1000) {
+                    // Attack player
+                    player.health -= enemy.damage;
+                    enemy.lastAttack = time;
+                    showMessage(`${enemy.name} attacks! ${enemy.quote}`);
+                    document.getElementById('game').classList.add('flash');
+                    setTimeout(() => document.getElementById('game').classList.remove('flash'), 100);
+                    
+                    if (player.health <= 0) {
+                        gameOver = true;
+                        showMessage("GAME OVER! Press R to restart");
+                    }
+                }
+            }
+        }
+        
+        function restart() {
+            player = { x: 5, y: 5, angle: 0, health: 100, score: 0 };
+            gameOver = false;
+            initEnemies();
+        }
+        
+        // Game loop
+        function gameLoop() {
+            update();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Lock pointer for better mouse control
+        document.getElementById('game-container').addEventListener('click', function() {
+            this.requestPointerLock();
+        });
+        
+        // Start game
+        initEnemies();
+        gameLoop();
+        showMessage("Welcome to ASCII DOOM: Physics Nobel Edition!");
+    </script>
+</body>
+</html>

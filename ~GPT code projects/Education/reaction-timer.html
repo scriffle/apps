@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reaction Timer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.1/chart.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            transition: background-color 0.1s;
+        }
+        #container {
+            text-align: center;
+            width: 80%;
+            max-width: 600px;
+        }
+        #dot {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: red;
+            margin: 20px auto;
+            display: none;
+        }
+        #stats {
+            margin-top: 20px;
+        }
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #chart-container {
+            margin-top: 20px;
+            height: 300px;
+        }
+        #feedback {
+            color: red;
+            font-weight: bold;
+            height: 20px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h1>Reaction Timer</h1>
+        <p>Press the spacebar when the red dot appears</p>
+        <div id="dot"></div>
+        <div id="feedback"></div>
+        <div id="stats">
+            <p>Last 10 reaction times: <span id="last-times"></span></p>
+            <p>Average reaction time: <span id="average-time"></span> ms</p>
+        </div>
+        <button id="start-button">Start</button>
+        <button id="reset-button">Reset</button>
+        <div id="chart-container">
+            <canvas id="reactionChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const dot = document.getElementById('dot');
+        const lastTimesElement = document.getElementById('last-times');
+        const averageTimeElement = document.getElementById('average-time');
+        const startButton = document.getElementById('start-button');
+        const resetButton = document.getElementById('reset-button');
+        const feedbackElement = document.getElementById('feedback');
+        const ctx = document.getElementById('reactionChart').getContext('2d');
+
+        let startTime;
+        let timeoutId;
+        let waitingForClick = false;
+        let reactionTimes = [];
+        let allReactionTimes = [];
+        let maxWaitTime = 5000; // Start with 5 seconds
+        let isActive = false;
+
+        let chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Reaction Times',
+                    data: [],
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1
+                }, {
+                    label: 'Trendline',
+                    data: [],
+                    borderColor: 'rgb(255, 99, 132)',
+                    borderDash: [5, 5],
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Reaction Time (ms)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Trial'
+                        }
+                    }
+                }
+            }
+        });
+
+        function flashYellow() {
+            document.body.style.backgroundColor = '#ffff00';
+            setTimeout(() => {
+                document.body.style.backgroundColor = '#f0f0f0';
+            }, 100);
+        }
+
+        function showDot() {
+            dot.style.display = 'block';
+            startTime = Date.now();
+            waitingForClick = true;
+        }
+
+        function hideDot() {
+            dot.style.display = 'none';
+            waitingForClick = false;
+        }
+
+        function startTimer() {
+            if (!isActive) return;
+            hideDot();
+            feedbackElement.textContent = '';
+            const randomDelay = Math.random() * maxWaitTime;
+            timeoutId = setTimeout(showDot, randomDelay);
+        }
+
+        function handleSpacebar(event) {
+            if (event.code === 'Space' && isActive) {
+                event.preventDefault();
+                if (!waitingForClick) {
+                    // Early press detected - penalize the user
+                    flashYellow();
+                    feedbackElement.textContent = 'Too early! Game reset.';
+                    clearTimeout(timeoutId);
+                    resetTimer();
+                    return;
+                }
+                
+                if (waitingForClick) {
+                    const reactionTime = Date.now() - startTime;
+                    if (reactionTime <= 1100) {
+                        allReactionTimes.push(reactionTime);
+                        reactionTimes.push(reactionTime);
+                        if (reactionTimes.length > 10) {
+                            reactionTimes.shift();
+                        }
+                        updateStats();
+                        updateChart();
+                    } else {
+                        feedbackElement.textContent = 'Too slow';
+                    }
+                    hideDot();
+                    setTimeout(startTimer, 2000);
+                    
+                    // Update maxWaitTime for the next round
+                    maxWaitTime = ((maxWaitTime / 1000 + 1) % 11 + 5) * 1000;
+                }
+            }
+        }
+
+        function updateStats() {
+            lastTimesElement.textContent = reactionTimes.join(', ');
+            const average = reactionTimes.reduce((a, b) => a + b, 0) / reactionTimes.length;
+            averageTimeElement.textContent = average.toFixed(2);
+        }
+
+        function updateChart() {
+            chart.data.labels = Array.from({length: allReactionTimes.length}, (_, i) => i + 1);
+            chart.data.datasets[0].data = allReactionTimes;
+
+            // Calculate trendline
+            const n = allReactionTimes.length;
+            const sum_x = n * (n + 1) / 2;
+            const sum_y = allReactionTimes.reduce((a, b) => a + b, 0);
+            const sum_xy = allReactionTimes.reduce((sum, y, x) => sum + y * (x + 1), 0);
+            const sum_xx = n * (n + 1) * (2 * n + 1) / 6;
+
+            const slope = (n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x);
+            const intercept = (sum_y - slope * sum_x) / n;
+
+            chart.data.datasets[1].data = Array.from({length: n}, (_, i) => slope * (i + 1) + intercept);
+
+            chart.update();
+        }
+
+        function resetTimer() {
+            clearTimeout(timeoutId);
+            hideDot();
+            reactionTimes = [];
+            allReactionTimes = [];
+            maxWaitTime = 5000;
+            updateStats();
+            updateChart();
+            isActive = false;
+            startButton.textContent = 'Start';
+            feedbackElement.textContent = '';
+        }
+
+        function toggleTimer() {
+            isActive = !isActive;
+            if (isActive) {
+                startButton.textContent = 'Pause';
+                startTimer();
+            } else {
+                startButton.textContent = 'Resume';
+                clearTimeout(timeoutId);
+                hideDot();
+            }
+        }
+
+        document.addEventListener('keydown', handleSpacebar);
+        resetButton.addEventListener('click', resetTimer);
+        startButton.addEventListener('click', toggleTimer);
+    </script>
+</body>
+</html>

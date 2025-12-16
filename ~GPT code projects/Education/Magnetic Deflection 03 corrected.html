@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .simulation-container {
+            border: 1px solid #333;
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
+            gap: 0;
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+            width: 100%;
+            max-width: 400px;
+        }
+        .button-group {
+            display: flex;
+            gap: 20px;
+            width: 100%;
+            justify-content: center;
+        }
+        .field-controls { display: flex; flex-direction: column; gap: 15px; width: 100%; }
+        .vector-controls { display: flex; gap: 20px; justify-content: center; margin-top: 10px; }
+        .vector-control { display: flex; align-items: center; gap: 5px; }
+        .field-control { display: flex; flex-direction: column; gap: 5px; }
+        .field-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .auto-switch { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+        .physics-values { font-family: Arial; padding: 15px; width: 200px; white-space: pre; border-left: 1px solid #ccc; }
+        button { padding: 8px 16px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; flex: 1; }
+        .proton-btn { background: #ffebee; color: red; }
+        .electron-btn { background: #e3f2fd; color: blue; }
+        .neutron-btn { background: #f5f5f5; color: #666; }
+        canvas { display: block; margin: 0; padding: 0; }
+        input[type="range"] { width: 100%; }
+        .right-hand-rule { border-left: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Particle Accelerator Simulation (SI Units)</h2>
+        <div class="controls">
+            <div class="button-group">
+                <button class="proton-btn" id="fireProton">Place Proton</button>
+                <button class="electron-btn" id="fireElectron">Place Electron</button>
+                <button class="neutron-btn" id="fireNeutron">Place Neutron</button>
+            </div>
+            <div class="field-controls">
+                <div class="field-control">
+                    <div class="field-row">
+                        <span id="voltageValue">1000V</span>
+                        <div class="auto-switch">
+                            <input type="checkbox" id="autoSwitch" checked>
+                            <label for="autoSwitch">Automatically Switch Voltage Sign</label>
+                        </div>
+                    </div>
+                    <input type="range" id="voltage" min="-100000" max="100000" value="1000" step="1000">
+                </div>
+                <div class="field-control">
+                    <div class="field-row">
+                        <span id="magneticValue">0T</span>
+                    </div>
+                    <input type="range" id="magneticField" min="-0.5" max="0.5" value="0" step="0.01">
+                </div>
+            </div>
+            <div class="vector-controls">
+                <div class="vector-control">
+                    <input type="checkbox" id="showForce">
+                    <label for="showForce">Show Force Vectors</label>
+                </div>
+                <div class="vector-control">
+                    <input type="checkbox" id="showVelocity">
+                    <label for="showVelocity">Show Velocity Vectors</label>
+                </div>
+                <div class="vector-control">
+                    <input type="checkbox" id="scaleElectron" checked>
+                    <label for="scaleElectron">Scale Electron</label>
+                </div>
+            </div>
+        </div>
+        <div class="simulation-container">
+            <canvas id="accelerator" width="600" height="400"></canvas>
+            <canvas id="rightHandRule" width="150" height="400" class="right-hand-rule"></canvas>
+            <div id="physicsValues" class="physics-values">Calculated Values Will Appear Here</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('accelerator');
+        const rhrCanvas = document.getElementById('rightHandRule');
+        const ctx = canvas.getContext('2d');
+        const rhrCtx = rhrCanvas.getContext('2d');
+        const voltageSlider = document.getElementById('voltage');
+        const voltageValue = document.getElementById('voltageValue');
+        const magneticSlider = document.getElementById('magneticField');
+        const magneticValue = document.getElementById('magneticValue');
+        const autoSwitch = document.getElementById('autoSwitch');
+        const physicsValues = document.getElementById('physicsValues');
+        const showForce = document.getElementById('showForce');
+        const showVelocity = document.getElementById('showVelocity');
+        const scaleElectron = document.getElementById('scaleElectron');
+
+        const ELECTRON_MASS = 9.1093837015e-31;
+        const PROTON_MASS = 1.67262192369e-27;
+        const NEUTRON_MASS = 1.67492749804e-27;
+        const ELECTRON_CHARGE = -1.602176634e-19;
+        const PROTON_CHARGE = 1.602176634e-19;
+        const PLATE_SEPARATION = 0.1;
+        const ACCELERATOR_LENGTH = 1.0;
+        const NEUTRON_LIFETIME = 3000;
+
+        const TIME_SCALE = 1e-9;
+        const VELOCITY_SCALE = 1e-6;
+        const ELECTRON_VISUAL_SCALE = 1000;
+        const MAX_TRAIL_LENGTH = 30;
+        const VECTOR_SCALE = 30;
+
+        const ACCEL_REGION_WIDTH = 200;
+        const MAG_FIELD_WIDTH = 400;
+        const PLATE_LENGTH = 150;
+        const PLATE_START_X = 30;
+        const PLATE_GAP = 100;
+
+        let lastPhysicsValues = null;
+        let lastParticleType = null;
+
+        function drawVector(ctx, x, y, vx, vy, color, label) {
+            const mag = Math.hypot(vx, vy);
+            if (!mag) return;
+            const scale = VECTOR_SCALE / mag;
+            const dx = vx * scale, dy = vy * scale;
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x+dx, y+dy);
+            const arrowSize = 8;
+            const angle = Math.atan2(dy, dx);
+            ctx.lineTo(x + dx - arrowSize * Math.cos(angle - Math.PI/6), y + dy - arrowSize * Math.sin(angle - Math.PI/6));
+            ctx.moveTo(x+dx, y+dy);
+            ctx.lineTo(x + dx - arrowSize * Math.cos(angle + Math.PI/6), y + dy - arrowSize * Math.sin(angle + Math.PI/6));
+            ctx.strokeStyle = color; ctx.stroke();
+            if (label) { ctx.fillStyle = color; ctx.fillText(label, x+dx+5, y+dy+5); }
+        }
+
+        function drawVector3D(ctx, x, y, vx, vy, vz, color, label) {
+            const scale = 40;
+            const cos30 = Math.cos(Math.PI/6), sin30 = Math.sin(Math.PI/6);
+            const dx = (vx - vz*cos30) * scale;
+            const dy = (vy - vz*sin30) * scale;
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x+dx, y+dy);
+            const arrowSize = 8;
+            const angle = Math.atan2(dy, dx);
+            ctx.lineTo(x+dx - arrowSize*Math.cos(angle-Math.PI/6), y+dy - arrowSize*Math.sin(angle-Math.PI/6));
+            ctx.moveTo(x+dx, y+dy);
+            ctx.lineTo(x+dx - arrowSize*Math.cos(angle+Math.PI/6), y+dy - arrowSize*Math.sin(angle+Math.PI/6));
+            ctx.strokeStyle = color; ctx.stroke();
+            if (label) { ctx.font='16px Times New Roman'; ctx.fillStyle=color; ctx.fillText(label, x+dx+20, y+dy+20); }
+            if (vz) { ctx.setLineDash([2,2]); ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x-vz*cos30*scale, y-vz*sin30*scale); ctx.stroke(); ctx.setLineDash([]); }
+        }
+
+        function drawRightHandRule() {
+            rhrCtx.clearRect(0,0,rhrCanvas.width,rhrCanvas.height);
+            const cx = r<hrCanvas.width/2, cy = r<hrCanvas.height/2;
+            const B = parseFloat(magneticSlider.value);
+            if (!B || !lastParticleType || lastParticleType==='neutron') {
+                r<hrCtx.fillStyle='black'; r<hrCtx.font='12px Arial'; r<hrCtx.textAlign='center';
+                r<hrCtx.fillText('No magnetic field or',cx,cy-10);
+                r<hrCtx.fillText('particle selected',cx,cy+10);
+                return;
+            }
+            r<hrCtx.font='14px Arial'; r<hrCtx.textAlign='center';
+            const isE = lastParticleType==='electron';
+            const Idir = isE?-1:1;
+            const Bdir = B>0?1:-1;
+            const Fdir = -Idir*Bdir;
+            r<hrCtx.fillStyle='black';
+            r<hrCtx.fillText('Magnetic Force',cx,40);
+            r<hrCtx.font='16px Times New Roman';
+            r<hrCtx.fillText('F = q(v × B)',cx,60);
+            r<hrCtx.fillText('F = qvB sin θ',cx,80);
+            r<hrCtx.fillText('r = mv/qB',cx,100);
+            r<hrCtx.font='14px Arial';
+            r<hrCtx.fillText(`Particle: ${lastParticleType}`,cx,140);
+            r<hrCtx.fillText('Convention: I = conventional current',cx,160);
+            drawVector3D(r<hrCtx, cx, cy+40, Idir,0,0,'#0066cc','I');
+            drawVector3D(r<hrCtx, cx, cy+40, 0,0,Bdir,'#cc0000','B');
+            drawVector3D(r<hrCtx, cx, cy+40, 0,Fdir,0,'#009900','F');
+            r<hrCtx.fillStyle='black'; r<hrCtx.font='14px Arial';
+            r<hrCtx.fillText(Bdir>0?'⊗ (into screen)':'⊙ (out of screen)', cx, cy+120);
+        }
+
+        function setVoltageForParticle(type) {
+            if (!autoSwitch.checked) return;
+            const v = Math.abs(parseFloat(voltageSlider.value));
+            voltageSlider.value = (type==='proton'? v : -v);
+            voltageValue.textContent = voltageSlider.value+'V';
+        }
+
+        function formatScientific(n) {
+            const [base, exp] = n.toExponential(3).split('e');
+            const supers = exp.replace(/./g,c=>({'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','+':'⁺','-':'⁻'}[c]));
+            return `${parseFloat(base).toFixed(3)}×10${supers}`;
+        }
+
+        class Particle {
+            constructor(type) {
+                this.type = type;
+                this.x = PLATE_START_X;
+                this.y = canvas.height/2;
+                this.vx = 0; this.vy = 0;
+                this.fx = 0; this.fy = 0;
+                this.active = true;
+                this.path = [];
+                this.creationTime = Date.now();
+                lastParticleType = type;
+                if (type==='proton') { this.mass=PROTON_MASS; this.charge=PROTON_CHARGE; this.color='rgb(255,0,0)'; this.radius=4; this.visualScale=1; }
+                else if (type==='electron') { this.mass=ELECTRON_MASS; this.charge=ELECTRON_CHARGE; this.color='rgb(0,0,255)'; this.radius=2; this.visualScale=scaleElectron.checked?ELECTRON_VISUAL_SCALE:1; }
+                else { this.mass=NEUTRON_MASS; this.charge=0; this.color='rgb(128,128,128)'; this.radius=4; this.visualScale=1; }
+            }
+            update() {
+                if (!this.active) return;
+                if (this.type==='neutron' && Date.now()-this.creationTime>NEUTRON_LIFETIME) { this.active=false; return; }
+                const V=parseFloat(voltageSlider.value), E=V/PLATE_SEPARATION, B=parseFloat(magneticSlider.value);
+                this.fx=0; this.fy=0;
+                if (this.x>=PLATE_START_X && this.x<=PLATE_START_X+PLATE_LENGTH) {
+                    const f=this.charge*E;
+                    const a=f/this.mass;
+                    this.vx+=(a*TIME_SCALE*VELOCITY_SCALE)/this.visualScale;
+                    this.fx=f;
+                    const s=Math.hypot(this.vx,this.vy)*VELOCITY_SCALE;
+                    this.updatePhysicsValues({ voltage:V, force:Math.abs(f), velocity:s*this.visualScale, region:'Electric Field' });
+                }
+                else if (this.x>=ACCEL_REGION_WIDTH && this.x<=ACCEL_REGION_WIDTH+MAG_FIELD_WIDTH) {
+                    const s=Math.hypot(this.vx,this.vy)*VELOCITY_SCALE;
+                    if (B!==0) {
+                        const r=(this.mass*s*this.visualScale)/(Math.abs(this.charge)*Math.abs(B));
+                        const ac=(s*s*this.visualScale*this.visualScale)/r;
+                        const fmag=Math.abs(this.charge*s*this.visualScale*Math.abs(B));
+                        const omega=(this.charge*B)/(this.mass*this.visualScale);
+                        const dt=TIME_SCALE;
+                        const vxOld=this.vx;
+                        this.vx=this.vx*Math.cos(omega*dt)-this.vy*Math.sin(omega*dt);
+                        this.vy=vxOld*Math.sin(omega*dt)+this.vy*Math.cos(omega*dt);
+                        // reverse deflection by 180°
+                        const fxOrig=-this.charge*B*this.vy;
+                        const fyOrig=this.charge*B*this.vx;
+                        this.fx=-fxOrig;
+                        this.fy=-fyOrig;
+                        this.updatePhysicsValues({ magneticField:B, radius:r, force:fmag, acceleration:ac, velocity:s*this.visualScale, region:'Magnetic Field' });
+                    } else {
+                        this.updatePhysicsValues({ magneticField:0, force:0, velocity:s*this.visualScale, region:'Magnetic Field' });
+                    }
+                }
+                else if (this.x>ACCEL_REGION_WIDTH+MAG_FIELD_WIDTH) { this.active=false; return; }
+                this.x+=this.vx;
+                this.y+=this.vy;
+                this.path.push({x:this.x,y:this.y}); if(this.path.length>MAX_TRAIL_LENGTH) this.path.shift();
+                if(this.x>canvas.width||this.y<0||this.y>canvas.height) this.active=false;
+            }
+            updatePhysicsValues(vals) {
+                let d=`Particle: ${this.type}\nRegion: ${vals.region}\n\n`;
+                d+=`m = ${formatScientific(this.mass)} kg\n`;
+                d+=`q = ${formatScientific(this.charge)} C\n`;
+                if(vals.voltage!==undefined) d+=`V = ${formatScientific(vals.voltage)} V\n`;
+                if(vals.magneticField!==undefined) d+=`B = ${formatScientific(vals.magneticField)} T\n`;
+                if(vals.radius!==undefined&&vals.magneticField!==0) d+=`r = ${formatScientific(vals.radius)} m\n`;
+                d+=`F = ${formatScientific(vals.force)} N\n`;
+                if(vals.acceleration!==undefined) d+=`a = ${formatScientific(vals.acceleration)} m/s²\n`;
+                d+=`v = ${formatScientific(vals.velocity)} m/s`;
+                lastPhysicsValues=d; physicsValues.textContent=d;
+            }
+            draw() {
+                if(!this.active) return;
+                if(this.path.length>1) {
+                    ctx.lineWidth=2;
+                    for(let i=1;i<this.path.length;i++){
+                        const op=i/this.path.length;
+                        const col=this.color.replace('rgb','rgba').replace(')',`,`+op+')');
+                        ctx.strokeStyle=col;
+                        ctx.beginPath(); ctx.moveTo(this.path[i-1].x,this.path[i-1].y);
+                        ctx.lineTo(this.path[i].x,this.path[i].y); ctx.stroke();
+                    }
+                }
+                ctx.beginPath(); ctx.arc(this.x,this.y,this.radius,0,Math.PI*2); ctx.fillStyle=this.color; ctx.fill();
+                if(this.type==='electron'){ ctx.strokeStyle='white'; ctx.stroke(); }
+                ctx.closePath();
+                if(showVelocity.checked) drawVector(ctx,this.x,this.y,this.vx,this.vy,'blue','v');
+                if(showForce.checked&&(this.fx!==0||this.fy!==0)) drawVector(ctx,this.x,this.y,this.fx,this.fy,'green','F');
+            }
+        }
+
+        function drawPlates() {
+            const cx = PLATE_START_X + PLATE_LENGTH/2;
+            const w = 10;
+            ctx.fillStyle='#666';
+            ctx.fillRect(cx-PLATE_GAP/2-w,canvas.height/2-PLATE_LENGTH/2,w,PLATE_LENGTH);
+            ctx.fillRect(cx+PLATE_GAP/2,canvas.height/2-PLATE_LENGTH/2,w,PLATE_LENGTH);
+            ctx.font='20px Arial'; const V=parseFloat(voltageSlider.value); const pos=V>=0;
+            ctx.fillStyle=pos?'red':'blue'; ctx.fillText(pos?'+':'-',cx-PLATE_GAP/2-w-20,canvas.height/2);
+            ctx.fillStyle=pos?'blue':'red'; ctx.fillText(pos?'-':'+',cx+PLATE_GAP/2+w+10,canvas.height/2);
+            const spacing=Math.max(5,40-(Math.abs(V)/5000));
+            ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.setLineDash([5,5]);
+            for(let y=canvas.height/2-PLATE_LENGTH/2+spacing; y<canvas.height/2+PLATE_LENGTH/2; y+=spacing){
+                ctx.beginPath();ctx.moveTo(cx-PLATE_GAP/2,y);ctx.lineTo(cx+PLATE_GAP/2,y);ctx.stroke();
+            }
+            ctx.setLineDash([]);
+        }
+
+        function drawMagneticFieldSymbols() {
+            const B=parseFloat(magneticSlider.value); if(!B)return;
+            const midX=ACCEL_REGION_WIDTH+MAG_FIELD_WIDTH/2;
+            const midY=canvas.height/2;
+            const base=Math.max(20,60-(Math.abs(B)/0.5)*50);
+            const sym=B>=0?'⊗':'⊙';
+            ctx.font='14px Arial';ctx.fillStyle='rgba(0,0,0,0.3)';
+            const rows=Math.ceil(canvas.height/base);const cols=Math.ceil(MAG_FIELD_WIDTH/base);
+            for(let r=-rows/2;r<rows/2;r++){for(let c=-cols/2;c<cols/2;c++){const x=midX+c*base;const y=midY+r*base;const d=Math.hypot(x-midX,y-midY);if(x>=ACCEL_REGION_WIDTH&&x<=ACCEL_REGION_WIDTH+MAG_FIELD_WIDTH&&y>=0&&y<=canvas.height&&d<=MAG_FIELD_WIDTH/2){ctx.fillText(sym,x-4,y+4);}}}
+        }
+
+        function drawRegions() {
+            ctx.fillStyle='rgba(0,255,255,0.1)';ctx.fillRect(ACCEL_REGION_WIDTH,0,MAG_FIELD_WIDTH,canvas.height);
+            ctx.fillStyle='black';ctx.font='14px Arial';
+            ctx.fillText(`Electric Field (${voltageSlider.value}V)`,50,30);
+            ctx.fillText(`Magnetic Field (${magneticSlider.value}T)`,ACCEL_REGION_WIDTH+100,30);
+            drawMagneticFieldSymbols();
+            drawRightHandRule();
+        }
+
+        let particles=[];
+        function animate(){ctx.clearRect(0,0,canvas.width,canvas.height);drawRegions();drawPlates();particles.forEach(p=>{p.update();p.draw();});particles=particles.filter(p=>p.active);if(!particles.length&&lastPhysicsValues){physicsValues.textContent=lastPhysicsValues;}requestAnimationFrame(animate);}        
+        document.getElementById('fireProton').addEventListener('click',()=>{setVoltageForParticle('proton');particles.push(new Particle('proton'));});
+        document.getElementById('fireElectron').addEventListener('click',()=>{setVoltageForParticle('electron');particles.push(new Particle('electron'));});
+        document.getElementById('fireNeutron').addEventListener('click',()=>{particles.push(new Particle('neutron'));});
+        voltageSlider.addEventListener('input',()=>{voltageValue.textContent=voltageSlider.value+'V';});
+        magneticSlider.addEventListener('input',()=>{magneticValue.textContent=magneticSlider.value+'T';});
+        scaleElectron.addEventListener('change',()=>{particles=[];});
+        animate();
+    </script>
+</body>
+</html>

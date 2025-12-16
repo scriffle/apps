@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive PlaySpace</title>
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: black;
+            color: white;
+        }
+        #controls {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+        #grid {
+            display: grid;
+            width: 100vmin;
+            height: 100vmin;
+        }
+        .cell {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.6vw;
+            box-shadow: inset 0 0 2px rgba(0,0,0,0.3);
+            transition: background-color 0.3s, filter 0.3s;
+        }
+        #optionsMenu {
+            display: none;
+            position: absolute;
+            background-color: white;
+            color: black;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+        }
+        #optionsMenu button {
+            display: block;
+            width: 100%;
+            padding: 8px 16px;
+            text-align: left;
+            border: none;
+            background-color: white;
+            color: black;
+        }
+        #optionsMenu button:hover {
+            background-color: #ddd;
+        }
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .dropdown:hover #optionsMenu {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <label for="gridSize">Grid Size: </label>
+        <input type="number" id="gridSize" min="8" max="100" value="50">
+        <label for="timerSlider">Timer Interval (ms): </label>
+        <input type="range" id="timerSlider" min="1" max="100" value="1">
+        <span id="timerValue">1</span> ms
+        <label for="numColors">Number of Colors: </label>
+        <input type="number" id="numColors" min="2" max="10" value="4">
+        <label for="colorPalette">Color Palette: </label>
+        <select id="colorPalette">
+            <option value="bright">Bright</option>
+            <option value="soft">Soft</option>
+            <option value="pastel">Pastel</option>
+            <option value="contrasting">Contrasting</option>
+            <option value="popping">Popping</option>
+        </select>
+        <div class="dropdown">
+            <button>Options</button>
+            <div id="optionsMenu">
+                <button id="toggleButton">Stop</button>
+                <button id="resetColorsButton">Reset Colors</button>
+                <button id="resetIntensitiesButton">Reset Intensities</button>
+                <button id="gradientButton">Populate with Gradient</button>
+            </div>
+        </div>
+    </div>
+    <div id="grid"></div>
+
+    <script>
+        const grid = document.getElementById('grid');
+        const gridSizeInput = document.getElementById('gridSize');
+        const timerSlider = document.getElementById('timerSlider');
+        const timerValue = document.getElementById('timerValue');
+        const numColorsInput = document.getElementById('numColors');
+        const colorPaletteSelect = document.getElementById('colorPalette');
+        const toggleButton = document.getElementById('toggleButton');
+        const resetColorsButton = document.getElementById('resetColorsButton');
+        const resetIntensitiesButton = document.getElementById('resetIntensitiesButton');
+        const gradientButton = document.getElementById('gradientButton');
+        let size = parseInt(gridSizeInput.value);
+        let colors = [];
+        const brightnessLevels = 5;
+        let intervalId;
+        let isRunning = true;
+
+        const colorPalettes = {
+            bright: ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', '#FFA500', '#800080', '#FFC0CB', '#008080'],
+            soft: ['#FFD700', '#ADFF2F', '#87CEFA', '#FFB6C1', '#9370DB', '#98FB98', '#FF6347', '#D2B48C', '#F08080', '#FAFAD2'],
+            pastel: ['#FFB3BA', '#FFDFBA', '#FFFFBA', '#BAFFC9', '#BAE1FF', '#E6E6FA', '#D8BFD8', '#FFDAB9', '#E0FFFF', '#F5DEB3'],
+            contrasting: ['#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', '#800000', '#808000'],
+            popping: ['#FF4500', '#32CD32', '#1E90FF', '#FFD700', '#FF1493', '#00CED1', '#FF6347', '#8A2BE2', '#EE82EE', '#5F9EA0']
+        };
+
+        // Function to set cell color based on brightness
+        function setCellColor(cell, color, level) {
+            const brightnessFactors = [0.6, 0.7, 0.8, 0.9, 1.0];
+            const brightnessFactor = brightnessFactors[level];
+            cell.style.backgroundColor = color;
+            cell.style.filter = `brightness(${brightnessFactor})`;
+        }
+
+        // Initialize grid
+        function initializeGrid() {
+            grid.innerHTML = '';
+            grid.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+            brightness = Array.from({ length: size }, () => Array(size).fill(0));
+            colorGrid = Array.from({ length: size }, () => Array(size).fill(''));
+
+            const fragment = document.createDocumentFragment();
+            for (let i = 0; i < size; i++) {
+                for (let j = 0; j < size; j++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    const color = colors[Math.floor(Math.random() * colors.length)];
+                    const level = Math.floor(Math.random() * 4) + 1; // Random brightness between 1 and 4
+                    cell.dataset.color = color;
+                    cell.dataset.level = level;
+                    colorGrid[i][j] = color;
+                    brightness[i][j] = level;
+                    setCellColor(cell, color, level);
+                    cell.addEventListener('click', () => {
+                        setCellToMax(i, j, cell.dataset.color);
+                    });
+                    fragment.appendChild(cell);
+                }
+            }
+            grid.appendChild(fragment);
+        }
+
+        function incrementCell(x, y, color) {
+            let queue = [[x, y]];
+            let cellsToUpdate = new Map();
+
+            while (queue.length > 0) {
+                let [i, j] = queue.shift();
+                brightness[i][j]++;
+                if (brightness[i][j] > 4) {
+                    brightness[i][j] = 0;
+                    let neighbors = getNeighbors(i, j);
+                    for (let [ni, nj] of neighbors) {
+                        brightness[ni][nj]++;
+                        colorGrid[ni][nj] = color;
+                        cellsToUpdate.set(ni * size + nj, [ni, nj]);
+                        if (brightness[ni][nj] > 4) {
+                            queue.push([ni, nj]);
+                        }
+                    }
+                }
+                cellsToUpdate.set(i * size + j, [i, j]);
+            }
+
+            requestAnimationFrame(() => {
+                cellsToUpdate.forEach(([i, j]) => {
+                    const cell = grid.children[i * size + j];
+                    cell.dataset.color = colorGrid[i][j];
+                    cell.dataset.level = brightness[i][j];
+                    setCellColor(cell, colorGrid[i][j], brightness[i][j]);
+                });
+            });
+        }
+
+        function setCellToMax(x, y, color) {
+            brightness[x][y] = 4;
+            colorGrid[x][y] = color;
+            const cell = grid.children[x * size + y];
+            cell.dataset.level = 4;
+            cell.dataset.color = color;
+            setCellColor(cell, color, 4);
+        }
+
+        function getNeighbors(x, y) {
+            const neighbors = [];
+            neighbors.push([(x - 1 + size) % size, y]); // Top neighbor (wraps around)
+            neighbors.push([(x + 1) % size, y]); // Bottom neighbor (wraps around)
+            neighbors.push([x, (y - 1 + size) % size]); // Left neighbor (wraps around)
+            neighbors.push([x, (y + 1) % size]); // Right neighbor (wraps around)
+            return neighbors;
+        }
+
+        // Function to randomly increment cells
+        function randomlyIncrementCells() {
+            const randomX = Math.floor(Math.random() * size);
+            const randomY = Math.floor(Math.random() * size);
+            const cell = grid.children[randomX * size + randomY];
+            incrementCell(randomX, randomY, cell.dataset.color);
+        }
+
+        // Function to start and adjust the interval for random increments
+        function startRandomIncrements() {
+            clearInterval(intervalId);
+            intervalId = setInterval(() => {
+                randomlyIncrementCells();
+            }, parseInt(timerSlider.value));
+        }
+
+        // Function to stop random increments
+        function stopRandomIncrements() {
+            clearInterval(intervalId);
+        }
+
+        // Set initial interval
+        startRandomIncrements();
+
+        // Update interval when slider value changes
+        timerSlider.addEventListener('input', () => {
+            timerValue.textContent = timerSlider.value;
+            if (isRunning) {
+                startRandomIncrements();
+            }
+        });
+
+        // Toggle button to start/stop random increments
+        toggleButton.addEventListener('click', () => {
+            if (isRunning) {
+                stopRandomIncrements();
+                toggleButton.textContent = 'Start';
+            } else {
+                startRandomIncrements();
+                toggleButton.textContent = 'Stop';
+            }
+            isRunning = !isRunning;
+        });
+
+        // Reset colors button
+        resetColorsButton.addEventListener('click', () => {
+            for (let i = 0; i < size; i++) {
+                for (let j = 0; j < size; j++) {
+                    const color = colors[Math.floor(Math.random() * colors.length)];
+                    colorGrid[i][j] = color;
+                    const cell = grid.children[i * size + j];
+                    cell.dataset.color = color;
+                    setCellColor(cell, color, brightness[i][j]);
+                }
+            }
+        });
+
+        // Reset intensities button
+        resetIntensitiesButton.addEventListener('click', () => {
+            for (let i = 0; i < size; i++) {
+                for (let j = 0; j < size; j++) {
+                    brightness[i][j] = 0;
+                    const cell = grid.children[i * size + j];
+                    cell.dataset.level = 0;
+                    setCellColor(cell, colorGrid[i][j], 0);
+                }
+            }
+        });
+
+        // Populate with gradient button
+        gradientButton.addEventListener('click', () => {
+            let gradientRegions = [];
+            let regions = 5; // Number of regions with different intensity levels
+            for (let r = 0; r < regions; r++) {
+                let startX = Math.floor(Math.random() * size);
+                let startY = Math.floor(Math.random() * size);
+                let intensity = Math.floor(Math.random() * 5);
+                let regionSize = Math.floor(Math.random() * size / regions) + size / regions;
+                gradientRegions.push({ startX, startY, intensity, regionSize });
+            }
+            for (let i = 0; i < size; i++) {
+                for (let j = 0; j < size; j++) {
+                    let minDist = size * size;
+                    let selectedRegion = null;
+                    for (let region of gradientRegions) {
+                        let dist = Math.abs(i - region.startX) + Math.abs(j - region.startY);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            selectedRegion = region;
+                        }
+                    }
+                    brightness[i][j] = (selectedRegion.intensity + Math.floor(Math.random() * 3) - 1 + 5) % 5;
+                    const cell = grid.children[i * size + j];
+                    cell.dataset.level = brightness[i][j];
+                    setCellColor(cell, colorGrid[i][j], brightness[i][j]);
+                }
+            }
+        });
+
+        // Update grid size when input value changes
+        gridSizeInput.addEventListener('change', () => {
+            size = Math.min(100, Math.max(8, parseInt(gridSizeInput.value)));
+            initializeGrid();
+            if (isRunning) {
+                startRandomIncrements();
+            }
+        });
+
+        // Update colors when input value changes
+        numColorsInput.addEventListener('change', () => {
+            const numColors = Math.min(10, Math.max(2, parseInt(numColorsInput.value)));
+            colors = colorPalettes[colorPaletteSelect.value].slice(0, numColors);
+            initializeGrid();
+        });
+
+        // Update colors when palette changes
+        colorPaletteSelect.addEventListener('change', () => {
+            const numColors = Math.min(10, Math.max(2, parseInt(numColorsInput.value)));
+            colors = colorPalettes[colorPaletteSelect.value].slice(0, numColors);
+            initializeGrid();
+        });
+
+        // Initialize the grid with the default size and colors
+        colors = colorPalettes[colorPaletteSelect.value].slice(0, parseInt(numColorsInput.value));
+        initializeGrid();
+
+        // Resize grid dynamically
+        window.addEventListener('resize', () => {
+            const newSize = Math.min(window.innerWidth, window.innerHeight);
+            grid.style.width = `${newSize}px`;
+            grid.style.height = `${newSize}px`;
+        });
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>World Languages by Country</title>
+  <style>
+    body { margin:0; font-family:sans-serif; }
+    svg  { width:100vw; height:100vh; display:block; }
+    .country {
+      stroke: #fff;
+      stroke-width: 0.5;
+      cursor: pointer;
+      transition: fill 0.2s;
+    }
+    .highlight {
+      fill: orange !important;
+    }
+    #tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      display: none;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <div id="tooltip"></div>
+  <svg id="map"></svg>
+
+  <script src="https://unpkg.com/d3@7"></script>
+  <script src="https://unpkg.com/topojson-client@3"></script>
+  <script>
+    // 1) Colors for each language family
+    const families = {
+      indo_european: "#a6cee3",
+      sino_tibetan:  "#1f78b4",
+      austronesian:  "#b2df8a",
+      arabic:        "#33a02c",
+      dravidian:     "#fb9a99",
+      japonic:       "#e31a1c",
+      koreanic:      "#fdbf6f",
+      turkic:        "#ff7f00",
+      austroasiatic: "#cab2d6",
+      tai_kadai:     "#6a3d9a"
+    };
+
+    // 2) Map ISO A3 code → family key
+    const familyByISO = {
+      // North America & Europe
+      USA:"indo_european", CAN:"indo_european", MEX:"indo_european",
+      GBR:"indo_european", FRA:"indo_european", DEU:"indo_european", ESP:"indo_european",
+      PRT:"indo_european", ITA:"indo_european", NLD:"indo_european", BEL:"indo_european",
+      SWE:"indo_european", NOR:"indo_european", DNK:"indo_european", FIN:"indo_european",
+      POL:"indo_european", RUS:"indo_european",
+
+      // South America
+      BRA:"indo_european", ARG:"indo_european", COL:"indo_european", PER:"indo_european",
+
+      // Oceania
+      AUS:"indo_european", NZL:"indo_european",
+
+      // South Asia
+      IND:"indo_european", BGD:"indo_european", PAK:"indo_european",
+
+      // East Asia
+      CHN:"sino_tibetan", MMR:"sino_tibetan", BTN:"sino_tibetan",
+      JPN:"japonic", KOR:"koreanic",
+
+      // Southeast Asia
+      IDN:"austronesian", MYS:"austronesian", PHL:"austronesian",
+      VNM:"austroasiatic", KHM:"austroasiatic", THA:"tai_kadai", LAO:"tai_kadai",
+
+      // Middle East & North Africa
+      EGY:"arabic", LBY:"arabic", DZA:"arabic", MAR:"arabic", TUN:"arabic",
+      SDN:"arabic", SAU:"arabic", IRQ:"arabic", SYR:"arabic", LBN:"arabic",
+      JOR:"arabic", ARE:"arabic", OMN:"arabic", QAT:"arabic", BHR:"arabic",
+      KWT:"arabic", YEM:"arabic"
+    };
+
+    const width  = window.innerWidth,
+          height = window.innerHeight,
+          svg     = d3.select("#map")
+                      .attr("viewBox", [0,0,width,height]),
+          tooltip = d3.select("#tooltip");
+
+    const projection = d3.geoMercator()
+                         .scale((width/630)*100)
+                         .translate([width/2, height/1.5]);
+
+    const path = d3.geoPath(projection);
+
+    // 3) Load and draw
+    d3.json("https://unpkg.com/world-atlas@2/countries-110m.json").then(world => {
+      const countries = topojson.feature(world, world.objects.countries).features;
+
+      svg.append("g")
+         .selectAll("path")
+         .data(countries)
+         .enter().append("path")
+           .attr("class", "country")
+           .attr("d", path)
+           .attr("fill", d => {
+             const fam = familyByISO[d.id];
+             return fam ? families[fam] : "#ccc";
+           })
+           .on("mouseover", (event, d) => {
+             const fam = familyByISO[d.id];
+             if (fam) {
+               // highlight all in same family
+               svg.selectAll("path")
+                  .classed("highlight", p => familyByISO[p.id] === fam);
+             }
+             tooltip
+               .style("display", "block")
+               .text(`${d.properties.name} — ${fam ? fam.replace("_"," ").toUpperCase() : "Unknown"}`);
+           })
+           .on("mousemove", event => {
+             tooltip
+               .style("left",  (event.pageX + 10) + "px")
+               .style("top",   (event.pageY + 10) + "px");
+           })
+           .on("mouseout", () => {
+             svg.selectAll("path").classed("highlight", false);
+             tooltip.style("display", "none");
+           });
+    });
+  </script>
+</body>
+</html>

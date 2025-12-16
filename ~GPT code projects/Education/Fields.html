@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Field Simulator (G, E, B) with Bounded Walls & Black Field Lines</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0; padding: 0;
+      display: flex; 
+      flex-direction: row;
+      height: 100vh;
+    }
+    #controls {
+      background: #f0f0f0;
+      width: 270px;
+      padding: 1em;
+      box-sizing: border-box;
+      overflow-y: auto;
+      border-right: 1px solid #ccc;
+    }
+    #simContainer {
+      flex: 1;
+      position: relative;
+    }
+    #fieldCanvas {
+      display: block;
+      background: #ffffff;
+      width: 100%;
+      height: 100%;
+    }
+    .pallet-section {
+      margin-bottom: 1em;
+      padding: 0.5em;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background-color: #fafafa;
+    }
+    .pallet-section h3 {
+      margin: 0.2em 0;
+    }
+    label {
+      display: block;
+      margin: 0.25em 0;
+    }
+  </style>
+</head>
+<body>
+
+<div id="controls">
+  <h2>Field Simulator</h2>
+  <!-- Radio buttons to switch between Gravity/Electric/Magnetic -->
+  <div>
+    <input type="radio" name="fieldType" id="gravRadio" value="gravity" checked> 
+      <label for="gravRadio">Gravity</label><br>
+    <input type="radio" name="fieldType" id="elecRadio" value="electric"> 
+      <label for="elecRadio">Electric</label><br>
+    <input type="radio" name="fieldType" id="magRadio"  value="magnetic"> 
+      <label for="magRadio">Magnetic</label><br>
+  </div>
+  
+  <hr>
+  
+  <!-- PALLET: Add objects depending on chosen field -->
+  <div class="pallet-section" id="palletGravity">
+    <h3>Add Mass</h3>
+    <label>Mass: <input type="number" id="gravMassInput" step="0.1" value="10"></label>
+    <label>Radius: <input type="number" id="gravRadiusInput" value="8"></label>
+    <label>Velocity X: <input type="number" id="gravVxInput" step="0.1" value="0"></label>
+    <label>Velocity Y: <input type="number" id="gravVyInput" step="0.1" value="0"></label>
+    <button id="gravAddBtn">Add Mass</button>
+  </div>
+
+  <div class="pallet-section" id="palletElectric" style="display:none;">
+    <h3>Add Charge</h3>
+    <label>Charge (±): <input type="number" id="elecChargeInput" step="1" value="10"></label>
+    <label>Radius: <input type="number" id="elecRadiusInput" value="8"></label>
+    <label>Velocity X: <input type="number" id="elecVxInput" step="0.1" value="0"></label>
+    <label>Velocity Y: <input type="number" id="elecVyInput" step="0.1" value="0"></label>
+    <button id="elecAddBtn">Add Charge</button>
+  </div>
+
+  <div class="pallet-section" id="palletMagnetic" style="display:none;">
+    <h3>Add Magnet</h3>
+    <label>Mag. Strength: <input type="number" id="magStrengthInput" step="1" value="10"></label>
+    <label>Length: <input type="number" id="magLengthInput" value="40"></label>
+    <label>Velocity X: <input type="number" id="magVxInput" step="0.1" value="0"></label>
+    <label>Velocity Y: <input type="number" id="magVyInput" step="0.1" value="0"></label>
+    <button id="magAddBtn">Add Magnet</button>
+  </div>
+  
+  <hr>
+  <p><strong>Instructions:</strong></p>
+  <ul>
+    <li>Select <em>Gravity, Electric, or Magnetic</em>.</li>
+    <li>Field lines are drawn in black (one pixel thick) with arrowheads every 200 pixels.</li>
+    <li>Press <strong>Spacebar</strong> to pause/unpause.</li>
+    <li>Drag objects to move them. Magnets rotate automatically.</li>
+    <li>Objects bounce off the simulation walls.</li>
+    <li>Field lines are rendered behind the objects.</li>
+    <li>We’ve preloaded 6 objects per mode; you can add more.</li>
+  </ul>
+</div>
+
+<div id="simContainer">
+  <canvas id="fieldCanvas"></canvas>
+</div>
+
+<script>
+/* 
+   FIELD SIMULATOR with Bounded Walls & Black Field Lines Behind Objects
+   - Gravity: masses attract and merge on collision.
+   - Electric: like charges repel and opposites attract.
+   - Magnetic: bar magnets rotate (torque).
+   - Field lines (for all modes) are drawn in black, one pixel thick with arrowheads every 200 pixels.
+   - Objects are bounded by walls (they bounce off the edges) and are drawn on top of the field lines.
+*/
+
+const canvas = document.getElementById('fieldCanvas');
+const ctx    = canvas.getContext('2d');
+let WIDTH    = 800;
+let HEIGHT   = 600;
+let isPaused = false;
+
+function resizeCanvas() {
+  WIDTH  = document.getElementById('simContainer').clientWidth;
+  HEIGHT = document.getElementById('simContainer').clientHeight;
+  canvas.width = WIDTH;
+  canvas.height = HEIGHT;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// Separate arrays for each mode
+let gravityObjects  = []; // { x, y, vx, vy, radius, mass }
+let electricObjects = []; // { x, y, vx, vy, radius, charge }
+let magneticObjects = []; // { x, y, vx, vy, angle, av, length, dipoleStrength, i }
+
+// Current mode
+let currentMode = 'gravity';
+
+// Dragging
+let draggedObject = null;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+
+// Constants
+const G_CONST   = 1.0;
+const K_CONST   = 1.0;
+const MIN_DIST  = 5.0; // clamp small distances for physics & field computations
+const MAG_MASS  = 1.0; // mass for magnets
+
+// Field line parameters
+const NUM_SEEDS     = 20; 
+const LINE_STEP     = 5;
+const MAX_STEPS     = 150;
+const ARROW_SPACING = 200; // draw an arrow every 200 pixels
+
+// UI references
+const gravRadio   = document.getElementById('gravRadio');
+const elecRadio   = document.getElementById('elecRadio');
+const magRadio    = document.getElementById('magRadio');
+gravRadio.addEventListener('change', () => setMode('gravity'));
+elecRadio.addEventListener('change', () => setMode('electric'));
+magRadio.addEventListener('change', () => setMode('magnetic'));
+
+const palletGravity  = document.getElementById('palletGravity');
+const palletElectric = document.getElementById('palletElectric');
+const palletMagnetic = document.getElementById('palletMagnetic');
+
+function setMode(newMode) {
+  currentMode = newMode;
+  palletGravity.style.display  = (newMode === 'gravity')  ? 'block' : 'none';
+  palletElectric.style.display = (newMode === 'electric') ? 'block' : 'none';
+  palletMagnetic.style.display = (newMode === 'magnetic') ? 'block' : 'none';
+}
+
+// Add from pallet
+document.getElementById('gravAddBtn').addEventListener('click', () => {
+  const mVal = parseFloat(document.getElementById('gravMassInput').value);
+  const rVal = parseFloat(document.getElementById('gravRadiusInput').value);
+  const vx   = parseFloat(document.getElementById('gravVxInput').value);
+  const vy   = parseFloat(document.getElementById('gravVyInput').value);
+  gravityObjects.push({
+    x: Math.random()*WIDTH, y: Math.random()*HEIGHT,
+    vx, vy, radius: rVal, mass: mVal
+  });
+});
+
+document.getElementById('elecAddBtn').addEventListener('click', () => {
+  const qVal = parseFloat(document.getElementById('elecChargeInput').value);
+  const rVal = parseFloat(document.getElementById('elecRadiusInput').value);
+  const vx   = parseFloat(document.getElementById('elecVxInput').value);
+  const vy   = parseFloat(document.getElementById('elecVyInput').value);
+  electricObjects.push({
+    x: Math.random()*WIDTH, y: Math.random()*HEIGHT,
+    vx, vy, radius: rVal, charge: qVal
+  });
+});
+
+document.getElementById('magAddBtn').addEventListener('click', () => {
+  const dipVal = parseFloat(document.getElementById('magStrengthInput').value);
+  const lengthVal = parseFloat(document.getElementById('magLengthInput').value);
+  const vx   = parseFloat(document.getElementById('magVxInput').value);
+  const vy   = parseFloat(document.getElementById('magVyInput').value);
+  const angle = Math.random()*2*Math.PI;
+  const iVal  = (1/12)*MAG_MASS*(lengthVal**2);
+  magneticObjects.push({
+    x: Math.random()*WIDTH, y: Math.random()*HEIGHT,
+    vx, vy, angle, av: 0, length: lengthVal, dipoleStrength: dipVal, i: iVal
+  });
+});
+
+// Mouse drag
+canvas.addEventListener('mousedown', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  let objs = getCurrentObjects();
+  for (let i = objs.length-1; i>=0; i--) {
+    let o = objs[i];
+    if (currentMode==='magnetic') {
+      let halfL = o.length*0.5;
+      let dx = mx - o.x;
+      let dy = my - o.y;
+      if (dx*dx + dy*dy <= halfL*halfL) {
+        draggedObject = o;
+        dragOffsetX = dx; 
+        dragOffsetY = dy;
+        break;
+      }
+    } else {
+      let dx = mx - o.x;
+      let dy = my - o.y;
+      if (dx*dx + dy*dy <= o.radius*o.radius) {
+        draggedObject = o;
+        dragOffsetX = dx;
+        dragOffsetY = dy;
+        break;
+      }
+    }
+  }
+});
+canvas.addEventListener('mousemove', (e) => {
+  if (!draggedObject) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  draggedObject.x = mx - dragOffsetX;
+  draggedObject.y = my - dragOffsetY;
+});
+canvas.addEventListener('mouseup', ()=>{ draggedObject=null; });
+canvas.addEventListener('mouseleave', ()=>{ draggedObject=null; });
+
+// Space => pause
+window.addEventListener('keydown',(e)=>{
+  if(e.code==='Space'){ e.preventDefault(); isPaused=!isPaused; }
+});
+
+function getCurrentObjects(){
+  if (currentMode==='gravity') return gravityObjects;
+  if (currentMode==='electric') return electricObjects;
+  if (currentMode==='magnetic') return magneticObjects;
+  return [];
+}
+
+// Function to bound an object within the walls
+function boundObject(o, effectiveRadius) {
+  if(o.x < effectiveRadius) { o.x = effectiveRadius; o.vx = -o.vx; }
+  if(o.x > WIDTH - effectiveRadius) { o.x = WIDTH - effectiveRadius; o.vx = -o.vx; }
+  if(o.y < effectiveRadius) { o.y = effectiveRadius; o.vy = -o.vy; }
+  if(o.y > HEIGHT - effectiveRadius) { o.y = HEIGHT - effectiveRadius; o.vy = -o.vy; }
+}
+
+// Main loop
+function animate(){
+  if(!isPaused) updatePhysics();
+  drawScene();
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+/* ======================= PHYSICS ======================= */
+function updatePhysics(){
+  if(currentMode==='gravity')  updateGravity();
+  if(currentMode==='electric') updateElectric();
+  if(currentMode==='magnetic') updateMagnetic();
+}
+
+/* -------- GRAVITY -------- */
+function updateGravity(){
+  let objs = gravityObjects;
+  objs.forEach(o=>{ o.ax=0; o.ay=0; });
+  // Pairwise gravitational attraction
+  for(let i=0; i<objs.length; i++){
+    for(let j=i+1;j<objs.length;j++){
+      let o1=objs[i], o2=objs[j];
+      let dx=o2.x-o1.x, dy=o2.y-o1.y;
+      let r=Math.sqrt(dx*dx+dy*dy)||1;
+      if(r<MIN_DIST) r=MIN_DIST;
+      let f= G_CONST*(o1.mass*o2.mass)/(r*r);
+      let fx=f*(dx/r), fy=f*(dy/r);
+      o1.ax+=fx/o1.mass; o1.ay+=fy/o1.mass;
+      o2.ax-=fx/o2.mass; o2.ay-=fy/o2.mass;
+    }
+  }
+  // Integrate position and bound within walls
+  objs.forEach(o=>{
+    o.vx+=o.ax; o.vy+=o.ay;
+    o.x+=o.vx; o.y+=o.vy;
+    boundObject(o, o.radius);
+  });
+  // Merge collisions
+  for(let i=0;i<objs.length;i++){
+    for(let j=i+1;j<objs.length;j++){
+      let o1=objs[i], o2=objs[j];
+      let dx=o2.x-o1.x, dy=o2.y-o1.y;
+      let dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<(o1.radius+o2.radius)){
+        let tm=o1.mass+o2.mass;
+        o1.x=(o1.x*o1.mass+o2.x*o2.mass)/tm;
+        o1.y=(o1.y*o1.mass+o2.y*o2.mass)/tm;
+        o1.vx=(o1.vx*o1.mass+o2.vx*o2.mass)/tm;
+        o1.vy=(o1.vy*o1.mass+o2.vy*o2.mass)/tm;
+        o1.mass=tm;
+        o1.radius=Math.sqrt(o1.radius*o1.radius + o2.radius*o2.radius);
+        objs.splice(j,1);
+        j--;
+      }
+    }
+  }
+}
+
+/* -------- ELECTRIC -------- */
+function updateElectric(){
+  let objs = electricObjects;
+  objs.forEach(o=>{ o.ax=0; o.ay=0; });
+  // Pairwise Coulomb (inverted so like repels and opposites attract)
+  for(let i=0;i<objs.length;i++){
+    for(let j=i+1;j<objs.length;j++){
+      let o1=objs[i], o2=objs[j];
+      let dx=o2.x-o1.x, dy=o2.y-o1.y;
+      let r=Math.sqrt(dx*dx+dy*dy)||1;
+      if(r<MIN_DIST) r=MIN_DIST;
+      let f = -K_CONST*(o1.charge*o2.charge)/(r*r);
+      let fx=f*(dx/r), fy=f*(dy/r);
+      o1.ax+=fx; o1.ay+=fy;
+      o2.ax-=fx; o2.ay-=fy;
+    }
+  }
+  // Update positions and bound within walls
+  objs.forEach(o=>{
+    o.vx+=o.ax; o.vy+=o.ay;
+    o.x+=o.vx; o.y+=o.vy;
+    boundObject(o, o.radius);
+  });
+}
+
+/* -------- MAGNETIC -------- */
+function updateMagnetic(){
+  let objs = magneticObjects;
+  objs.forEach(m=>{ m.ax=0; m.ay=0; m.torque=0; });
+  
+  for(let i=0;i<objs.length;i++){
+    for(let j=i+1;j<objs.length;j++){
+      let m1 = objs[i], m2 = objs[j];
+      function getPoles(m){
+        let halfL = m.length*0.5;
+        let cosA = Math.cos(m.angle), sinA = Math.sin(m.angle);
+        let xA = m.x+halfL*cosA, yA = m.y+halfL*sinA;
+        let xB = m.x-halfL*cosA, yB = m.y-halfL*sinA;
+        return [
+          {x:xA, y:yA, chargeVal:+m.dipoleStrength, rx:halfL*cosA, ry:halfL*sinA},
+          {x:xB, y:yB, chargeVal:-m.dipoleStrength, rx:-halfL*cosA, ry:-halfL*sinA}
+        ];
+      }
+      let p1 = getPoles(m1), p2 = getPoles(m2);
+      let fx1=0, fy1=0, t1=0;
+      let fx2=0, fy2=0, t2=0;
+      for(let pole1 of p1){
+        for(let pole2 of p2){
+          let dx = pole2.x - pole1.x, dy = pole2.y - pole1.y;
+          let r = Math.sqrt(dx*dx+dy*dy)||1;
+          if(r<MIN_DIST) r=MIN_DIST;
+          let f = K_CONST*(pole1.chargeVal*pole2.chargeVal)/(r*r);
+          let fx = f*(dx/r), fy = f*(dy/r);
+          fx1 += fx; fy1 += fy;
+          t1 += (pole1.rx*fy - pole1.ry*fx);
+          fx2 -= fx; fy2 -=fy;
+          t2 -= (pole2.rx*fy - pole2.ry*fx);
+        }
+      }
+      m1.ax += fx1; m1.ay += fy1; m1.torque += t1;
+      m2.ax += fx2; m2.ay += fy2; m2.torque += t2;
+    }
+  }
+  // Update positions, rotation, and bound magnets within walls (using half-length as effective radius)
+  objs.forEach(m=>{
+    m.vx += m.ax/MAG_MASS; 
+    m.vy += m.ay/MAG_MASS;
+    m.x += m.vx; m.y += m.vy;
+    let alpha = m.torque/m.i;
+    m.av += alpha;
+    m.angle += m.av;
+    let halfL = m.length*0.5;
+    boundObject(m, halfL);
+  });
+}
+
+/* ======================= DRAW SCENE ======================= */
+function drawScene(){
+  ctx.clearRect(0,0,WIDTH,HEIGHT);
+  
+  // 1) Draw Field Lines in black (one pixel) with arrowheads every ARROW_SPACING pixels.
+  ctx.strokeStyle = 'black';
+  ctx.lineWidth = 1;
+  if(currentMode==='gravity'){
+    drawGravityFieldLines(gravityObjects);
+  } else if(currentMode==='electric'){
+    drawElectricFieldLines(electricObjects);
+  } else {
+    drawMagneticFieldLines(magneticObjects);
+  }
+  
+  // 2) Draw Objects on top of the field lines
+  drawObjects();
+}
+
+/* ======================= FIELD LINES ======================= */
+function drawGravityFieldLines(objs){
+  for(let o of objs){
+    drawRadialFieldLines(o.x, o.y, objs, 'gravity', +1);
+  }
+}
+function drawElectricFieldLines(objs){
+  for(let o of objs){
+    let sign = (o.charge>=0) ? +1 : -1;
+    drawRadialFieldLines(o.x, o.y, objs, 'electric', sign);
+  }
+}
+function drawMagneticFieldLines(objs){
+  for(let m of objs){
+    let halfL = m.length*0.5;
+    let cosA = Math.cos(m.angle), sinA = Math.sin(m.angle);
+    let xA = m.x+halfL*cosA, yA = m.y+halfL*sinA;
+    let xB = m.x-halfL*cosA, yB = m.y-halfL*sinA;
+    drawRadialFieldLines(xA, yA, objs, 'magnetic', +1);
+    drawRadialFieldLines(xB, yB, objs, 'magnetic', -1);
+  }
+}
+
+function drawRadialFieldLines(cx, cy, allObjs, mode, sign){
+  for(let i=0;i<NUM_SEEDS;i++){
+    let angle = (2*Math.PI*i)/NUM_SEEDS;
+    let sx = cx + 2*Math.cos(angle);
+    let sy = cy + 2*Math.sin(angle);
+    traceFieldLine(sx, sy, allObjs, mode, sign);
+  }
+}
+
+// Trace a field line from a seed point and draw arrowheads every ARROW_SPACING pixels
+function traceFieldLine(x0, y0, allObjs, mode, sign){
+  let x = x0, y = y0;
+  let points = [];
+  points.push({x, y});
+  ctx.beginPath();
+  ctx.moveTo(x,y);
+  let accumulatedDist = 0;
+  for(let step=0; step<MAX_STEPS; step++){
+    let {fx, fy} = computeField(x, y, allObjs, mode);
+    if(sign < 0){ fx = -fx; fy = -fy; }
+    let mag = Math.sqrt(fx*fx+fy*fy);
+    if(mag < 1e-9) break;
+    fx /= mag; fy /= mag;
+    let nx = x + fx*LINE_STEP;
+    let ny = y + fy*LINE_STEP;
+    let dx = nx - x, dy = ny - y;
+    let segDist = Math.sqrt(dx*dx+dy*dy);
+    accumulatedDist += segDist;
+    x = nx; y = ny;
+    points.push({x, y});
+    ctx.lineTo(x,y);
+    if(x<0 || x>WIDTH || y<0 || y>HEIGHT) break;
+  }
+  ctx.stroke();
+  
+  // Draw arrowheads every ARROW_SPACING pixels along the traced line
+  let distCounter = 0;
+  for(let i=0; i<points.length-1; i++){
+    let p1 = points[i], p2 = points[i+1];
+    let seg = Math.hypot(p2.x-p1.x, p2.y-p1.y);
+    distCounter += seg;
+    while(distCounter >= ARROW_SPACING){
+      let excess = distCounter - ARROW_SPACING;
+      let f = 1 - (excess/seg);
+      let ax = p1.x + f*(p2.x - p1.x);
+      let ay = p1.y + f*(p2.y - p1.y);
+      drawArrowhead({x: p1.x, y: p1.y}, {x: p2.x, y: p2.y}, 4, {x: ax, y: ay});
+      distCounter -= ARROW_SPACING;
+    }
+  }
+}
+
+// Draw a simple arrowhead at a given point along the segment
+function drawArrowhead(p1, p2, size, pos){
+  let angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+  ctx.save();
+  ctx.translate(pos.x, pos.y);
+  ctx.rotate(angle);
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.lineTo(-size, size/2);
+  ctx.lineTo(-size, -size/2);
+  ctx.closePath();
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.fill();
+  ctx.restore();
+}
+
+// Compute net field at (x,y)
+function computeField(x, y, allObjs, mode){
+  let fx = 0, fy = 0;
+  if(mode==='gravity'){
+    for(let m of allObjs){
+      let dx = m.x - x, dy = m.y - y;
+      let r = Math.sqrt(dx*dx+dy*dy)||1;
+      if(r < MIN_DIST) r = MIN_DIST;
+      let f = G_CONST*(m.mass)/(r*r);
+      fx += f*(dx/r);
+      fy += f*(dy/r);
+    }
+  } else if(mode==='electric'){
+    for(let c of allObjs){
+      let dx = c.x - x, dy = c.y - y;
+      let r = Math.sqrt(dx*dx+dy*dy)||1;
+      if(r < MIN_DIST) r = MIN_DIST;
+      let f = -K_CONST*(c.charge)/(r*r);
+      fx += f*(dx/r);
+      fy += f*(dy/r);
+    }
+  } else {
+    // Magnetic field: sum contributions from each magnet's poles
+    for(let mag of allObjs){
+      let halfL = mag.length*0.5;
+      let cosA = Math.cos(mag.angle), sinA = Math.sin(mag.angle);
+      let xA = mag.x + halfL*cosA, yA = mag.y + halfL*sinA;
+      let xB = mag.x - halfL*cosA, yB = mag.y - halfL*sinA;
+      
+      let dxA = xA - x, dyA = yA - y;
+      let rA = Math.sqrt(dxA*dxA+dyA*dyA)||1;
+      if(rA < MIN_DIST) rA = MIN_DIST;
+      let fA = K_CONST*(mag.dipoleStrength)/(rA*rA);
+      fx += fA*(dxA/rA);
+      fy += fA*(dyA/rA);
+      
+      let dxB = xB - x, dyB = yB - y;
+      let rB = Math.sqrt(dxB*dxB+dyB*dyB)||1;
+      if(rB < MIN_DIST) rB = MIN_DIST;
+      let fB = K_CONST*(-mag.dipoleStrength)/(rB*rB);
+      fx += fB*(dxB/rB);
+      fy += fB*(dyB/rB);
+    }
+  }
+  return {fx, fy};
+}
+
+/* ======================= DRAW OBJECTS ======================= */
+function drawObjects(){
+  let objs = getCurrentObjects();
+  ctx.save();
+  if(currentMode==='gravity'){
+    objs.forEach(o=>{
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, o.radius, 0, 2*Math.PI);
+      ctx.fillStyle = '#AAAAAA';
+      ctx.fill();
+    });
+  } else if(currentMode==='electric'){
+    objs.forEach(o=>{
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, o.radius, 0, 2*Math.PI);
+      ctx.fillStyle = (o.charge>=0) ? 'red' : 'blue';
+      ctx.fill();
+    });
+  } else {
+    objs.forEach(m=>{
+      let halfL = m.length*0.5;
+      let cosA = Math.cos(m.angle), sinA = Math.sin(m.angle);
+      let xA = m.x + halfL*cosA, yA = m.y + halfL*sinA;
+      let xB = m.x - halfL*cosA, yB = m.y - halfL*sinA;
+      // Draw rod
+      ctx.beginPath();
+      ctx.moveTo(xB, yB);
+      ctx.lineTo(xA, yA);
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      // Draw +pole
+      ctx.beginPath();
+      ctx.arc(xA, yA, 5, 0, 2*Math.PI);
+      ctx.fillStyle = 'red';
+      ctx.fill();
+      // Draw -pole
+      ctx.beginPath();
+      ctx.arc(xB, yB, 5, 0, 2*Math.PI);
+      ctx.fillStyle = 'blue';
+      ctx.fill();
+    });
+  }
+  ctx.restore();
+}
+
+/* ======================= PRELOAD 6 EA ======================= */
+function initPreloadedObjects(){
+  for(let i=0;i<6;i++){
+    let mass = 5 + Math.random()*15;
+    let radius = 5 + Math.sqrt(mass);
+    gravityObjects.push({
+      x: Math.random()*WIDTH, y: Math.random()*HEIGHT,
+      vx: 0, vy: 0, radius, mass
+    });
+  }
+  for(let i=0;i<6;i++){
+    let charge = (Math.random() < 0.5) ? +10 : -10;
+    electricObjects.push({
+      x: Math.random()*WIDTH, y: Math.random()*HEIGHT,
+      vx: 0, vy: 0, radius: 8, charge
+    });
+  }
+  for(let i=0;i<6;i++){
+    let dipVal = 10 + Math.random()*10;
+    let lengthVal = 30 + Math.random()*30;
+    let angle = Math.random()*2*Math.PI;
+    let iVal = (1/12)*MAG_MASS*(lengthVal**2);
+    magneticObjects.push({
+      x: Math.random()*WIDTH, y: Math.random()*HEIGHT,
+      vx: 0, vy: 0, angle, av: 0,
+      length: lengthVal, dipoleStrength: dipVal, i: iVal
+    });
+  }
+}
+
+initPreloadedObjects();
+</script>
+</body>
+</html>

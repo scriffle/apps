@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spelling Quiz</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: auto; }
+    h1 { text-align: center; }
+    #intro { margin-bottom: 20px; }
+    #timer { display: none; position: sticky; top: 0; background: white; padding: 10px; font-size: 1.2rem; z-index: 100; }
+    #quizForm { column-count: 2; column-gap: 20px; }
+    @media (min-width: 1000px) { #quizForm { column-count: 3; } }
+    .question { margin: 15px 0; break-inside: avoid; display: none; }
+    .choices label { display: block; margin-bottom: 5px; }
+    .correct { color: green; }
+    .incorrect { color: darkgoldenrod; }
+    .wrong-selection { color: red; font-weight: bold; }
+    #submit, #restart { display: none; margin-top: 20px; padding: 10px 20px; font-size: 1rem; }
+    #result { font-weight: bold; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>Spelling Quiz</h1>
+  <p id="intro">
+    The coming decade will <strong>accommodate</strong> an unprecedented convergence of AI, biotech, and quantum computing, 
+    <strong>acknowledgment</strong> of which is already reshaping research agendas worldwide; as innovators 
+    <strong>definitely</strong> pursue ever-more ambitious goals, they’ll need to <strong>embarrass</strong> inertia in legacy systems 
+    and <strong>separate</strong> outdated models from future-proof architectures. <strong>Occurrence</strong> of real-time adaptive 
+    networks and <strong>maintenance</strong>-free materials will <strong>possess</strong> the power to <strong>recommend</strong> 
+    personalized treatments, <strong>noticeable</strong> even in everyday consumer devices. Companies will <strong>exaggerate</strong> 
+    their roadmaps <strong>until</strong> regulators step in—yet, <strong>clear</strong> guidelines emerge, <strong>schedule</strong> conflicts 
+    and <strong>knowledge</strong> gaps will persist. As <strong>vacuum</strong>-sealed quantum sensors and 
+    <strong>millennium</strong>-class cryptography mature, <strong>conscience</strong>-driven frameworks for data privacy will 
+    <strong>guide</strong> development. Meanwhile, <strong>coaches</strong> of technical teams must <strong>build</strong> resilient 
+    supply chains and <strong>count</strong> on automated QA to catch errors before they cascade. From <strong>dense</strong> 
+    neural-interface grids to <strong>across</strong>-the-board energy harvesting, these trends converge at the 
+    <strong>threshold</strong> of a new era in which <strong>focus</strong> on human-centric design and <strong>sense</strong>-making tools 
+    will <strong>piece</strong> together a coherent vision for our technological future.
+  </p>
+
+  <button id="start">Start Quiz</button>
+  <div id="timer">Time: <span id="timeDisplay">0</span> seconds</div>
+  <form id="quizForm"></form>
+  <button id="submit">Submit</button>
+  <button id="restart">Repeat Quiz</button>
+  <div id="result"></div>
+
+  <script>
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    const allWords = [
+      {correct: 'accommodate', choices: ['acommodate','accomodate','accommodate','accommdate']},
+      {correct: 'acknowledgment', choices: ['acknowledgement','acknowledgment','aknowledgment','acknowdgment']},
+      {correct: 'definitely', choices: ['definately','defiantly','definately','definitely']},
+      {correct: 'embarrass', choices: ['embarass','embarrasss','embrrass','embarrass']},
+      {correct: 'separate', choices: ['seperate','seprate','seperete','separate']},
+      {correct: 'occurrence', choices: ['ocurence','occurrance','ocurrence','occurrence']},
+      {correct: 'maintenance', choices: ['maintanence','maintainence','mantainance','maintenance']},
+      {correct: 'possession', choices: ['posession','possesion','poession','possession']},
+      {correct: 'questionnaire', choices: ['questionaire','questionnare','questionnarie','questionnaire']},
+      {correct: 'rhythm', choices: ['rythm','rhtyhm','rhytm','rhythm']},
+      {correct: 'vacuum', choices: ['vacum','vaccum','vaacum','vacuum']},
+      {correct: 'privilege', choices: ['privelege','priviledge','privaledge','privilege']},
+      {correct: 'recommend', choices: ['reccommend','recomend','recomment','recommend']},
+      {correct: 'noticeable', choices: ['noticable','noitceable','noticible','noticeable']},
+      {correct: 'exaggerate', choices: ['exagerate','exaggerrate','exagerrate','exaggerate']},
+      {correct: 'until', choices: ['untill','untiil','untel','until']},
+      {correct: 'clear', choices: ['cerar','clera','clear','cleer']},
+      {correct: 'schedule', choices: ['schedual','shedule','scedule','schedule']},
+      {correct: 'knowledge', choices: ['knowlege','knowledg','knowlede','knowledge']},
+      {correct: 'count', choices: ['coutn','counte','count','contu']},
+      {correct: 'dense', choices: ['dence','denes','dense','dens']},
+      {correct: 'focus', choices: ['focuss','foccus','focus','foqus']},
+      {correct: 'piece', choices: ['pice','peice','piece','pieace']},
+      {correct: 'sense', choices: ['sence','senes','sense','sns']},
+    ];
+
+    let quizWords, timerInterval, timeStart;
+    const form = document.getElementById('quizForm'),
+          timerDiv = document.getElementById('timer'),
+          timeDisplay = document.getElementById('timeDisplay'),
+          startBtn = document.getElementById('start'),
+          submitBtn = document.getElementById('submit'),
+          restartBtn = document.getElementById('restart'),
+          resultDiv = document.getElementById('result');
+
+    function startQuiz() {
+      // initialize
+      quizWords = shuffle(allWords.slice()).slice(0,10);
+      form.innerHTML = '';
+      resultDiv.textContent = '';
+      startBtn.style.display = 'none';
+      submitBtn.style.display = 'inline-block';
+      restartBtn.style.display = 'none';
+      document.getElementById('intro').style.display = 'none';
+      timerDiv.style.display = 'block';
+      // build questions
+      quizWords.forEach((w, i) => {
+        const opts = shuffle(w.choices.slice());
+        const div = document.createElement('div');
+        div.className = 'question';
+        div.style.display = 'block';
+        div.innerHTML = `<strong>${i+1}. How do you spell "${w.correct}"?</strong>` +
+                        '<div class="choices">' +
+                        opts.map(c=>`<label><input type="radio" name="q${i}" value="${c}"> ${c}</label>`).join('') +
+                        '</div>' +
+                        `<div id="fb${i}" class="feedback"></div>`;
+        form.appendChild(div);
+      });
+      // start timer
+      timeStart = Date.now();
+      timeDisplay.textContent = '0';
+      timerInterval = setInterval(() => {
+        const secs = Math.floor((Date.now() - timeStart)/1000);
+        timeDisplay.textContent = secs;
+      }, 1000);
+    }
+
+    function showResults() {
+      clearInterval(timerInterval);
+      timerDiv.style.display = 'none';
+      let score = 0;
+      quizWords.forEach((w, i) => {
+        const sel = form.elements['q'+i].value;
+        const fb = document.getElementById('fb'+i);
+        // highlight options
+        const labels = form.querySelectorAll(`[name=q${i}]`);
+        labels.forEach(inp=>{
+          const lbl = inp.parentNode;
+          if (inp.value === w.correct) lbl.classList.add('correct'); else lbl.classList.add('incorrect');
+          if (inp.checked && inp.value !== w.correct) lbl.classList.add('wrong-selection');
+          if (inp.checked) lbl.style.fontWeight = 'bold';
+        });
+        if (sel === w.correct) score++;
+      });
+      const totalTime = Math.floor((Date.now() - timeStart)/1000);
+      resultDiv.textContent = `You got ${score} out of ${quizWords.length} correct in ${totalTime} seconds.`;
+      submitBtn.style.display = 'none';
+      restartBtn.style.display = 'inline-block';
+    }
+
+    startBtn.addEventListener('click', startQuiz);
+    submitBtn.addEventListener('click', showResults);
+    restartBtn.addEventListener('click', startQuiz);
+  </script>
+</body>
+</html>

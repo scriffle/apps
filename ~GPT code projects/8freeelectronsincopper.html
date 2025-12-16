@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Copper Rod - Free Electrons Simulation</title>
+<style>
+:root {
+  --bg: #0b1020;
+  --fg: #e6f0ff;
+  --muted: #9fb1d4;
+  --accent: #6ee7ff;
+  --panel: #111936;
+  --panel2: #0e1530;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  background: radial-gradient(1200px 600px at 10% -10%, #1c2750 0%, #0b1020 50%),
+              radial-gradient(1200px 800px at 110% 110%, #08122b 0%, #0b1020 60%);
+  color: var(--fg);
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  padding: 16px 20px;
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid rgba(110, 231, 255, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.header-content {
+  flex: 1;
+  min-width: 300px;
+}
+
+h1 {
+  font-size: 20px;
+  letter-spacing: 0.3px;
+  color: var(--accent);
+  margin: 0 0 4px 0;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+button {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #6ee7ff 0%, #6dffa7 100%);
+  color: #0b1020;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 12px rgba(110, 231, 255, 0.3);
+}
+
+button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(110, 231, 255, 0.4);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+#container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  position: relative;
+}
+
+canvas {
+  display: block;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--panel), var(--panel2));
+  border: 1px solid #1a2550;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.legend {
+  position: absolute;
+  left: 30px;
+  top: 30px;
+  font-size: 12px;
+  color: #cdd9ff;
+  background: rgba(8, 12, 28, 0.75);
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(120, 150, 255, 0.2);
+  backdrop-filter: blur(4px);
+}
+
+.legend div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.legend div:last-child {
+  margin-bottom: 0;
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.dot.e {
+  background: radial-gradient(circle at 30% 30%, #c7f3ff, #6ee7ff);
+  box-shadow: 0 0 8px rgba(110, 231, 255, 0.5);
+}
+
+.dot.ion {
+  background: radial-gradient(circle at 30% 30%, #ffe6d1, #ff9a6d);
+  box-shadow: 0 0 6px rgba(255, 154, 109, 0.4);
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="header-content">
+    <h1>⚡ Copper Rod - Free Electron Motion</h1>
+    <div class="subtitle">Free electrons (blue) moving through fixed copper ions (orange) with Brownian motion and Coulomb repulsion</div>
+  </div>
+  <button id="resetBtn">Reset Electrons</button>
+</header>
+<div id="container">
+  <canvas id="canvas"></canvas>
+  <div class="legend">
+    <div><span class="dot e"></span> Free electrons</div>
+    <div><span class="dot ion"></span> Copper atoms (Cu)</div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  
+  // Physics constants
+  const COULOMB_K = 8000;          // Coulomb constant (scaled for simulation)
+  const ELECTRON_ION_K = 3000;     // Electron-ion repulsion (weaker)
+  const SOFTENING = 8;             // Softening parameter to avoid singularities
+  const DAMPING = 0.985;           // Velocity damping
+  const BROWNIAN_FORCE = 180;      // Thermal motion strength
+  const MAX_FORCE = 6000;          // Maximum force magnitude
+  const DT = 0.016;                // Time step
+  const LATTICE_SPACING = 35;      // Distance between ions
+  const ELECTRON_COUNT = 180;      // Number of free electrons
+  const ELECTRON_RADIUS = 2.8;     // Visual radius
+  const ION_RADIUS = 6;            // Visual radius
+  
+  // Rod dimensions (relative to canvas)
+  let rodWidth, rodHeight, rodX, rodY;
+  let ions = [];
+  let electrons = [];
+  
+  // Resize handling
+  function resize() {
+    const container = canvas.parentElement;
+    const maxWidth = container.clientWidth - 40;
+    const maxHeight = container.clientHeight - 40;
+    
+    // Set canvas to a reasonable size
+    const width = Math.min(1000, maxWidth);
+    const height = Math.min(600, maxHeight);
+    
+    canvas.width = width;
+    canvas.height = height;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    
+    // Rod takes up most of the canvas
+    rodWidth = width * 0.85;
+    rodHeight = height * 0.7;
+    rodX = (width - rodWidth) / 2;
+    rodY = (height - rodHeight) / 2;
+    
+    initializeSimulation();
+  }
+  
+  // Initialize ions in lattice and electrons randomly
+  function initializeSimulation() {
+    ions = [];
+    electrons = [];
+    
+    // Create copper ion lattice
+    const cols = Math.floor(rodWidth / LATTICE_SPACING);
+    const rows = Math.floor(rodHeight / LATTICE_SPACING);
+    const offsetX = rodX + (rodWidth - (cols - 1) * LATTICE_SPACING) / 2;
+    const offsetY = rodY + (rodHeight - (rows - 1) * LATTICE_SPACING) / 2;
+    
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        ions.push({
+          x: offsetX + col * LATTICE_SPACING,
+          y: offsetY + row * LATTICE_SPACING
+        });
+      }
+    }
+    
+    initializeElectrons();
+  }
+  
+  // Initialize or reset just the electrons
+  function initializeElectrons() {
+    electrons = [];
+    
+    // Create free electrons randomly within the rod
+    for (let i = 0; i < ELECTRON_COUNT; i++) {
+      electrons.push({
+        x: rodX + Math.random() * rodWidth,
+        y: rodY + Math.random() * rodHeight,
+        vx: (Math.random() - 0.5) * 100,
+        vy: (Math.random() - 0.5) * 100
+      });
+    }
+  }
+  
+  // Physics update
+  function updatePhysics() {
+    const soft2 = SOFTENING * SOFTENING;
+    
+    // Update each electron
+    for (let i = 0; i < electrons.length; i++) {
+      const e = electrons[i];
+      let fx = 0;
+      let fy = 0;
+      
+      // Electron-electron repulsion
+      for (let j = 0; j < electrons.length; j++) {
+        if (i === j) continue;
+        const other = electrons[j];
+        
+        const dx = e.x - other.x;
+        const dy = e.y - other.y;
+        const r2 = dx * dx + dy * dy + soft2;
+        const r = Math.sqrt(r2);
+        
+        // Inverse square law: F = k / r²
+        const forceMag = Math.min(MAX_FORCE, COULOMB_K / r2);
+        fx += forceMag * (dx / r);
+        fy += forceMag * (dy / r);
+      }
+      
+      // Electron-ion repulsion (weaker, ions are positive but heavy)
+      for (const ion of ions) {
+        const dx = e.x - ion.x;
+        const dy = e.y - ion.y;
+        const r2 = dx * dx + dy * dy + soft2;
+        const r = Math.sqrt(r2);
+        
+        // Weaker repulsion from ions
+        const forceMag = Math.min(MAX_FORCE, ELECTRON_ION_K / r2);
+        fx += forceMag * (dx / r);
+        fy += forceMag * (dy / r);
+      }
+      
+      // Brownian motion (random thermal kicks)
+      fx += (Math.random() - 0.5) * BROWNIAN_FORCE;
+      fy += (Math.random() - 0.5) * BROWNIAN_FORCE;
+      
+      // Update velocity
+      e.vx = (e.vx + fx * DT) * DAMPING;
+      e.vy = (e.vy + fy * DT) * DAMPING;
+      
+      // Update position
+      e.x += e.vx * DT;
+      e.y += e.vy * DT;
+      
+      // Bounce off rod boundaries
+      const margin = ELECTRON_RADIUS * 2;
+      if (e.x < rodX + margin) {
+        e.x = rodX + margin;
+        e.vx = Math.abs(e.vx) * 0.8;
+      }
+      if (e.x > rodX + rodWidth - margin) {
+        e.x = rodX + rodWidth - margin;
+        e.vx = -Math.abs(e.vx) * 0.8;
+      }
+      if (e.y < rodY + margin) {
+        e.y = rodY + margin;
+        e.vy = Math.abs(e.vy) * 0.8;
+      }
+      if (e.y > rodY + rodHeight - margin) {
+        e.y = rodY + rodHeight - margin;
+        e.vy = -Math.abs(e.vy) * 0.8;
+      }
+    }
+  }
+  
+  // Render
+  function render() {
+    // Clear with trails effect
+    ctx.fillStyle = 'rgba(17, 25, 54, 0.3)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw rod outline
+    ctx.strokeStyle = 'rgba(110, 231, 255, 0.15)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(rodX, rodY, rodWidth, rodHeight);
+    
+    // Draw copper ions
+    for (const ion of ions) {
+      const grd = ctx.createRadialGradient(
+        ion.x - ION_RADIUS * 0.3,
+        ion.y - ION_RADIUS * 0.3,
+        ION_RADIUS * 0.2,
+        ion.x,
+        ion.y,
+        ION_RADIUS
+      );
+      grd.addColorStop(0, '#ffe6d1');
+      grd.addColorStop(1, '#ff9a6d');
+      
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.arc(ion.x, ion.y, ION_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    
+    // Draw electrons
+    for (const e of electrons) {
+      const grd = ctx.createRadialGradient(
+        e.x - ELECTRON_RADIUS * 0.6,
+        e.y - ELECTRON_RADIUS * 0.6,
+        ELECTRON_RADIUS * 0.3,
+        e.x,
+        e.y,
+        ELECTRON_RADIUS
+      );
+      grd.addColorStop(0, '#c7f3ff');
+      grd.addColorStop(1, '#6ee7ff');
+      
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, ELECTRON_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Glow effect
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = 'rgba(110, 231, 255, 0.6)';
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, ELECTRON_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+  
+  // Animation loop
+  function animate() {
+    updatePhysics();
+    render();
+    requestAnimationFrame(animate);
+  }
+  
+  // Handle window resize
+  window.addEventListener('resize', resize);
+  
+  // Handle reset button
+  document.getElementById('resetBtn').addEventListener('click', initializeElectrons);
+  
+  // Initialize and start
+  resize();
+  animate();
+})();
+</script>
+</body>
+</html>

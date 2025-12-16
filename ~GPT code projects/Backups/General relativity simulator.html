@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic 3D Grid with Space Warping and Time Dilation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #sliderContainer {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-top: 1px solid #ccc;
+            box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            font-family: Arial, sans-serif;
+        }
+        #meshContainer {
+            position: absolute;
+            top: 0;
+            bottom: 50px; /* Reserve space for the slider */
+            width: 100%;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+    <div id="meshContainer"></div>
+    <div id="sliderContainer">
+        <label for="sizeSlider">Grid Size (n x n x n): </label>
+        <input type="range" id="sizeSlider" min="3" max="8" value="5" step="1">
+        <span id="sizeValue">5</span>
+    </div>
+    <script>
+        let scene, camera, renderer, massiveObject;
+        const clocks = [];
+        const lines = [];
+        let gridSize = 5; // Initial grid size (n)
+        const gridSpacing = 1.2;
+        const sphereMass = 100 * 1.989e30;  // 100 solar masses in kg
+        const G = 6.67430e-11;  // Gravitational constant
+        const c = 3e8;  // Speed of light in m/s
+        let scalingFactor = 1e6;  // Base scaling factor for time dilation
+        let warpStrength = 3.0;  // Base strength of space warping effect
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('meshContainer').appendChild(renderer.domElement);
+
+            createMesh(gridSize);
+
+            camera.position.z = 10;
+
+            window.addEventListener('resize', onWindowResize, false);
+            document.addEventListener('wheel', onMouseWheel, false);
+            document.addEventListener('mousedown', onMouseDown, false);
+            document.addEventListener('mouseup', onMouseUp, false);
+            document.addEventListener('mousemove', onMouseMove, false);
+
+            // Slider to adjust grid size
+            const sizeSlider = document.getElementById('sizeSlider');
+            const sizeValue = document.getElementById('sizeValue');
+            sizeSlider.addEventListener('input', () => {
+                gridSize = parseInt(sizeSlider.value);
+                sizeValue.textContent = gridSize;
+                resetScene();
+                createMesh(gridSize);
+            });
+        }
+
+        function createMesh(size) {
+            clocks.length = 0;
+            lines.length = 0;
+
+            // Create clocks at each intersection of the n x n x n grid
+            for (let x = 0; x < size; x++) {
+                for (let y = 0; y < size; y++) {
+                    for (let z = 0; z < size; z++) {
+                        const position = new THREE.Vector3((x - (size - 1) / 2) * gridSpacing, (y - (size - 1) / 2) * gridSpacing, (z - (size - 1) / 2) * gridSpacing);
+                        const clock = createClock();
+                        clock.position.copy(position);
+                        clock.userData.startTime = Date.now();  // Initialize start time
+                        clock.userData.elapsedTime = 0;  // Track elapsed time independently for each clock
+                        clock.userData.originalPosition = position.clone();  // Store the original position for warping
+                        scene.add(clock);
+                        clocks.push(clock);
+
+                        // Draw lines along Cartesian planes only
+                        if (x < size - 1) {
+                            const nextXPosition = new THREE.Vector3((x + 1 - (size - 1) / 2) * gridSpacing, (y - (size - 1) / 2) * gridSpacing, (z - (size - 1) / 2) * gridSpacing);
+                            lines.push(drawLine(position, nextXPosition));
+                        }
+                        if (y < size - 1) {
+                            const nextYPosition = new THREE.Vector3((x - (size - 1) / 2) * gridSpacing, (y + 1 - (size - 1) / 2) * gridSpacing, (z - (size - 1) / 2) * gridSpacing);
+                            lines.push(drawLine(position, nextYPosition));
+                        }
+                        if (z < size - 1) {
+                            const nextZPosition = new THREE.Vector3((x - (size - 1) / 2) * gridSpacing, (y - (size - 1) / 2) * gridSpacing, (z + 1 - (size - 1) / 2) * gridSpacing);
+                            lines.push(drawLine(position, nextZPosition));
+                        }
+                    }
+                }
+            }
+
+            // Create the massive object (90% opaque yellow sphere, quartered radius)
+            const massiveObjectGeometry = new THREE.SphereGeometry(gridSpacing / 8, 32, 32);  // Quartered radius
+            const massiveObjectMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.9 });  // 90% opaque yellow
+            massiveObject = new THREE.Mesh(massiveObjectGeometry, massiveObjectMaterial);
+            scene.add(massiveObject);
+
+            animate();
+        }
+
+        function resetScene() {
+            // Remove all existing objects from the scene
+            while (scene.children.length > 0) {
+                scene.remove(scene.children[0]);
+            }
+        }
+
+        function createClock() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'blue';  // Vibrant blue color
+            ctx.font = '40px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText("00:00", canvas.width / 2, canvas.height / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+
+            const clockMaterial = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
+            const clockGeometry = new THREE.PlaneGeometry(1, 0.5);
+            const clock = new THREE.Mesh(clockGeometry, clockMaterial);
+
+            clock.userData = { texture: texture, canvas: canvas, ctx: ctx, startTime: 0, elapsedTime: 0, timeDilationFactor: 1, originalPosition: null };
+            return clock;
+        }
+
+        function drawLine(start, end) {
+            const material = new THREE.LineBasicMaterial({ color: 0xcccccc });
+            const points = [start.clone(), end.clone()];
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(geometry, material);
+            scene.add(line);
+            return line;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function onMouseWheel(event) {
+            camera.position.z += event.deltaY * 0.01;
+        }
+
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+
+        function onMouseDown(event) {
+            isDragging = true;
+            previousMousePosition = {
+                x: event.clientX,
+                y: event.clientY
+            };
+        }
+
+        function onMouseUp() {
+            isDragging = false;
+        }
+
+        function onMouseMove(event) {
+            if (!isDragging) return;
+            const deltaMove = {
+                x: event.clientX - previousMousePosition.x,
+                y: event.clientY - previousMousePosition.y
+            };
+            scene.rotation.y += deltaMove.x * 0.01;
+            scene.rotation.x += deltaMove.y * 0.01;
+            previousMousePosition = { x: event.clientX, y: event.clientY };
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const currentTime = Date.now();
+            const elapsedTime = currentTime / 1000;  // Time in seconds
+            const meshWidth = gridSize * gridSpacing;  // Width of the entire mesh
+            const travelDistance = meshWidth * 2;  // Distance to travel outside the mesh
+            const speed = travelDistance / 10;  // Traverse the distance in 10 seconds
+
+            massiveObject.position.x = (elapsedTime % 10) * speed - travelDistance / 2;  // Start outside, pass through center, exit
+
+            // Update clocks and mesh points with enhanced time dilation and space warping
+            clocks.forEach(clock => {
+                const distance = clock.userData.originalPosition.distanceTo(massiveObject.position) * scalingFactor;  // Use original position for distance
+                const timeDilationFactor = Math.sqrt(1 - (2 * G * sphereMass) / (c * c * distance));
+
+                // Correct time dilation application
+                if (!isNaN(timeDilationFactor) && timeDilationFactor < 1) {
+                    clock.userData.timeDilationFactor = timeDilationFactor;
+                } else {
+                    clock.userData.timeDilationFactor = 1;  // Default to no time dilation
+                }
+
+                // Update each clock's elapsed time considering the time dilation
+                clock.userData.elapsedTime += (currentTime - clock.userData.startTime) * clock.userData.timeDilationFactor;
+                clock.userData.startTime = currentTime;
+
+                // Format time as MM:SS
+                const adjustedElapsedTime = Math.floor(clock.userData.elapsedTime / 1000);
+                const minutes = Math.floor(adjustedElapsedTime / 60).toString().padStart(2, '0');
+                const seconds = (adjustedElapsedTime % 60).toString().padStart(2, '0');
+                const timeString = `${minutes}:${seconds}`;
+
+                // Update clock texture
+                clock.userData.ctx.clearRect(0, 0, clock.userData.canvas.width, clock.userData.canvas.height);
+                clock.userData.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                clock.userData.ctx.fillRect(0, 0, clock.userData.canvas.width, clock.userData.canvas.height);
+                clock.userData.ctx.fillStyle = 'blue';  // Vibrant blue color
+                clock.userData.ctx.fillText(timeString, clock.userData.canvas.width / 2, clock.userData.canvas.height / 2);
+                clock.userData.texture.needsUpdate = true;
+
+                // Apply space warping effect
+                const warpVector = new THREE.Vector3().subVectors(clock.userData.originalPosition, massiveObject.position);
+                const distanceFromMass = Math.max(warpVector.length(), 0.1);  // Aggressive clamp to avoid infinity
+                const warpAmount = warpStrength / (distanceFromMass * distanceFromMass + 1e-5);  // Avoid division by zero, asymptotic near mass
+                warpVector.multiplyScalar(Math.min(warpAmount, 1));  // Further clamp to prevent excessive warp
+                clock.position.copy(clock.userData.originalPosition).sub(warpVector);
+
+                // Update connected lines to move with the warped clock positions
+                updateLines();
+                
+                // Make the clock face the camera
+                clock.lookAt(camera.position);
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        function updateLines() {
+            let lineIndex = 0;
+            for (let x = 0; x < gridSize; x++) {
+                for (let y = 0; y < gridSize; y++) {
+                    for (let z = 0; z < gridSize; z++) {
+                        const index = x * gridSize * gridSize + y * gridSize + z;
+                        const clock = clocks[index];
+
+                        if (x < gridSize - 1) {
+                            const nextClockX = clocks[index + gridSize * gridSize];
+                            updateLine(lines[lineIndex], clock.position, nextClockX.position);
+                            lineIndex++;
+                        }
+
+                        if (y < gridSize - 1) {
+                            const nextClockY = clocks[index + gridSize];
+                            updateLine(lines[lineIndex], clock.position, nextClockY.position);
+                            lineIndex++;
+                        }
+
+                        if (z < gridSize - 1) {
+                            const nextClockZ = clocks[index + 1];
+                            updateLine(lines[lineIndex], clock.position, nextClockZ.position);
+                            lineIndex++;
+                        }
+                    }
+                }
+            }
+        }
+
+        function updateLine(line, start, end) {
+            const positions = line.geometry.attributes.position.array;
+            positions[0] = start.x;
+            positions[1] = start.y;
+            positions[2] = start.z;
+            positions[3] = end.x;
+            positions[4] = end.y;
+            positions[5] = end.z;
+            line.geometry.attributes.position.needsUpdate = true;
+        }
+
+        init();
+    </script>
+</body>
+</html>

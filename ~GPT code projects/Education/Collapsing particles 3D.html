@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Barnes-Hut N-Body Simulation</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 10px;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+    button {
+      margin: 5px;
+    }
+    #progress-bar-container {
+      position: absolute;
+      top: 50px;
+      left: 10px;
+      width: 300px;
+      height: 20px;
+      border: 1px solid #ccc;
+      background: #222;
+    }
+    #progress-bar {
+      width: 0%;
+      height: 100%;
+      background: #4caf50;
+    }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <label>Particles: <input type="number" id="numParticles" value="1000" min="1"></label>
+    <label>Steps: <input type="number" id="numSteps" value="500" min="1"></label>
+    <label>Spread: <input type="number" id="spread" value="500" min="1"></label>
+    <button id="startBtn">Start</button>
+    <button id="stopBtn">Stop</button>
+    <button id="replayBtn" disabled>Replay</button>
+  </div>
+
+  <div id="progress-bar-container">
+    <div id="progress-bar"></div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://cdn.skypack.dev/three@0.141.0';
+
+    // Initialize Scene, Camera, and Renderer
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    let particles = [];
+    let steps = [];
+    let running = false;
+    let currentStep = 0;
+    let progressBar = document.getElementById('progress-bar');
+
+    const dt = 0.1;
+    const G = 1.0;
+    const softening = 0.01;
+
+    class Particle {
+      constructor(x, y, z, vx, vy, vz, mass) {
+        this.position = new THREE.Vector3(x, y, z);
+        this.velocity = new THREE.Vector3(vx, vy, vz);
+        this.mass = mass;
+        this.radius = Math.cbrt(mass);
+
+        const geometry = new THREE.SphereGeometry(this.radius);
+        const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        this.mesh = new THREE.Mesh(geometry, material);
+        scene.add(this.mesh);
+      }
+
+      updatePosition() {
+        this.position.add(this.velocity.clone().multiplyScalar(dt));
+        this.mesh.position.copy(this.position);
+      }
+    }
+
+    function initParticles(numParticles, spread) {
+      particles = [];
+      for (let i = 0; i < numParticles; i++) {
+        const angle1 = Math.random() * Math.PI * 2;
+        const angle2 = Math.random() * Math.PI;
+        const radius = spread * Math.sqrt(Math.random());
+
+        const x = radius * Math.sin(angle2) * Math.cos(angle1);
+        const y = radius * Math.sin(angle2) * Math.sin(angle1);
+        const z = radius * Math.cos(angle2);
+
+        const vx = Math.random() * 0.2 - 0.1;
+        const vy = Math.random() * 0.2 - 0.1;
+        const vz = Math.random() * 0.2 - 0.1;
+
+        const mass = Math.random() * 10 + 1;
+        particles.push(new Particle(x, y, z, vx, vy, vz, mass));
+      }
+    }
+
+    function computeForces() {
+      for (let p1 of particles) {
+        let force = new THREE.Vector3(0, 0, 0);
+        for (let p2 of particles) {
+          if (p1 === p2) continue;
+          let dir = p2.position.clone().sub(p1.position);
+          let distSq = dir.lengthSq() + softening * softening;
+          let dist = Math.sqrt(distSq);
+          dir.normalize();
+          let f = (G * p1.mass * p2.mass) / distSq;
+          force.add(dir.multiplyScalar(f));
+        }
+        let acceleration = force.divideScalar(p1.mass);
+        p1.velocity.add(acceleration.multiplyScalar(dt));
+      }
+    }
+
+    async function prerenderSimulation(numSteps) {
+      steps = [];
+      for (let i = 0; i < numSteps; i++) {
+        stepSimulation();
+        steps.push(particles.map(p => ({ pos: p.position.clone(), vel: p.velocity.clone() })));
+        progressBar.style.width = `${(i / numSteps) * 100}%`;
+        if (i % 10 === 0) await new Promise(r => setTimeout(r, 1)); // Batch updates to keep UI responsive
+      }
+    }
+
+    function stepSimulation() {
+      computeForces();
+      for (let p of particles) {
+        p.updatePosition();
+      }
+    }
+
+    function replaySimulation() {
+      running = false;
+      currentStep = 0;
+      function animate() {
+        if (currentStep >= steps.length) return;
+        particles.forEach((p, i) => {
+          p.position.copy(steps[currentStep][i].pos);
+          p.mesh.position.copy(p.position);
+        });
+        renderer.render(scene, camera);
+        currentStep++;
+        requestAnimationFrame(animate);
+      }
+      animate();
+    }
+
+    document.getElementById('startBtn').addEventListener('click', async () => {
+      const numParticles = parseInt(document.getElementById('numParticles').value);
+      const numSteps = parseInt(document.getElementById('numSteps').value);
+      const spread = parseInt(document.getElementById('spread').value);
+      initParticles(numParticles, spread);
+      await prerenderSimulation(numSteps);
+      document.getElementById('replayBtn').disabled = false;
+      replaySimulation();
+    });
+
+    document.getElementById('stopBtn').addEventListener('click', () => {
+      running = false;
+    });
+
+    document.getElementById('replayBtn').addEventListener('click', () => {
+      replaySimulation();
+    });
+
+    camera.position.z = 1500;
+  </script>
+</body>
+</html>

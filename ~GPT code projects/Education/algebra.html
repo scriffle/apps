@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Algebra Drag-and-Drop</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+    }
+    .equation-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      font-size: 1.2em;
+    }
+    .side {
+      border: 2px dashed #aaa;
+      min-width: 200px;
+      min-height: 60px;
+      padding: 10px;
+      margin: 0 20px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+    }
+    .equals-sign {
+      font-weight: bold;
+      margin: 0 10px;
+      font-size: 1.4em;
+    }
+    .term {
+      margin: 5px;
+      padding: 5px 10px;
+      border: 1px solid #444;
+      cursor: grab;
+      border-radius: 4px;
+      background-color: #f8f8f8;
+      user-select: none;
+    }
+    .term.dragging {
+      opacity: 0.5;
+    }
+    .highlight-drop {
+      background-color: #e5ffee;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Algebraic Equation Drag-and-Drop</h1>
+<p>Drag the terms across the equals sign. Notice how the sign inverts automatically!</p>
+
+<div class="equation-container">
+  <div id="leftSide" class="side" ondragover="allowDrop(event)" ondrop="dropTerm(event)">
+    <!-- Terms on left side will appear here -->
+  </div>
+  <div class="equals-sign">=</div>
+  <div id="rightSide" class="side" ondragover="allowDrop(event)" ondrop="dropTerm(event)">
+    <!-- Terms on right side will appear here -->
+  </div>
+</div>
+
+<script>
+  /********************************************************
+   * INTERNAL REPRESENTATION OF THE EQUATION
+   * ------------------------------------------------------
+   * We'll store each "term" as an object:
+   *   { id: number, text: "2x", sign: +1 or -1 }
+   * The sign indicates +1 for positive terms and -1 for negative terms.
+   ********************************************************/
+
+  // Example equation:  2x - 3y = 12 + y
+  // Left side:  2x, -3y
+  // Right side: 12, +y
+  let leftTerms = [
+    { id: 1, text: "2x", sign: +1 },
+    { id: 2, text: "3y", sign: -1 }
+  ];
+
+  let rightTerms = [
+    { id: 3, text: "12", sign: +1 },
+    { id: 4, text: "y",  sign: +1 }
+  ];
+
+  // A quick way to generate unique IDs if needed
+  let nextId = 5;
+
+  // We will re-render the equation whenever something changes
+  function renderEquation() {
+    const leftSideDiv = document.getElementById("leftSide");
+    const rightSideDiv = document.getElementById("rightSide");
+
+    // Clear existing content
+    leftSideDiv.innerHTML = "";
+    rightSideDiv.innerHTML = "";
+
+    // Render left side terms
+    leftTerms.forEach(term => {
+      // Create a draggable element
+      const termEl = document.createElement("div");
+      termEl.classList.add("term");
+      termEl.draggable = true;
+      termEl.id = "term-" + term.id;
+      // Display sign if negative
+      termEl.textContent = (term.sign === -1 ? "-" : "") + term.text;
+
+      // Drag start event
+      termEl.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/plain", JSON.stringify(term));
+        termEl.classList.add("dragging");
+      });
+      // Drag end event
+      termEl.addEventListener("dragend", (e) => {
+        termEl.classList.remove("dragging");
+      });
+
+      leftSideDiv.appendChild(termEl);
+    });
+
+    // Render right side terms
+    rightTerms.forEach(term => {
+      const termEl = document.createElement("div");
+      termEl.classList.add("term");
+      termEl.draggable = true;
+      termEl.id = "term-" + term.id;
+      termEl.textContent = (term.sign === -1 ? "-" : "") + term.text;
+
+      termEl.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/plain", JSON.stringify(term));
+        termEl.classList.add("dragging");
+      });
+      termEl.addEventListener("dragend", (e) => {
+        termEl.classList.remove("dragging");
+      });
+
+      rightSideDiv.appendChild(termEl);
+    });
+  }
+
+  /********************************************************
+   * DRAG AND DROP HANDLERS
+   ********************************************************/
+
+  function allowDrop(e) {
+    e.preventDefault();
+    // Optionally highlight the drop area
+    e.currentTarget.classList.add("highlight-drop");
+  }
+
+  function dropTerm(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove("highlight-drop");
+
+    // Get the term being dragged
+    let data = e.dataTransfer.getData("text/plain");
+    if (!data) return;
+
+    // Parse the JSON data
+    let draggedTerm = JSON.parse(data);
+
+    // Determine if we are dropping on the left or right
+    let dropTargetId = e.currentTarget.id;
+    let droppingOnLeft = (dropTargetId === "leftSide");
+
+    // Check if the term currently lives on the left or right
+    let isCurrentlyOnLeft = leftTerms.some(t => t.id === draggedTerm.id);
+    let isCurrentlyOnRight = rightTerms.some(t => t.id === draggedTerm.id);
+
+    // Prevent dropping if it's dropped into the same side
+    if (
+      (droppingOnLeft && isCurrentlyOnLeft) ||
+      (!droppingOnLeft && isCurrentlyOnRight)
+    ) {
+      return; // Do nothing
+    }
+
+    // If dropping from left to right => invert sign
+    // If dropping from right to left => invert sign
+    // sign = -sign
+    draggedTerm.sign *= -1;
+
+    // Remove the term from whichever side it's on
+    if (isCurrentlyOnLeft) {
+      leftTerms = leftTerms.filter(t => t.id !== draggedTerm.id);
+    } else if (isCurrentlyOnRight) {
+      rightTerms = rightTerms.filter(t => t.id !== draggedTerm.id);
+    }
+
+    // Add the term to the appropriate side
+    if (droppingOnLeft) {
+      leftTerms.push(draggedTerm);
+    } else {
+      rightTerms.push(draggedTerm);
+    }
+
+    // Re-render
+    renderEquation();
+  }
+
+  // Remove highlight class on drag leave
+  document.querySelectorAll(".side").forEach(sideEl => {
+    sideEl.addEventListener("dragleave", (e) => {
+      e.currentTarget.classList.remove("highlight-drop");
+    });
+  });
+
+  // Initial render
+  renderEquation();
+</script>
+
+</body>
+</html>

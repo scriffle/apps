@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Musical Gesture Capture - Multi-Track</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #111;
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .transport-panel {
+            background: #222;
+            padding: 15px;
+            border-bottom: 1px solid #444;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-shrink: 0;
+        }
+
+        .timeline-panel {
+            background: #1a1a1a;
+            padding: 10px 15px;
+            border-bottom: 2px solid #444;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+            height: 50px;
+        }
+
+        .timeline-container {
+            flex: 1;
+            position: relative;
+            height: 30px;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 3px;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .timeline-track {
+            position: absolute;
+            height: 100%;
+            background: linear-gradient(90deg, #444 0%, #666 100%);
+            opacity: 0.3;
+        }
+
+        .playback-head {
+            position: absolute;
+            top: -2px;
+            width: 3px;
+            height: calc(100% + 4px);
+            background: #ff6b6b;
+            box-shadow: 0 0 6px #ff6b6b;
+            transition: left 0.1s ease-out;
+            z-index: 10;
+        }
+
+        .timeline-markers {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+        }
+
+        .timeline-marker {
+            position: absolute;
+            top: 0;
+            width: 1px;
+            height: 100%;
+            background: #666;
+        }
+
+        .timeline-marker.major {
+            background: #888;
+            width: 2px;
+        }
+
+        .timeline-time {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #aaa;
+            min-width: 80px;
+            text-align: center;
+        }
+
+        .rewind-btn {
+            background: #333;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .rewind-btn:hover {
+            background: #444;
+        }
+
+        .transport-btn {
+            background: #333;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .transport-btn:hover {
+            background: #444;
+        }
+
+        .transport-btn.active {
+            background: #007acc;
+            border-color: #0099ff;
+        }
+
+        .transport-btn.recording {
+            background: #cc3333;
+            border-color: #ff4444;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .global-timer {
+            background: #000;
+            border: 1px solid #333;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            font-weight: bold;
+            color: #0ff;
+        }
+
+        .status {
+            margin-left: auto;
+            font-size: 14px;
+            color: #aaa;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .track-panel {
+            width: 300px;
+            background: #1a1a1a;
+            border-right: 2px solid #444;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .track-header {
+            background: #333;
+            padding: 10px;
+            border-bottom: 1px solid #555;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .add-track-btn {
+            background: #007acc;
+            border: none;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .add-track-btn:hover {
+            background: #0099ff;
+        }
+
+        .track-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 5px;
+        }
+
+        .track-item {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            margin-bottom: 5px;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .track-item.selected {
+            border-color: #007acc;
+            background: #2a3a4a;
+        }
+
+        .track-item.recording {
+            border-color: #ff4444;
+            background: #4a2a2a;
+        }
+
+        .track-item.muted {
+            opacity: 0.5;
+        }
+
+        .track-header-row {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .track-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            border: 1px solid #666;
+        }
+
+        .track-name {
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-family: inherit;
+            font-size: 12px;
+            flex: 1;
+            padding: 2px 4px;
+            border-radius: 2px;
+        }
+
+        .track-name:focus {
+            background: #333;
+            outline: 1px solid #007acc;
+        }
+
+        .track-controls {
+            display: flex;
+            gap: 3px;
+        }
+
+        .track-btn {
+            background: #333;
+            border: 1px solid #555;
+            color: #aaa;
+            padding: 2px 6px;
+            border-radius: 2px;
+            cursor: pointer;
+            font-size: 10px;
+            min-width: 22px;
+            text-align: center;
+        }
+
+        .track-btn:hover {
+            background: #444;
+        }
+
+        .track-btn.active {
+            background: #007acc;
+            color: white;
+            border-color: #0099ff;
+        }
+
+        .track-btn.rec-enabled {
+            background: #cc3333;
+            color: white;
+            border-color: #ff4444;
+        }
+
+        .track-btn.muted {
+            background: #666;
+            color: #333;
+        }
+
+        .track-btn.solo {
+            background: #ffaa00;
+            color: black;
+            border-color: #ffcc44;
+        }
+
+        .track-info {
+            font-size: 10px;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .main-display {
+            flex: 1;
+            position: relative;
+            background: #000;
+            overflow: hidden;
+        }
+
+        .gesture-block {
+            position: absolute;
+            border-radius: 3px;
+            transition: all 0.1s ease-out;
+            pointer-events: none;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+
+        .ui-panel {
+            background: #222;
+            padding: 10px 15px;
+            border-top: 2px solid #444;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-shrink: 0;
+            font-size: 12px;
+        }
+
+        .key-indicator {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+
+        .active-key {
+            background: #007acc;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 2px;
+            font-size: 11px;
+        }
+
+        .help-text {
+            color: #666;
+            font-size: 11px;
+        }
+
+        .recording-indicator {
+            color: #ff4444;
+            font-weight: bold;
+        }
+
+        .playback-indicator {
+            color: #44ff44;
+            font-weight: bold;
+        }
+
+        .track-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .track-list::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+
+        .track-list::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="transport-panel">
+            <button class="transport-btn" id="recordBtn">Record</button>
+            <button class="transport-btn" id="playBtn">Play</button>
+            <button class="transport-btn" id="stopBtn">Stop</button>
+            <button class="transport-btn" id="clearAllBtn">Clear All</button>
+            <div class="global-timer" id="globalTimer">00:00.000</div>
+            <div class="status">
+                <span id="statusText">Ready</span>
+            </div>
+        </div>
+
+        <div class="timeline-panel">
+            <button class="rewind-btn" id="rewindBtn">⏮</button>
+            <div class="timeline-time" id="currentTime">00:00.000</div>
+            <div class="timeline-container" id="timelineContainer">
+                <div class="timeline-markers" id="timelineMarkers"></div>
+                <div class="playback-head" id="playbackHead"></div>
+            </div>
+            <div class="timeline-time" id="totalTime">00:00.000</div>
+        </div>
+
+        <div class="main-content">
+            <div class="track-panel">
+                <div class="track-header">
+                    <button class="add-track-btn" id="addTrackBtn">+ Track</button>
+                    <span style="font-size: 12px; color: #aaa;">Tracks</span>
+                </div>
+                <div class="track-list" id="trackList">
+                    <!-- Tracks will be added here -->
+                </div>
+            </div>
+
+            <div class="main-display" id="mainDisplay">
+                <!-- Gesture blocks will appear here -->
+            </div>
+        </div>
+
+        <div class="ui-panel">
+            <div class="help-text">
+                HOME: Start Recording | END: Stop Recording | Click track REC to enable
+            </div>
+            <div class="key-indicator" id="keyIndicator">
+                <!-- Active keys will show here -->
+            </div>
+            <div id="recordingStatus"></div>
+        </div>
+    </div>
+
+    <script>
+        class MusicalGestureCapture {
+            constructor() {
+                this.sessionStartTime = 0;
+                this.recordingStartTime = 0;
+                this.playbackTime = 0;
+                this.playbackStartTime = 0;
+                this.isPlaying = false;
+                this.isRecording = false;
+                this.tracks = [];
+                this.selectedTrackId = null;
+                this.activeKeys = new Map();
+                this.globalTimer = null;
+                this.playbackTimers = [];
+                this.soloTrackId = null;
+                this.totalDuration = 0;
+                
+                // Track colors
+                this.trackColors = [
+                    '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', 
+                    '#ffeaa7', '#dda0dd', '#98d8c8', '#f7dc6f',
+                    '#bb8fce', '#85c1e9', '#f8c471', '#82e0aa'
+                ];
+                
+                // Australian QWERTY layout mapping
+                this.keyboardLayout = {
+                    // Row 4 (highest) - Numbers row
+                    '1': {x: 0, y: 3}, '2': {x: 1, y: 3}, '3': {x: 2, y: 3}, '4': {x: 3, y: 3},
+                    '5': {x: 4, y: 3}, '6': {x: 5, y: 3}, '7': {x: 6, y: 3}, '8': {x: 7, y: 3},
+                    '9': {x: 8, y: 3}, '0': {x: 9, y: 3}, '-': {x: 10, y: 3}, '=': {x: 11, y: 3},
+                    
+                    // Row 3 - QWERTY row
+                    'q': {x: 0, y: 2}, 'w': {x: 1, y: 2}, 'e': {x: 2, y: 2}, 'r': {x: 3, y: 2},
+                    't': {x: 4, y: 2}, 'y': {x: 5, y: 2}, 'u': {x: 6, y: 2}, 'i': {x: 7, y: 2},
+                    'o': {x: 8, y: 2}, 'p': {x: 9, y: 2}, '[': {x: 10, y: 2}, ']': {x: 11, y: 2},
+                    
+                    // Row 2 - ASDF row
+                    'a': {x: 0, y: 1}, 's': {x: 1, y: 1}, 'd': {x: 2, y: 1}, 'f': {x: 3, y: 1},
+                    'g': {x: 4, y: 1}, 'h': {x: 5, y: 1}, 'j': {x: 6, y: 1}, 'k': {x: 7, y: 1},
+                    'l': {x: 8, y: 1}, ';': {x: 9, y: 1}, "'": {x: 10, y: 1},
+                    
+                    // Row 1 (lowest) - ZXCV row
+                    'z': {x: 0, y: 0}, 'x': {x: 1, y: 0}, 'c': {x: 2, y: 0}, 'v': {x: 3, y: 0},
+                    'b': {x: 4, y: 0}, 'n': {x: 5, y: 0}, 'm': {x: 6, y: 0}, ',': {x: 7, y: 0},
+                    '.': {x: 8, y: 0}, '/': {x: 9, y: 0}
+                };
+                
+                this.initElements();
+                this.bindEvents();
+                this.createTrack(); // Create first track
+                this.startGlobalTimer();
+                this.updateDisplay();
+            }
+            
+            initElements() {
+                this.recordBtn = document.getElementById('recordBtn');
+                this.playBtn = document.getElementById('playBtn');
+                this.stopBtn = document.getElementById('stopBtn');
+                this.clearAllBtn = document.getElementById('clearAllBtn');
+                this.rewindBtn = document.getElementById('rewindBtn');
+                this.globalTimerDisplay = document.getElementById('globalTimer');
+                this.currentTimeDisplay = document.getElementById('currentTime');
+                this.totalTimeDisplay = document.getElementById('totalTime');
+                this.timelineContainer = document.getElementById('timelineContainer');
+                this.playbackHead = document.getElementById('playbackHead');
+                this.timelineMarkers = document.getElementById('timelineMarkers');
+                this.statusText = document.getElementById('statusText');
+                this.mainDisplay = document.getElementById('mainDisplay');
+                this.keyIndicator = document.getElementById('keyIndicator');
+                this.recordingStatus = document.getElementById('recordingStatus');
+                this.addTrackBtn = document.getElementById('addTrackBtn');
+                this.trackList = document.getElementById('trackList');
+            }
+            
+            bindEvents() {
+                // Transport controls
+                this.recordBtn.addEventListener('click', () => this.toggleRecording());
+                this.playBtn.addEventListener('click', () => this.togglePlayback());
+                this.stopBtn.addEventListener('click', () => this.stop());
+                this.clearAllBtn.addEventListener('click', () => this.clearAll());
+                this.rewindBtn.addEventListener('click', () => this.rewind());
+                this.addTrackBtn.addEventListener('click', () => this.createTrack());
+                
+                // Timeline controls
+                this.timelineContainer.addEventListener('click', (e) => this.seekToPosition(e));
+                
+                // Keyboard events
+                document.addEventListener('keydown', (e) => this.handleKeyDown(e));
+                document.addEventListener('keyup', (e) => this.handleKeyUp(e));
+                
+                // Prevent default for special keys
+                document.addEventListener('keydown', (e) => {
+                    if (['Home', 'End', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                        e.preventDefault();
+                    }
+                });
+            }
+            
+            startGlobalTimer() {
+                this.sessionStartTime = performance.now();
+                this.globalTimer = setInterval(() => {
+                    if (this.isPlaying) {
+                        this.playbackTime = performance.now() - this.playbackStartTime;
+                        this.updatePlaybackHead();
+                    }
+                    
+                    // Global timer now shows playback position
+                    this.updateGlobalTimer();
+                    this.updateTimelineDisplay();
+                }, 10); // Update every 10ms for precision
+            }
+            
+            updateGlobalTimer() {
+                // Global timer now tracks playback position, not session time
+                const playbackSeconds = (this.isPlaying ? this.playbackTime : 0) / 1000;
+                const minutes = Math.floor(playbackSeconds / 60);
+                const seconds = Math.floor(playbackSeconds % 60);
+                const milliseconds = Math.floor((playbackSeconds % 1) * 1000);
+                
+                this.globalTimerDisplay.textContent = 
+                    `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
+            }
+            
+            updateTimelineDisplay() {
+                // Update current time display
+                const currentSeconds = (this.isPlaying ? this.playbackTime : 0) / 1000;
+                const currentMinutes = Math.floor(currentSeconds / 60);
+                const currentSecs = Math.floor(currentSeconds % 60);
+                const currentMs = Math.floor((currentSeconds % 1) * 1000);
+                
+                this.currentTimeDisplay.textContent = 
+                    `${currentMinutes.toString().padStart(2, '0')}:${currentSecs.toString().padStart(2, '0')}.${currentMs.toString().padStart(3, '0')}`;
+                
+                // Update total time
+                const totalSeconds = this.totalDuration / 1000;
+                const totalMinutes = Math.floor(totalSeconds / 60);
+                const totalSecs = Math.floor(totalSeconds % 60);
+                const totalMs = Math.floor((totalSeconds % 1) * 1000);
+                
+                this.totalTimeDisplay.textContent = 
+                    `${totalMinutes.toString().padStart(2, '0')}:${totalSecs.toString().padStart(2, '0')}.${totalMs.toString().padStart(3, '0')}`;
+            }
+            
+            updatePlaybackHead() {
+                if (this.totalDuration > 0) {
+                    const progress = Math.min(this.playbackTime / this.totalDuration, 1);
+                    const timelineWidth = this.timelineContainer.clientWidth;
+                    this.playbackHead.style.left = (progress * timelineWidth) + 'px';
+                }
+            }
+            
+            updateTimelineMarkers() {
+                this.timelineMarkers.innerHTML = '';
+                
+                if (this.totalDuration === 0) return;
+                
+                const timelineWidth = this.timelineContainer.clientWidth;
+                const markerInterval = 1000; // 1 second intervals
+                const majorInterval = 5000; // 5 second major markers
+                
+                for (let time = 0; time <= this.totalDuration; time += markerInterval) {
+                    const marker = document.createElement('div');
+                    marker.className = 'timeline-marker' + (time % majorInterval === 0 ? ' major' : '');
+                    const position = (time / this.totalDuration) * timelineWidth;
+                    marker.style.left = position + 'px';
+                    this.timelineMarkers.appendChild(marker);
+                }
+            }
+            
+            calculateTotalDuration() {
+                this.totalDuration = 0;
+                this.tracks.forEach(track => {
+                    track.gestures.forEach(gesture => {
+                        const endTime = gesture.endTime || (gesture.startTime + gesture.duration);
+                        this.totalDuration = Math.max(this.totalDuration, endTime);
+                    });
+                });
+                this.updateTimelineMarkers();
+            }
+            
+            seekToPosition(e) {
+                if (this.totalDuration === 0) return;
+                
+                const rect = this.timelineContainer.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const progress = clickX / rect.width;
+                const seekTime = progress * this.totalDuration;
+                
+                this.playbackTime = seekTime;
+                this.playbackStartTime = performance.now() - seekTime;
+                this.updatePlaybackHead();
+                this.updateGlobalTimer(); // Update global timer to show seek position
+                
+                // If playing, restart playback from new position
+                if (this.isPlaying) {
+                    this.stop();
+                    setTimeout(() => {
+                        this.playbackTime = seekTime;
+                        this.play();
+                    }, 50);
+                }
+            }
+            
+            rewind() {
+                this.playbackTime = 0;
+                this.playbackStartTime = performance.now();
+                this.updatePlaybackHead();
+                this.updateTimelineDisplay();
+                this.updateGlobalTimer(); // Update global timer to show 00:00.000
+                
+                if (this.isPlaying) {
+                    this.stop();
+                    setTimeout(() => this.play(), 50);
+                }
+            }
+            
+            createTrack() {
+                const track = {
+                    id: Date.now() + Math.random(),
+                    name: `Track ${this.tracks.length + 1}`,
+                    color: this.trackColors[this.tracks.length % this.trackColors.length],
+                    gestures: [],
+                    isRecording: false,
+                    isRecordEnabled: false,
+                    isMuted: false,
+                    visualization: 'blocks' // Placeholder for future
+                };
+                
+                this.tracks.push(track);
+                this.createTrackUI(track);
+                
+                if (this.selectedTrackId === null) {
+                    this.selectTrack(track.id);
+                }
+                
+                return track;
+            }
+            
+            createTrackUI(track) {
+                const trackElement = document.createElement('div');
+                trackElement.className = 'track-item';
+                trackElement.dataset.trackId = track.id;
+                
+                trackElement.innerHTML = `
+                    <div class="track-header-row">
+                        <div class="track-color" style="background-color: ${track.color}"></div>
+                        <input type="text" class="track-name" value="${track.name}" />
+                    </div>
+                    <div class="track-controls">
+                        <button class="track-btn rec-btn" title="Record Enable">R</button>
+                        <button class="track-btn mute-btn" title="Mute">M</button>
+                        <button class="track-btn solo-btn" title="Solo">S</button>
+                        <button class="track-btn clear-btn" title="Clear Track">×</button>
+                    </div>
+                    <div class="track-info">
+                        <span class="gesture-count">0 gestures</span>
+                        <span class="track-status"></span>
+                    </div>
+                `;
+                
+                // Bind track events
+                trackElement.addEventListener('click', (e) => {
+                    if (!e.target.classList.contains('track-btn') && !e.target.classList.contains('track-name')) {
+                        this.selectTrack(track.id);
+                    }
+                });
+                
+                const nameInput = trackElement.querySelector('.track-name');
+                nameInput.addEventListener('change', () => {
+                    track.name = nameInput.value;
+                });
+                
+                const recBtn = trackElement.querySelector('.rec-btn');
+                recBtn.addEventListener('click', () => this.toggleTrackRecordEnable(track.id));
+                
+                const muteBtn = trackElement.querySelector('.mute-btn');
+                muteBtn.addEventListener('click', () => this.toggleTrackMute(track.id));
+                
+                const soloBtn = trackElement.querySelector('.solo-btn');
+                soloBtn.addEventListener('click', () => this.toggleTrackSolo(track.id));
+                
+                const clearBtn = trackElement.querySelector('.clear-btn');
+                clearBtn.addEventListener('click', () => this.clearTrack(track.id));
+                
+                this.trackList.appendChild(trackElement);
+            }
+            
+            selectTrack(trackId) {
+                this.selectedTrackId = trackId;
+                this.updateTrackUI();
+            }
+            
+            toggleTrackRecordEnable(trackId) {
+                const track = this.tracks.find(t => t.id === trackId);
+                if (track) {
+                    track.isRecordEnabled = !track.isRecordEnabled;
+                    this.updateTrackUI();
+                }
+            }
+            
+            toggleTrackMute(trackId) {
+                const track = this.tracks.find(t => t.id === trackId);
+                if (track) {
+                    track.isMuted = !track.isMuted;
+                    this.updateTrackUI();
+                }
+            }
+            
+            toggleTrackSolo(trackId) {
+                if (this.soloTrackId === trackId) {
+                    this.soloTrackId = null;
+                } else {
+                    this.soloTrackId = trackId;
+                }
+                this.updateTrackUI();
+            }
+            
+            clearTrack(trackId) {
+                const track = this.tracks.find(t => t.id === trackId);
+                if (track) {
+                    track.gestures = [];
+                    this.clearTrackVisuals(trackId);
+                    this.calculateTotalDuration();
+                    this.updateTrackUI();
+                }
+            }
+            
+            clearTrackVisuals(trackId) {
+                const blocks = this.mainDisplay.querySelectorAll(`[data-track-id="${trackId}"]`);
+                blocks.forEach(block => block.remove());
+            }
+            
+            updateTrackUI() {
+                this.tracks.forEach(track => {
+                    const trackElement = this.trackList.querySelector(`[data-track-id="${track.id}"]`);
+                    if (!trackElement) return;
+                    
+                    // Update selection
+                    trackElement.classList.toggle('selected', track.id === this.selectedTrackId);
+                    
+                    // Update recording state
+                    trackElement.classList.toggle('recording', track.isRecording);
+                    
+                    // Update muted state
+                    trackElement.classList.toggle('muted', track.isMuted);
+                    
+                    // Update buttons
+                    const recBtn = trackElement.querySelector('.rec-btn');
+                    recBtn.classList.toggle('rec-enabled', track.isRecordEnabled);
+                    
+                    const muteBtn = trackElement.querySelector('.mute-btn');
+                    muteBtn.classList.toggle('muted', track.isMuted);
+                    
+                    const soloBtn = trackElement.querySelector('.solo-btn');
+                    soloBtn.classList.toggle('solo', this.soloTrackId === track.id);
+                    
+                    // Update info
+                    const gestureCount = trackElement.querySelector('.gesture-count');
+                    gestureCount.textContent = `${track.gestures.length} gestures`;
+                    
+                    const trackStatus = trackElement.querySelector('.track-status');
+                    trackStatus.textContent = track.isRecording ? 'REC' : 
+                                             track.isMuted ? 'MUTE' : 
+                                             this.soloTrackId === track.id ? 'SOLO' : '';
+                });
+            }
+            
+            handleKeyDown(e) {
+                const key = e.key.toLowerCase();
+                
+                console.log('KeyDown:', key, 'isRecording:', this.isRecording);
+                
+                // Special keys
+                if (e.key === 'Home') {
+                    this.startRecording();
+                    return;
+                }
+                if (e.key === 'End') {
+                    this.stopRecording();
+                    return;
+                }
+                
+                // Ignore if key already pressed or not in layout
+                if (this.activeKeys.has(key) || !this.keyboardLayout[key]) {
+                    console.log('Key ignored:', key, 'already active:', this.activeKeys.has(key), 'in layout:', !!this.keyboardLayout[key]);
+                    return;
+                }
+                
+                const position = this.keyboardLayout[key];
+                const modifiers = {
+                    shift: e.shiftKey,
+                    ctrl: e.ctrlKey,
+                    alt: e.altKey,
+                    meta: e.metaKey
+                };
+                
+                // Use relative time from recording start
+                const currentTime = performance.now();
+                const relativeTime = this.isRecording ? currentTime - this.recordingStartTime : 0;
+                
+                console.log('Timing debug - currentTime:', currentTime, 'recordingStartTime:', this.recordingStartTime, 'relativeTime:', relativeTime);
+                
+                const gesture = {
+                    key,
+                    position,
+                    modifiers,
+                    startTime: relativeTime,
+                    endTime: null,
+                    duration: 0
+                };
+                
+                console.log('Created gesture with startTime:', relativeTime);
+                
+                this.activeKeys.set(key, gesture);
+                
+                // Record to all record-enabled tracks
+                let recordedToTracks = 0;
+                this.tracks.forEach(track => {
+                    if (track.isRecordEnabled && track.isRecording) {
+                        const trackGesture = { ...gesture, trackId: track.id };
+                        track.gestures.push(trackGesture);
+                        recordedToTracks++;
+                        console.log('Recorded gesture to track:', track.name, 'startTime:', relativeTime);
+                    }
+                });
+                
+                console.log('Recorded to', recordedToTracks, 'tracks');
+                
+                this.createVisualBlock(gesture, this.getRecordingTrack());
+                this.updateKeyIndicator();
+            }
+            
+            handleKeyUp(e) {
+                const key = e.key.toLowerCase();
+                
+                if (!this.activeKeys.has(key)) return;
+                
+                const gesture = this.activeKeys.get(key);
+                const currentTime = performance.now();
+                const relativeTime = this.isRecording ? currentTime - this.recordingStartTime : gesture.startTime + 100;
+                
+                gesture.endTime = relativeTime;
+                gesture.duration = Math.max(relativeTime - gesture.startTime, 50);
+                
+                console.log('KeyUp:', key, 'endTime:', relativeTime, 'duration:', gesture.duration);
+                
+                // Update the gesture in all tracks that recorded it
+                this.tracks.forEach(track => {
+                    track.gestures.forEach(trackGesture => {
+                        if (trackGesture.key === key && Math.abs(trackGesture.startTime - gesture.startTime) < 10) {
+                            trackGesture.endTime = gesture.endTime;
+                            trackGesture.duration = gesture.duration;
+                            console.log('Updated gesture in track:', track.name, 'endTime:', gesture.endTime);
+                        }
+                    });
+                });
+                
+                this.activeKeys.delete(key);
+                this.updateKeyIndicator();
+                this.calculateTotalDuration();
+                
+                // Update visual block
+                this.updateVisualBlock(gesture);
+            }
+            
+            getRecordingTrack() {
+                return this.tracks.find(t => t.isRecordEnabled && t.isRecording) || this.tracks[0];
+            }
+            
+            createVisualBlock(gesture, track) {
+                if (!track) return;
+                
+                const block = document.createElement('div');
+                block.className = 'gesture-block';
+                block.dataset.key = gesture.key;
+                block.dataset.trackId = track.id;
+                
+                const displayWidth = this.mainDisplay.clientWidth;
+                const displayHeight = this.mainDisplay.clientHeight;
+                
+                // Map position to screen coordinates
+                const x = (gesture.position.x / 11) * displayWidth * 0.9 + displayWidth * 0.05;
+                const y = displayHeight - ((gesture.position.y / 3) * displayHeight * 0.8 + displayHeight * 0.1);
+                
+                // Add slight randomization
+                const randomX = x + (Math.random() - 0.5) * 20;
+                const randomY = y + (Math.random() - 0.5) * 20;
+                
+                // Size based on modifiers
+                let size = 20;
+                if (gesture.modifiers.shift) size += 10;
+                if (gesture.modifiers.ctrl) size += 15;
+                if (gesture.modifiers.alt) size += 12;
+                
+                // Use track color
+                const baseColor = track.color;
+                
+                block.style.left = randomX + 'px';
+                block.style.top = randomY + 'px';
+                block.style.width = size + 'px';
+                block.style.height = size + 'px';
+                block.style.background = baseColor;
+                block.style.opacity = '0.8';
+                
+                this.mainDisplay.appendChild(block);
+                
+                // Store reference in gesture
+                gesture.visualBlock = block;
+            }
+            
+            updateVisualBlock(gesture) {
+                if (!gesture.visualBlock) return;
+                
+                const block = gesture.visualBlock;
+                const duration = Math.max(gesture.duration, 100);
+                
+                // Animate fade out based on duration
+                block.style.transition = `opacity ${duration}ms ease-out`;
+                block.style.opacity = '0';
+                
+                setTimeout(() => {
+                    if (block.parentNode) {
+                        block.parentNode.removeChild(block);
+                    }
+                }, duration);
+            }
+            
+            updateKeyIndicator() {
+                this.keyIndicator.innerHTML = '';
+                for (const [key, gesture] of this.activeKeys) {
+                    const indicator = document.createElement('div');
+                    indicator.className = 'active-key';
+                    indicator.textContent = key.toUpperCase();
+                    if (gesture.modifiers.shift) indicator.textContent += '+⇧';
+                    if (gesture.modifiers.ctrl) indicator.textContent += '+⌃';
+                    if (gesture.modifiers.alt) indicator.textContent += '+⌥';
+                    this.keyIndicator.appendChild(indicator);
+                }
+            }
+            
+            startRecording() {
+                if (this.isPlaying) this.stop();
+                
+                this.isRecording = true;
+                this.recordingStartTime = performance.now(); // This is correct - sets the baseline
+                
+                // Start recording on all record-enabled tracks
+                this.tracks.forEach(track => {
+                    if (track.isRecordEnabled) {
+                        track.isRecording = true;
+                        console.log('Started recording on track:', track.name);
+                    }
+                });
+                
+                console.log('Recording started, baseline time set to:', this.recordingStartTime);
+                
+                this.updateDisplay();
+                this.updateTrackUI();
+            }
+            
+            stopRecording() {
+                this.isRecording = false;
+                this.tracks.forEach(track => {
+                    track.isRecording = false;
+                });
+                this.updateDisplay();
+                this.updateTrackUI();
+            }
+            
+            toggleRecording() {
+                if (this.isRecording) {
+                    this.stopRecording();
+                } else {
+                    this.startRecording();
+                }
+            }
+            
+            togglePlayback() {
+                if (this.isPlaying) {
+                    this.stop();
+                } else {
+                    this.play();
+                }
+            }
+            
+            play() {
+                if (this.tracks.every(t => t.gestures.length === 0)) {
+                    console.log('No gestures to play');
+                    return;
+                }
+                
+                console.log('Starting playback, total duration:', this.totalDuration);
+                console.log('Playback time:', this.playbackTime);
+                
+                this.isPlaying = true;
+                this.playbackStartTime = performance.now() - this.playbackTime;
+                this.updateDisplay();
+                
+                // Clear existing visual blocks
+                this.clearAllVisuals();
+                
+                // Play all non-muted tracks (unless solo is active)
+                this.tracks.forEach(track => {
+                    const shouldPlay = this.soloTrackId ? 
+                        track.id === this.soloTrackId : 
+                        !track.isMuted;
+                    
+                    console.log('Track:', track.name, 'shouldPlay:', shouldPlay, 'gestures:', track.gestures.length);
+                    
+                    if (shouldPlay && track.gestures.length > 0) {
+                        this.playTrack(track);
+                    }
+                });
+                
+                // Auto-stop when playback complete
+                const remainingTime = this.totalDuration - this.playbackTime;
+                console.log('Will auto-stop in:', remainingTime, 'ms');
+                
+                const stopTimer = setTimeout(() => {
+                    if (this.isPlaying) {
+                        console.log('Auto-stopping playback');
+                        this.stop();
+                    }
+                }, remainingTime + 1000);
+                
+                this.playbackTimers.push(stopTimer);
+            }
+            
+            playTrack(track) {
+                track.gestures.forEach(gesture => {
+                    const startDelay = Math.max(0, gesture.startTime - this.playbackTime);
+                    const endTime = gesture.endTime || (gesture.startTime + gesture.duration);
+                    const endDelay = Math.max(0, endTime - this.playbackTime);
+                    
+                    // Debug logging
+                    console.log('Gesture:', gesture.key, 'startTime:', gesture.startTime, 'endTime:', gesture.endTime, 'duration:', gesture.duration, 'startDelay:', startDelay, 'endDelay:', endDelay);
+                    
+                    // Only schedule if delays are reasonable
+                    if (startDelay >= 0 && startDelay <= this.totalDuration) {
+                        // Schedule key down
+                        const downTimer = setTimeout(() => {
+                            if (this.isPlaying) {
+                                console.log('Creating visual block for:', gesture.key, 'at delay:', startDelay);
+                                this.createVisualBlock(gesture, track);
+                            }
+                        }, startDelay);
+                        
+                        this.playbackTimers.push(downTimer);
+                    }
+                    
+                    if (endDelay >= 0 && endDelay <= this.totalDuration + 5000) {
+                        // Schedule key up
+                        const upTimer = setTimeout(() => {
+                            if (this.isPlaying) {
+                                console.log('Updating visual block for:', gesture.key, 'at delay:', endDelay);
+                                this.updateVisualBlock(gesture);
+                            }
+                        }, endDelay);
+                        
+                        this.playbackTimers.push(upTimer);
+                    }
+                });
+            }
+            
+            stop() {
+                this.isPlaying = false;
+                this.stopRecording(); // This will set isRecording = false
+                
+                // Clear all playback timers
+                this.playbackTimers.forEach(timer => clearTimeout(timer));
+                this.playbackTimers = [];
+                
+                // Reset playback position
+                this.playbackTime = 0;
+                this.updatePlaybackHead();
+                this.updateGlobalTimer(); // Reset global timer to 00:00.000
+                
+                this.updateDisplay();
+            }
+            
+            clearAll() {
+                this.stop();
+                this.tracks.forEach(track => {
+                    track.gestures = [];
+                });
+                this.clearAllVisuals();
+                this.calculateTotalDuration();
+                this.updateTrackUI();
+            }
+            
+            clearAllVisuals() {
+                const blocks = this.mainDisplay.querySelectorAll('.gesture-block');
+                blocks.forEach(block => block.remove());
+            }
+            
+            updateDisplay() {
+                // Update transport buttons
+                this.recordBtn.className = 'transport-btn' + (this.isRecording ? ' recording' : '');
+                this.playBtn.className = 'transport-btn' + (this.isPlaying ? ' active' : '');
+                
+                // Update status
+                const recordingTracks = this.tracks.filter(t => t.isRecording).length;
+                if (this.isRecording && recordingTracks > 0) {
+                    this.statusText.textContent = `Recording ${recordingTracks} track${recordingTracks > 1 ? 's' : ''}...`;
+                    this.recordingStatus.innerHTML = '<span class="recording-indicator">● REC</span>';
+                } else if (this.isPlaying) {
+                    const playingTracks = this.soloTrackId ? 1 : this.tracks.filter(t => !t.isMuted).length;
+                    this.statusText.textContent = `Playing ${playingTracks} track${playingTracks > 1 ? 's' : ''}...`;
+                    this.recordingStatus.innerHTML = '<span class="playback-indicator">▶ PLAY</span>';
+                } else {
+                    const totalGestures = this.tracks.reduce((sum, t) => sum + t.gestures.length, 0);
+                    this.statusText.textContent = `Ready (${this.tracks.length} tracks, ${totalGestures} gestures)`;
+                    this.recordingStatus.innerHTML = '';
+                }
+            }
+        }
+        
+        // Initialize app when page loads
+        window.addEventListener('load', () => {
+            window.app = new MusicalGestureCapture();
+        });
+    </script>
+</body>
+</html>

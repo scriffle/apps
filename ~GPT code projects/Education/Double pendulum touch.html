@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Double Pendulum Simulator</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; }
+        #controls {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            min-width: 250px;
+            cursor: move;
+            user-select: none;
+            z-index: 1000;
+        }
+        .collapsible {
+            background-color: #eee;
+            color: #444;
+            cursor: pointer;
+            padding: 18px;
+            width: 100%;
+            border: none;
+            text-align: left;
+            outline: none;
+            font-size: 15px;
+        }
+        .active, .collapsible:hover { background-color: #ccc; }
+        .content {
+            padding: 0 18px;
+            display: none;
+            overflow: hidden;
+            background-color: #f1f1f1;
+        }
+        button {
+            margin: 5px;
+            padding: 8px;
+            cursor: pointer;
+        }
+        .slider-container {
+            margin: 10px 0;
+        }
+        .checkbox-container {
+            margin: 10px 0;
+            line-height: 1.5;
+        }
+        .status {
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 5px;
+        }
+        canvas { display: block; }
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="controls">
+        <button class="collapsible">Settings</button>
+        <div class="content">
+            <p>Number of Pendulums:</p>
+            <select id="pendulumCount">
+                <option value="4">4</option>
+                <option value="9">9</option>
+                <option value="16" selected>16</option>
+                <option value="25">25</option>
+                <option value="36">36</option>
+                <option value="49">49</option>
+                <option value="64">64</option>
+                <option value="81">81</option>
+                <option value="100">100</option>
+            </select>
+            <div class="slider-container">
+                <div class="slider-label">
+                    <label for="speedSlider">Simulation Speed:</label>
+                    <span id="speedValue">2.0x</span>
+                </div>
+                <input type="range" id="speedSlider" min="0.1" max="4" step="0.1" value="2">
+            </div>
+            <div class="slider-container">
+                <div class="slider-label">
+                    <label for="dampingSlider">Damping:</label>
+                    <span id="dampingValue">0.000</span>
+                </div>
+                <input type="range" id="dampingSlider" min="0" max="0.01" step="0.0001" value="0">
+            </div>
+            <div class="slider-container">
+                <div class="slider-label">
+                    <label for="gravitySlider">Gravity:</label>
+                    <span id="gravityValue">100%</span>
+                </div>
+                <input type="range" id="gravitySlider" min="50" max="150" step="1" value="100">
+            </div>
+            <div class="checkbox-container">
+                <input type="checkbox" id="showRods" checked>
+                <label for="showRods">Show Pendulum Rods</label><br>
+                <input type="checkbox" id="showInnerTrail" checked>
+                <label for="showInnerTrail">Show Inner Mass Trail</label><br>
+                <input type="checkbox" id="innerFixed">
+                <label for="innerFixed">Fixed Inner Mass Reference</label><br>
+                <input type="checkbox" id="useDeviceMotion">
+                <label for="useDeviceMotion">Use Device Motion</label>
+            </div>
+            <div class="status" id="motionStatus">Device motion: not available</div>
+            <button id="perturbBtn">Perturb</button>
+            <button id="resetBtn">Reset</button>
+            <button id="randomizeBtn">Randomize</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let animationId = null;
+        let isRunning = false;
+        let pendulums = [];
+        let trails1 = [];
+        let trails2 = [];
+        const baseG = 9.81;
+        let g = baseG;
+        let dt = 0.032;
+        let damping = 0;
+        const MAX_ANGULAR_VELOCITY = 50;
+
+        // Visualization settings
+        let showRods = true;
+        let showInnerTrail = true;
+        let innerFixed = false;
+        let useDeviceMotion = false;
+
+        // Device motion threshold for perturbation
+        const MOTION_THRESHOLD = 5;
+        let lastMotionTime = 0;
+        const MOTION_COOLDOWN = 500;
+
+        // Dragging state
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+        let xOffset = 0;
+        let yOffset = 0;
+
+        const controls = document.getElementById('controls');
+
+        // Check for device motion support
+        if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+            document.getElementById('useDeviceMotion').addEventListener('change', async function() {
+                if (this.checked) {
+                    try {
+                        const permission = await DeviceMotionEvent.requestPermission();
+                        if (permission === 'granted') {
+                            useDeviceMotion = true;
+                            setupDeviceMotion();
+                            document.getElementById('motionStatus').textContent = 'Device motion: available';
+                        } else {
+                            this.checked = false;
+                            document.getElementById('motionStatus').textContent = 'Device motion: permission denied';
+                        }
+                    } catch (e) {
+                        this.checked = false;
+                        document.getElementById('motionStatus').textContent = 'Device motion: error requesting permission';
+                    }
+                } else {
+                    useDeviceMotion = false;
+                }
+            });
+        } else if (window.DeviceMotionEvent) {
+            setupDeviceMotion();
+            document.getElementById('motionStatus').textContent = 'Device motion: available';
+        } else {
+            document.getElementById('useDeviceMotion').disabled = true;
+            document.getElementById('motionStatus').textContent = 'Device motion: not supported';
+        }
+
+        function setupDeviceMotion() {
+            window.addEventListener('devicemotion', function(event) {
+                if (!useDeviceMotion || !isRunning) return;
+                
+                const now = Date.now();
+                if (now - lastMotionTime < MOTION_COOLDOWN) return;
+
+                const acceleration = event.acceleration;
+                if (!acceleration) return;
+
+                const totalAccel = Math.sqrt(
+                    acceleration.x * acceleration.x + 
+                    acceleration.y * acceleration.y + 
+                    acceleration.z * acceleration.z
+                );
+
+                if (totalAccel > MOTION_THRESHOLD) {
+                    perturbPendulums();
+                    lastMotionTime = now;
+                }
+            });
+        }
+
+        // Mouse and Touch Event Handlers
+        function handleDragStart(e) {
+            const event = e.type === 'mousedown' ? e : e.touches[0];
+            if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'SELECT' && e.target.tagName !== 'INPUT') {
+                initialX = event.clientX - xOffset;
+                initialY = event.clientY - yOffset;
+                isDragging = true;
+            }
+        }
+
+        function handleDragMove(e) {
+            if (isDragging) {
+                e.preventDefault();
+                const event = e.type === 'mousemove' ? e : e.touches[0];
+                currentX = event.clientX - initialX;
+                currentY = event.clientY - initialY;
+                xOffset = currentX;
+                yOffset = currentY;
+                setTranslate(currentX, currentY, controls);
+            }
+        }
+
+        function handleDragEnd() {
+            isDragging = false;
+        }
+
+        function setTranslate(xPos, yPos, el) {
+            el.style.transform = `translate(${xPos}px, ${yPos}px)`;
+        }
+
+        controls.addEventListener('mousedown', handleDragStart);
+        controls.addEventListener('touchstart', handleDragStart);
+        document.addEventListener('mousemove', handleDragMove);
+        document.addEventListener('touchmove', handleDragMove, { passive: false });
+        document.addEventListener('mouseup', handleDragEnd);
+        document.addEventListener('touchend', handleDragEnd);
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // RK4 integration helper
+        function derivatives(state) {
+            const [theta1, omega1, theta2, omega2] = state;
+            const delta = theta2 - theta1;
+            const den = 2 * this.m1 + this.m2 - this.m2 * Math.cos(2 * delta);
+
+            const d2theta1 = (this.m2 * this.l1 * omega1 * omega1 * Math.sin(2 * delta) +
+                2 * this.m2 * g * Math.sin(theta2) * Math.cos(delta) +
+                this.m2 * this.l2 * omega2 * omega2 * Math.sin(delta) -
+                (2 * this.m1 + this.m2) * g * Math.sin(theta1)) /
+                (this.l1 * den);
+
+            const d2theta2 = (-this.m2 * this.l2 * omega2 * omega2 * Math.sin(2 * delta) +
+                2 * (this.m1 + this.m2) * (this.l1 * omega1 * omega1 * Math.sin(delta) -
+                    g * Math.sin(theta2) +
+                    g * Math.sin(theta1) * Math.cos(delta))) /
+                (this.l2 * den);
+
+            return [omega1, d2theta1, omega2, d2theta2];
+        }
+
+        function rk4Step(state, dt) {
+            const k1 = derivatives.call(this, state);
+            const k2 = derivatives.call(this, state.map((x, i) => x + dt * k1[i] / 2));
+            const k3 = derivatives.call(this, state.map((x, i) => x + dt * k2[i] / 2));
+            const k4 = derivatives.call(this, state.map((x, i) => x + dt * k3[i]));
+
+            return state.map((x, i) => x + (dt / 6) * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]));
+        }
+
+        class DoublePendulum {
+            constructor(x, y, m1, m2, l1, l2, theta1, theta2) {
+                this.x = x;
+                this.y = y;
+                this.m1 = m1;
+                this.m2 = m2;
+                this.l1 = l1;
+                this.l2 = l2;
+                this.theta1 = theta1;
+                this.theta2 = theta2;
+                this.omega1 = 0;
+                this.omega2 = 0;
+            }
+
+            update() {
+                const state = [this.theta1, this.omega1, this.theta2, this.omega2];
+                const newState = rk4Step.call(this, state, dt);
+                [this.theta1, this.omega1, this.theta2, this.omega2] = newState;
+
+                // Apply damping
+                this.omega1 *= (1 - damping);
+                this.omega2 *= (1 - damping);
+
+                // Limit angular velocities
+                this.omega1 = Math.max(Math.min(this.omega1, MAX_ANGULAR_VELOCITY), -MAX_ANGULAR_VELOCITY);
+                this.omega2 = Math.max(Math.min(this.omega2, MAX_ANGULAR_VELOCITY), -MAX_ANGULAR_VELOCITY);
+            }
+
+            getPositions() {
+                const x1 = this.x + this.l1 * Math.sin(this.theta1);
+                const y1 = this.y + this.l1 * Math.cos(this.theta1);
+                const x2 = x1 + this.l2 * Math.sin(this.theta2);
+                const y2 = y1 + this.l2 * Math.cos(this.theta2);
+                return { x1, y1, x2, y2 };
+            }
+        }
+
+        class Trail {
+            constructor() {
+                this.points = [];
+                this.maxLength = 300;
+            }
+
+            clear() {
+                this.points = [];
+            }
+
+            add(x, y, referenceX = 0, referenceY = 0) {
+                this.points.push({ 
+                    x: x - referenceX, 
+                    y: y - referenceY, 
+                    age: 1.0 
+                });
+                if (this.points.length > this.maxLength) {
+                    this.points.shift();
+                }
+            }
+
+            update() {
+                this.points.forEach(p => p.age *= 0.99);
+                this.points = this.points.filter(p => p.age > 0.01);
+            }
+
+            draw(ctx, referenceX = 0, referenceY = 0) {
+                this.points.forEach(p => {
+                    ctx.beginPath();
+                    ctx.arc(p.x + referenceX, p.y + referenceY, 1, 0, 2 * Math.PI);
+                    ctx.fillStyle = `rgba(255, 165, 0, ${p.age})`;
+                    ctx.fill();
+                });
+            }
+        }
+
+        function clearAllTrails() {
+            trails1.forEach(trail => trail.clear());
+            trails2.forEach(trail => trail.clear());
+        }
+
+        function initializePendulums(count) {
+            pendulums = [];
+            trails1 = [];
+            trails2 = [];
+            
+            let cols, rows;
+            if (count === 4) {
+                cols = 2;
+                rows = 2;
+            } else if (count === 9) {
+                cols = 3;
+                rows = 3;
+            } else {
+                cols = Math.ceil(Math.sqrt(count));
+                rows = Math.ceil(count / cols);
+            }
+
+            const cellWidth = canvas.width / cols;
+            const cellHeight = canvas.height / rows;
+            const cellSize = Math.min(cellWidth, cellHeight);
+
+            for (let i = 0; i < count; i++) {
+                                const row = Math.floor(i / cols);
+                const col = i % cols;
+                
+                const x = col * cellWidth + cellWidth / 2;
+                const y = row * cellHeight + cellHeight * 0.3;
+                
+                const m1 = 1;
+                const m2 = 1;
+                const l1 = cellSize * 0.2;
+                const l2 = l1 * 0.5;
+                const theta1 = Math.PI;
+                const theta2 = Math.PI;
+
+                pendulums.push(new DoublePendulum(x, y, m1, m2, l1, l2, theta1, theta2));
+                trails1.push(new Trail());
+                trails2.push(new Trail());
+            }
+        }
+
+        function perturbPendulums() {
+            const direction = Math.random() < 0.5 ? -1 : 1;
+            const perturbAmount = 0.1;
+
+            pendulums.forEach(p => {
+                p.theta1 += direction * perturbAmount;
+                p.theta2 += direction * perturbAmount;
+            });
+        }
+
+        function randomizePendulums() {
+            const count = pendulums.length;
+            let cols, rows;
+            if (count === 4) {
+                cols = 2;
+                rows = 2;
+            } else if (count === 9) {
+                cols = 3;
+                rows = 3;
+            } else {
+                cols = Math.ceil(Math.sqrt(count));
+                rows = Math.ceil(count / cols);
+            }
+            
+            const cellWidth = canvas.width / cols;
+            const cellHeight = canvas.height / Math.ceil(count / cols);
+            const cellSize = Math.min(cellWidth, cellHeight);
+
+            clearAllTrails();
+
+            pendulums.forEach(p => {
+                p.m1 = 0.5 + Math.random();
+                p.m2 = 0.5 + Math.random();
+                p.l1 = cellSize * (0.1 + Math.random() * 0.2);
+                p.l2 = p.l1 * (0.3 + Math.random() * 0.4);
+                p.omega1 = 0;
+                p.omega2 = 0;
+                p.theta1 = Math.PI;
+                p.theta2 = Math.PI;
+            });
+        }
+
+        function getMassRadius(mass, cellSize) {
+            const baseRadius = 8 * Math.sqrt(mass);
+            const scaledRadius = (cellSize / 400) * baseRadius;
+            return Math.max(scaledRadius, 2.5);
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const cols = Math.ceil(Math.sqrt(pendulums.length));
+            const rows = Math.ceil(pendulums.length / cols);
+            const cellWidth = canvas.width / cols;
+            const cellHeight = canvas.height / rows;
+            const cellSize = Math.min(cellWidth, cellHeight);
+
+            pendulums.forEach((p, i) => {
+                const pos = p.getPositions();
+                
+                if (showInnerTrail) {
+                    trails1[i].draw(ctx, innerFixed ? (p.x - pos.x1) : 0, innerFixed ? (p.y - pos.y1) : 0);
+                }
+                trails2[i].draw(ctx, innerFixed ? (p.x - pos.x1) : 0, innerFixed ? (p.y - pos.y1) : 0);
+
+                // Transform all coordinates relative to inner mass when in fixed reference mode
+                const drawX = innerFixed ? p.x : pos.x1;
+                const drawY = innerFixed ? p.y : pos.y1;
+                const offsetX = innerFixed ? (p.x - pos.x1) : 0;
+                const offsetY = innerFixed ? (p.y - pos.y1) : 0;
+
+                if (showRods) {
+                    ctx.beginPath();
+                    ctx.moveTo(p.x + offsetX, p.y + offsetY);
+                    ctx.lineTo(pos.x1 + offsetX, pos.y1 + offsetY);
+                    ctx.lineTo(pos.x2 + offsetX, pos.y2 + offsetY);
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+
+                const radius1 = getMassRadius(p.m1, cellSize);
+                const radius2 = getMassRadius(p.m2, cellSize);
+
+                ctx.beginPath();
+                ctx.arc(pos.x1 + offsetX, pos.y1 + offsetY, radius1, 0, 2 * Math.PI);
+                ctx.fillStyle = '#444';
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.arc(pos.x2 + offsetX, pos.y2 + offsetY, radius2, 0, 2 * Math.PI);
+                ctx.fillStyle = '#444';
+                ctx.fill();
+
+                if (showInnerTrail) {
+                    trails1[i].add(pos.x1, pos.y1);
+                    trails1[i].update();
+                }
+                trails2[i].add(pos.x2, pos.y2, innerFixed ? (pos.x1 - p.x) : 0, innerFixed ? (pos.y1 - p.y) : 0);
+                trails2[i].update();
+            });
+
+            if (isRunning) {
+                pendulums.forEach(p => p.update());
+                animationId = requestAnimationFrame(draw);
+            }
+        }
+
+        // UI Controls
+        document.querySelector('.collapsible').addEventListener('click', function() {
+            this.classList.toggle('active');
+            const content = this.nextElementSibling;
+            content.style.display = content.style.display === 'block' ? 'none' : 'block';
+        });
+
+        document.getElementById('speedSlider').addEventListener('input', function() {
+            const speed = parseFloat(this.value);
+            dt = 0.016 * speed;
+            document.getElementById('speedValue').textContent = speed.toFixed(1) + 'x';
+        });
+
+        document.getElementById('dampingSlider').addEventListener('input', function() {
+            damping = parseFloat(this.value);
+            document.getElementById('dampingValue').textContent = damping.toFixed(3);
+        });
+
+        document.getElementById('gravitySlider').addEventListener('input', function() {
+            const percentage = parseInt(this.value);
+            g = baseG * (percentage / 100);
+            document.getElementById('gravityValue').textContent = percentage + '%';
+        });
+
+        document.getElementById('pendulumCount').addEventListener('change', function() {
+            isRunning = false;
+            cancelAnimationFrame(animationId);
+            initializePendulums(parseInt(this.value));
+            draw();
+        });
+
+        document.getElementById('perturbBtn').addEventListener('click', function() {
+            if (!isRunning) {
+                isRunning = true;
+                clearAllTrails();
+                perturbPendulums();
+                draw();
+            }
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', function() {
+            isRunning = false;
+            cancelAnimationFrame(animationId);
+            initializePendulums(parseInt(document.getElementById('pendulumCount').value));
+            draw();
+        });
+
+        document.getElementById('randomizeBtn').addEventListener('click', function() {
+            isRunning = false;
+            cancelAnimationFrame(animationId);
+            randomizePendulums();
+            draw();
+        });
+
+        document.getElementById('showRods').addEventListener('change', function() {
+            showRods = this.checked;
+            if (!isRunning) draw();
+        });
+
+        document.getElementById('showInnerTrail').addEventListener('change', function() {
+            showInnerTrail = this.checked;
+            if (!this.checked) {
+                trails1.forEach(trail => trail.clear());
+            }
+            if (!isRunning) draw();
+        });
+
+        document.getElementById('innerFixed').addEventListener('change', function() {
+            innerFixed = this.checked;
+            clearAllTrails();
+            if (!isRunning) draw();
+        });
+
+        // Initialize with default values
+        initializePendulums(16);
+        draw();
+    </script>
+</body>
+</html>

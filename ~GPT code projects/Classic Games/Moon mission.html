@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apollo Moon Mission Simulator</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Courier New', monospace;
+            color: #0f0;
+        }
+        
+        canvas {
+            display: block;
+            cursor: crosshair;
+        }
+        
+        .panel {
+            position: absolute;
+            background: rgba(0, 20, 0, 0.9);
+            border: 2px solid #0f0;
+            padding: 10px;
+            font-size: 12px;
+            user-select: none;
+            cursor: move;
+            min-width: 200px;
+        }
+        
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #0f0;
+        }
+        
+        .panel-title {
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .collapse-btn {
+            cursor: pointer;
+            padding: 0 5px;
+            border: 1px solid #0f0;
+            background: none;
+            color: #0f0;
+        }
+        
+        .panel-content {
+            line-height: 1.4;
+        }
+        
+        .panel-content.collapsed {
+            display: none;
+        }
+        
+        #missionData {
+            top: 10px;
+            left: 10px;
+        }
+        
+        #physicsData {
+            top: 10px;
+            right: 10px;
+        }
+        
+        #controls {
+            bottom: 10px;
+            left: 10px;
+        }
+        
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 2px 0;
+        }
+        
+        .data-label {
+            color: #0a0;
+        }
+        
+        .data-value {
+            color: #0f0;
+            text-align: right;
+            font-weight: bold;
+        }
+        
+        .warning {
+            color: #fa0;
+        }
+        
+        .danger {
+            color: #f00;
+        }
+        
+        .success {
+            color: #0ff;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    
+    <div id="missionData" class="panel">
+        <div class="panel-header">
+            <span class="panel-title">MISSION DATA</span>
+            <button class="collapse-btn" onclick="togglePanel('missionData')">−</button>
+        </div>
+        <div class="panel-content" id="missionDataContent">
+            <div class="data-row">
+                <span class="data-label">Altitude:</span>
+                <span class="data-value" id="altitude">0 km</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Velocity:</span>
+                <span class="data-value" id="velocity">0 m/s</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Vx:</span>
+                <span class="data-value" id="vx">0 m/s</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Vy:</span>
+                <span class="data-value" id="vy">0 m/s</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Dist to Earth:</span>
+                <span class="data-value" id="distEarth">0 km</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Dist to Moon:</span>
+                <span class="data-value" id="distMoon">384,400 km</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Time Warp:</span>
+                <span class="data-value" id="timeWarp">1x</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Mission Time:</span>
+                <span class="data-value" id="missionTime">00:00:00</span>
+            </div>
+        </div>
+    </div>
+    
+    <div id="physicsData" class="panel">
+        <div class="panel-header">
+            <span class="panel-title">PHYSICS DATA</span>
+            <button class="collapse-btn" onclick="togglePanel('physicsData')">−</button>
+        </div>
+        <div class="panel-content" id="physicsDataContent">
+            <div class="data-row">
+                <span class="data-label">Stage:</span>
+                <span class="data-value" id="stage">1</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Total Mass:</span>
+                <span class="data-value" id="totalMass">2,970,000 kg</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Fuel Mass:</span>
+                <span class="data-value" id="fuelMass">2,160,000 kg</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Fuel %:</span>
+                <span class="data-value" id="fuelPercent">100%</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Thrust:</span>
+                <span class="data-value" id="thrust">0 kN</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Acceleration:</span>
+                <span class="data-value" id="acceleration">0 m/s²</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">TWR:</span>
+                <span class="data-value" id="twr">0.00</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Zoom:</span>
+                <span class="data-value" id="zoom">1:1</span>
+            </div>
+        </div>
+    </div>
+    
+    <div id="controls" class="panel">
+        <div class="panel-header">
+            <span class="panel-title">CONTROLS</span>
+            <button class="collapse-btn" onclick="togglePanel('controls')">−</button>
+        </div>
+        <div class="panel-content" id="controlsContent">
+            <div style="margin-bottom: 5px;"><strong>THRUST:</strong></div>
+            <div>↑ - Main Engine</div>
+            <div>← → - Side Thrusters</div>
+            <div>Shift+↑ - Toggle Main</div>
+            <div>Space - Stage Separation</div>
+            <div style="margin-top: 5px;"><strong>TIME:</strong></div>
+            <div>1 - Decrease Warp</div>
+            <div>2 - Increase Warp</div>
+            <div style="margin-top: 5px;"><strong>VIEW:</strong></div>
+            <div>Mouse Wheel - Zoom</div>
+            <div>+/- Keys - Zoom In/Out</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Physical constants
+        const G = 6.67430e-11; // Gravitational constant
+        const EARTH_MASS = 5.972e24; // kg
+        const MOON_MASS = 7.342e22; // kg
+        const EARTH_RADIUS = 6.371e6; // m
+        const MOON_RADIUS = 1.737e6; // m
+        const EARTH_MOON_DISTANCE = 3.844e8; // m
+        
+        // Apollo spacecraft data (realistic)
+        const STAGES = [
+            { // Stage 1 (Saturn V first stage)
+                dryMass: 130000,
+                fuelMass: 2160000,
+                thrust: 34020000, // N
+                isp: 263, // seconds
+                burnRate: 13000 // kg/s
+            },
+            { // Stage 2 (Saturn V second stage)
+                dryMass: 36000,
+                fuelMass: 444000,
+                thrust: 4400000, // N
+                isp: 421,
+                burnRate: 1050
+            },
+            { // Stage 3 (Saturn V third stage)
+                dryMass: 13500,
+                fuelMass: 106000,
+                thrust: 1000000, // N
+                isp: 421,
+                burnRate: 240
+            },
+            { // Lunar Module
+                dryMass: 4500,
+                fuelMass: 18000,
+                thrust: 45000, // N (descent engine)
+                isp: 311,
+                burnRate: 15
+            }
+        ];
+        
+        // Game state
+        let rocket = {
+            x: 0,
+            y: EARTH_RADIUS,
+            vx: 0,
+            vy: 0,
+            angle: 0,
+            stage: 0,
+            fuel: STAGES[0].fuelMass,
+            mainEngineOn: false,
+            mainEngineLocked: false,
+            trajectory: []
+        };
+        
+        let moon = {
+            angle: 0,
+            x: EARTH_MOON_DISTANCE,
+            y: 0
+        };
+        
+        let camera = {
+            zoom: 1e-3,
+            targetZoom: 1e-3,
+            minZoom: 1e-9,  // Wide enough to see Earth-Moon system
+            maxZoom: 1e-3   // Close enough to see rocket on launch pad
+        };
+        
+        let timeWarp = 1;
+        let missionTime = 0;
+        let stars = [];
+        
+        // Input handling
+        const keys = {};
+        let draggedPanel = null;
+        let dragOffset = { x: 0, y: 0 };
+        
+        // Initialize
+        function init() {
+            resize();
+            window.addEventListener('resize', resize);
+            window.addEventListener('keydown', (e) => {
+                keys[e.key] = true;
+                if (e.key === 'ArrowUp' && e.shiftKey) {
+                    e.preventDefault();
+                    rocket.mainEngineLocked = !rocket.mainEngineLocked;
+                    if (!rocket.mainEngineLocked) {
+                        rocket.mainEngineOn = false;
+                    }
+                } else if (e.key === ' ') {
+                    e.preventDefault();
+                    separateStage();
+                } else if (e.key === '1') {
+                    timeWarp = Math.max(1, timeWarp / 2);
+                } else if (e.key === '2') {
+                    timeWarp = Math.min(100000, timeWarp * 2);
+                } else if (e.key === '-' || e.key === '_') {
+                    camera.targetZoom *= 0.8;
+                    camera.targetZoom = Math.max(camera.minZoom, camera.targetZoom);
+                } else if (e.key === '=' || e.key === '+') {
+                    camera.targetZoom *= 1.25;
+                    camera.targetZoom = Math.min(camera.maxZoom, camera.targetZoom);
+                }
+            });
+            window.addEventListener('keyup', (e) => {
+                keys[e.key] = false;
+                if (e.key === 'ArrowUp' && !rocket.mainEngineLocked) {
+                    rocket.mainEngineOn = false;
+                }
+            });
+            
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const factor = e.deltaY > 0 ? 0.8 : 1.25;  // More aggressive zoom
+                camera.targetZoom *= factor;
+                camera.targetZoom = Math.max(camera.minZoom, Math.min(camera.maxZoom, camera.targetZoom));
+            });
+            
+            // Panel dragging
+            document.querySelectorAll('.panel').forEach(panel => {
+                panel.addEventListener('mousedown', startDrag);
+            });
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', stopDrag);
+            
+            // Generate stars
+            for (let i = 0; i < 1000; i++) {
+                stars.push({
+                    x: Math.random() * 2 - 1,
+                    y: Math.random() * 2 - 1,
+                    brightness: Math.random()
+                });
+            }
+            
+            gameLoop();
+        }
+        
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        
+        function startDrag(e) {
+            if (e.target.classList.contains('collapse-btn')) return;
+            draggedPanel = e.currentTarget;
+            const rect = draggedPanel.getBoundingClientRect();
+            dragOffset.x = e.clientX - rect.left;
+            dragOffset.y = e.clientY - rect.top;
+        }
+        
+        function drag(e) {
+            if (!draggedPanel) return;
+            draggedPanel.style.left = (e.clientX - dragOffset.x) + 'px';
+            draggedPanel.style.top = (e.clientY - dragOffset.y) + 'px';
+            draggedPanel.style.right = 'auto';
+            draggedPanel.style.bottom = 'auto';
+        }
+        
+        function stopDrag() {
+            draggedPanel = null;
+        }
+        
+        function togglePanel(id) {
+            const content = document.getElementById(id + 'Content');
+            const btn = content.previousElementSibling.querySelector('.collapse-btn');
+            content.classList.toggle('collapsed');
+            btn.textContent = content.classList.contains('collapsed') ? '+' : '−';
+        }
+        
+        function separateStage() {
+            if (rocket.stage < STAGES.length - 1) {
+                rocket.stage++;
+                rocket.fuel = STAGES[rocket.stage].fuelMass;
+            }
+        }
+        
+        function getTotalMass() {
+            let mass = 0;
+            for (let i = rocket.stage; i < STAGES.length; i++) {
+                mass += STAGES[i].dryMass + (i === rocket.stage ? rocket.fuel : STAGES[i].fuelMass);
+            }
+            return mass;
+        }
+        
+        function update(dt) {
+            // Handle input
+            if (keys['ArrowUp'] && !rocket.mainEngineLocked) {
+                rocket.mainEngineOn = true;
+            }
+            
+            if (keys['ArrowLeft']) {
+                rocket.angle -= 2 * dt;
+            }
+            if (keys['ArrowRight']) {
+                rocket.angle += 2 * dt;
+            }
+            
+            // Update moon position
+            moon.angle += (2 * Math.PI / (27.3 * 24 * 3600)) * dt * timeWarp;
+            moon.x = EARTH_MOON_DISTANCE * Math.cos(moon.angle);
+            moon.y = EARTH_MOON_DISTANCE * Math.sin(moon.angle);
+            
+            // Calculate forces
+            const totalMass = getTotalMass();
+            const stage = STAGES[rocket.stage];
+            
+            // Gravity from Earth
+            const dxEarth = -rocket.x;
+            const dyEarth = -rocket.y;
+            const distEarth = Math.sqrt(dxEarth * dxEarth + dyEarth * dyEarth);
+            const fEarth = G * EARTH_MASS * totalMass / (distEarth * distEarth);
+            const fxEarth = fEarth * dxEarth / distEarth;
+            const fyEarth = fEarth * dyEarth / distEarth;
+            
+            // Gravity from Moon
+            const dxMoon = moon.x - rocket.x;
+            const dyMoon = moon.y - rocket.y;
+            const distMoon = Math.sqrt(dxMoon * dxMoon + dyMoon * dyMoon);
+            const fMoon = G * MOON_MASS * totalMass / (distMoon * distMoon);
+            const fxMoon = fMoon * dxMoon / distMoon;
+            const fyMoon = fMoon * dyMoon / distMoon;
+            
+            // Thrust
+            let fxThrust = 0, fyThrust = 0;
+            if ((rocket.mainEngineOn || rocket.mainEngineLocked) && rocket.fuel > 0) {
+                const thrustMag = stage.thrust;
+                fxThrust = thrustMag * Math.sin(rocket.angle);
+                fyThrust = thrustMag * Math.cos(rocket.angle);
+                
+                // Consume fuel
+                rocket.fuel -= stage.burnRate * dt * timeWarp;
+                if (rocket.fuel <= 0) {
+                    rocket.fuel = 0;
+                    rocket.mainEngineOn = false;
+                    rocket.mainEngineLocked = false;
+                }
+            }
+            
+            // Side thrusters (RCS)
+            if (keys['ArrowLeft'] || keys['ArrowRight']) {
+                const rcsMass = 10 * dt * timeWarp;
+                if (rocket.fuel > rcsMass) {
+                    rocket.fuel -= rcsMass;
+                }
+            }
+            
+            // Total acceleration
+            const ax = (fxEarth + fxMoon + fxThrust) / totalMass;
+            const ay = (fyEarth + fyMoon + fyThrust) / totalMass;
+            
+            // Update velocity and position
+            rocket.vx += ax * dt * timeWarp;
+            rocket.vy += ay * dt * timeWarp;
+            
+            // Check for surface collision before moving
+            const newX = rocket.x + rocket.vx * dt * timeWarp;
+            const newY = rocket.y + rocket.vy * dt * timeWarp;
+            
+            const newDistEarth = Math.sqrt(newX * newX + newY * newY);
+            const newDistMoon = Math.sqrt((newX - moon.x) ** 2 + (newY - moon.y) ** 2);
+            
+            if (newDistEarth > EARTH_RADIUS && newDistMoon > MOON_RADIUS) {
+                rocket.x = newX;
+                rocket.y = newY;
+            } else {
+                // Landing or crash
+                const speed = Math.sqrt(rocket.vx * rocket.vx + rocket.vy * rocket.vy);
+                if (speed < 10) { // Safe landing
+                    rocket.vx = 0;
+                    rocket.vy = 0;
+                } else { // Crash
+                    rocket.vx *= 0.5;
+                    rocket.vy *= 0.5;
+                }
+            }
+            
+            // Update trajectory
+            if (missionTime % 100 < dt) {
+                rocket.trajectory.push({ x: rocket.x, y: rocket.y });
+                if (rocket.trajectory.length > 1000) {
+                    rocket.trajectory.shift();
+                }
+            }
+            
+            // Update camera zoom
+            camera.zoom += (camera.targetZoom - camera.zoom) * 0.1;
+            
+            // Update mission time
+            missionTime += dt * timeWarp;
+            
+            // Update UI
+            updateUI(distEarth, distMoon, ax, ay);
+        }
+        
+        function updateUI(distEarth, distMoon, ax, ay) {
+            const altitude = distEarth - EARTH_RADIUS;
+            const velocity = Math.sqrt(rocket.vx * rocket.vx + rocket.vy * rocket.vy);
+            const totalMass = getTotalMass();
+            const stage = STAGES[rocket.stage];
+            const thrust = (rocket.mainEngineOn || rocket.mainEngineLocked) && rocket.fuel > 0 ? stage.thrust : 0;
+            const acceleration = Math.sqrt(ax * ax + ay * ay);
+            const twr = thrust / (totalMass * 9.81);
+            
+            document.getElementById('altitude').textContent = formatDistance(altitude);
+            document.getElementById('velocity').textContent = formatVelocity(velocity);
+            document.getElementById('vx').textContent = formatVelocity(rocket.vx);
+            document.getElementById('vy').textContent = formatVelocity(rocket.vy);
+            document.getElementById('distEarth').textContent = formatDistance(distEarth);
+            document.getElementById('distMoon').textContent = formatDistance(distMoon);
+            document.getElementById('timeWarp').textContent = timeWarp + 'x';
+            document.getElementById('missionTime').textContent = formatTime(missionTime);
+            
+            document.getElementById('stage').textContent = (rocket.stage + 1);
+            document.getElementById('totalMass').textContent = formatMass(totalMass);
+            document.getElementById('fuelMass').textContent = formatMass(rocket.fuel);
+            document.getElementById('fuelPercent').textContent = Math.round(rocket.fuel / stage.fuelMass * 100) + '%';
+            document.getElementById('thrust').textContent = formatForce(thrust);
+            document.getElementById('acceleration').textContent = acceleration.toFixed(2) + ' m/s²';
+            document.getElementById('twr').textContent = twr.toFixed(2);
+            document.getElementById('zoom').textContent = '1:' + formatNumber(1 / camera.zoom) + ' (log: ' + Math.log10(1/camera.zoom).toFixed(1) + ')';
+            
+            // Color coding
+            const fuelPercent = rocket.fuel / stage.fuelMass;
+            const fuelElement = document.getElementById('fuelPercent');
+            fuelElement.className = fuelPercent < 0.1 ? 'data-value danger' : fuelPercent < 0.3 ? 'data-value warning' : 'data-value';
+            
+            const twrElement = document.getElementById('twr');
+            twrElement.className = twr > 1 ? 'data-value success' : 'data-value warning';
+        }
+        
+        function formatDistance(meters) {
+            if (Math.abs(meters) < 1000) {
+                return meters.toFixed(0) + ' m';
+            } else if (Math.abs(meters) < 1000000) {
+                return (meters / 1000).toFixed(1) + ' km';
+            } else {
+                return (meters / 1000).toFixed(0) + ' km';
+            }
+        }
+        
+        function formatVelocity(mps) {
+            if (Math.abs(mps) < 1000) {
+                return mps.toFixed(1) + ' m/s';
+            } else {
+                return (mps / 1000).toFixed(2) + ' km/s';
+            }
+        }
+        
+        function formatMass(kg) {
+            if (kg < 1000) {
+                return kg.toFixed(0) + ' kg';
+            } else if (kg < 1000000) {
+                return (kg / 1000).toFixed(1) + ' t';
+            } else {
+                return (kg / 1000).toFixed(0) + ' t';
+            }
+        }
+        
+        function formatForce(n) {
+            if (n < 1000) {
+                return n.toFixed(0) + ' N';
+            } else if (n < 1000000) {
+                return (n / 1000).toFixed(0) + ' kN';
+            } else {
+                return (n / 1000000).toFixed(1) + ' MN';
+            }
+        }
+        
+        function formatNumber(n) {
+            if (n < 1000) {
+                return n.toFixed(0);
+            } else if (n < 1000000) {
+                return (n / 1000).toFixed(0) + 'K';
+            } else if (n < 1000000000) {
+                return (n / 1000000).toFixed(0) + 'M';
+            } else {
+                return (n / 1000000000).toFixed(0) + 'B';
+            }
+        }
+        
+        function formatTime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        function worldToScreen(x, y) {
+            const scale = camera.zoom * Math.min(canvas.width, canvas.height) / 2;
+            return {
+                x: canvas.width / 2 + (x - rocket.x) * scale,
+                y: canvas.height / 2 - (y - rocket.y) * scale
+            };
+        }
+        
+        function draw() {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Save the context for camera rotation
+            ctx.save();
+            
+            // Rotate entire view so rocket points up
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate(-rocket.angle);
+            ctx.translate(-canvas.width / 2, -canvas.height / 2);
+            
+            // Draw stars (with rotation compensation)
+            ctx.fillStyle = '#fff';
+            stars.forEach(star => {
+                // Create a rotating starfield effect
+                const angle = Math.atan2(star.y - 0.5, star.x - 0.5);
+                const dist = Math.sqrt((star.x - 0.5) ** 2 + (star.y - 0.5) ** 2);
+                const rotatedAngle = angle - rocket.angle;
+                const x = canvas.width / 2 + Math.cos(rotatedAngle) * dist * canvas.width;
+                const y = canvas.height / 2 + Math.sin(rotatedAngle) * dist * canvas.height;
+                ctx.globalAlpha = star.brightness * 0.8;
+                ctx.fillRect(x, y, 1 + star.brightness, 1 + star.brightness);
+            });
+            ctx.globalAlpha = 1;
+            
+            // Draw trajectory
+            ctx.strokeStyle = 'rgba(255, 255, 0, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            rocket.trajectory.forEach((point, i) => {
+                const screen = worldToScreen(point.x, point.y);
+                if (i === 0) {
+                    ctx.moveTo(screen.x, screen.y);
+                } else {
+                    ctx.lineTo(screen.x, screen.y);
+                }
+            });
+            ctx.stroke();
+            
+            // Draw Earth
+            const earthScreen = worldToScreen(0, 0);
+            const earthRadiusActual = EARTH_RADIUS * camera.zoom * Math.min(canvas.width, canvas.height) / 2;
+            const earthRadius = Math.max(30, earthRadiusActual);  // Minimum 30 pixels
+            
+            // Only draw Earth if it's in view
+            if (Math.abs(earthScreen.x - canvas.width/2) < canvas.width && 
+                Math.abs(earthScreen.y - canvas.height/2) < canvas.height) {
+                const gradient = ctx.createRadialGradient(earthScreen.x, earthScreen.y, 0, earthScreen.x, earthScreen.y, earthRadius);
+                gradient.addColorStop(0, '#4169E1');
+                gradient.addColorStop(0.8, '#1E90FF');
+                gradient.addColorStop(1, '#000080');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(earthScreen.x, earthScreen.y, earthRadius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Add label when zoomed out
+                if (camera.zoom < 1e-6) {
+                    ctx.save();
+                    ctx.translate(earthScreen.x, earthScreen.y + earthRadius + 15);
+                    ctx.rotate(rocket.angle);
+                    ctx.fillStyle = '#0f0';
+                    ctx.font = '12px monospace';
+                    ctx.fillText('Earth', -20, 0);
+                    ctx.restore();
+                }
+            }
+            
+            // Draw Moon
+            const moonScreen = worldToScreen(moon.x, moon.y);
+            const moonRadiusActual = MOON_RADIUS * camera.zoom * Math.min(canvas.width, canvas.height) / 2;
+            const moonRadius = Math.max(15, moonRadiusActual);  // Minimum 15 pixels
+            
+            // Only draw Moon if it's in view
+            if (Math.abs(moonScreen.x - canvas.width/2) < canvas.width && 
+                Math.abs(moonScreen.y - canvas.height/2) < canvas.height) {
+                const moonGradient = ctx.createRadialGradient(moonScreen.x, moonScreen.y, 0, moonScreen.x, moonScreen.y, moonRadius);
+                moonGradient.addColorStop(0, '#E0E0E0');
+                moonGradient.addColorStop(0.8, '#C0C0C0');
+                moonGradient.addColorStop(1, '#808080');
+                ctx.fillStyle = moonGradient;
+                ctx.beginPath();
+                ctx.arc(moonScreen.x, moonScreen.y, moonRadius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Add label when zoomed out
+                if (camera.zoom < 1e-6) {
+                    ctx.save();
+                    ctx.translate(moonScreen.x, moonScreen.y + moonRadius + 15);
+                    ctx.rotate(rocket.angle);
+                    ctx.fillStyle = '#0f0';
+                    ctx.font = '12px monospace';
+                    ctx.fillText('Moon', -15, 0);
+                    ctx.restore();
+                }
+            }
+            
+            // Restore context before drawing rocket and UI elements
+            ctx.restore();
+            
+            // Draw rocket (always at center, always pointing up)
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            
+            // Rocket body
+            const rocketHeight = 30;
+            const rocketWidth = 10;
+            ctx.fillStyle = '#ddd';
+            ctx.fillRect(-rocketWidth / 2, -rocketHeight / 2, rocketWidth, rocketHeight);
+            
+            // Rocket nose
+            ctx.fillStyle = '#f00';
+            ctx.beginPath();
+            ctx.moveTo(-rocketWidth / 2, -rocketHeight / 2);
+            ctx.lineTo(0, -rocketHeight / 2 - 10);
+            ctx.lineTo(rocketWidth / 2, -rocketHeight / 2);
+            ctx.fill();
+            
+            // Engine flame
+            if ((rocket.mainEngineOn || rocket.mainEngineLocked) && rocket.fuel > 0) {
+                const flameLength = 20 + Math.random() * 10;
+                const flameGradient = ctx.createLinearGradient(0, rocketHeight / 2, 0, rocketHeight / 2 + flameLength);
+                flameGradient.addColorStop(0, 'rgba(255, 255, 0, 0.8)');
+                flameGradient.addColorStop(0.5, 'rgba(255, 100, 0, 0.6)');
+                flameGradient.addColorStop(1, 'rgba(255, 0, 0, 0.2)');
+                ctx.fillStyle = flameGradient;
+                ctx.beginPath();
+                ctx.moveTo(-rocketWidth / 2, rocketHeight / 2);
+                ctx.lineTo(-rocketWidth / 3, rocketHeight / 2 + flameLength);
+                ctx.lineTo(0, rocketHeight / 2 + flameLength + 5);
+                ctx.lineTo(rocketWidth / 3, rocketHeight / 2 + flameLength);
+                ctx.lineTo(rocketWidth / 2, rocketHeight / 2);
+                ctx.fill();
+            }
+            
+            ctx.restore();
+            
+            // Draw direction indicators
+            const indicatorLength = 50;
+            ctx.strokeStyle = '#0f0';
+            ctx.lineWidth = 2;
+            
+            // To Earth
+            const earthAngle = Math.atan2(-rocket.y, -rocket.x);
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate(earthAngle + Math.PI / 2 - rocket.angle);
+            ctx.beginPath();
+            ctx.moveTo(0, -40);
+            ctx.lineTo(-5, -35);
+            ctx.moveTo(0, -40);
+            ctx.lineTo(5, -35);
+            ctx.moveTo(0, -40);
+            ctx.lineTo(0, -30);
+            ctx.stroke();
+            ctx.fillStyle = '#0f0';
+            ctx.font = '10px monospace';
+            ctx.fillText('E', -3, -45);
+            ctx.restore();
+            
+            // To Moon
+            const moonAngle = Math.atan2(moon.y - rocket.y, moon.x - rocket.x);
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate(moonAngle + Math.PI / 2 - rocket.angle);
+            ctx.beginPath();
+            ctx.moveTo(0, -40);
+            ctx.lineTo(-5, -35);
+            ctx.moveTo(0, -40);
+            ctx.lineTo(5, -35);
+            ctx.moveTo(0, -40);
+            ctx.lineTo(0, -30);
+            ctx.stroke();
+            ctx.fillStyle = '#0f0';
+            ctx.font = '10px monospace';
+            ctx.fillText('M', -3, -45);
+            ctx.restore();
+        }
+        
+        let lastTime = 0;
+        function gameLoop(currentTime) {
+            const dt = Math.min((currentTime - lastTime) / 1000, 0.1) || 0.016;
+            lastTime = currentTime;
+            
+            update(dt);
+            draw();
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,1692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SI Unit Visualizer</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: #f5f7fa;
+            padding: 20px;
+            color: #2d3748;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #1a202c;
+        }
+
+        .help-button {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #3182ce;
+            color: white;
+            border: none;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .help-button:hover {
+            background: #2c5282;
+            transform: scale(1.1);
+        }
+
+        .help-dialog {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-width: 600px;
+            z-index: 1000;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .help-dialog.show {
+            display: block;
+        }
+
+        .help-dialog h2 {
+            margin-bottom: 20px;
+            color: #1a202c;
+        }
+
+        .help-dialog h3 {
+            margin-top: 20px;
+            margin-bottom: 10px;
+            color: #2d3748;
+        }
+
+        .help-dialog p, .help-dialog li {
+            line-height: 1.6;
+            color: #4a5568;
+            margin-bottom: 10px;
+        }
+
+        .help-dialog ul {
+            margin-left: 20px;
+        }
+
+        .close-help {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #718096;
+        }
+
+        .close-help:hover {
+            color: #2d3748;
+        }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+
+        .overlay.show {
+            display: block;
+        }
+
+        .playground {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .playground h3 {
+            margin-bottom: 15px;
+            color: #2d3748;
+        }
+
+        .unit-palette {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .canvas {
+            min-height: 500px;
+            background: #f8fafc;
+            border: 2px dashed #cbd5e0;
+            border-radius: 8px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .canvas.drag-over {
+            background: #e6fffa;
+            border-color: #38a169;
+        }
+
+        .canvas.placing-mode {
+            cursor: crosshair;
+        }
+
+        .unit-count {
+            display: inline-block;
+            margin-left: 20px;
+            padding: 6px 12px;
+            background: #edf2f7;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #4a5568;
+        }
+
+        .unit-count.max {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .unit-block {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+            margin: 2px;
+            position: relative;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+            cursor: move;
+            user-select: none;
+        }
+
+        .unit-block:hover {
+            transform: scale(1.1);
+        }
+
+        .unit-block.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+
+        .unit-block.canceling {
+            animation: cancelOut 0.6s ease-out forwards;
+        }
+
+        @keyframes cancelOut {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.3) rotate(180deg);
+                opacity: 0.8;
+                background-color: #e53e3e !important;
+            }
+            100% {
+                transform: scale(0) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        .unit-block.one {
+            background-color: #718096;
+            font-size: 14px;
+        }
+
+        /* Unit colors */
+        .kg { background-color: #e53e3e; }
+        .m { background-color: #3182ce; }
+        .s { background-color: #38a169; }
+        .A { background-color: #d69e2e; }
+        .K { background-color: #319795; }
+        .mol { background-color: #805ad5; }
+        .cd { background-color: #ed8936; }
+
+        /* Lighter shades for underlapping units */
+        .unit-block.kg.underlap { background-color: #fc8181; }
+        .unit-block.m.underlap { background-color: #63b3ed; }
+        .unit-block.s.underlap { background-color: #68d391; }
+        .unit-block.A.underlap { background-color: #f6ad55; }
+        .unit-block.K.underlap { background-color: #4fd1c5; }
+        .unit-block.mol.underlap { background-color: #b794f4; }
+        .unit-block.cd.underlap { background-color: #fbd38d; }
+
+        .compound-unit {
+            position: absolute;
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            background: white;
+            border-radius: 8px;
+            padding: 15px 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            cursor: move;
+            transition: all 0.2s;
+        }
+
+        .compound-unit:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .compound-unit.selected {
+            box-shadow: 0 0 0 3px #3182ce;
+        }
+
+        .compound-unit.dragging {
+            opacity: 0.8;
+            cursor: grabbing;
+            z-index: 1000;
+        }
+
+        .compound-unit.invalid-position {
+            box-shadow: 0 0 0 3px #e53e3e;
+        }
+
+        .unit-visual {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .numerator {
+            display: flex;
+            align-items: flex-start;
+            gap: 4px;
+            min-height: 36px;
+            position: relative;
+        }
+
+        .denominator {
+            display: flex;
+            align-items: flex-start;
+            gap: 4px;
+            padding-top: 6px;
+            border-top: 2px solid #4a5568;
+            min-width: 100%;
+            min-height: 36px;
+            position: relative;
+        }
+
+        .unit-slot {
+            position: relative;
+            width: 36px;
+            min-height: 36px;
+            margin: 0 2px;
+        }
+
+        .unit-slot .unit-block {
+            position: absolute;
+            margin: 0;
+        }
+
+        .drop-zone {
+            position: absolute;
+            border: 2px dashed transparent;
+            border-radius: 4px;
+            pointer-events: none;
+            transition: all 0.2s;
+        }
+
+        .drop-zone.active {
+            border-color: #38a169;
+            background: rgba(56, 161, 105, 0.1);
+        }
+
+        .drop-zone.multiply {
+            background: rgba(49, 130, 206, 0.1);
+            border-color: #3182ce;
+        }
+
+        .drop-zone.divide {
+            background: rgba(229, 62, 62, 0.1);
+            border-color: #e53e3e;
+        }
+
+        .drop-zone.exponent {
+            background: rgba(128, 90, 213, 0.1);
+            border-color: #805ad5;
+        }
+
+        .drop-zone.new-unit {
+            position: absolute;
+            width: 120px;
+            height: 80px;
+            background: rgba(56, 161, 105, 0.2);
+            border: 2px dashed #38a169;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #38a169;
+            font-weight: 600;
+        }
+
+        .formula-container {
+            text-align: center;
+            position: relative;
+        }
+
+        .formula {
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            color: #2d3748;
+            font-weight: 600;
+        }
+
+        .unit-name {
+            font-size: 14px;
+            color: #3182ce;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: #1a202c;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.5;
+            max-width: 300px;
+            z-index: 1001;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .tooltip.show {
+            opacity: 1;
+        }
+
+        .tooltip::before {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 4px solid transparent;
+            border-top-color: #1a202c;
+        }
+
+        .tooltip-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .tooltip-content {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .known-units {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .known-units h3 {
+            margin-bottom: 15px;
+            color: #2d3748;
+        }
+
+        .units-list {
+            max-height: 300px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        .unit-category {
+            margin-bottom: 20px;
+        }
+
+        .unit-category h4 {
+            color: #4a5568;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .unit-items {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+        }
+
+        .unit-item {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .unit-item:hover {
+            background: #edf2f7;
+            border-color: #cbd5e0;
+            transform: translateY(-1px);
+        }
+
+        .unit-item-symbol {
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 16px;
+        }
+
+        .unit-item-name {
+            font-size: 12px;
+            color: #718096;
+            margin-top: 2px;
+        }
+
+        .place-preview {
+            position: absolute;
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        .instructions {
+            color: #718096;
+            font-size: 14px;
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+
+        .clear-button {
+            background: #e53e3e;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-left: 10px;
+            transition: background 0.2s;
+        }
+
+        .clear-button:hover {
+            background: #c53030;
+        }
+
+        .legend {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .legend h3 {
+            margin-bottom: 15px;
+            color: #2d3748;
+        }
+
+        .legend-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-block {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        .legend-text {
+            font-size: 14px;
+            color: #4a5568;
+        }
+
+        .keyboard-hint {
+            font-size: 12px;
+            color: #a0aec0;
+            margin-top: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <button class="help-button" onclick="toggleHelp()">?</button>
+        <h1>SI Unit Visualizer</h1>
+        
+        <div class="overlay" id="overlay" onclick="toggleHelp()"></div>
+        <div class="help-dialog" id="help-dialog">
+            <button class="close-help" onclick="toggleHelp()">×</button>
+            <h2>SI Unit Visualizer Help</h2>
+            
+            <h3>Purpose</h3>
+            <p>This interactive tool helps you understand how SI units combine to form compound units like Newton (kg·m·s⁻²) or Joule (kg·m²·s⁻²).</p>
+            
+            <h3>Mouse/Touch Controls</h3>
+            <ul>
+                <li><strong>Create new compound:</strong> Drag any unit to empty canvas space</li>
+                <li><strong>Select compound:</strong> Click to select (blue border)</li>
+                <li><strong>Move compound:</strong> Drag the compound unit itself</li>
+                <li><strong>Add to compound:</strong> Drag units into a compound</li>
+                <li><strong>Side-by-side drop:</strong> Multiply units (blue zone)</li>
+                <li><strong>Below line drop:</strong> Divide by unit (red zone)</li>
+                <li><strong>Overlap same unit:</strong> Create exponents (purple zone)</li>
+                <li><strong>Remove unit:</strong> Drag unit out of compound</li>
+                <li><strong>Max 10 compounds:</strong> Limited for performance</li>
+            </ul>
+            
+            <h3>Keyboard Shortcuts</h3>
+            <ul>
+                <li><strong>Number keys (1-8):</strong> Add base units to selected compound's numerator</li>
+                <li><strong>Shift + Number:</strong> Add to denominator</li>
+                <li><strong>Letter keys:</strong>
+                    <ul>
+                        <li>g → kg (mass)</li>
+                        <li>m → m (length)</li>
+                        <li>s → s (time)</li>
+                        <li>a → A (current)</li>
+                        <li>k → K (temperature)</li>
+                        <li>o → mol (amount)</li>
+                        <li>c → cd (luminous intensity)</li>
+                    </ul>
+                </li>
+                <li><strong>Shift + Letter:</strong> Add to denominator</li>
+                <li><strong>Delete/Backspace:</strong> Delete selected compound</li>
+            </ul>
+            
+            <h3>Features</h3>
+            <ul>
+                <li>Multiple compound units on canvas (max 10)</li>
+                <li>Visual stacking shows exponents</li>
+                <li>Auto-cancellation when same unit appears above and below</li>
+                <li>Real-time formula updates</li>
+                <li>Drag units between compounds</li>
+                <li>Collision detection prevents overlapping</li>
+                <li>Known units are automatically recognized</li>
+                <li>Hover over formulas for detailed information</li>
+            </ul>
+        </div>
+        
+        <div class="playground">
+            <h3>Unit Playground</h3>
+            <div class="instructions">
+                • Press ? for help and keyboard shortcuts
+            </div>
+            <div class="unit-palette">
+                <div class="unit-block one" draggable="true" data-unit="1" data-source="palette">1</div>
+                <div class="unit-block kg" draggable="true" data-unit="kg" data-source="palette">kg</div>
+                <div class="unit-block m" draggable="true" data-unit="m" data-source="palette">m</div>
+                <div class="unit-block s" draggable="true" data-unit="s" data-source="palette">s</div>
+                <div class="unit-block A" draggable="true" data-unit="A" data-source="palette">A</div>
+                <div class="unit-block K" draggable="true" data-unit="K" data-source="palette">K</div>
+                <div class="unit-block mol" draggable="true" data-unit="mol" data-source="palette">mol</div>
+                <div class="unit-block cd" draggable="true" data-unit="cd" data-source="palette">cd</div>
+                <button class="clear-button" onclick="clearAllCompounds()">Clear All</button>
+                <span class="unit-count" id="unit-count">0 / 10 compounds</span>
+            </div>
+            <div class="canvas" id="canvas"></div>
+            <div class="keyboard-hint">Click a compound to select it, then use keyboard shortcuts</div>
+        </div>
+
+        <div class="known-units">
+            <h3>Common Units</h3>
+            <div class="units-list" id="units-list"></div>
+        </div>
+
+        <div class="legend">
+            <h3>SI Base Units</h3>
+            <div class="legend-items">
+                <div class="legend-item">
+                    <div class="legend-block one"></div>
+                    <span class="legend-text">1 - unity (dimensionless)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-block kg"></div>
+                    <span class="legend-text">kg - kilogram (mass)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-block m"></div>
+                    <span class="legend-text">m - metre (length)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-block s"></div>
+                    <span class="legend-text">s - second (time)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-block A"></div>
+                    <span class="legend-text">A - ampere (current)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-block K"></div>
+                    <span class="legend-text">K - kelvin (temperature)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-block mol"></div>
+                    <span class="legend-text">mol - mole (amount)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-block cd"></div>
+                    <span class="legend-text">cd - candela (luminous intensity)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Known units database
+        const knownUnits = [
+            // === BASE UNITS ===
+        
+            
+        ];
+
+        // Global state
+        let compoundUnits = {};
+        let activeUnitId = null;
+        let nextUnitId = 1;
+        const MAX_UNITS = 10;
+        
+        // Drag state
+        let draggedElement = null;
+        let draggedUnit = null;
+        let draggedFrom = null;
+        let draggedCompoundId = null;
+        let dropZone = null;
+        let isDraggingCompound = false;
+        let compoundDragOffset = { x: 0, y: 0 };
+        
+        // Placement mode
+        let placementMode = false;
+        let placementUnit = null;
+        let placePreview = null;
+        
+        // Tooltip state
+        let tooltipTimeout = null;
+        let currentTooltip = null;
+        
+        // Unit mappings
+        const numberToUnit = ['1', 'kg', 'm', 's', 'A', 'K', 'mol', 'cd'];
+        const letterToUnit = {
+            'g': 'kg',
+            'm': 'm',
+            's': 's',
+            'a': 'A',
+            'k': 'K',
+            'o': 'mol',
+            'c': 'cd'
+        };
+
+        // Get DOM elements
+        const canvas = document.getElementById('canvas');
+
+        // Initialize
+        window.addEventListener('load', () => {
+            renderKnownUnits();
+            setTimeout(() => {
+                createCompoundUnit(100, 50);
+            }, 100);
+        });
+
+        // Setup event listeners
+        canvas.addEventListener('dragover', handleCanvasDragOver);
+        canvas.addEventListener('drop', handleCanvasDrop);
+        canvas.addEventListener('dragleave', handleCanvasDragLeave);
+        canvas.addEventListener('click', handleCanvasClick);
+        canvas.addEventListener('mousemove', handleCanvasMouseMove);
+
+        // Keyboard event listener
+        document.addEventListener('keydown', handleKeyPress);
+
+        // Setup palette units
+        document.querySelectorAll('.unit-palette .unit-block').forEach(unit => {
+            unit.addEventListener('dragstart', handleUnitDragStart);
+            unit.addEventListener('dragend', handleUnitDragEnd);
+        });
+
+        // Render known units menu
+        function renderKnownUnits() {
+            const container = document.getElementById('units-list');
+            const categories = {};
+            
+            // Group by category
+            knownUnits.forEach(unit => {
+                if (!categories[unit.category]) {
+                    categories[unit.category] = [];
+                }
+                categories[unit.category].push(unit);
+            });
+            
+            // Render categories
+            Object.entries(categories).forEach(([category, units]) => {
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'unit-category';
+                
+                const title = document.createElement('h4');
+                title.textContent = category.charAt(0).toUpperCase() + category.slice(1);
+                categoryDiv.appendChild(title);
+                
+                const itemsDiv = document.createElement('div');
+                itemsDiv.className = 'unit-items';
+                
+                units.forEach(unit => {
+                    const item = document.createElement('div');
+                    item.className = 'unit-item';
+                    item.innerHTML = `
+                        <div class="unit-item-symbol">${unit.symbol}</div>
+                        <div class="unit-item-name">${unit.name}</div>
+                    `;
+                    item.addEventListener('click', () => startPlacement(unit));
+                    itemsDiv.appendChild(item);
+                });
+                
+                categoryDiv.appendChild(itemsDiv);
+                container.appendChild(categoryDiv);
+            });
+        }
+
+        // Start placement mode
+        function startPlacement(unit) {
+            if (Object.keys(compoundUnits).length >= MAX_UNITS) {
+                updateUnitCount();
+                return;
+            }
+            
+            placementMode = true;
+            placementUnit = unit;
+            canvas.classList.add('placing-mode');
+            
+            // Create preview
+            placePreview = document.createElement('div');
+            placePreview.className = 'compound-unit place-preview';
+            placePreview.innerHTML = `
+                <div class="unit-visual">
+                    <div class="numerator"></div>
+                    <div class="denominator"></div>
+                </div>
+                <div class="formula-container">
+                    <div class="formula">${unit.expression}</div>
+                    <div class="unit-name">${unit.name} (${unit.symbol})</div>
+                </div>
+            `;
+            canvas.appendChild(placePreview);
+        }
+
+        // Handle canvas mouse move
+        function handleCanvasMouseMove(e) {
+            if (placementMode && placePreview) {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left - 60;
+                const y = e.clientY - rect.top - 40;
+                
+                placePreview.style.left = x + 'px';
+                placePreview.style.top = y + 'px';
+                
+                // Check collision
+                const collision = checkPlacementCollision(x, y);
+                placePreview.classList.toggle('invalid-position', collision);
+            }
+        }
+
+        // Check placement collision
+        function checkPlacementCollision(x, y) {
+            const previewRect = {
+                left: x,
+                top: y,
+                right: x + 120,
+                bottom: y + 80
+            };
+            
+            for (const id of Object.keys(compoundUnits)) {
+                const element = document.getElementById(id);
+                const rect = {
+                    left: compoundUnits[id].position.x,
+                    top: compoundUnits[id].position.y,
+                    right: compoundUnits[id].position.x + element.offsetWidth,
+                    bottom: compoundUnits[id].position.y + element.offsetHeight
+                };
+                
+                if (!(previewRect.left > rect.right || 
+                      previewRect.right < rect.left || 
+                      previewRect.top > rect.bottom || 
+                      previewRect.bottom < rect.top)) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
+        // Create compound from known unit
+        function createCompoundFromKnown(unit, x, y) {
+            const id = `unit-${nextUnitId++}`;
+            compoundUnits[id] = {
+                numerator: {},
+                denominator: {},
+                position: { x, y },
+                knownUnit: unit
+            };
+            
+            // Parse dimension vector - only process non-zero values
+            Object.entries(unit.dimension_vector).forEach(([base, power]) => {
+                if (power > 0) {
+                    compoundUnits[id].numerator[base] = power;
+                } else if (power < 0) {
+                    compoundUnits[id].denominator[base] = -power;
+                }
+            });
+            
+            // Handle special case for dimensionless units
+            if (Object.keys(compoundUnits[id].numerator).length === 0 && 
+                Object.keys(compoundUnits[id].denominator).length === 0) {
+                // This is a truly dimensionless unit, add 1 to numerator
+                compoundUnits[id].numerator['1'] = 1;
+            }
+            
+            const compound = createCompoundElement(id);
+            canvas.appendChild(compound);
+            
+            // Update display after element is added to DOM
+            setTimeout(() => {
+                updateCompoundDisplay(id);
+                selectCompound(id);
+            }, 0);
+            
+            updateUnitCount();
+            
+            return id;
+        }
+
+        // Create a new compound unit
+        function createCompoundUnit(x, y, initialUnit = null) {
+            if (Object.keys(compoundUnits).length >= MAX_UNITS) {
+                updateUnitCount();
+                return null;
+            }
+            
+            const id = `unit-${nextUnitId++}`;
+            compoundUnits[id] = {
+                numerator: {},
+                denominator: {},
+                position: { x, y },
+                knownUnit: null
+            };
+            
+            if (initialUnit && initialUnit !== '1') {
+                compoundUnits[id].numerator[initialUnit] = 1;
+            }
+            
+            const compound = createCompoundElement(id);
+            canvas.appendChild(compound);
+            
+            // Update display after element is added to DOM
+            setTimeout(() => {
+                updateCompoundDisplay(id);
+                selectCompound(id);
+            }, 0);
+            
+            updateUnitCount();
+            
+            return id;
+        }
+
+        // Create compound DOM element
+        function createCompoundElement(id) {
+            const compound = document.createElement('div');
+            compound.className = 'compound-unit';
+            compound.id = id;
+            compound.style.left = compoundUnits[id].position.x + 'px';
+            compound.style.top = compoundUnits[id].position.y + 'px';
+            
+            compound.innerHTML = `
+                <div class="unit-visual">
+                    <div class="numerator" id="numerator-${id}"></div>
+                    <div class="denominator" id="denominator-${id}"></div>
+                </div>
+                <div class="formula-container" id="formula-container-${id}">
+                    <div class="formula" id="formula-${id}">1</div>
+                </div>
+            `;
+            
+            // Make compound draggable
+            compound.draggable = true;
+            compound.addEventListener('dragstart', handleCompoundDragStart);
+            compound.addEventListener('dragend', handleCompoundDragEnd);
+            compound.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectCompound(id);
+            });
+            
+            // Setup drop zones for this compound
+            compound.addEventListener('dragover', (e) => handleCompoundDragOver(e, id));
+            compound.addEventListener('drop', (e) => handleCompoundDrop(e, id));
+            
+            return compound;
+        }
+
+        // Select a compound unit
+        function selectCompound(id) {
+            // Deselect all
+            document.querySelectorAll('.compound-unit').forEach(c => {
+                c.classList.remove('selected');
+            });
+            
+            // Select new
+            activeUnitId = id;
+            const compound = document.getElementById(id);
+            if (compound) {
+                compound.classList.add('selected');
+            }
+        }
+
+        // Handle keyboard input
+        function handleKeyPress(e) {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            
+            // Escape placement mode
+            if (e.key === 'Escape' && placementMode) {
+                cancelPlacement();
+                return;
+            }
+            
+            // Delete key
+            if ((e.key === 'Delete' || e.key === 'Backspace') && activeUnitId) {
+                e.preventDefault();
+                deleteCompound(activeUnitId);
+                return;
+            }
+            
+            // Help
+            if (e.key === '?') {
+                toggleHelp();
+                return;
+            }
+            
+            // Unit shortcuts
+            if (!activeUnitId) return;
+            
+            let unit = null;
+            let toDenominator = e.shiftKey;
+            
+            if (e.key >= '1' && e.key <= '8') {
+                const index = parseInt(e.key) - 1;
+                if (index < numberToUnit.length) {
+                    unit = numberToUnit[index];
+                }
+            } else if (letterToUnit[e.key.toLowerCase()]) {
+                unit = letterToUnit[e.key.toLowerCase()];
+            }
+            
+            if (unit) {
+                e.preventDefault();
+                const compound = compoundUnits[activeUnitId];
+                if (toDenominator) {
+                    if (!compound.denominator[unit]) {
+                        compound.denominator[unit] = 0;
+                    }
+                    compound.denominator[unit]++;
+                } else {
+                    if (!compound.numerator[unit]) {
+                        compound.numerator[unit] = 0;
+                    }
+                    compound.numerator[unit]++;
+                }
+                updateCompoundDisplay(activeUnitId);
+                checkForCancellation(activeUnitId);
+            }
+        }
+
+        // Cancel placement
+        function cancelPlacement() {
+            placementMode = false;
+            placementUnit = null;
+            canvas.classList.remove('placing-mode');
+            if (placePreview) {
+                placePreview.remove();
+                placePreview = null;
+            }
+        }
+
+        // Handle canvas click
+        function handleCanvasClick(e) {
+            if (e.target === canvas) {
+                if (placementMode && placePreview) {
+                    const rect = canvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left - 60;
+                    const y = e.clientY - rect.top - 40;
+                    
+                    if (!checkPlacementCollision(x, y)) {
+                        createCompoundFromKnown(placementUnit, x, y);
+                        cancelPlacement();
+                    }
+                } else {
+                    selectCompound(null);
+                }
+            }
+        }
+
+        // Check if compound matches known unit
+        function checkKnownUnit(compoundId) {
+            const compound = compoundUnits[compoundId];
+            
+            // Build dimension vector
+            const dimVector = { kg: 0, m: 0, s: 0, A: 0, K: 0, mol: 0, cd: 0 };
+            
+            Object.entries(compound.numerator).forEach(([unit, count]) => {
+                if (unit !== '1' && dimVector[unit] !== undefined) {
+                    dimVector[unit] += count;
+                }
+            });
+            
+            Object.entries(compound.denominator).forEach(([unit, count]) => {
+                if (dimVector[unit] !== undefined) {
+                    dimVector[unit] -= count;
+                }
+            });
+            
+            // Find matching unit
+            const match = knownUnits.find(known => {
+                return Object.entries(known.dimension_vector).every(([unit, power]) => {
+                    return dimVector[unit] === power;
+                });
+            });
+            
+            compound.knownUnit = match || null;
+            return match;
+        }
+
+        // Update compound display
+        function updateCompoundDisplay(compoundId) {
+            const compound = compoundUnits[compoundId];
+            if (!compound) return;
+            
+            const numerator = document.getElementById(`numerator-${compoundId}`);
+            const denominator = document.getElementById(`denominator-${compoundId}`);
+            
+            if (!numerator || !denominator) return;
+            
+            numerator.innerHTML = '';
+            denominator.innerHTML = '';
+            
+            if (Object.keys(compound.numerator).length === 0) {
+                const oneSlot = createUnitSlot('1', 1);
+                numerator.appendChild(oneSlot);
+            } else {
+                Object.entries(compound.numerator).forEach(([unit, count]) => {
+                    const slot = createUnitSlot(unit, count);
+                    numerator.appendChild(slot);
+                });
+            }
+            
+            Object.entries(compound.denominator).forEach(([unit, count]) => {
+                const slot = createUnitSlot(unit, count);
+                denominator.appendChild(slot);
+            });
+            
+            // Check for known unit
+            const knownUnit = checkKnownUnit(compoundId);
+            updateFormula(compoundId);
+            
+            const hasExponents = Object.values(compound.numerator).some(count => count > 1);
+            numerator.style.minHeight = hasExponents ? '46px' : '36px';
+            
+            // Setup tooltip
+            setupTooltip(compoundId);
+        }
+
+        // Setup tooltip
+        function setupTooltip(compoundId) {
+            const container = document.getElementById(`formula-container-${compoundId}`);
+            const compound = compoundUnits[compoundId];
+            
+            container.addEventListener('mouseenter', () => {
+                if (compound.knownUnit) {
+                    tooltipTimeout = setTimeout(() => {
+                        showTooltip(container, compound.knownUnit);
+                    }, 3000);
+                }
+            });
+            
+            container.addEventListener('mouseleave', () => {
+                if (tooltipTimeout) {
+                    clearTimeout(tooltipTimeout);
+                    tooltipTimeout = null;
+                }
+                hideTooltip();
+            });
+        }
+
+        // Show tooltip
+        function showTooltip(element, unit) {
+            hideTooltip();
+            
+            const tooltip = document.createElement('div');
+            tooltip.className = 'tooltip';
+            tooltip.innerHTML = `
+                <div class="tooltip-title">${unit.name} (${unit.symbol})</div>
+                <div class="tooltip-content">
+                    <strong>Description:</strong> ${unit.brief_description}<br>
+                    <strong>Intuitive:</strong> ${unit.intuitive_description}<br>
+                    <strong>Field:</strong> ${unit.field_of_use}<br>
+                    <strong>Common symbols:</strong> ${unit.pronumerals.join(', ')}
+                </div>
+            `;
+            
+            document.body.appendChild(tooltip);
+            
+            const rect = element.getBoundingClientRect();
+            tooltip.style.left = rect.left + rect.width / 2 - tooltip.offsetWidth / 2 + 'px';
+            tooltip.style.top = rect.top - tooltip.offsetHeight - 10 + 'px';
+            
+            setTimeout(() => tooltip.classList.add('show'), 10);
+            currentTooltip = tooltip;
+        }
+
+        // Hide tooltip
+        function hideTooltip() {
+            if (currentTooltip) {
+                currentTooltip.remove();
+                currentTooltip = null;
+            }
+        }
+
+        // Update formula
+        function updateFormula(compoundId) {
+            const compound = compoundUnits[compoundId];
+            if (!compound) return;
+            
+            const formula = document.getElementById(`formula-${compoundId}`);
+            const container = document.getElementById(`formula-container-${compoundId}`);
+            
+            if (!formula || !container) return;
+            
+            let numeratorStr = '';
+            let denominatorStr = '';
+            
+            if (Object.keys(compound.numerator).length === 0) {
+                numeratorStr = '1';
+            } else {
+                Object.entries(compound.numerator).forEach(([unit, count]) => {
+                    if (numeratorStr) numeratorStr += '·';
+                    numeratorStr += unit;
+                    if (count > 1) {
+                        numeratorStr += getSuperscript(count);
+                    }
+                });
+            }
+            
+            Object.entries(compound.denominator).forEach(([unit, count]) => {
+                if (denominatorStr) denominatorStr += '·';
+                denominatorStr += unit;
+                if (count > 1) {
+                    denominatorStr += getSuperscript(count);
+                }
+            });
+            
+            let formulaText = numeratorStr;
+            if (denominatorStr) {
+                const denomParts = denominatorStr.split('·').map(part => {
+                    const match = part.match(/^(\w+)(.*)/);
+                    const unit = match[1];
+                    const exp = match[2] || '¹';
+                    return unit + '⁻' + exp;
+                });
+                formulaText = numeratorStr + '·' + denomParts.join('·');
+            }
+            
+            formula.textContent = formulaText;
+            
+            // Add unit name if known
+            if (compound.knownUnit) {
+                let nameDiv = container.querySelector('.unit-name');
+                if (!nameDiv) {
+                    nameDiv = document.createElement('div');
+                    nameDiv.className = 'unit-name';
+                    container.appendChild(nameDiv);
+                }
+                nameDiv.textContent = `${compound.knownUnit.name} (${compound.knownUnit.symbol})`;
+            } else {
+                const nameDiv = container.querySelector('.unit-name');
+                if (nameDiv) nameDiv.remove();
+            }
+        }
+
+        // Create unit slot
+        function createUnitSlot(unit, count) {
+            const slot = document.createElement('div');
+            slot.className = 'unit-slot';
+            
+            for (let i = 0; i < count; i++) {
+                const block = document.createElement('div');
+                block.className = `unit-block ${unit} ${i > 0 ? 'underlap' : ''}`;
+                block.textContent = unit;
+                block.style.top = (i * 6) + 'px';
+                block.style.left = (i * 6) + 'px';
+                block.style.zIndex = count - i;
+                block.dataset.unit = unit;
+                
+                if (i === 0) {
+                    block.draggable = true;
+                    block.addEventListener('dragstart', handleUnitDragStart);
+                    block.addEventListener('dragend', handleUnitDragEnd);
+                } else {
+                    block.draggable = false;
+                    block.style.pointerEvents = 'none';
+                }
+                
+                slot.appendChild(block);
+            }
+            
+            return slot;
+        }
+
+        // Delete compound
+        function deleteCompound(id) {
+            const compound = document.getElementById(id);
+            if (compound) {
+                compound.remove();
+            }
+            delete compoundUnits[id];
+            
+            if (activeUnitId === id) {
+                activeUnitId = null;
+            }
+            
+            updateUnitCount();
+        }
+
+        // Clear all compounds
+        function clearAllCompounds() {
+            Object.keys(compoundUnits).forEach(id => {
+                const compound = document.getElementById(id);
+                if (compound) compound.remove();
+            });
+            compoundUnits = {};
+            activeUnitId = null;
+            nextUnitId = 1;
+            updateUnitCount();
+        }
+
+        // Update unit count display
+        function updateUnitCount() {
+            const count = Object.keys(compoundUnits).length;
+            const counter = document.getElementById('unit-count');
+            counter.textContent = `${count} / ${MAX_UNITS} compounds`;
+            counter.className = count >= MAX_UNITS ? 'unit-count max' : 'unit-count';
+        }
+
+        // Handle unit drag start
+        function handleUnitDragStart(e) {
+            draggedElement = e.target;
+            draggedUnit = e.target.dataset.unit;
+            isDraggingCompound = false;
+            
+            const dragImage = e.target.cloneNode(true);
+            dragImage.style.position = 'absolute';
+            dragImage.style.top = '-1000px';
+            document.body.appendChild(dragImage);
+            e.dataTransfer.setDragImage(dragImage, 16, 16);
+            setTimeout(() => document.body.removeChild(dragImage), 0);
+            
+            if (e.target.dataset.source === 'palette') {
+                draggedFrom = 'palette';
+                draggedCompoundId = null;
+            } else {
+                // Find which compound this unit is from
+                const compound = e.target.closest('.compound-unit');
+                draggedCompoundId = compound.id;
+                
+                if (e.target.closest('.numerator')) {
+                    draggedFrom = 'numerator';
+                    compoundUnits[draggedCompoundId].numerator[draggedUnit]--;
+                    if (compoundUnits[draggedCompoundId].numerator[draggedUnit] <= 0) {
+                        delete compoundUnits[draggedCompoundId].numerator[draggedUnit];
+                    }
+                } else if (e.target.closest('.denominator')) {
+                    draggedFrom = 'denominator';
+                    compoundUnits[draggedCompoundId].denominator[draggedUnit]--;
+                    if (compoundUnits[draggedCompoundId].denominator[draggedUnit] <= 0) {
+                        delete compoundUnits[draggedCompoundId].denominator[draggedUnit];
+                    }
+                }
+                setTimeout(() => updateCompoundDisplay(draggedCompoundId), 0);
+            }
+            
+            e.target.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', draggedUnit);
+        }
+
+        // Handle unit drag end
+        function handleUnitDragEnd(e) {
+            e.target.classList.remove('dragging');
+            if (dropZone) {
+                dropZone.remove();
+                dropZone = null;
+            }
+            draggedElement = null;
+            draggedUnit = null;
+            draggedFrom = null;
+            draggedCompoundId = null;
+        }
+
+        // Handle compound drag start
+        function handleCompoundDragStart(e) {
+            if (e.target.classList.contains('unit-block')) return;
+            
+            isDraggingCompound = true;
+            draggedElement = e.currentTarget;
+            draggedCompoundId = e.currentTarget.id;
+            
+            const rect = e.currentTarget.getBoundingClientRect();
+            compoundDragOffset.x = e.clientX - rect.left;
+            compoundDragOffset.y = e.clientY - rect.top;
+            
+            e.currentTarget.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', 'compound');
+        }
+
+        // Handle compound drag end
+        function handleCompoundDragEnd(e) {
+            e.currentTarget.classList.remove('dragging');
+            e.currentTarget.classList.remove('invalid-position');
+            isDraggingCompound = false;
+            draggedElement = null;
+            draggedCompoundId = null;
+        }
+
+        // Handle canvas drag over
+        function handleCanvasDragOver(e) {
+            e.preventDefault();
+            
+            if (isDraggingCompound) {
+                // Check for collisions
+                const canvasRect = canvas.getBoundingClientRect();
+                const x = e.clientX - canvasRect.left - compoundDragOffset.x;
+                const y = e.clientY - canvasRect.top - compoundDragOffset.y;
+                
+                const collision = checkCollision(draggedCompoundId, x, y);
+                draggedElement.classList.toggle('invalid-position', collision);
+            } else if (draggedUnit) {
+                // Check if dropping on empty space
+                const compound = e.target.closest('.compound-unit');
+                if (!compound && Object.keys(compoundUnits).length < MAX_UNITS) {
+                    // Show new unit drop zone
+                    if (dropZone) dropZone.remove();
+                    
+                    const canvasRect = canvas.getBoundingClientRect();
+                    dropZone = document.createElement('div');
+                    dropZone.className = 'drop-zone new-unit';
+                    dropZone.style.left = (e.clientX - canvasRect.left - 60) + 'px';
+                    dropZone.style.top = (e.clientY - canvasRect.top - 40) + 'px';
+                    dropZone.textContent = 'New compound';
+                    canvas.appendChild(dropZone);
+                }
+            }
+        }
+
+        // Handle canvas drop
+        function handleCanvasDrop(e) {
+            e.preventDefault();
+            
+            if (isDraggingCompound) {
+                const canvasRect = canvas.getBoundingClientRect();
+                const x = e.clientX - canvasRect.left - compoundDragOffset.x;
+                const y = e.clientY - canvasRect.top - compoundDragOffset.y;
+                
+                if (!checkCollision(draggedCompoundId, x, y)) {
+                    compoundUnits[draggedCompoundId].position = { x, y };
+                    draggedElement.style.left = x + 'px';
+                    draggedElement.style.top = y + 'px';
+                }
+            } else if (draggedUnit && !e.target.closest('.compound-unit')) {
+                // Create new compound
+                const canvasRect = canvas.getBoundingClientRect();
+                const x = e.clientX - canvasRect.left - 60;
+                const y = e.clientY - canvasRect.top - 40;
+                createCompoundUnit(x, y, draggedUnit);
+            }
+            
+            if (dropZone) {
+                dropZone.remove();
+                dropZone = null;
+            }
+        }
+
+        // Handle canvas drag leave
+        function handleCanvasDragLeave(e) {
+            if (e.target === canvas && dropZone) {
+                dropZone.remove();
+                dropZone = null;
+            }
+        }
+
+        // Handle compound drag over
+        function handleCompoundDragOver(e, compoundId) {
+            if (isDraggingCompound || !draggedUnit) return;
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const dropInfo = calculateDropZone(e, compoundId);
+            
+            if (dropZone) {
+                dropZone.remove();
+            }
+            
+            if (dropInfo) {
+                const compound = document.getElementById(compoundId);
+                dropZone = document.createElement('div');
+                dropZone.className = 'drop-zone active ' + dropInfo.type;
+                dropZone.style.left = dropInfo.left + 'px';
+                dropZone.style.top = dropInfo.top + 'px';
+                dropZone.style.width = '40px';
+                dropZone.style.height = '40px';
+                compound.appendChild(dropZone);
+            }
+        }
+
+        // Handle compound drop
+        function handleCompoundDrop(e, compoundId) {
+            if (isDraggingCompound || !draggedUnit) return;
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const dropInfo = calculateDropZone(e, compoundId);
+            
+            if (dropInfo) {
+                const compound = compoundUnits[compoundId];
+                if (dropInfo.location === 'numerator') {
+                    if (!compound.numerator[draggedUnit]) {
+                        compound.numerator[draggedUnit] = 0;
+                    }
+                    compound.numerator[draggedUnit]++;
+                } else if (dropInfo.location === 'denominator') {
+                    if (!compound.denominator[draggedUnit]) {
+                        compound.denominator[draggedUnit] = 0;
+                    }
+                    compound.denominator[draggedUnit]++;
+                }
+                
+                updateCompoundDisplay(compoundId);
+                checkForCancellation(compoundId);
+            }
+            
+            if (dropZone) {
+                dropZone.remove();
+                dropZone = null;
+            }
+        }
+
+        // Calculate drop zone
+        function calculateDropZone(e, compoundId) {
+            const compound = document.getElementById(compoundId);
+            const rect = compound.getBoundingClientRect();
+            const numerator = compound.querySelector('.numerator');
+            const denominator = compound.querySelector('.denominator');
+            const numRect = numerator.getBoundingClientRect();
+            const denomRect = denominator.getBoundingClientRect();
+            
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            let dropInfo = {};
+            
+            if (e.clientY < denomRect.top - 10) {
+                dropInfo.location = 'numerator';
+                
+                const existingUnits = numerator.querySelectorAll('.unit-slot');
+                let foundOverlap = false;
+                
+                existingUnits.forEach(slot => {
+                    const slotRect = slot.getBoundingClientRect();
+                    if (e.clientX >= slotRect.left - 10 && e.clientX <= slotRect.right + 10) {
+                        const topUnit = slot.querySelector('.unit-block:first-child');
+                        if (topUnit && topUnit.dataset.unit === draggedUnit) {
+                            dropInfo.type = 'exponent';
+                            dropInfo.left = slotRect.left - rect.left;
+                            dropInfo.top = slotRect.top - rect.top + 6;
+                            foundOverlap = true;
+                        }
+                    }
+                });
+                
+                if (!foundOverlap) {
+                    dropInfo.type = 'multiply';
+                    dropInfo.left = x - 20;
+                    dropInfo.top = numRect.top - rect.top;
+                }
+            } else {
+                dropInfo.location = 'denominator';
+                
+                const existingUnits = denominator.querySelectorAll('.unit-slot');
+                let foundOverlap = false;
+                
+                existingUnits.forEach(slot => {
+                    const slotRect = slot.getBoundingClientRect();
+                    if (e.clientX >= slotRect.left - 10 && e.clientX <= slotRect.right + 10) {
+                        const topUnit = slot.querySelector('.unit-block:first-child');
+                        if (topUnit && topUnit.dataset.unit === draggedUnit) {
+                            dropInfo.type = 'exponent';
+                            dropInfo.left = slotRect.left - rect.left;
+                            dropInfo.top = slotRect.top - rect.top + 6;
+                            foundOverlap = true;
+                        }
+                    }
+                });
+                
+                if (!foundOverlap) {
+                    dropInfo.type = 'divide';
+                    dropInfo.left = x - 20;
+                    dropInfo.top = denomRect.top - rect.top;
+                }
+            }
+            
+            return dropInfo;
+        }
+
+        // Check collision
+        function checkCollision(compoundId, x, y) {
+            const movingElement = document.getElementById(compoundId);
+            const movingRect = {
+                left: x,
+                top: y,
+                right: x + movingElement.offsetWidth,
+                bottom: y + movingElement.offsetHeight
+            };
+            
+            for (const id of Object.keys(compoundUnits)) {
+                if (id === compoundId) continue;
+                
+                const element = document.getElementById(id);
+                const rect = {
+                    left: compoundUnits[id].position.x,
+                    top: compoundUnits[id].position.y,
+                    right: compoundUnits[id].position.x + element.offsetWidth,
+                    bottom: compoundUnits[id].position.y + element.offsetHeight
+                };
+                
+                if (!(movingRect.left > rect.right || 
+                      movingRect.right < rect.left || 
+                      movingRect.top > rect.bottom || 
+                      movingRect.bottom < rect.top)) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
+        // Check for cancellation
+        function checkForCancellation(compoundId) {
+            const compound = compoundUnits[compoundId];
+            const commonUnits = [];
+            
+            Object.keys(compound.numerator).forEach(unit => {
+                if (compound.denominator[unit]) {
+                    commonUnits.push(unit);
+                }
+            });
+            
+            if (commonUnits.length > 0) {
+                setTimeout(() => {
+                    const compoundElement = document.getElementById(compoundId);
+                    commonUnits.forEach(unit => {
+                        const numBlocks = compoundElement.querySelectorAll(`.numerator .unit-block[data-unit="${unit}"]`);
+                        const denomBlocks = compoundElement.querySelectorAll(`.denominator .unit-block[data-unit="${unit}"]`);
+                        
+                        if (numBlocks.length > 0 && denomBlocks.length > 0) {
+                            numBlocks[0].classList.add('canceling');
+                            denomBlocks[0].classList.add('canceling');
+                            
+                            setTimeout(() => {
+                                compound.numerator[unit]--;
+                                compound.denominator[unit]--;
+                                
+                                if (compound.numerator[unit] <= 0) {
+                                    delete compound.numerator[unit];
+                                }
+                                if (compound.denominator[unit] <= 0) {
+                                    delete compound.denominator[unit];
+                                }
+                                
+                                updateCompoundDisplay(compoundId);
+                            }, 600);
+                        }
+                    });
+                }, 100);
+            }
+        }
+
+        // Get superscript
+        function getSuperscript(n) {
+            const superscripts = {
+                '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵',
+                '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '0': '⁰'
+            };
+            return String(n).split('').map(d => superscripts[d]).join('');
+        }
+
+        // Toggle help
+        function toggleHelp() {
+            const helpDialog = document.getElementById('help-dialog');
+            const overlay = document.getElementById('overlay');
+            
+            helpDialog.classList.toggle('show');
+            overlay.classList.toggle('show');
+        }
+    </script>
+</body>
+</html> 
+           

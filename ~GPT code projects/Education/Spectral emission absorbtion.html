@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hydrogen Atom Standing Wave Simulation</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #000;
+        }
+
+        canvas {
+            display: block;
+            background-color: #111;
+        }
+
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .energy-levels {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .energy-levels button {
+            padding: 5px 10px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            background-color: #333;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .energy-levels button.selected {
+            background-color: #555;
+        }
+
+        .sliders {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .sliders label {
+            margin-right: 10px;
+        }
+
+        #photonInfo {
+            margin-top: 20px;
+            font-size: 14px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <div class="energy-levels">
+            <button data-level="1">n = 1 (Energy: -13.6 eV)</button>
+            <button data-level="2">n = 2 (Energy: -3.4 eV)</button>
+            <button data-level="3">n = 3 (Energy: -1.51 eV)</button>
+            <button data-level="4">n = 4 (Energy: -0.85 eV)</button>
+            <button data-level="5">n = 5 (Energy: -0.54 eV)</button>
+            <button data-level="6">n = 6 (Energy: -0.38 eV)</button>
+        </div>
+        <div class="sliders">
+            <div>
+                <label for="amplitudeSlider">Amplitude: </label>
+                <input type="range" id="amplitudeSlider" min="5" max="25" value="15">
+            </div>
+            <div>
+                <label for="frequencySlider">Frequency: </label>
+                <input type="range" id="frequencySlider" min="10" max="500" value="250">
+            </div>
+        </div>
+        <div id="photonInfo">Photon Energy: N/A eV | Frequency: N/A Hz | Wavelength: N/A nm</div>
+    </div>
+    <canvas id="waveCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('waveCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const shellData = [
+            { n: 1, energy: -13.6, radius: 0.529 },   // Bohr radius in angstroms
+            { n: 2, energy: -3.4, radius: 2.116 },
+            { n: 3, energy: -1.51, radius: 4.761 },
+            { n: 4, energy: -0.85, radius: 8.464 },
+            { n: 5, energy: -0.54, radius: 13.225 },
+            { n: 6, energy: -0.38, radius: 19.044 }
+        ];
+
+        let selectedLevel = 1;
+        let targetLevel = 1;
+        let transitionInProgress = false;
+        let photons = [];
+        let incomingPhoton = null;
+        let spectralLines = [];
+
+        const amplitudeSlider = document.getElementById('amplitudeSlider');
+        const frequencySlider = document.getElementById('frequencySlider');
+        const photonInfo = document.getElementById('photonInfo');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth * 0.8; // Smaller canvas
+            canvas.height = window.innerHeight * 0.8; // Smaller canvas
+        }
+
+        function drawStaticShells() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radii = [
+                canvas.width / 12,
+                canvas.width / 10,
+                canvas.width / 8,
+                canvas.width / 6.5,
+                canvas.width / 5.5,
+                canvas.width / 4.8
+            ];
+
+            ctx.strokeStyle = 'gray';
+            ctx.lineWidth = 1;
+
+            shellData.forEach((shell, index) => {
+                const radius = radii[index];
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+                ctx.closePath();
+                ctx.stroke();
+
+                // Label the circumference in angstroms
+                const circumference = 2 * Math.PI * shell.radius;
+                ctx.fillStyle = 'gray';
+                ctx.font = '12px Arial';
+                ctx.fillText(`C = ${circumference.toFixed(2)} Å`, centerX + radius + 10, centerY - radius / 2);
+            });
+        }
+
+        function drawWave(centerX, centerY, radius, n, amplitude, frequency, time) {
+            const points = 360;
+            const angleStep = (2 * Math.PI) / points;
+
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            for (let i = 0; i <= points; i++) {
+                const angle = i * angleStep;
+                const sineValue = Math.sin(n * angle);
+                const oscillatingAmplitude = amplitude * Math.sin(frequency * time);
+
+                const x = centerX + (radius + sineValue * oscillatingAmplitude) * Math.cos(angle);
+                const y = centerY + (radius + sineValue * oscillatingAmplitude) * Math.sin(angle);
+
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        function drawPhoton(photon) {
+            ctx.beginPath();
+            ctx.arc(photon.x, photon.y, photon.size, 0, 2 * Math.PI);
+            ctx.fillStyle = photon.color;
+            ctx.fill();
+        }
+
+        function updatePhotons() {
+            photons = photons.filter(photon => {
+                photon.x += photon.vx;
+                photon.y += photon.vy;
+                return photon.x > 0 && photon.x < canvas.width && photon.y > 0 && photon.y < canvas.height;
+            });
+
+            if (incomingPhoton) {
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2;
+                incomingPhoton.x += incomingPhoton.vx;
+                incomingPhoton.y += incomingPhoton.vy;
+
+                const distanceToCenter = Math.sqrt(
+                    Math.pow(incomingPhoton.x - centerX, 2) +
+                    Math.pow(incomingPhoton.y - centerY, 2)
+                );
+
+                if (distanceToCenter < incomingPhoton.size) {
+                    // Photon has reached the center
+                    selectedLevel = incomingPhoton.targetLevel;
+                    incomingPhoton = null;
+                }
+            }
+        }
+
+        function drawSpectralLines() {
+            const lineHeight = 10;
+            const lineWidth = 3;
+            const startX = canvas.width - 50;
+            const startY = canvas.height - 150;
+
+            spectralLines.forEach((line, index) => {
+                ctx.fillStyle = line.color;
+                ctx.fillRect(startX, startY + index * lineHeight, lineWidth, lineHeight);
+            });
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawStaticShells();
+
+            if (selectedLevel !== null) {
+                const level = shellData[selectedLevel - 1];
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2;
+                const radii = [
+                    canvas.width / 12,
+                    canvas.width / 10,
+                    canvas.width / 8,
+                    canvas.width / 6.5,
+                    canvas.width / 5.5,
+                    canvas.width / 4.8
+                ];
+
+                const amplitude = parseInt(amplitudeSlider.value);
+                const frequency = parseInt(frequencySlider.value) / 50;
+                const time = performance.now() / 1000;
+
+                if (transitionInProgress) {
+                    const currentRadius = radii[selectedLevel - 1];
+                    const targetRadius = radii[targetLevel - 1];
+
+                    // Animate transition by gradually changing the radius
+                    const transitionSpeed = 0.02; // Adjust this for faster or slower transitions
+                    const newRadius = currentRadius + transitionSpeed * (targetRadius - currentRadius);
+
+                    if (Math.abs(newRadius - targetRadius) < 0.1) {
+                        selectedLevel = targetLevel;
+                        transitionInProgress = false;
+                    } else {
+                        drawWave(centerX, centerY, newRadius, level.n, amplitude, frequency, time);
+                    }
+                } else {
+                    drawWave(centerX, centerY, radii[selectedLevel - 1], level.n, amplitude, frequency, time);
+                }
+            }
+
+            updatePhotons();
+            photons.forEach(drawPhoton);
+
+            if (incomingPhoton) {
+                drawPhoton(incomingPhoton);
+            }
+
+            drawSpectralLines();
+
+            requestAnimationFrame(animate);
+        }
+
+        function emitPhoton(color, energy, frequency, wavelength) {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const speed = 3; // Set a constant speed for all photons
+
+            const angle = Math.random() * 2 * Math.PI;
+
+            const vx = speed * Math.cos(angle);
+            const vy = speed * Math.sin(angle);
+
+            photons.push({
+                x: centerX,
+                y: centerY,
+                vx: vx,
+                vy: vy,
+                size: 10,
+                color: color
+            });
+
+            // Add to spectral lines if within visible range
+            if (wavelength >= 380 && wavelength <= 700) {
+                spectralLines.push({ color: color });
+            }
+
+            photonInfo.style.color = (wavelength >= 380 && wavelength <= 700) ? color : 'white';
+            photonInfo.innerHTML = `Photon Energy: ${energy.toFixed(2)} eV | Frequency: ${frequency.toExponential(2)} Hz | Wavelength: ${wavelength.toFixed(2)} nm`;
+        }
+
+        function absorbPhoton(color, energy, frequency, wavelength, newLevel) {
+            const edgeX = Math.random() > 0.5 ? 0 : canvas.width;
+            const edgeY = Math.random() > 0.5 ? 0 : canvas.height;
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const speed = 3; // Set a constant speed for the incoming photon
+
+            const angle = Math.atan2(centerY - edgeY, centerX - edgeX);
+
+            incomingPhoton = {
+                x: edgeX,
+                y: edgeY,
+                vx: speed * Math.cos(angle),
+                vy: speed * Math.sin(angle),
+                size: 10,
+                color: color,
+                targetLevel: newLevel
+            };
+        }
+
+        document.querySelectorAll('.energy-levels button').forEach((button) => {
+            button.addEventListener('click', () => {
+                const level = parseInt(button.getAttribute('data-level'));
+
+                if (level < selectedLevel) {
+                    const energyDifference = shellData[selectedLevel - 1].energy - shellData[level - 1].energy;
+                    const frequency = energyDifference * 2.417989242e14; // Convert eV to Hz using h = 4.135667696e-15 eV·s
+                    const wavelength = 1240 / energyDifference; // in nm, using hc/E formula
+                    let color;
+
+                    // Map energy difference to wavelength
+                    if (wavelength < 380) {
+                        color = 'white'; // Out of visible range
+                    } else if (wavelength < 450) {
+                        color = 'blue';
+                    } else if (wavelength < 495) {
+                        color = 'green';
+                    } else if (wavelength < 570) {
+                        color = 'yellow';
+                    } else if (wavelength < 620) {
+                        color = 'orange';
+                    } else if (wavelength <= 700) {
+                        color = 'red';
+                    } else {
+                        color = 'white'; // Out of visible range
+                    }
+
+                    emitPhoton(color, energyDifference, frequency, wavelength);
+
+                    // Immediately switch to the new lower level for the standing wave
+                    selectedLevel = level;
+                    targetLevel = level;
+                    transitionInProgress = false;
+
+                } else if (level > selectedLevel) {
+                    const energyDifference = shellData[level - 1].energy - shellData[selectedLevel - 1].energy;
+                    const frequency = energyDifference * 2.417989242e14; // Convert eV to Hz using h = 4.135667696e-15 eV·s
+                    const wavelength = 1240 / energyDifference; // in nm, using hc/E formula
+                    let color;
+
+                    // Map energy difference to wavelength
+                    if (wavelength < 380) {
+                        color = 'white'; // Out of visible range
+                    } else if (wavelength < 450) {
+                        color = 'blue';
+                    } else if (wavelength < 495) {
+                        color = 'green';
+                    } else if (wavelength < 570) {
+                        color = 'yellow';
+                    } else if (wavelength < 620) {
+                        color = 'orange';
+                    } else if (wavelength <= 700) {
+                        color = 'red';
+                    } else {
+                        color = 'white'; // Out of visible range
+                    }
+
+                    absorbPhoton(color, energyDifference, frequency, wavelength, level);
+                }
+
+                document.querySelectorAll('.energy-levels button').forEach((btn) => {
+                    btn.classList.remove('selected');
+                });
+                button.classList.add('selected');
+            });
+        });
+
+        window.addEventListener('resize', resizeCanvas);
+
+        // Initial setup
+        resizeCanvas();
+        document.querySelector('.energy-levels button[data-level="1"]').classList.add('selected');
+        animate();
+
+        window.addEventListener('unload', () => {
+            cancelAnimationFrame(animationId);
+        });
+    </script>
+</body>
+</html>

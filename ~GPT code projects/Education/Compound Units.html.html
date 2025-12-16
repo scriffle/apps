@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Physics Unit Builder</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #app {
+            display: grid;
+            grid-template-columns: auto 300px;
+            height: 100vh;
+            position: relative;
+        }
+
+        #workspace {
+            background: #000;
+            position: relative;
+            overflow: hidden;
+            touch-action: none;
+            height: 100vh;
+        }
+
+        #unit-bank {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 15px;
+            display: flex;
+            gap: 20px;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+            z-index: 100;
+        }
+
+        .unit {
+            width: 60px;
+            height: 60px;
+            cursor: grab;
+            position: relative;
+            user-select: none;
+            touch-action: none;
+        }
+
+        .unit.dragging {
+            opacity: 0.8;
+            cursor: grabbing;
+            z-index: 1000;
+        }
+
+        .unit svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .unit-label {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-weight: bold;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        }
+
+        .workspace-unit {
+            position: absolute;
+            cursor: grab;
+            touch-action: none;
+        }
+
+        .snap-preview {
+            position: absolute;
+            border: 2px dashed rgba(102, 175, 233, 0.6);
+            border-radius: 10px;
+            pointer-events: none;
+            opacity: 0.6;
+            background: rgba(102, 175, 233, 0.1);
+        }
+
+        .snap-preview::after {
+            content: attr(data-operation);
+            position: absolute;
+            right: -25px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 14px;
+            color: rgba(102, 175, 233, 0.8);
+        }
+
+        .snap-preview.vertical::after {
+            content: '÷';
+            right: -15px;
+        }
+
+        .snap-preview.horizontal::after {
+            content: '×';
+            right: -15px;
+        }
+
+        .compound-unit {
+            position: relative;
+            display: grid;
+            gap: 5px;
+            padding: 10px;
+            border: 2px dashed rgba(102, 175, 233, 0.6);
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .compound-unit-row {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .compound-unit-numerator {
+            border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+            padding-bottom: 5px;
+            margin-bottom: 5px;
+        }
+
+        .compound-unit-denominator {
+            padding-top: 5px;
+        }
+
+        .operation-hint {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+            z-index: 90;
+        }
+
+        .unit-formula {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        #controls {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
+
+        button {
+            background: #333;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #444;
+        }
+
+        #progress-panel {
+            background: #1a1a1a;
+            padding: 20px;
+            border-left: 1px solid #333;
+            transform: translateX(100%);
+            transition: transform 0.3s;
+        }
+
+        #progress-panel.open {
+            transform: translateX(0);
+        }
+
+        #progress-toggle {
+            position: absolute;
+            left: -40px;
+            top: 20px;
+            width: 40px;
+            height: 40px;
+            background: #333;
+            border: none;
+            color: white;
+            cursor: pointer;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px;
+            border-radius: 5px;
+            pointer-events: none;
+            display: none;
+            z-index: 1000;
+            max-width: 300px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .discovered-unit {
+            padding: 10px;
+            margin: 5px 0;
+            background: #333;
+            border-radius: 5px;
+            opacity: 0.5;
+        }
+
+        .discovered-unit.found {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="workspace">
+            <div id="controls">
+                <button id="reset">Reset</button>
+                <button id="undo">Undo</button>
+            </div>
+            <div class="operation-hint">
+                Horizontal = Multiply (×) • Vertical = Divide (÷)
+            </div>
+            <div id="unit-bank"></div>
+        </div>
+        <div id="progress-panel">
+            <button id="progress-toggle">≫</button>
+            <h2>Discovered Units</h2>
+            <div id="discovered-list"></div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const UNITS = {
+            mass: { symbol: 'kg', color: '#ff6666', type: 'circle', order: 1 },
+            length: { symbol: 'm', color: '#66ff66', type: 'line', order: 2 },
+            time: { symbol: 's', color: '#6666ff', type: 'oscillator', order: 3 },
+            reciprocal: { symbol: '1', color: '#ffff66', type: 'square', order: 4 }
+        };
+
+        const DERIVED_UNITS = {
+            'velocity': { 
+                combination: ['m', 's'], 
+                display: 'm÷s', 
+                description: 'Velocity: Rate of change of position' 
+            },
+            'acceleration': { 
+                combination: ['m', 's', 's'], 
+                display: 'm÷s²', 
+                description: 'Acceleration: Rate of change of velocity' 
+            },
+            'force': { 
+                combination: ['kg', 'm', 's', 's'], 
+                display: 'kg×m÷s²', 
+                description: 'Force: Mass times acceleration' 
+            },
+            'momentum': { 
+                combination: ['kg', 'm', 's'], 
+                display: 'kg×m÷s', 
+                description: 'Momentum: Mass times velocity' 
+            },
+            'energy': { 
+                combination: ['kg', 'm', 'm', 's', 's'], 
+                display: 'kg×m²÷s²', 
+                description: 'Energy: Capacity to do work' 
+            },
+            'power': { 
+                combination: ['kg', 'm', 'm', 's', 's', 's'], 
+                display: 'kg×m²÷s³', 
+                description: 'Power: Rate of doing work' 
+            },
+            'frequency': { 
+                combination: ['s', '1'], 
+                display: '1÷s', 
+                description: 'Frequency: Cycles per second' 
+            }
+        };
+
+        // State management
+        let state = {
+            units: [],
+            dragging: null,
+            undoStack: [],
+            discoveredUnits: new Set(),
+            nextUnitId: 1
+        };
+
+        // DOM Elements
+        const workspace = document.getElementById('workspace');
+        const unitBank = document.getElementById('unit-bank');
+        const progressPanel = document.getElementById('progress-panel');
+        const progressToggle = document.getElementById('progress-toggle');
+        const discoveredList = document.getElementById('discovered-list');
+
+        function createUnitSVG(type, color) {
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('viewBox', '0 0 60 60');
+
+            switch(type) {
+                case 'circle':
+                    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    circle.setAttribute('cx', '30');
+                    circle.setAttribute('cy', '30');
+                    circle.setAttribute('r', '25');
+                    circle.setAttribute('fill', color);
+                    svg.appendChild(circle);
+                    break;
+                case 'line':
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    line.setAttribute('x', '10');
+                    line.setAttribute('y', '25');
+                    line.setAttribute('width', '40');
+                    line.setAttribute('height', '10');
+                    line.setAttribute('fill', color);
+                    svg.appendChild(line);
+                    break;
+                case 'oscillator':
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    path.setAttribute('d', 'M10,30 Q20,10 30,30 Q40,50 50,30');
+                    path.setAttribute('stroke', color);
+                    path.setAttribute('stroke-width', '4');
+                    path.setAttribute('fill', 'none');
+                    svg.appendChild(path);
+                    
+                    gsap.to(path, {
+                        attr: { d: 'M10,30 Q20,50 30,30 Q40,10 50,30' },
+                        duration: 1,
+                        repeat: -1,
+                        yoyo: true,
+                        ease: "sine.inOut"
+                    });
+                    break;
+                case 'square':
+                    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    rect.setAttribute('x', '15');
+                    rect.setAttribute('y', '15');
+                    rect.setAttribute('width', '30');
+                    rect.setAttribute('height', '30');
+                    rect.setAttribute('fill', color);
+                    svg.appendChild(rect);
+                    break;
+            }
+
+            return svg;
+        }
+
+function getUnitSymbols(element) {
+            if (element.dataset.symbols) {
+                return JSON.parse(element.dataset.symbols);
+            }
+            return [UNITS[element.dataset.unitType].symbol];
+        }
+
+        function getUnitOrder(symbol) {
+            for (const unit of Object.values(UNITS)) {
+                if (unit.symbol === symbol) return unit.order;
+            }
+            return 999;
+        }
+
+        function sortSymbols(symbols) {
+            return symbols.sort((a, b) => getUnitOrder(a) - getUnitOrder(b));
+        }
+
+        function formatFormula(numeratorSymbols, denominatorSymbols = []) {
+            const sortedNumerator = sortSymbols(numeratorSymbols);
+            const sortedDenominator = sortSymbols(denominatorSymbols);
+            
+            if (sortedDenominator.length === 0) {
+                return sortedNumerator.join('×');
+            }
+            
+            return `${sortedNumerator.join('×')}÷${sortedDenominator.join('×')}`;
+        }
+
+        function createWorkspaceUnit(unitType) {
+            const unit = UNITS[unitType];
+            const element = document.createElement('div');
+            element.className = 'unit workspace-unit';
+            element.dataset.unitType = unitType;
+            element.dataset.unitId = state.nextUnitId++;
+            element.dataset.symbols = JSON.stringify([unit.symbol]);
+            
+            const svg = createUnitSVG(unit.type, unit.color);
+            element.appendChild(svg);
+
+            const label = document.createElement('div');
+            label.className = 'unit-label';
+            label.textContent = unit.symbol;
+            element.appendChild(label);
+
+            return element;
+        }
+
+        function initializeUnitBank() {
+            Object.entries(UNITS).forEach(([key, unit]) => {
+                const unitElement = document.createElement('div');
+                unitElement.className = 'unit';
+                unitElement.dataset.unitType = key;
+                
+                const svg = createUnitSVG(unit.type, unit.color);
+                unitElement.appendChild(svg);
+
+                const label = document.createElement('div');
+                label.className = 'unit-label';
+                label.textContent = unit.symbol;
+                unitElement.appendChild(label);
+
+                unitBank.appendChild(unitElement);
+                
+                initializeDrag(unitElement);
+            });
+        }
+
+        function initializeDrag(element) {
+            element.addEventListener('pointerdown', startDrag);
+        }
+
+        function startDrag(e) {
+            const original = e.target.closest('.unit');
+            if (!original) return;
+
+            let dragElement;
+            if (original.classList.contains('workspace-unit')) {
+                dragElement = original;
+                state.dragging = {
+                    element: dragElement,
+                    isNew: false,
+                    offset: {
+                        x: e.clientX - dragElement.offsetLeft,
+                        y: e.clientY - dragElement.offsetTop
+                    }
+                };
+            } else {
+                dragElement = createWorkspaceUnit(original.dataset.unitType);
+                workspace.appendChild(dragElement);
+                
+                dragElement.style.left = (e.clientX - 30) + 'px';
+                dragElement.style.top = (e.clientY - 30) + 'px';
+
+                state.dragging = {
+                    element: dragElement,
+                    isNew: true,
+                    offset: {
+                        x: 30,
+                        y: 30
+                    }
+                };
+            }
+
+            dragElement.classList.add('dragging');
+            
+            document.addEventListener('pointermove', drag);
+            document.addEventListener('pointerup', stopDrag);
+
+            e.preventDefault();
+        }
+
+        function drag(e) {
+            if (!state.dragging) return;
+
+            const { element, offset } = state.dragging;
+            
+            const x = e.clientX - offset.x;
+            const y = e.clientY - offset.y;
+
+            element.style.left = x + 'px';
+            element.style.top = y + 'px';
+
+            checkForSnapping(element);
+        }
+
+        function stopDrag(e) {
+            if (!state.dragging) return;
+
+            const { element, isNew } = state.dragging;
+            element.classList.remove('dragging');
+
+            if (isNew) {
+                state.units.push(element);
+                state.undoStack.push({
+                    type: 'add',
+                    element: element
+                });
+            }
+
+            trySnap(element);
+
+            state.dragging = null;
+            
+            document.removeEventListener('pointermove', drag);
+            document.removeEventListener('pointerup', stopDrag);
+        }
+
+        function checkForSnapping(element) {
+            const nearby = state.units.filter(unit => {
+                if (unit === element) return false;
+                
+                const rect1 = element.getBoundingClientRect();
+                const rect2 = unit.getBoundingClientRect();
+                
+                const distance = Math.sqrt(
+                    Math.pow((rect1.left + rect1.width/2) - (rect2.left + rect2.width/2), 2) +
+                    Math.pow((rect1.top + rect1.height/2) - (rect2.top + rect2.height/2), 2)
+                );
+
+                return distance < 70;
+            });
+
+            if (nearby.length > 0) {
+                const allUnits = [element, ...nearby];
+                updateSnapPreview(element, nearby);
+            } else {
+                const preview = document.querySelector('.snap-preview');
+                if (preview) preview.remove();
+            }
+        }
+
+        function updateSnapPreview(element, nearbyUnits) {
+            const preview = document.querySelector('.snap-preview') || document.createElement('div');
+            preview.className = 'snap-preview';
+            
+            // Calculate bounds
+            const rects = [element, ...nearbyUnits].map(el => el.getBoundingClientRect());
+            const left = Math.min(...rects.map(r => r.left));
+            const top = Math.min(...rects.map(r => r.top));
+            const right = Math.max(...rects.map(r => r.right));
+            const bottom = Math.max(...rects.map(r => r.bottom));
+
+            // Determine if operation is vertical or horizontal
+            const elementCenter = element.getBoundingClientRect();
+            const nearbyCenter = nearbyUnits[0].getBoundingClientRect();
+            
+            const isVertical = Math.abs(elementCenter.top - nearbyCenter.top) > 
+                             Math.abs(elementCenter.left - nearbyCenter.left);
+
+            preview.classList.toggle('vertical', isVertical);
+            preview.classList.toggle('horizontal', !isVertical);
+
+            // Get symbols for formula preview
+            const elementSymbols = getUnitSymbols(element);
+            const nearbySymbols = getUnitSymbols(nearbyUnits[0]);
+            
+            // Format formula based on operation
+            const formula = isVertical ? 
+                formatFormula(elementCenter.top < nearbyCenter.top ? elementSymbols : nearbySymbols,
+                            elementCenter.top < nearbyCenter.top ? nearbySymbols : elementSymbols) :
+                formatFormula([...elementSymbols, ...nearbySymbols]);
+
+            // Add formula display
+            let formulaDiv = preview.querySelector('.unit-formula');
+            if (!formulaDiv) {
+                formulaDiv = document.createElement('div');
+                formulaDiv.className = 'unit-formula';
+                preview.appendChild(formulaDiv);
+            }
+            formulaDiv.textContent = formula;
+            
+            // Position preview
+            preview.style.left = left + 'px';
+            preview.style.top = top + 'px';
+            preview.style.width = (right - left) + 'px';
+            preview.style.height = (bottom - top) + 'px';
+
+            if (!preview.parentElement) {
+                workspace.appendChild(preview);
+            }
+        }
+
+        function trySnap(element) {
+            const nearby = state.units.filter(unit => {
+                if (unit === element) return false;
+                
+                const rect1 = element.getBoundingClientRect();
+                const rect2 = unit.getBoundingClientRect();
+                
+                const distance = Math.sqrt(
+                    Math.pow((rect1.left + rect1.width/2) - (rect2.left + rect2.width/2), 2) +
+                    Math.pow((rect1.top + rect1.height/2) - (rect2.top + rect2.height/2), 2)
+                );
+
+                return distance < 70;
+            });
+
+            if (nearby.length > 0) {
+                createCompoundUnit([element, ...nearby]);
+                return true;
+            }
+
+            return false;
+        }
+
+        function createCompoundUnit(units) {
+            const container = document.createElement('div');
+            container.className = 'unit workspace-unit';
+            container.dataset.unitId = state.nextUnitId++;
+            
+            // Calculate position
+            const rects = units.map(unit => unit.getBoundingClientRect());
+            const left = Math.min(...rects.map(r => r.left));
+            const top = Math.min(...rects.map(r => r.top));
+            
+            container.style.left = left + 'px';
+            container.style.top = top + 'px';
+
+            // Determine if operation is vertical
+            const unit1Center = units[0].getBoundingClientRect();
+            const unit2Center = units[1].getBoundingClientRect();
+            const isVertical = Math.abs(unit1Center.top - unit2Center.top) > 
+                             Math.abs(unit1Center.left - unit2Center.left);
+
+            // Create appropriate container based on operation
+            const unitsContainer = document.createElement('div');
+            unitsContainer.className = 'compound-unit';
+
+            let combinedSymbols;
+            if (isVertical) {
+                // Create fraction layout
+                const numerator = document.createElement('div');
+                numerator.className = 'compound-unit-row compound-unit-numerator';
+                
+                const denominator = document.createElement('div');
+                denominator.className = 'compound-unit-row compound-unit-denominator';
+
+                // Sort units into numerator and denominator
+                const topUnit = units.find(u => u.getBoundingClientRect().top < unit2Center.top);
+                const bottomUnit = units.find(u => u !== topUnit);
+
+                const topSymbols = getUnitSymbols(topUnit);
+                const bottomSymbols = getUnitSymbols(bottomUnit);
+
+                numerator.appendChild(topUnit.cloneNode(true));
+                denominator.appendChild(bottomUnit.cloneNode(true));
+
+                unitsContainer.appendChild(numerator);
+                unitsContainer.appendChild(denominator);
+
+                // Combine symbols for vertical layout (division)
+                combinedSymbols = [...topSymbols, ...bottomSymbols.map(s => s + "'")];
+            } else {
+                // Create horizontal layout
+                unitsContainer.className += ' compound-unit-row';
+                
+                // Sort units left to right
+                const sortedUnits = units.sort((a, b) => {
+                    const rectA = a.getBoundingClientRect();
+                    const rectB = b.getBoundingClientRect();
+                    return rectA.left - rectB.left;
+                });
+
+                sortedUnits.forEach(unit => {
+                    unitsContainer.appendChild(unit.cloneNode(true));
+                });
+
+                // Combine symbols for horizontal layout (multiplication)
+                combinedSymbols = sortedUnits.map(getUnitSymbols).flat();
+            }
+
+            container.appendChild(unitsContainer);
+
+            // Add formula display
+            const formulaDiv = document.createElement('div');
+            formulaDiv.className = 'unit-formula';
+            const formula = isVertical ?
+                formatFormula(getUnitSymbols(units[0]), getUnitSymbols(units[1])) :
+                formatFormula(combinedSymbols);
+            formulaDiv.textContent = formula;
+            container.appendChild(formulaDiv);
+
+            // Store combined symbols
+            container.dataset.symbols = JSON.stringify(combinedSymbols);
+
+            // Make draggable
+            initializeDrag(container);
+
+            // Remove original units and add new compound unit
+            units.forEach(unit => {
+                unit.remove();
+                state.units = state.units.filter(u => u !== unit);
+            });
+
+            state.units.push(container);
+            workspace.appendChild(container);
+
+            // Animate
+            gsap.from(container, {
+                scale: 0.8,
+                opacity: 0,
+                duration: 0.3,
+                ease: "back.out(1.7)"
+            });
+
+            // Check for derived unit
+            checkDerivedUnit(combinedSymbols);
+
+            // Remove snap preview
+            const preview = document.querySelector('.snap-preview');
+            if (preview) preview.remove();
+        }
+
+        function checkDerivedUnit(symbols) {
+            Object.entries(DERIVED_UNITS).forEach(([name, unit]) => {
+                const normalizedSymbols = symbols.map(s => s.replace("'", "")).sort();
+                const normalizedCombination = [...unit.combination].sort();
+                
+                if (JSON.stringify(normalizedSymbols) === JSON.stringify(normalizedCombination)) {
+                    if (!state.discoveredUnits.has(name)) {
+                        state.discoveredUnits.add(name);
+                        updateDiscoveredList();
+                        showDiscoveryAnimation(name, unit.display, unit.description);
+                    }
+                }
+            });
+        }
+
+        function showDiscoveryAnimation(name, display, description) {
+            const tooltip = document.createElement('div');
+            tooltip.className = 'tooltip';
+            tooltip.innerHTML = `
+                <h3>Discovered: ${name}</h3>
+                <p>${display}</p>
+                <p>${description}</p>
+            `;
+            document.body.appendChild(tooltip);
+
+            const workspaceRect = workspace.getBoundingClientRect();
+            tooltip.style.left = (workspaceRect.width / 2 - tooltip.offsetWidth / 2) + 'px';
+            tooltip.style.top = (workspaceRect.height / 2 - tooltip.offsetHeight / 2) + 'px';
+            tooltip.style.display = 'block';
+
+            gsap.from(tooltip, {
+                y: -50,
+                opacity: 0,
+                duration: 0.5,
+                ease: "back.out(1.7)"
+            });
+
+            setTimeout(() => {
+                gsap.to(tooltip, {
+                    opacity: 0,
+                    y: 50,
+                    duration: 0.3,
+                    onComplete: () => tooltip.remove()
+                });
+            }, 3000);
+        }
+
+        progressToggle.addEventListener('click', () => {
+            progressPanel.classList.toggle('open');
+            progressToggle.textContent = progressPanel.classList.contains('open') ? '≪' : '≫';
+        });
+
+        document.getElementById('reset').addEventListener('click', () => {
+            gsap.to(workspace.querySelectorAll('.unit, .compound-unit'), {
+                scale: 0,
+                opacity: 0,
+                stagger: 0.05,
+                duration: 0.3,
+                onComplete: () => {
+                    state.units.forEach(unit => unit.remove());
+                    state.units = [];
+                    state.undoStack = [];
+                    state.discoveredUnits.clear();
+                    updateDiscoveredList();
+                }
+            });
+        });
+
+        document.getElementById('undo').addEventListener('click', () => {
+            const lastAction = state.undoStack.pop();
+            if (lastAction) {
+                switch(lastAction.type) {
+                    case 'add':
+                        gsap.to(lastAction.element, {
+                            scale: 0,
+                            opacity: 0,
+                            duration: 0.3,
+                            onComplete: () => {
+                                lastAction.element.remove();
+                                state.units = state.units.filter(unit => unit !== lastAction.element);
+                            }
+                        });
+                        break;
+                }
+            }
+        });
+
+        function updateDiscoveredList() {
+            discoveredList.innerHTML = '';
+            Object.entries(DERIVED_UNITS).forEach(([name, unit]) => {
+                const div = document.createElement('div');
+                div.className = 'discovered-unit' + (state.discoveredUnits.has(name) ? ' found' : '');
+                div.textContent = `${name} (${unit.display})`;
+                discoveredList.appendChild(div);
+
+                if (state.discoveredUnits.has(name)) {
+                    gsap.from(div, {
+                        scale: 0.8,
+                        opacity: 0,
+                        duration: 0.3,
+                        ease: "back.out(1.7)"
+                    });
+                }
+            });
+        }
+
+        function init() {
+            initializeUnitBank();
+            updateDiscoveredList();
+        }
+
+        init();
+    </script>
+</body>
+</html>

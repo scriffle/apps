@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Responsive Moving Questions Web App</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: sans-serif; /* non-serif font */
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    /* Main display pane fills available space */
+    #mainDisplay {
+      flex: 1;
+      position: relative;
+      background: #f0f0f0;
+      overflow: hidden;
+    }
+    /* Controller pane at the bottom */
+    #controller {
+      height: 80px;
+      background: #ddd;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+    }
+    /* The slider is now half the width and centered */
+    #slider {
+      width: 50%;
+      display: block;
+      margin: 0 auto;
+    }
+    /* Style for the question boxes */
+    .question {
+      position: absolute;
+      background: grey;
+      color: white;
+      text-align: center;
+      border-radius: 5px;
+      user-select: none;
+      cursor: grab;
+      transition: background-color 0.5s, box-shadow 0.5s, color 0.5s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .question:active {
+      cursor: grabbing;
+    }
+  </style>
+</head>
+<body>
+  <div id="mainDisplay"></div>
+  <div id="controller">
+    <input type="range" id="slider" min="0" max="20" step="0.1" value="0">
+  </div>
+  
+  <script>
+    const mainDisplay = document.getElementById('mainDisplay');
+    const slider = document.getElementById('slider');
+    const questions = [];
+    const numQuestions = 20;
+    let containerWidth, containerHeight;
+    // Box dimensions will be dynamic
+    let boxWidth = 150;
+    let boxHeight = 50;
+    const damping = 0.98; // friction/damping factor
+    const repulsionStrength = 1000; // constant for repulsion force
+    const randomAccelMag = 0.2; // gentle random acceleration magnitude
+
+    // Function to compute a contrasting text color based on background rgb value.
+    function getContrastingColor(rgbString) {
+      // Expecting format "rgb(r, g, b)"
+      const nums = rgbString.match(/\d+/g).map(Number);
+      const r = nums[0], g = nums[1], b = nums[2];
+      // Compute luminance using a common formula
+      const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+      return luminance < 128 ? 'white' : 'black';
+    }
+
+    // Create a gradient from red (for Question 1) to yellow (middle) to green (for Question 20)
+    const gradientColors = [];
+    for (let i = 0; i < numQuestions; i++) {
+      let r, g, b = 0;
+      if (i < numQuestions / 2) {
+        // From red to yellow: red remains at 255, green ramps up
+        let t = i / ((numQuestions / 2) - 1);
+        r = 255;
+        g = Math.round(255 * t);
+      } else {
+        // From yellow to green: green remains at 255, red ramps down
+        let t = (i - numQuestions / 2) / ((numQuestions / 2) - 1);
+        r = Math.round(255 * (1 - t));
+        g = 255;
+      }
+      gradientColors.push(`rgb(${r},${g},${b})`);
+    }
+    // Compute a matching array for contrasting text colors for each gradient color.
+    const gradientTextColors = gradientColors.map(color => getContrastingColor(color));
+
+    // Update container dimensions and recalc box sizes.
+    function updateContainerSize() {
+      containerWidth = mainDisplay.clientWidth;
+      containerHeight = mainDisplay.clientHeight;
+      // Set box size relative to container, with minimum limits.
+      boxWidth = Math.max(100, containerWidth * 0.15);
+      boxHeight = Math.max(40, containerHeight * 0.1);
+      // Update each question's element size and reposition if necessary.
+      questions.forEach(q => {
+         q.el.style.width = boxWidth + 'px';
+         q.el.style.height = boxHeight + 'px';
+         // If off the edge, reposition inside the container.
+         if (q.x > containerWidth - boxWidth) {
+           q.x = containerWidth - boxWidth;
+         }
+         if (q.y > containerHeight - boxHeight) {
+           q.y = containerHeight - boxHeight;
+         }
+         q.el.style.left = q.x + 'px';
+         q.el.style.top = q.y + 'px';
+      });
+    }
+    window.addEventListener('resize', updateContainerSize);
+    updateContainerSize();
+
+    // Create the 20 question boxes
+    for (let i = 0; i < numQuestions; i++) {
+      const div = document.createElement('div');
+      div.classList.add('question');
+      div.innerText = 'Question ' + (i + 1);
+      // Place randomly within the main display pane
+      const pos = {
+        x: Math.random() * (containerWidth - boxWidth),
+        y: Math.random() * (containerHeight - boxHeight)
+      };
+      div.style.left = pos.x + 'px';
+      div.style.top = pos.y + 'px';
+      // Set initial dynamic dimensions
+      div.style.width = boxWidth + 'px';
+      div.style.height = boxHeight + 'px';
+      
+      // Create an object to track physics and dragging data
+      const q = {
+        el: div,
+        x: pos.x,
+        y: pos.y,
+        vx: (Math.random() - 0.5) * 2,
+        vy: (Math.random() - 0.5) * 2,
+        isDragging: false,
+        dragOffsetX: 0,
+        dragOffsetY: 0,
+      };
+      questions.push(q);
+      mainDisplay.appendChild(div);
+
+      // Add pointer events to allow dragging
+      div.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        q.isDragging = true;
+        q.dragOffsetX = e.clientX - q.x;
+        q.dragOffsetY = e.clientY - q.y;
+        div.setPointerCapture(e.pointerId);
+      });
+      div.addEventListener('pointermove', (e) => {
+        if (q.isDragging) {
+          q.x = e.clientX - q.dragOffsetX;
+          q.y = e.clientY - q.dragOffsetY;
+          // Constrain to within the container
+          q.x = Math.max(0, Math.min(q.x, containerWidth - boxWidth));
+          q.y = Math.max(0, Math.min(q.y, containerHeight - boxHeight));
+          div.style.left = q.x + 'px';
+          div.style.top = q.y + 'px';
+        }
+      });
+      div.addEventListener('pointerup', (e) => {
+        q.isDragging = false;
+        div.releasePointerCapture(e.pointerId);
+      });
+      div.addEventListener('pointercancel', (e) => {
+        q.isDragging = false;
+        div.releasePointerCapture(e.pointerId);
+      });
+    }
+
+    // Slider event: determine the active question box based on slider value.
+    slider.addEventListener('input', () => {
+      let value = parseFloat(slider.value);
+      // Determine active index (0 to 19) based on slider reading.
+      let activeIndex = Math.min(Math.floor(value), numQuestions - 1);
+      questions.forEach((q, index) => {
+        if (index === activeIndex) {
+          // Apply the gradient color and silver underglow for the active box.
+          q.el.style.backgroundColor = gradientColors[index];
+          q.el.style.boxShadow = "0 0 10px 5px silver";
+          // Set the text color to a contrasting color.
+          q.el.style.color = gradientTextColors[index];
+        } else {
+          // Reset to grey with no shadow and default text color.
+          q.el.style.backgroundColor = "grey";
+          q.el.style.boxShadow = "none";
+          q.el.style.color = "white";
+        }
+      });
+    });
+
+    // Animation loop for physics and motion
+    function animate() {
+      updateContainerSize();
+      // For each question box:
+      for (let i = 0; i < numQuestions; i++) {
+        const qi = questions[i];
+        // Apply gentle random acceleration if not dragging.
+        if (!qi.isDragging) {
+          qi.vx += (Math.random() - 0.5) * randomAccelMag;
+          qi.vy += (Math.random() - 0.5) * randomAccelMag;
+        }
+        // Calculate repulsion from every other box using an inverse square law.
+        for (let j = 0; j < numQuestions; j++) {
+          if (i === j) continue;
+          const qj = questions[j];
+          const dx = qi.x - qj.x;
+          const dy = qi.y - qj.y;
+          const distSq = dx * dx + dy * dy;
+          const minDist = 50; // avoid extreme forces when very close
+          if (distSq < minDist * minDist) {
+            const dist = Math.sqrt(distSq) || 0.001;
+            const force = repulsionStrength / (distSq);
+            // Normalize and apply force.
+            const ax = (dx / dist) * force;
+            const ay = (dy / dist) * force;
+            if (!qi.isDragging) {
+              qi.vx += ax;
+              qi.vy += ay;
+            }
+          }
+        }
+        // Apply damping for smooth motion.
+        qi.vx *= damping;
+        qi.vy *= damping;
+        // Update position if not being dragged.
+        if (!qi.isDragging) {
+          qi.x += qi.vx;
+          qi.y += qi.vy;
+          // Bounce off container walls.
+          if (qi.x < 0) { qi.x = 0; qi.vx = Math.abs(qi.vx); }
+          if (qi.y < 0) { qi.y = 0; qi.vy = Math.abs(qi.vy); }
+          if (qi.x > containerWidth - boxWidth) { qi.x = containerWidth - boxWidth; qi.vx = -Math.abs(qi.vx); }
+          if (qi.y > containerHeight - boxHeight) { qi.y = containerHeight - boxHeight; qi.vy = -Math.abs(qi.vy); }
+          qi.el.style.left = qi.x + 'px';
+          qi.el.style.top = qi.y + 'px';
+        }
+      }
+      requestAnimationFrame(animate);
+    }
+    animate();
+  </script>
+</body>
+</html>

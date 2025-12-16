@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convex Lens Simulation with Touch Support</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 90vh;
+            background-color: #f0f0f0;
+            flex-direction: column;
+        }
+
+        #container {
+            position: relative;
+            width: 80%;
+            height: 90%;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            background-color: #f9f9f9;
+        }
+
+        #imageCanvas {
+            display: block;
+            width: 100%;
+            height: 75%;
+            background-color: lightgray;
+        }
+
+        #diagramCanvas {
+            display: block;
+            width: 100%;
+            height: 25%;
+            background-color: #f9f9f9;
+            cursor: pointer;
+        }
+
+        #lens {
+            position: absolute;
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            border: 2px solid #000;
+            background-color: rgba(255, 255, 255, 0.3);
+            display: block;
+        }
+
+        #uploadImage {
+            display: block;
+        }
+
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        #controls input[type="range"] {
+            width: 110%; /* Increase slider width by 10% */
+        }
+
+        #snapButton, #resetButton, #explainButton {
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+
+        #resetButton {
+            background-color: #28a745;
+        }
+
+        #infoDisplay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 14px;
+            font-weight: bold;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 5px;
+            border-radius: 4px;
+            z-index: 10;
+        }
+
+        #virtualImageMessage, #eyeDistanceMessage, #scaleDiagramMessage {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            font-weight: bold;
+            color: red;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 5px;
+            border-radius: 4px;
+            display: none;
+            z-index: 10;
+        }
+
+        #modal {
+            display: none;
+            position: fixed;
+            z-index: 20;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        #modalContent {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            width: 60%;
+            text-align: center;
+            border-radius: 10px;
+        }
+
+        #modalContent button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        /* Fade-out animation for messages */
+        @keyframes fadeOut {
+            0% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <canvas id="imageCanvas"></canvas>
+        <canvas id="diagramCanvas"></canvas>
+        <div id="lens"></div>
+        <div id="infoDisplay"></div>
+        <div id="virtualImageMessage">Can't place eye at virtual image</div>
+        <div id="eyeDistanceMessage">Eye distance of more than 50 cm is unrealistic. Image will be unfocused.</div>
+        <div id="scaleDiagramMessage"></div>
+    </div>
+    <div id="controls">
+        <input type="file" id="uploadImage" accept="image/*">
+        <label for="focalLength">Focal Length (cm): <span id="focalLengthValue">5</span></label>
+        <input type="range" id="focalLength" min="1" max="30" step="0.1" value="5">
+
+        <label for="objectDistance">Object Distance (cm): <span id="objectDistanceValue">10</span></label>
+        <input type="range" id="objectDistance" min="1" max="50" step="0.1" value="10">
+        
+        <label for="eyeDistance">Eye Distance (cm): <span id="eyeDistanceValue">10</span></label>
+        <input type="range" id="eyeDistance" min="1" max="50" step="0.1" value="10">
+
+        <label for="imageScale">Picture Scale: <span id="imageScaleValue">0.10</span></label>
+        <input type="range" id="imageScale" min="0.01" max="0.5" step="0.01" value="0.1">
+
+        <button id="snapButton">Snap Eye to Image</button>
+        <button id="resetButton">Reset</button>
+        <button id="explainButton">Explain</button>
+    </div>
+
+    <!-- Modal for explanation -->
+    <div id="modal">
+        <div id="modalContent">
+            <h2>Convex Lens Simulation</h2>
+            <p>Welcome to the Convex Lens Simulation!</p>
+            <p>In this simulation, you can explore the behavior of a convex lens using Gaussian lens rules. Here's how it works:</p>
+            <ul style="text-align: left;">
+                <li><strong>Lens Dragging:</strong> Click and drag the lens over the image to see the magnified or inverted view based on the lens's focal length.</li>
+                <li><strong>Adjusting Parameters:</strong> Use the sliders to adjust the object distance, eye distance, focal length, and the picture scale.</li>
+                <li><strong>Snap Eye to Image:</strong> Press the "Snap Eye to Image" button to focus the eye on the image. If the image is farther than 50 cm, it will be blurry.</li>
+                <li><strong>Scale Diagram:</strong> The bottom diagram shows the relative position of the picture, image, lens, and eye, and allows dragging key points.</li>
+            </ul>
+            <button id="closeModal">Close</button>
+        </div>
+    </div>
+
+    <script>
+        // Select elements
+        const imageCanvas = document.getElementById('imageCanvas');
+        const ctx = imageCanvas.getContext('2d');
+        const lens = document.getElementById('lens');
+        const uploadImage = document.getElementById('uploadImage');
+        const container = document.getElementById('container');
+        const focalLengthSlider = document.getElementById('focalLength');
+        const focalLengthLabel = document.getElementById('focalLengthValue');
+        const objectDistanceSlider = document.getElementById('objectDistance');
+        const objectDistanceLabel = document.getElementById('objectDistanceValue');
+        const eyeDistanceSlider = document.getElementById('eyeDistance');
+        const eyeDistanceLabel = document.getElementById('eyeDistanceValue');
+        const imageScaleSlider = document.getElementById('imageScale');
+        const imageScaleLabel = document.getElementById('imageScaleValue');
+        const snapButton = document.getElementById('snapButton');
+        const resetButton = document.getElementById('resetButton');
+        const explainButton = document.getElementById('explainButton');
+        const closeModal = document.getElementById('closeModal');
+        const diagramCanvas = document.getElementById('diagramCanvas');
+        const diagramCtx = diagramCanvas.getContext('2d');
+        const infoDisplay = document.getElementById('infoDisplay');
+        const virtualImageMessage = document.getElementById('virtualImageMessage');
+        const eyeDistanceMessage = document.getElementById('eyeDistanceMessage');
+        const scaleDiagramMessage = document.getElementById('scaleDiagramMessage');
+        const modal = document.getElementById('modal');
+
+        // Image object
+        let image = new Image();
+        let imageLoaded = false;
+        let imageX = 0;
+        let imageY = 0;
+        let scaledWidth = 0;
+        let scaledHeight = 0;
+
+        // Image scale (adjustable)
+        let imgScale = parseFloat(imageScaleSlider.value);
+
+        // Store the lens' relative position (percentage-based)
+        let lensRelativeX = 0.5; // Start at the center horizontally
+        let lensRelativeY = 0.1; // Start at the top center
+
+        // Variables to track dragging in the scale diagram
+        let draggingElement = null;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let isDragging = false;
+
+        // Show the modal when the "Explain" button is clicked
+        explainButton.addEventListener('click', () => {
+            modal.style.display = 'block';
+        });
+
+        // Close modal when close button is clicked
+        closeModal.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+
+        // Show a temporary message in the scale diagram
+        function showScaleDiagramMessage(message) {
+            scaleDiagramMessage.textContent = message;
+            scaleDiagramMessage.style.display = 'block';
+            scaleDiagramMessage.style.animation = 'fadeOut 6s forwards'; // Fade out after 6 seconds
+        }
+
+        // Generate a random very light pastel background color (even closer to white)
+        function randomPastelColor() {
+            const randomValue = () => Math.floor(240 + Math.random() * 15); // Even lighter pastel range
+            return `rgb(${randomValue()}, ${randomValue()}, ${randomValue()})`;
+        }
+
+        // Set canvas size and assign random pastel color only on the first run
+        function resizeCanvas() {
+            const containerRect = container.getBoundingClientRect();
+
+            // Adjust canvas sizes
+            imageCanvas.width = containerRect.width;
+            imageCanvas.height = containerRect.height * 0.75; // 75% of container height for main image
+            diagramCanvas.width = containerRect.width;
+            diagramCanvas.height = containerRect.height * 0.25; // 25% for scale diagram
+
+            // Reposition the lens based on the relative position
+            lens.style.left = `${lensRelativeX * containerRect.width - lens.offsetWidth / 2}px`;
+            lens.style.top = `${lensRelativeY * containerRect.height * 0.75 - lens.offsetHeight / 2}px`;
+
+            if (imageLoaded) {
+                drawImage();
+                drawScaleDiagram();
+                applyLensEffect(parseFloat(lens.style.left) + lens.offsetWidth / 2, parseFloat(lens.style.top) + lens.offsetHeight / 2); // Reapply the lens effect on resize
+            }
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        // Load the last uploaded image from localStorage if available
+        const storedImage = localStorage.getItem('lastUploadedImage');
+        if (storedImage) {
+            image.src = storedImage;
+            image.onload = () => {
+                imageLoaded = true;
+                resizeCanvas();
+            };
+        }
+
+        // Handle image upload
+        uploadImage.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    image.src = event.target.result;
+                    localStorage.setItem('lastUploadedImage', event.target.result); // Store the image in localStorage
+                    image.onload = () => {
+                        imageLoaded = true;
+                        resizeCanvas();
+                    };
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Draw the image, resizable via slider, centered
+        function drawImage() {
+            ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
+            scaledWidth = image.width * imgScale;
+            scaledHeight = image.height * imgScale;
+            imageX = (imageCanvas.width - scaledWidth) / 2;
+            imageY = (imageCanvas.height - scaledHeight) / 2;
+            ctx.drawImage(image, imageX, imageY, scaledWidth, scaledHeight);
+        }
+
+        // Handle lens drag and move with both mouse and touch events
+        let lensOffsetX = 0;
+        let lensOffsetY = 0;
+        let isDraggingLens = false;
+
+        lens.addEventListener('mousedown', (e) => {
+            const rect = lens.getBoundingClientRect();
+            lensOffsetX = e.clientX - rect.left;
+            lensOffsetY = e.clientY - rect.top;
+            isDraggingLens = true;
+        });
+
+        lens.addEventListener('touchstart', (e) => {
+            const touch = e.touches[0];
+            const rect = lens.getBoundingClientRect();
+            lensOffsetX = touch.clientX - rect.left;
+            lensOffsetY = touch.clientY - rect.top;
+            isDraggingLens = true;
+            e.preventDefault(); // Prevent scrolling or zooming
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (isDraggingLens) {
+                const containerRect = container.getBoundingClientRect();
+                const mouseX = e.clientX - containerRect.left - lensOffsetX;
+                const mouseY = e.clientY - containerRect.top - lensOffsetY;
+                moveLens(mouseX, mouseY, containerRect);
+                applyLensEffect(mouseX + lens.offsetWidth / 2, mouseY + lens.offsetHeight / 2); // Apply effect at lens center
+            }
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            if (isDraggingLens) {
+                const touch = e.touches[0];
+                const containerRect = container.getBoundingClientRect();
+                const touchX = touch.clientX - containerRect.left - lensOffsetX;
+                const touchY = touch.clientY - containerRect.top - lensOffsetY;
+                moveLens(touchX, touchY, containerRect);
+                applyLensEffect(touchX + lens.offsetWidth / 2, touchY + lens.offsetHeight / 2); // Apply effect at lens center
+                e.preventDefault(); // Prevent scrolling or zooming
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDraggingLens = false;
+        });
+
+        window.addEventListener('touchend', () => {
+            isDraggingLens = false;
+        });
+
+        // Move lens position and store relative position for both touch and mouse
+        function moveLens(x, y, containerRect = container.getBoundingClientRect()) {
+            lensRelativeX = (x + lens.offsetWidth / 2) / containerRect.width;
+            lensRelativeY = (y + lens.offsetHeight / 2) / (containerRect.height * 0.75);
+
+            lens.style.left = `${x}px`;
+            lens.style.top = `${y}px`;
+        }
+
+        // Apply Gaussian lens laws and magnification effect with focus
+        function applyLensEffect(centerX, centerY) {
+            // Redraw the image, without showing the original picture under the lens
+            drawImage();
+
+            // Get the focal length from the slider
+            const focalLength = parseFloat(focalLengthSlider.value);
+            focalLengthLabel.textContent = `${focalLength}`;
+
+            // Object distance from slider (in cm)
+            const objectDistance = parseFloat(objectDistanceSlider.value);
+            objectDistanceLabel.textContent = `${objectDistance}`;
+
+            // Eye distance from slider (in cm)
+            const eyeDistance = parseFloat(eyeDistanceSlider.value);
+            eyeDistanceLabel.textContent = `${eyeDistance}`;
+
+            // Calculate image distance using the Gaussian lens formula: 1/f = 1/d_o + 1/d_i
+            const imageDistance = (objectDistance * focalLength) / (objectDistance - focalLength);
+
+            // Real images are always inverted, virtual images are always upright
+            let magnificationType = objectDistance > focalLength ? "Real" : "Virtual";
+            let imageOrientation = magnificationType === "Real" ? "Inverted" : "Upright";
+
+            // Calculate magnification (M = d_i / d_o)
+            let magnification = Math.abs(imageDistance / objectDistance);
+            if (magnificationType === "Real") magnification = -magnification; // Real images are inverted
+
+            // Calculate the focus ratio (how out-of-focus the image is)
+            const focusRatio = Math.min(imageDistance / eyeDistance, eyeDistance / imageDistance) * 100;
+            const blurFactor = Math.abs(1 - focusRatio / 100) * 20; // Larger deviation = more blur
+
+            // Update the info box
+            let infoText = `
+                Magnification: ${Math.abs(magnification).toFixed(2)}<br>
+                Image Type: ${magnificationType}<br>
+                Image Orientation: ${imageOrientation}<br>`;
+            
+            if (magnificationType === "Real") {
+                infoText += `Focus: ${focusRatio.toFixed(0)}%`; // Only show focus for real images
+            }
+
+            infoDisplay.innerHTML = infoText;
+
+            // Extract the region of the image behind the lens
+            const regionX = (centerX - imageX) / scaledWidth * image.width;
+            const regionY = (centerY - imageY) / scaledHeight * image.height;
+
+            // Create a magnified circular section of the image
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, lens.offsetWidth / 2, 0, Math.PI * 2);
+            ctx.clip();
+
+            // Apply inversion if needed and magnify the image
+            ctx.translate(centerX, centerY);
+            if (magnification < 0) {
+                ctx.scale(-1, -1); // Invert image if magnification is negative
+            }
+
+            // Apply the blur effect based on how out of focus the image is
+            ctx.filter = `blur(${blurFactor}px)`;
+
+            ctx.drawImage(
+                image,
+                regionX - (lens.offsetWidth / 2) / Math.abs(magnification),
+                regionY - (lens.offsetHeight / 2) / Math.abs(magnification),
+                lens.offsetWidth / Math.abs(magnification),
+                lens.offsetHeight / Math.abs(magnification),
+                -lens.offsetWidth / 2,
+                -lens.offsetHeight / 2,
+                lens.offsetWidth,
+                lens.offsetHeight
+            );
+            ctx.restore();
+
+            drawScaleDiagram(); // Redraw scale diagram with updated parameters
+        }
+
+        // Draw the scale diagram
+        function drawScaleDiagram() {
+            const focalLength = parseFloat(focalLengthSlider.value);
+            const objectDistance = parseFloat(objectDistanceSlider.value);
+            const eyeDistance = parseFloat(eyeDistanceSlider.value);
+            const imageDistance = (objectDistance * focalLength) / (objectDistance - focalLength);
+            const magnification = Math.abs(imageDistance / objectDistance); // Magnification
+
+            // Clear the diagram canvas
+            diagramCtx.clearRect(0, 0, diagramCanvas.width, diagramCanvas.height);
+
+            // Ensure the diagram fits within 90% of the container width
+            const maxDistance = Math.max(objectDistance, imageDistance, eyeDistance);
+            const scaleFactor = (diagramCanvas.width * 0.9) / (objectDistance + eyeDistance + focalLength * 2);
+
+            const centerX = diagramCanvas.width / 2;
+            const diagramHeight = diagramCanvas.height / 2;
+
+            // Staggered Y positions for labels to avoid overlap
+            const staggerYPositions = {
+                focus: diagramHeight - 20, // Focus text above diagram
+                picture: diagramHeight + 30, // Picture label 10px further down
+                image: diagramHeight + 50, // Image label below the Picture label, moved down by 10px
+                eye: diagramHeight + 70 // Eye label below the Image label, moved down by 10px
+            };
+
+            // Draw the original object (replacing the blue square with a small version of the image)
+            if (imageLoaded) {
+                const objectWidth = 30; // Set a constant width for the scaled image
+                const objectHeight = (objectWidth / image.width) * image.height;
+                diagramCtx.drawImage(image, centerX - objectDistance * scaleFactor - objectWidth / 2, diagramHeight - objectHeight / 2, objectWidth, objectHeight);
+                diagramCtx.fillText(`Picture ${objectDistance.toFixed(1)} cm`, centerX - objectDistance * scaleFactor, staggerYPositions.picture); // Picture and distance on one line
+            }
+
+            // Draw the lens and label it 'Convex Lens'
+            diagramCtx.beginPath();
+            diagramCtx.arc(centerX, diagramHeight, 15, 0, Math.PI * 2);
+            diagramCtx.stroke();
+            diagramCtx.textAlign = "center"; // Center-align the text
+            diagramCtx.fillText('Convex Lens', centerX, diagramHeight - 35); // Lens label moved up by 5px
+
+            // Draw the focal points as black dots (italicized 'f'), add focal length next to them
+            diagramCtx.fillStyle = 'black';
+            diagramCtx.font = "italic 16px sans-serif"; // Italicize the 'f'
+            diagramCtx.beginPath();
+            diagramCtx.arc(centerX - focalLength * scaleFactor, diagramHeight, 5, 0, Math.PI * 2); // Left Focal Point (f)
+            diagramCtx.fill();
+            diagramCtx.fillText('f', centerX - focalLength * scaleFactor, staggerYPositions.focus); // Italicized and placed above
+            diagramCtx.fillText(`${focalLength.toFixed(1)} cm`, centerX - focalLength * scaleFactor + 30, staggerYPositions.focus); // Focal length moved 10px to the right
+            diagramCtx.beginPath();
+            diagramCtx.arc(centerX + focalLength * scaleFactor, diagramHeight, 5, 0, Math.PI * 2); // Right Focal Point (f)
+            diagramCtx.fill();
+            diagramCtx.fillText('f', centerX + focalLength * scaleFactor, staggerYPositions.focus); // Italicized and placed above
+            diagramCtx.fillText(`${focalLength.toFixed(1)} cm`, centerX + focalLength * scaleFactor + 30, staggerYPositions.focus); // Focal length moved 10px to the right
+
+            // Draw the image (apply 1.75 strength magnification)
+            if (imageLoaded) {
+                const imageWidth = 30 * (1 + (magnification - 1) * 0.75); // 1.75 strength magnification
+                const imageHeight = (imageWidth / image.width) * image.height;
+                diagramCtx.save();
+                diagramCtx.globalAlpha = 0.5; // Set 50% opacity for the image
+                diagramCtx.drawImage(image, centerX + imageDistance * scaleFactor - imageWidth / 2, diagramHeight - imageHeight / 2, imageWidth, imageHeight);
+                diagramCtx.restore();
+                diagramCtx.fillText(`Image ${imageDistance.toFixed(1)} cm`, centerX + imageDistance * scaleFactor, staggerYPositions.image); // Image and distance on one line
+
+                // Image click message
+                diagramCanvas.addEventListener('mousedown', function (e) {
+                    const mouseX = e.clientX - diagramCanvas.getBoundingClientRect().left;
+                    const imageX = centerX + imageDistance * scaleFactor;
+                    if (Math.abs(mouseX - imageX) < 20) {
+                        showScaleDiagramMessage("This is the image. Its position is determined by the focal length and the picture.");
+                    }
+                });
+            }
+
+            // Draw the eye emoji instead of the image
+            const eyeX = centerX + eyeDistance * scaleFactor;
+            diagramCtx.textAlign = 'center';
+            diagramCtx.fillText('👀', eyeX, diagramHeight + 10); // Eye emoji
+            diagramCtx.fillText(`Eye ${eyeDistance.toFixed(1)} cm`, eyeX, staggerYPositions.eye); // Eye and distance on one line
+        }
+
+        // Snap the eye distance to the image distance (only for real images)
+        function snapEyeToImage() {
+            const focalLength = parseFloat(focalLengthSlider.value);
+            const objectDistance = parseFloat(objectDistanceSlider.value);
+
+            if (objectDistance > focalLength) { // Ensure it's a real image
+                const imageDistance = (objectDistance * focalLength) / (objectDistance - focalLength);
+                if (imageDistance > 50) {
+                    eyeDistanceMessage.style.display = "block"; // Show warning message
+                    eyeDistanceMessage.style.animation = 'fadeOut 6s forwards'; // Fade out after 6 seconds
+                } else {
+                    eyeDistanceSlider.value = imageDistance;
+                    eyeDistanceLabel.textContent = `${imageDistance.toFixed(2)}`;
+                    virtualImageMessage.style.display = "none"; // Hide message for real image
+                }
+                updateOnSliderChange(); // Update diagram and lens
+            } else { // Virtual image
+                virtualImageMessage.style.display = "block"; // Show virtual image message
+                virtualImageMessage.style.animation = 'fadeOut 6s forwards'; // Fade out after 6 seconds
+            }
+        }
+
+        // Reset all values to their initial state
+        function resetSimulation() {
+            focalLengthSlider.value = 5;
+            objectDistanceSlider.value = 10;
+            eyeDistanceSlider.value = 10;
+            imageScaleSlider.value = 0.1;
+            lensRelativeX = 0.5; // Reset lens to center
+            lensRelativeY = 0.1; // Reset lens to top
+            updateOnSliderChange();
+            resizeCanvas(); // Ensure everything is updated
+        }
+
+        // Update the lens effect and scale diagram when any slider changes
+        function updateOnSliderChange() {
+            imgScale = parseFloat(imageScaleSlider.value); // Update image scale
+            imageScaleLabel.textContent = `${imgScale.toFixed(2)}`;
+
+            if (imageLoaded) {
+                applyLensEffect(parseFloat(lens.style.left) + lens.offsetWidth / 2, parseFloat(lens.style.top) + lens.offsetHeight / 2);
+                drawScaleDiagram();
+            }
+        }
+
+        // Handle dragging in the scale diagram (object, lens, eye, or focal points) with mouse and touch
+        diagramCanvas.addEventListener('mousedown', handleDragStart);
+        diagramCanvas.addEventListener('touchstart', handleDragStart);
+
+        window.addEventListener('mousemove', handleDragging);
+        window.addEventListener('touchmove', handleDragging);
+
+        window.addEventListener('mouseup', handleDragEnd);
+        window.addEventListener('touchend', handleDragEnd);
+
+        function handleDragStart(e) {
+            const canvasRect = diagramCanvas.getBoundingClientRect();
+            const mouseX = e.type === 'mousedown' ? e.clientX - canvasRect.left : e.touches[0].clientX - canvasRect.left;
+            const mouseY = e.type === 'mousedown' ? e.clientY - canvasRect.top : e.touches[0].clientY - canvasRect.top;
+
+            draggingElement = null;
+
+            // Check if the user is clicking near the object, lens, eye, or focal points, and initiate dragging
+            const centerX = diagramCanvas.width / 2;
+            const diagramHeight = diagramCanvas.height / 2;
+            const scaleFactor = (diagramCanvas.width * 0.9) / (parseFloat(objectDistanceSlider.value) + parseFloat(eyeDistanceSlider.value) + parseFloat(focalLengthSlider.value) * 2);
+
+            const objectX = centerX - parseFloat(objectDistanceSlider.value) * scaleFactor;
+            const eyeX = centerX + parseFloat(eyeDistanceSlider.value) * scaleFactor;
+            const leftFocalX = centerX - parseFloat(focalLengthSlider.value) * scaleFactor;
+            const rightFocalX = centerX + parseFloat(focalLengthSlider.value) * scaleFactor;
+            const lensX = centerX;
+
+            if (Math.abs(mouseX - objectX) < 20) {
+                draggingElement = 'object';
+            } else if (Math.abs(mouseX - eyeX) < 20) {
+                draggingElement = 'eye';
+            } else if (Math.abs(mouseX - leftFocalX) < 10) {
+                draggingElement = 'leftFocal';
+            } else if (Math.abs(mouseX - rightFocalX) < 10) {
+                draggingElement = 'rightFocal';
+            } else if (Math.abs(mouseX - lensX) < 20) {
+                draggingElement = 'lens';
+            }
+
+            if (draggingElement) {
+                isDragging = true;
+                dragStartX = mouseX;
+                e.preventDefault(); // Prevent scrolling or zooming
+            }
+        }
+
+        function handleDragging(e) {
+            if (isDragging && draggingElement) {
+                const canvasRect = diagramCanvas.getBoundingClientRect();
+                const mouseX = e.type === 'mousemove' ? e.clientX - canvasRect.left : e.touches[0].clientX - canvasRect.left;
+
+                const centerX = diagramCanvas.width / 2;
+                const scaleFactor = (diagramCanvas.width * 0.9) / (parseFloat(objectDistanceSlider.value) + parseFloat(eyeDistanceSlider.value) + parseFloat(focalLengthSlider.value) * 2);
+
+                if (draggingElement === 'object') {
+                    const newObjectDistance = (centerX - mouseX) / scaleFactor;
+                    objectDistanceSlider.value = Math.max(1, Math.min(50, newObjectDistance));
+                } else if (draggingElement === 'eye') {
+                    const newEyeDistance = (mouseX - centerX) / scaleFactor;
+                    eyeDistanceSlider.value = Math.max(1, Math.min(50, newEyeDistance));
+                } else if (draggingElement === 'leftFocal') {
+                    const newFocalLength = (centerX - mouseX) / scaleFactor;
+                    focalLengthSlider.value = Math.max(1, Math.min(30, newFocalLength));
+                } else if (draggingElement === 'rightFocal') {
+                    const newFocalLength = (mouseX - centerX) / scaleFactor;
+                    focalLengthSlider.value = Math.max(1, Math.min(30, newFocalLength));
+                }
+
+                updateOnSliderChange();
+                e.preventDefault(); // Prevent scrolling or zooming
+            }
+        }
+
+        function handleDragEnd() {
+            isDragging = false;
+            draggingElement = null;
+        }
+
+        // Add event listeners to all sliders for dynamic updates
+        objectDistanceSlider.addEventListener('input', updateOnSliderChange);
+        eyeDistanceSlider.addEventListener('input', updateOnSliderChange);
+        focalLengthSlider.addEventListener('input', updateOnSliderChange);
+        imageScaleSlider.addEventListener('input', updateOnSliderChange);
+
+        // Snap button functionality
+        snapButton.addEventListener('click', snapEyeToImage);
+
+        // Reset button functionality
+        resetButton.addEventListener('click', resetSimulation);
+
+        // Initial resize to fit container
+        resizeCanvas();
+    </script>
+</body>
+</html>

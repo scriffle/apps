@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>汉字书写测验</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: auto; }
+    h1 { text-align: center; }
+    #intro { margin-bottom: 20px; }
+    #timer { display: none; position: sticky; top: 0; background: white; padding: 10px; font-size: 1.2rem; z-index: 100; }
+    #quizForm { column-count: 2; column-gap: 20px; }
+    @media (min-width: 1000px) { #quizForm { column-count: 3; } }
+    .question { margin: 15px 0; break-inside: avoid; display: none; }
+    .choices label { display: block; margin-bottom: 5px; }
+    .correct { color: green; }
+    .incorrect { color: darkgoldenrod; }
+    .wrong-selection { color: red; font-weight: bold; }
+    #submit, #restart { display: none; margin-top: 20px; padding: 10px 20px; font-size: 1rem; }
+    #result { font-weight: bold; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>汉字书写测验</h1>
+  <p id="intro">
+    下一个十年将出现 AI、生物技术与量子计算的融合浪潮。在这一过程中，实时自适应网络与免维护材料将推动个性化服务在日常设备中的普及。当行业夸大其研发蓝图直到监管介入时，清晰的规范和完善的知识体系仍有待建立。随着真空量子传感器与千禧级加密技术的成熟，基于良知的数据隐私框架将引领开发。与此同时，团队需构建弹性供应链，并依靠自动化质量检测避免差错级联。从密集人机接口到全方位能量采集，这些趋势在新纪元的门槛交汇，塑造以用户为中心的科技愿景。
+  </p>
+
+  <button id="start">开始测验</button>
+  <div id="timer">时间：<span id="timeDisplay">0</span> 秒</div>
+  <form id="quizForm"></form>
+  <button id="submit">提交</button>
+  <button id="restart">再次测验</button>
+  <div id="result"></div>
+
+  <script>
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    const allWords = [
+      { correct: '平', choices: ['华','年','平','干'] },
+      { correct: '风', choices: ['凫','风','凤','习'] },
+      { correct: '马', choices: ['牦','每','妈','马'] },
+      { correct: '趋势', choices: ['序','祺','绪','趋势'] },
+      { correct: '电', choices: ['画','申','电','电'] },
+      { correct: '辨', choices: ['辨','遍','辩','辫'] },
+      { correct: '问', choices: ['闻','闵','问','闯'] },
+      { correct: '间', choices: ['闷','闻','间','闻'] },
+      { correct: '没', choices: ['没','泽','冇','及'] },
+      { correct: '料', choices: ['料','科','粮','料'] },
+      { correct: '人', choices: ['人','刃','入','八'] },
+      { correct: '本', choices: ['朴','术','木','本'] },
+      { correct: '理', choices: ['礼','埋','里','理'] },
+      { correct: '笑', choices: ['孝','筱','笑','交'] },
+      { correct: '进', choices: ['近','立','放','进'] },
+      { correct: '关', choices: ['责','观','见','关'] },
+      { correct: '是', choices: ['事','旳','日','是'] },
+      { correct: '来', choices: ['木','莱','来','来'] },
+      { correct: '研', choices: ['砖','岩','砚','研'] },
+      { correct: '密', choices: ['幂','蜜','密','密'] },
+      { correct: '纳', choices: ['肭','那','纳','纳'] },
+      { correct: '无', choices: ['夭','夫','天','无'] },
+      { correct: '见', choices: ['贝','观','件','见'] },
+      { correct: '时', choices: ['均','吓','时','时'] },
+      { correct: '化', choices: ['华','话','花','化'] }
+    ];
+
+    let quizWords, timerInterval, timeStart;
+    const form = document.getElementById('quizForm'),
+          timerDiv = document.getElementById('timer'),
+          timeDisplay = document.getElementById('timeDisplay'),
+          startBtn = document.getElementById('start'),
+          submitBtn = document.getElementById('submit'),
+          restartBtn = document.getElementById('restart'),
+          resultDiv = document.getElementById('result');
+
+    function startQuiz() {
+      quizWords = shuffle(allWords.slice()).slice(0, 10);
+      form.innerHTML = '';
+      resultDiv.textContent = '';
+      startBtn.style.display = 'none';
+      submitBtn.style.display = 'inline-block';
+      restartBtn.style.display = 'none';
+      document.getElementById('intro').style.display = 'none';
+      timerDiv.style.display = 'block';
+
+      quizWords.forEach((w, i) => {
+        const opts = shuffle(w.choices.slice());
+        const div = document.createElement('div');
+        div.className = 'question';
+        div.style.display = 'block';
+        div.innerHTML = `<strong>${i+1}、“${w.correct}” 的正确写法是？</strong>` +
+                        '<div class="choices">' +
+                        opts.map(c => `<label><input type="radio" name="q${i}" value="${c}"> ${c}</label>`).join('') +
+                        '</div>' +
+                        `<div id="fb${i}" class="feedback"></div>`;
+        form.appendChild(div);
+      });
+
+      timeStart = Date.now();
+      timeDisplay.textContent = '0';
+      timerInterval = setInterval(() => {
+        const secs = Math.floor((Date.now() - timeStart) / 1000);
+        timeDisplay.textContent = secs;
+      }, 1000);
+    }
+
+    function showResults() {
+      clearInterval(timerInterval);
+      timerDiv.style.display = 'none';
+      let score = 0;
+      quizWords.forEach((w, i) => {
+        const sel = form.elements['q' + i]?.value;
+        const labels = form.querySelectorAll(`[name=q${i}]`);
+        labels.forEach(inp => {
+          const lbl = inp.parentNode;
+          if (inp.value === w.correct) lbl.classList.add('correct');
+          else lbl.classList.add('incorrect');
+          if (inp.checked && inp.value !== w.correct) lbl.classList.add('wrong-selection');
+          if (inp.checked) lbl.style.fontWeight = 'bold';
+        });
+        if (sel === w.correct) score++;
+      });
+      const totalTime = Math.floor((Date.now() - timeStart) / 1000);
+      resultDiv.textContent = `你答对了 ${score} / ${quizWords.length}，用时 ${totalTime} 秒。`;
+      submitBtn.style.display = 'none';
+      restartBtn.style.display = 'inline-block';
+    }
+
+    startBtn.addEventListener('click', startQuiz);
+    submitBtn.addEventListener('click', showResults);
+    restartBtn.addEventListener('click', startQuiz);
+  </script>
+</body>
+</html>

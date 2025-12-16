@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Wikipedia Nearby Explorer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <style>
+    html, body { margin: 0; padding: 0; font-family: system-ui, sans-serif; background: #f7f7fa; }
+    #controls {
+      padding: 1em;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .6em;
+    }
+    #controls label { margin-right: .5em; }
+    #status { font-size: 1em; color: #2a2a2a; }
+    #map {
+      height: 50vh; width: 100vw;
+      position: relative;
+    }
+    #crosshair {
+      position: absolute;
+      left: 50%; top: 50%;
+      width: 32px; height: 32px;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      z-index: 401; /* Just above leaflet overlays */
+      opacity: 0.36;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #crosshair svg { display: block; }
+    #results { margin: 0 auto; max-width: 700px; padding: 1em; }
+    .article { display: flex; align-items: flex-start; gap: 1em; background: #fff; margin: 1em 0; padding: 1em; border-radius: 1em; box-shadow: 0 2px 8px #0001; }
+    .article img { width: 60px; height: 60px; object-fit: cover; border-radius: .5em; flex-shrink: 0; }
+    .article-content { flex: 1 1 auto; }
+    .article-title { font-weight: bold; font-size: 1.1em; margin-bottom: 0.2em; }
+    .article-link { text-decoration: none; color: #0645ad; }
+    .article-dist { color: #888; font-size: 0.93em; }
+    .article-summary { margin: 0.1em 0 0.2em 0; color: #222; font-size: 1em; }
+    .center-btn { background: #0661c7; color: #fff; border: none; padding: 0.3em 1em; border-radius: 1em; font-size: 0.96em; cursor: pointer; margin-left: 0.5em; }
+    .center-btn:hover { background: #2982ea; }
+    @media (max-width:600px) {
+      #results { padding: 0.5em; }
+      .article { flex-direction: column; align-items: stretch; }
+      .article img { width: 100%; height: 120px; margin-bottom: 0.4em; }
+      #controls { flex-direction: column; align-items: stretch; gap: 0.5em;}
+      #crosshair { width: 22px; height: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <button id="locateBtn" onclick="findNearby()">Find Articles Near Me</button>
+    <label>Radius:
+      <select id="radiusSel" onchange="refreshAtMapCenter()">
+        <option value="1000">1 km</option>
+        <option value="3000">3 km</option>
+        <option value="5000" selected>5 km</option>
+        <option value="10000">10 km</option>
+        <option value="20000">20 km</option>
+      </select>
+    </label>
+    <label>Language:
+      <select id="langSel" onchange="refreshAtMapCenter()">
+        <option value="en" selected>English</option>
+        <option value="de">Deutsch</option>
+        <option value="fr">Français</option>
+        <option value="es">Español</option>
+        <option value="ru">Русский</option>
+        <option value="zh">中文</option>
+        <option value="ja">日本語</option>
+        <option value="ar">العربية</option>
+        <option value="pt">Português</option>
+        <option value="it">Italiano</option>
+      </select>
+    </label>
+    <span id="status"></span>
+    <button id="refreshBtn" onclick="refreshAtMapCenter()">Refresh Search Here</button>
+  </div>
+  <div id="map" style="position:relative;">
+    <div id="crosshair">
+      <svg width="100%" height="100%" viewBox="0 0 32 32">
+        <circle cx="16" cy="16" r="10" stroke="#555" stroke-width="1.3" fill="none"/>
+        <line x1="16" y1="5" x2="16" y2="27" stroke="#555" stroke-width="1"/>
+        <line x1="5" y1="16" x2="27" y2="16" stroke="#555" stroke-width="1"/>
+      </svg>
+    </div>
+  </div>
+  <div id="results"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    let map, userMarker, articleMarkers = [];
+    let lastSearch = { lat: null, lon: null, radius: null, lang: null };
+    const FALLBACK_LIMITS = [20, 10, 5];
+
+    function initMap(lat = -37.8136, lon = 144.9631) {
+      if (map) {
+        map.setView([lat, lon], 14);
+        return;
+      }
+      map = L.map('map').setView([lat, lon], 14);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map);
+      // Keep crosshair centered
+      document.getElementById('crosshair').style.pointerEvents = 'none';
+      map.on('moveend', function() {
+        document.getElementById('refreshBtn').disabled = false;
+      });
+      // Re-attach crosshair after Leaflet resets map innerHTML
+      setTimeout(() => {
+        if (!document.getElementById('crosshair')) {
+          const crosshair = document.createElement('div');
+          crosshair.id = "crosshair";
+          crosshair.innerHTML = `<svg width="100%" height="100%" viewBox="0 0 32 32">
+            <circle cx="16" cy="16" r="10" stroke="#555" stroke-width="1.3" fill="none"/>
+            <line x1="16" y1="5" x2="16" y2="27" stroke="#555" stroke-width="1"/>
+            <line x1="5" y1="16" x2="27" y2="16" stroke="#555" stroke-width="1"/>
+          </svg>`;
+          crosshair.style.position = "absolute";
+          crosshair.style.left = "50%";
+          crosshair.style.top = "50%";
+          crosshair.style.transform = "translate(-50%,-50%)";
+          crosshair.style.zIndex = 401;
+          crosshair.style.opacity = 0.36;
+          crosshair.style.pointerEvents = "none";
+          document.getElementById('map').appendChild(crosshair);
+        }
+      }, 300);
+    }
+
+    function addUserMarker(lat, lon) {
+      if (userMarker) {
+        userMarker.setLatLng([lat, lon]);
+      } else {
+        userMarker = L.marker([lat, lon], {icon: L.icon({
+          iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
+          iconSize: [36, 36],
+          iconAnchor: [18, 36],
+        })}).addTo(map)
+          .bindPopup("You are here").openPopup();
+      }
+    }
+
+    function clearArticleMarkers() {
+      articleMarkers.forEach(m => map.removeLayer(m));
+      articleMarkers = [];
+    }
+
+    function setStatus(txt, isErr=false) {
+      const st = document.getElementById('status');
+      st.textContent = txt;
+      st.style.color = isErr ? "#b20000" : "#2a2a2a";
+    }
+
+    async function findNearby() {
+      setStatus("Getting your location…");
+      document.getElementById("results").innerHTML = "";
+      if (!navigator.geolocation) {
+        setStatus("Geolocation not supported.", true);
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        initMap(lat, lon);
+        addUserMarker(lat, lon);
+        map.setView([lat, lon], 15);
+        setStatus("Searching for nearby Wikipedia articles…");
+        await fetchAndDisplayArticles(lat, lon);
+      }, (err) => {
+        setStatus("Could not get your location. Please allow access.", true);
+      });
+    }
+
+    async function fetchAndDisplayArticles(lat, lon) {
+      const radius = document.getElementById("radiusSel").value;
+      const lang = document.getElementById("langSel").value;
+      clearArticleMarkers();
+      document.getElementById("results").innerHTML = `<div>Loading…</div>`;
+      lastSearch = { lat, lon, radius, lang };
+      document.getElementById('refreshBtn').disabled = true;
+
+      let lastError = null;
+      for (let i = 0; i < FALLBACK_LIMITS.length; ++i) {
+        const WIKI_LIMIT = FALLBACK_LIMITS[i];
+        try {
+          // 1. Fetch articles
+          const apiUrl = `https://${lang}.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}%7C${lon}&gsradius=${radius}&gslimit=${WIKI_LIMIT}&format=json&origin=*`;
+          const res = await fetch(apiUrl);
+          const data = await res.json();
+          let found = data.query.geosearch.length;
+
+          if (!found) {
+            if (i === FALLBACK_LIMITS.length - 1) {
+              document.getElementById("results").innerHTML = `<div>No Wikipedia articles found within ${radius/1000} km of this point.</div>`;
+              setStatus("No articles found.", true);
+              document.getElementById('refreshBtn').disabled = false;
+              return;
+            }
+            continue; // try lower limit if no articles
+          }
+          let capMsg = "";
+          if (found === WIKI_LIMIT && i === 0) {
+            capMsg = `<div style="font-size:0.95em;color:#bb6700;margin:.3em 0;">
+              Showing the ${WIKI_LIMIT} closest articles within ${radius/1000} km.<br>
+              Zoom in, or pan the map for more results!
+            </div>`;
+          }
+          if (i > 0) {
+            capMsg += `<div style="font-size:0.95em;color:#b70000;">Partial results (limit auto-reduced to ${WIKI_LIMIT}).</div>`;
+          }
+          setStatus(`${found} articles found.`);
+          document.getElementById('refreshBtn').disabled = true;
+
+          // 2. Gather titles for details lookup, but avoid too-long URLs
+          let titles = data.query.geosearch.map(a => a.title);
+          let titleChunk = [];
+          let urlBaseLen = (`https://${lang}.wikipedia.org/w/api.php?action=query&prop=pageimages|extracts&exintro=1&exsentences=1&explaintext=1&piprop=thumbnail&pithumbsize=200&format=json&origin=*`).length + 10;
+          let titlesLen = 0, maxLen = 1800; // Keep URL under this
+
+          for (let t of titles) {
+            if ((titlesLen + t.length + 1) > maxLen) break;
+            titleChunk.push(t);
+            titlesLen += t.length + 1;
+          }
+          if (titleChunk.length < titles.length) {
+            capMsg += `<div style="font-size:0.95em;color:#bb6700;">Only the first ${titleChunk.length} articles shown due to technical limits.</div>`;
+          }
+
+          // 3. Fetch details: thumbnail + extract in one API call
+          const detailsApi = `https://${lang}.wikipedia.org/w/api.php?` +
+            `action=query&prop=pageimages|extracts&exintro=1&exsentences=1&explaintext=1&piprop=thumbnail&pithumbsize=200&format=json&origin=*` +
+            `&titles=${encodeURIComponent(titleChunk.join('|'))}`;
+          const detRes = await fetch(detailsApi);
+          const detData = await detRes.json();
+
+          // Make pageId lookup
+          const detailsByTitle = {};
+          for (const pageid in detData.query.pages) {
+            const p = detData.query.pages[pageid];
+            detailsByTitle[p.title] = p;
+          }
+
+          // 4. Render
+          let html = capMsg;
+          data.query.geosearch.slice(0, titleChunk.length).forEach((a, idx) => {
+            const d = detailsByTitle[a.title] || {};
+            html += `<div class="article">
+                ${d.thumbnail ? `<img src="${d.thumbnail.source}" alt="Image of ${a.title}">` : `<img src="https://upload.wikimedia.org/wikipedia/commons/6/63/Wikipedia-logo.png" alt="Wikipedia">`}
+                <div class="article-content">
+                  <div class="article-title">
+                    <a class="article-link" href="https://${lang}.wikipedia.org/wiki/${encodeURIComponent(a.title)}" target="_blank">${a.title}</a>
+                    <span class="article-dist">(${Math.round(a.dist)} m)</span>
+                    <button class="center-btn" onclick="centerOn(${a.lat},${a.lon})">📍</button>
+                  </div>
+                  <div class="article-summary">${d.extract ? d.extract : ""}</div>
+                </div>
+              </div>`;
+            // Add map marker
+            const marker = L.marker([a.lat, a.lon]).addTo(map)
+              .bindPopup(`<a href="https://${lang}.wikipedia.org/wiki/${encodeURIComponent(a.title)}" target="_blank">${a.title}</a><br>
+                <span style='color:#333;font-size:0.96em;'>${d.extract ? d.extract : ""}</span><br>
+                <span style='color:#555;font-size:0.92em;'>${Math.round(a.dist)} m away</span>`);
+            articleMarkers.push(marker);
+          });
+          document.getElementById("results").innerHTML = html;
+          document.getElementById('refreshBtn').disabled = false;
+          return;
+        } catch (err) {
+          lastError = err;
+          // Try next lower limit
+        }
+      }
+      // If we get here, all attempts failed
+      setStatus("Could not load articles. Try zooming, panning, or reducing radius.", true);
+      document.getElementById("results").innerHTML = `<div>Could not load articles. Try again later.</div>`;
+      document.getElementById('refreshBtn').disabled = false;
+    }
+
+    function centerOn(lat, lon) {
+      map.setView([lat, lon], 16, { animate: true });
+    }
+
+    async function refreshAtMapCenter() {
+      if (!map) return;
+      const center = map.getCenter();
+      map.setView(center, map.getZoom(), { animate: true });
+      await fetchAndDisplayArticles(center.lat, center.lng);
+    }
+
+    window.onload = () => {
+      let lang = navigator.language?.slice(0,2) || "en";
+      const langSel = document.getElementById('langSel');
+      for (let i=0; i<langSel.options.length; i++) {
+        if (langSel.options[i].value === lang) {
+          langSel.selectedIndex = i;
+          break;
+        }
+      }
+      initMap();
+      document.getElementById('refreshBtn').disabled = false;
+    };
+  </script>
+</body>
+</html>

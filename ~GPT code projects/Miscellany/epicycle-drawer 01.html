@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Draw and Generate Epicycles</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+            margin: 20px;
+        }
+        canvas {
+            background: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            margin: 20px;
+            cursor: crosshair;
+        }
+        .controls {
+            margin: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+        }
+        button {
+            padding: 8px 16px;
+            margin: 0 5px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .mode {
+            padding: 5px;
+            margin: 5px 0;
+            background: #eee;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Draw and Generate Epicycles</h1>
+    <div class="controls">
+        <div class="mode">
+            Current Mode: <span id="modeDisplay">Drawing</span>
+        </div>
+        <button onclick="startDrawing()">Draw Mode</button>
+        <button onclick="generateEpicycles()">Generate Epicycles</button>
+        <button onclick="clearCanvas()">Clear</button>
+        Number of circles: <input type="range" min="1" max="100" value="50" id="circleCount">
+    </div>
+    <canvas id="canvas" width="800" height="600"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const modeDisplay = document.getElementById('modeDisplay');
+        
+        let isDrawing = false;
+        let userPath = [];
+        let fourierX = [];
+        let time = 0;
+        let drawing = false;
+        let animationId;
+        let mode = 'drawing'; // 'drawing' or 'epicycles'
+        let lastPoint = null;
+        let path = [];
+        let isShiftPressed = false;
+
+        // Complex number helper functions
+        const complex = (r, i) => ({ re: r, im: i });
+        const cExp = (freq, t) => complex(Math.cos(freq * t), Math.sin(freq * t));
+        const cMult = (a, b) => complex(
+            a.re * b.re - a.im * b.im,
+            a.re * b.im + a.im * b.re
+        );
+
+        // Discrete Fourier Transform
+        function dft(signal) {
+            const X = [];
+            const N = signal.length;
+            for (let k = 0; k < N; k++) {
+                let sum = complex(0, 0);
+                for (let n = 0; n < N; n++) {
+                    const phi = (2 * Math.PI * k * n) / N;
+                    const c = complex(Math.cos(phi), -Math.sin(phi));
+                    sum.re += signal[n].re * c.re - signal[n].im * c.im;
+                    sum.im += signal[n].re * c.im + signal[n].im * c.re;
+                }
+                sum.re = sum.re / N;
+                sum.im = sum.im / N;
+                X[k] = { freq: k, amp: Math.sqrt(sum.re * sum.re + sum.im * sum.im), phase: Math.atan2(sum.im, sum.re) };
+            }
+            return X.sort((a, b) => b.amp - a.amp);
+        }
+
+        // Draw a circle
+        function drawCircle(x, y, radius) {
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, 2 * Math.PI);
+            ctx.stroke();
+        }
+
+        // Draw epicycles
+        function epicycles(x, y, rotation, fourier) {
+            const circleCount = parseInt(document.getElementById('circleCount').value);
+            for (let i = 0; i < Math.min(circleCount, fourier.length); i++) {
+                const prevX = x;
+                const prevY = y;
+                const freq = fourier[i].freq;
+                const radius = fourier[i].amp;
+                const phase = fourier[i].phase;
+                
+                x += radius * Math.cos(freq * time + phase + rotation);
+                y += radius * Math.sin(freq * time + phase + rotation);
+                
+                ctx.strokeStyle = '#ddd';
+                drawCircle(prevX, prevY, radius);
+                
+                ctx.strokeStyle = '#999';
+                ctx.beginPath();
+                ctx.moveTo(prevX, prevY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            }
+            return complex(x, y);
+        }
+
+        // Main drawing function for epicycles
+        function draw() {
+            if (mode !== 'epicycles') return;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            
+            const v = epicycles(0, 0, 0, fourierX);
+            
+            if (path.length > 0) {
+                ctx.strokeStyle = '#4CAF50';
+                ctx.beginPath();
+                ctx.moveTo(path[0].x, path[0].y);
+                for (let i = 1; i < path.length; i++) {
+                    ctx.lineTo(path[i].x, path[i].y);
+                }
+                ctx.stroke();
+            }
+            
+            path.unshift({ x: v.re, y: v.im });
+            if (path.length > 500) path.pop();
+            
+            time += 2 * Math.PI / fourierX.length;
+            if (time > 2 * Math.PI) {
+                time = 0;
+                path = [];
+            }
+            
+            ctx.restore();
+            animationId = requestAnimationFrame(draw);
+        }
+
+        // User drawing functions
+        function startDrawing() {
+            mode = 'drawing';
+            modeDisplay.textContent = 'Drawing';
+            clearCanvas();
+            cancelAnimationFrame(animationId);
+        }
+
+        function generateEpicycles() {
+            if (userPath.length < 2) {
+                alert('Please draw something first!');
+                return;
+            }
+            
+            mode = 'epicycles';
+            modeDisplay.textContent = 'Epicycles';
+            
+            // Center the drawing
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            // Convert user path to complex numbers
+            const complexPoints = userPath.map(p => complex(
+                p.x - centerX,
+                p.y - centerY
+            ));
+            
+            // Generate Fourier transform
+            fourierX = dft(complexPoints);
+            
+            // Reset animation
+            time = 0;
+            path = [];
+            
+            // Start animation
+            draw();
+        }
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            userPath = [];
+            path = [];
+            time = 0;
+            lastPoint = null;
+            cancelAnimationFrame(animationId);
+        }
+
+        // Key event handlers for straight-line locking
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Shift') {
+                isShiftPressed = true;
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'Shift') {
+                isShiftPressed = false;
+            }
+        });
+
+        // Mouse event handlers
+        canvas.addEventListener('mousedown', (e) => {
+            if (mode !== 'drawing') return;
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            lastPoint = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+            userPath.push(lastPoint);
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing || mode !== 'drawing') return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const currentPoint = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+
+            if (isShiftPressed && lastPoint) {
+                const dx = Math.abs(currentPoint.x - lastPoint.x);
+                const dy = Math.abs(currentPoint.y - lastPoint.y);
+
+                if (dx > dy) {
+                    currentPoint.y = lastPoint.y; // Lock to horizontal
+                } else {
+                    currentPoint.x = lastPoint.x; // Lock to vertical
+                }
+            }
+            
+            // Draw line
+            ctx.beginPath();
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.moveTo(lastPoint.x, lastPoint.y);
+            ctx.lineTo(currentPoint.x, currentPoint.y);
+            ctx.stroke();
+            
+            lastPoint = currentPoint;
+            userPath.push(currentPoint);
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            isDrawing = false;
+        });
+
+        // Initialize
+        clearCanvas();
+    </script>
+</body>
+</html>

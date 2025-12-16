@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Electron Inverse Square Law Simulator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 15px;
+            padding: 25px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        canvas {
+            display: block;
+            margin: 0 auto 20px;
+            background: white;
+            border-radius: 10px;
+            cursor: crosshair;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .info-panel {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        
+        .info-label {
+            font-weight: bold;
+        }
+        
+        .info-value {
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 5px 15px;
+            border-radius: 5px;
+            min-width: 150px;
+            text-align: right;
+        }
+        
+        .highlight {
+            font-size: 24px;
+            color: #ffeb3b;
+            text-shadow: 0 0 10px rgba(255, 235, 59, 0.5);
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            flex: 1;
+            padding: 12px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: bold;
+            transition: transform 0.2s, box-shadow 0.2s;
+            min-width: 140px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .instructions {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .instructions strong {
+            color: #ffeb3b;
+        }
+        
+        .law-box {
+            background: rgba(255, 235, 59, 0.2);
+            border: 2px solid #ffeb3b;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        .law-box h3 {
+            margin: 0 0 10px 0;
+            color: #ffeb3b;
+        }
+        
+        .formula {
+            font-size: 20px;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>⚡ Electron Inverse Square Law Simulator</h1>
+    <p class="subtitle">Explore how repulsive force changes with distance between electrons</p>
+    
+    <div class="container">
+        <canvas id="canvas" width="800" height="400"></canvas>
+        
+        <div class="info-panel">
+            <div class="info-row">
+                <span class="info-label">Distance:</span>
+                <span class="info-value" id="distance">--</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Repulsive Force:</span>
+                <span class="info-value highlight" id="force">--</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Force Multiplier:</span>
+                <span class="info-value" id="multiplier">--</span>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button onclick="resetElectrons()">Reset Position</button>
+            <button onclick="halfDistance()">Halve Distance</button>
+            <button onclick="doubleDistance()">Double Distance</button>
+        </div>
+        
+        <div class="controls" style="justify-content: center;">
+            <label style="display: flex; align-items: center; gap: 10px; font-size: 18px; cursor: pointer; background: rgba(255, 255, 255, 0.2); padding: 15px 25px; border-radius: 8px;">
+                <input type="checkbox" id="freeMove" onchange="toggleFreeMove()" style="width: 20px; height: 20px; cursor: pointer;">
+                <span>⚡ Allow Free Movement (electrons repel automatically)</span>
+            </label>
+        </div>
+        
+        <div class="law-box">
+            <h3>Inverse Square Law</h3>
+            <div class="formula">Force = k / (distance²)</div>
+            <p style="margin: 10px 0 0 0; font-size: 14px;">
+                Halve the distance → Force × 4<br>
+                Double the distance → Force ÷ 4
+            </p>
+        </div>
+        
+        <div class="instructions">
+            <strong>How to Use:</strong><br>
+            • <strong>Manual Mode:</strong> Click and drag either electron (red circles) to move it<br>
+            • <strong>Free Movement:</strong> Check the box to let electrons repel each other automatically<br>
+            • Watch how the force changes as distance changes<br>
+            • Blue arrows show the repulsive force direction and strength<br>
+            • Use buttons to test specific distance changes<br>
+            • If an electron escapes the box in free movement mode, the simulation resets
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let electron1 = { x: 300, y: 200, radius: 20, dragging: false, vx: 0, vy: 0 };
+        let electron2 = { x: 500, y: 200, radius: 20, dragging: false, vx: 0, vy: 0 };
+        let initialDistance = 200;
+        let dragOffset = { x: 0, y: 0 };
+        let freeMove = false;
+        let animationId = null;
+        
+        function calculateDistance() {
+            const dx = electron2.x - electron1.x;
+            const dy = electron2.y - electron1.y;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+        
+        function calculateForce(distance) {
+            // Arbitrary constant for visualization
+            const k = 50000;
+            return k / (distance * distance);
+        }
+        
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const distance = calculateDistance();
+            const force = calculateForce(distance);
+            const multiplier = calculateForce(distance) / calculateForce(initialDistance);
+            
+            // Draw electric field lines
+            ctx.strokeStyle = 'rgba(100, 150, 255, 0.2)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 8; i++) {
+                const angle = (i * Math.PI * 2) / 8;
+                const startX = electron1.x + Math.cos(angle) * electron1.radius;
+                const startY = electron1.y + Math.sin(angle) * electron1.radius;
+                const endX = electron1.x + Math.cos(angle) * 100;
+                const endY = electron1.y + Math.sin(angle) * 100;
+                
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+                
+                const startX2 = electron2.x + Math.cos(angle) * electron2.radius;
+                const startY2 = electron2.y + Math.sin(angle) * electron2.radius;
+                const endX2 = electron2.x + Math.cos(angle) * 100;
+                const endY2 = electron2.y + Math.sin(angle) * 100;
+                
+                ctx.beginPath();
+                ctx.moveTo(startX2, startY2);
+                ctx.lineTo(endX2, endY2);
+                ctx.stroke();
+            }
+            
+            // Draw electrons
+            drawElectron(electron1);
+            drawElectron(electron2);
+            
+            // Draw force arrows ON TOP of electrons
+            const dx = electron2.x - electron1.x;
+            const dy = electron2.y - electron1.y;
+            const angle = Math.atan2(dy, dx);
+            const arrowLength = Math.min(force * 1.0, 160);
+            
+            // Arrow from electron1
+            drawArrow(
+                electron1.x,
+                electron1.y,
+                electron1.x + Math.cos(angle + Math.PI) * arrowLength,
+                electron1.y + Math.sin(angle + Math.PI) * arrowLength,
+                'rgba(255, 50, 50, 0.9)'
+            );
+            
+            // Arrow from electron2
+            drawArrow(
+                electron2.x,
+                electron2.y,
+                electron2.x + Math.cos(angle) * arrowLength,
+                electron2.y + Math.sin(angle) * arrowLength,
+                'rgba(255, 50, 50, 0.9)'
+            );
+            
+            // Draw distance line
+            ctx.strokeStyle = 'rgba(100, 100, 100, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(electron1.x, electron1.y);
+            ctx.lineTo(electron2.x, electron2.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Update info
+            document.getElementById('distance').textContent = distance.toFixed(1) + ' pixels';
+            document.getElementById('force').textContent = force.toFixed(2) + ' units';
+            document.getElementById('multiplier').textContent = '×' + multiplier.toFixed(2);
+        }
+        
+        function drawElectron(e) {
+            // Outer glow
+            const gradient = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, e.radius + 10);
+            gradient.addColorStop(0, 'rgba(50, 100, 255, 0.3)');
+            gradient.addColorStop(1, 'rgba(50, 100, 255, 0)');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(e.x, e.y, e.radius + 10, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Electron body
+            const bodyGradient = ctx.createRadialGradient(e.x - 5, e.y - 5, 0, e.x, e.y, e.radius);
+            bodyGradient.addColorStop(0, '#6b9bff');
+            bodyGradient.addColorStop(1, '#0055cc');
+            ctx.fillStyle = bodyGradient;
+            ctx.beginPath();
+            ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Border
+            ctx.strokeStyle = '#003399';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Minus sign
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('−', e.x, e.y);
+        }
+        
+        function drawArrow(x1, y1, x2, y2, color) {
+            const headLength = 24;
+            const angle = Math.atan2(y2 - y1, x2 - x1);
+            
+            ctx.strokeStyle = color;
+            ctx.fillStyle = color;
+            ctx.lineWidth = 8;
+            
+            // Line
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+            
+            // Calculate tip position (extends beyond x2, y2)
+            const tipX = x2 + headLength * Math.cos(angle);
+            const tipY = y2 + headLength * Math.sin(angle);
+            
+            // Arrowhead with base at (x2, y2) and tip extending forward
+            ctx.beginPath();
+            ctx.moveTo(tipX, tipY);
+            ctx.lineTo(
+                x2 - headLength * 0.5 * Math.cos(angle - Math.PI / 2),
+                y2 - headLength * 0.5 * Math.sin(angle - Math.PI / 2)
+            );
+            ctx.lineTo(
+                x2 - headLength * 0.5 * Math.cos(angle + Math.PI / 2),
+                y2 - headLength * 0.5 * Math.sin(angle + Math.PI / 2)
+            );
+            ctx.closePath();
+            ctx.fill();
+        }
+        
+        function isPointInElectron(x, y, electron) {
+            const dx = x - electron.x;
+            const dy = y - electron.y;
+            return Math.sqrt(dx * dx + dy * dy) < electron.radius;
+        }
+        
+        canvas.addEventListener('mousedown', (e) => {
+            if (freeMove) return; // Don't allow dragging in free move mode
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            if (isPointInElectron(x, y, electron1)) {
+                electron1.dragging = true;
+                dragOffset.x = x - electron1.x;
+                dragOffset.y = y - electron1.y;
+            } else if (isPointInElectron(x, y, electron2)) {
+                electron2.dragging = true;
+                dragOffset.x = x - electron2.x;
+                dragOffset.y = y - electron2.y;
+            }
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (freeMove) return; // Don't allow dragging in free move mode
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            if (electron1.dragging) {
+                electron1.x = Math.max(electron1.radius, Math.min(canvas.width - electron1.radius, x - dragOffset.x));
+                electron1.y = Math.max(electron1.radius, Math.min(canvas.height - electron1.radius, y - dragOffset.y));
+                draw();
+            } else if (electron2.dragging) {
+                electron2.x = Math.max(electron2.radius, Math.min(canvas.width - electron2.radius, x - dragOffset.x));
+                electron2.y = Math.max(electron2.radius, Math.min(canvas.height - electron2.radius, y - dragOffset.y));
+                draw();
+            }
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            electron1.dragging = false;
+            electron2.dragging = false;
+        });
+        
+        canvas.addEventListener('mouseleave', () => {
+            electron1.dragging = false;
+            electron2.dragging = false;
+        });
+        
+        function resetElectrons() {
+            // Stop free movement if active
+            if (freeMove) {
+                document.getElementById('freeMove').checked = false;
+                freeMove = false;
+                if (animationId) {
+                    cancelAnimationFrame(animationId);
+                    animationId = null;
+                }
+            }
+            
+            electron1.x = 300;
+            electron1.y = 200;
+            electron1.vx = 0;
+            electron1.vy = 0;
+            electron2.x = 500;
+            electron2.y = 200;
+            electron2.vx = 0;
+            electron2.vy = 0;
+            initialDistance = calculateDistance();
+            draw();
+        }
+        
+        function halfDistance() {
+            const centerX = (electron1.x + electron2.x) / 2;
+            const centerY = (electron1.y + electron2.y) / 2;
+            const dx = electron2.x - electron1.x;
+            const dy = electron2.y - electron1.y;
+            
+            electron1.x = centerX - dx / 4;
+            electron1.y = centerY - dy / 4;
+            electron2.x = centerX + dx / 4;
+            electron2.y = centerY + dy / 4;
+            draw();
+        }
+        
+        function doubleDistance() {
+            const centerX = (electron1.x + electron2.x) / 2;
+            const centerY = (electron1.y + electron2.y) / 2;
+            const dx = electron2.x - electron1.x;
+            const dy = electron2.y - electron1.y;
+            
+            const newX1 = centerX - dx;
+            const newY1 = centerY - dy;
+            const newX2 = centerX + dx;
+            const newY2 = centerY + dy;
+            
+            // Check boundaries
+            if (newX1 >= electron1.radius && newX2 <= canvas.width - electron2.radius &&
+                newY1 >= electron1.radius && newY2 <= canvas.height - electron2.radius) {
+                electron1.x = newX1;
+                electron1.y = newY1;
+                electron2.x = newX2;
+                electron2.y = newY2;
+            }
+            draw();
+        }
+        
+        function toggleFreeMove() {
+            freeMove = document.getElementById('freeMove').checked;
+            
+            if (freeMove) {
+                // Reset velocities
+                electron1.vx = 0;
+                electron1.vy = 0;
+                electron2.vx = 0;
+                electron2.vy = 0;
+                // Start animation
+                animate();
+            } else {
+                // Stop animation
+                if (animationId) {
+                    cancelAnimationFrame(animationId);
+                    animationId = null;
+                }
+                draw();
+            }
+        }
+        
+        function checkBounds() {
+            // Check if either electron is out of bounds
+            if (electron1.x < 0 || electron1.x > canvas.width ||
+                electron1.y < 0 || electron1.y > canvas.height ||
+                electron2.x < 0 || electron2.x > canvas.width ||
+                electron2.y < 0 || electron2.y > canvas.height) {
+                
+                // Reset simulation
+                document.getElementById('freeMove').checked = false;
+                freeMove = false;
+                if (animationId) {
+                    cancelAnimationFrame(animationId);
+                    animationId = null;
+                }
+                resetElectrons();
+                
+                // Show message
+                setTimeout(() => {
+                    alert('Electron escaped the simulation area! Resetting...');
+                }, 100);
+                
+                return false;
+            }
+            return true;
+        }
+        
+        function updatePhysics() {
+            // Calculate distance and direction
+            const dx = electron2.x - electron1.x;
+            const dy = electron2.y - electron1.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Prevent division by zero only
+            if (distance < 1) return;
+            
+            // Calculate force using inverse square law
+            const k = 8000; // Force constant for animation
+            const force = k / (distance * distance);
+            
+            // Calculate unit vector (direction)
+            const unitX = dx / distance;
+            const unitY = dy / distance;
+            
+            // Calculate acceleration for each electron (F = ma, assuming m = 1)
+            const accel1X = -force * unitX; // Electron 1 pushed away from electron 2
+            const accel1Y = -force * unitY;
+            const accel2X = force * unitX;  // Electron 2 pushed away from electron 1
+            const accel2Y = force * unitY;
+            
+            // Update velocities (with damping for stability)
+            const damping = 0.98;
+            electron1.vx = (electron1.vx + accel1X) * damping;
+            electron1.vy = (electron1.vy + accel1Y) * damping;
+            electron2.vx = (electron2.vx + accel2X) * damping;
+            electron2.vy = (electron2.vy + accel2Y) * damping;
+            
+            // Update positions
+            electron1.x += electron1.vx;
+            electron1.y += electron1.vy;
+            electron2.x += electron2.vx;
+            electron2.y += electron2.vy;
+        }
+        
+        function animate() {
+            if (!freeMove) return;
+            
+            updatePhysics();
+            
+            if (!checkBounds()) {
+                return; // Stop animation if out of bounds
+            }
+            
+            draw();
+            animationId = requestAnimationFrame(animate);
+        }
+        
+        // Initial draw
+        draw();
+    </script>
+</body>
+</html>

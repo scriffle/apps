@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Moth Evolution Simulation</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            max-width: 840px;
+            margin: 0 auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .button {
+            background: #e5e7eb;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 16px;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+        .button:hover {
+            background: #d1d5db;
+        }
+        .stats {
+            font-size: 14px;
+            color: #666;
+            margin-top: 10px;
+        }
+        .control-group {
+            margin-bottom: 16px;
+        }
+        .label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+        .progress {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            background: #3b82f6;
+            transition: width 0.2s ease;
+        }
+        canvas {
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="header">
+            <span>Generation: <span id="generation">0</span></span>
+            <div>
+                <button id="playPause" class="button">Play</button>
+                <button id="reset" class="button">Reset</button>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="label">Current Breeding Rate: <span id="breedingRate">0.002</span></label>
+            <div class="progress">
+                <div id="breedingRateBar" class="progress-bar" style="width: 20%"></div>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="label">Predator Vision Range: <span id="visionRange">150</span></label>
+            <input type="range" id="visionRangeSlider" min="50" max="300" step="10" value="150" style="width: 100%">
+        </div>
+        <div class="control-group">
+            <label class="label">Predator Field of View: <span id="fovAngle">120</span>°</label>
+            <input type="range" id="fovSlider" min="30" max="180" step="10" value="120" style="width: 100%">
+        </div>
+        <canvas id="simulation"></canvas>
+        <div id="stats" class="stats"></div>
+    </div>
+
+<script>
+const cfg = {
+    w: 800, h: 600,
+    im: 200,
+    ms: 0.5,
+    ps: 1.5,
+    psSearch: 0.5,
+    pathDuration: 120,
+    rr: 30,
+    mp: 20,
+    mr: 0.1,
+    mrBig: 0.5,
+    mrChance: 0.05,
+    mc: 0.02,
+    pr: 8,
+    mr2: 3,
+    mm: 30,
+    ct: 0.15,
+    predRatio: 0.1,
+    maxAge: 500,
+    targetPop: 500,
+    maxPop: 1000,
+    brMin: 0.0001,
+    brMax: 0.01,
+    brAdjustRate: 0.05,
+    curveControl: 0.5
+};
+
+// Simulation state
+let running = false;
+let generation = 0;
+let moths = [];
+let predators = [];
+let visionRange = 150;
+let fovAngle = 120;
+let animationFrame;
+
+// Canvas setup
+const canvas = document.getElementById('simulation');
+canvas.width = cfg.w;
+canvas.height = cfg.h;
+const ctx = canvas.getContext('2d');
+
+// Helper functions
+const randomPoint = () => ({
+    x: Math.random() * cfg.w,
+    y: Math.random() * cfg.h
+});
+
+const randomOffsetPoint = (start, end, offset) => {
+    const midX = (start.x + end.x) / 2;
+    const midY = (start.y + end.y) / 2;
+    const angle = Math.atan2(end.y - start.y, end.x - start.x) + (Math.random() > 0.5 ? Math.PI/2 : -Math.PI/2);
+    const dist = Math.hypot(end.x - start.x, end.y - start.y) * offset;
+    return {
+        x: midX + Math.cos(angle) * dist,
+        y: midY + Math.sin(angle) * dist
+    };
+};
+
+const cubicBezier = (p0, p1, p2, p3, t) => {
+    const mt = 1 - t;
+    const mt2 = mt * mt;
+    const t2 = t * t;
+    
+    const x = mt2 * mt * p0.x + 
+              3 * mt2 * t * p1.x + 
+              3 * mt * t2 * p2.x + 
+              t2 * t * p3.x;
+              
+    const y = mt2 * mt * p0.y + 
+              3 * mt2 * t * p1.y + 
+              3 * mt * t2 * p2.y + 
+              t2 * t * p3.y;
+              
+    return { x, y };
+};
+
+const getContrast = (mothColor, bgColor) => {
+    // Direct difference
+    const directContrast = Math.abs(mothColor - bgColor);
+    // Wraparound difference (considering the color as a circle)
+    const wrapContrast = 1 - directContrast;
+    // Use the larger of the two differences
+    return Math.max(directContrast, wrapContrast);
+};
+
+const newSearchPath = (start) => {
+    const end = randomPoint();
+    const control1 = randomOffsetPoint(start, end, cfg.curveControl);
+    const control2 = randomOffsetPoint(start, end, cfg.curveControl);
+    return { start, control1, control2, end, progress: 0 };
+};
+
+const getBg = (x, y) => (x + y) / (cfg.w + cfg.h);
+const hit = (p, m) => Math.hypot(p.x - m.x, p.y - m.y) < (cfg.pr + cfg.mr2);
+
+const isInVisionCone = (predator, point) => {
+    if (!predator.vx && !predator.vy) return false;
+    
+    const dx = point.x - predator.x;
+    const dy = point.y - predator.y;
+    const distance = Math.hypot(dx, dy);
+    
+    if (distance > visionRange) return false;
+    
+    const predatorAngle = Math.atan2(predator.vy, predator.vx);
+    const pointAngle = Math.atan2(dy, dx);
+    let angleDiff = Math.abs(pointAngle - predatorAngle);
+    if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+    
+    return angleDiff <= (fovAngle * Math.PI / 180) / 2;
+};
+
+const drawVisionCone = (predator) => {
+    if (!predator.vx && !predator.vy) return;
+    
+    const angle = Math.atan2(predator.vy, predator.vx);
+    const halfFOV = (fovAngle * Math.PI / 180) / 2;
+    
+    ctx.beginPath();
+    ctx.moveTo(predator.x, predator.y);
+    ctx.arc(predator.x, predator.y, visionRange, 
+            angle - halfFOV, angle + halfFOV);
+    ctx.lineTo(predator.x, predator.y);
+    ctx.fillStyle = 'rgba(255,255,0,0.1)';
+    ctx.fill();
+};
+
+const drawPath = (path, t) => {
+    ctx.beginPath();
+    ctx.moveTo(path.start.x, path.start.y);
+    
+    const steps = 20;
+    for (let i = 0; i <= steps; i++) {
+        const pt = cubicBezier(
+            path.start, path.control1, path.control2, path.end, 
+            Math.min(t, i/steps)
+        );
+        ctx.lineTo(pt.x, pt.y);
+    }
+    
+    ctx.strokeStyle = 'rgba(255,165,0,0.1)';
+    ctx.stroke();
+};
+
+const calcBreedingRate = (population) => {
+    let popDiff;
+    if (population > cfg.targetPop) {
+        popDiff = (cfg.maxPop - population) / (cfg.maxPop - cfg.targetPop);
+    } else {
+        popDiff = (cfg.targetPop - population) / cfg.targetPop;
+    }
+    return Math.min(cfg.brMax, 
+           Math.max(cfg.brMin, 
+           cfg.brMin + (cfg.brMax - cfg.brMin) * 
+           (0.5 + popDiff * cfg.brAdjustRate)));
+};
+
+const mutateColor = (baseColor) => {
+    if (Math.random() < cfg.mrChance) {
+        return Math.random();
+    }
+    return Math.max(0, Math.min(1, baseColor + (Math.random() - 0.5) * cfg.mr));
+};
+
+const initPreds = n => Array.from({length: n}, () => {
+    const pos = randomPoint();
+    return {
+        x: pos.x,
+        y: pos.y,
+        vx: 0,
+        vy: 0,
+        id: Math.random(),
+        hunting: false,
+        path: newSearchPath(pos),
+        pathTimer: 0
+    };
+});
+
+const initMoths = () => {
+    const ms = Array.from({length: cfg.im}, () => {
+        const x = Math.random() * cfg.w;
+        const y = Math.random() * cfg.h;
+        return {
+            x, y, sx: x, sy: y,
+            c: Math.random(),
+            vx: 0, vy: 0,
+            id: Math.random(),
+            age: 0,
+            mov: false
+        };
+    });
+    moths = ms;
+    predators = initPreds(Math.max(1, Math.floor(cfg.im * cfg.predRatio)));
+    generation = 0;
+    drawBg();
+    updateStats();
+};
+
+const drawBg = () => {
+    const g = ctx.createLinearGradient(0, 0, cfg.w, cfg.h);
+    g.addColorStop(0, 'rgb(240,240,240)');
+    g.addColorStop(0.5, 'rgb(128,128,128)');
+    g.addColorStop(1, 'rgb(40,40,40)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, cfg.w, cfg.h);
+};
+
+const updateStats = () => {
+    const br = calcBreedingRate(moths.length);
+    document.getElementById('generation').textContent = generation;
+    document.getElementById('breedingRate').textContent = br.toFixed(4);
+    document.getElementById('breedingRateBar').style.width = `${(br/cfg.brMax)*100}%`;
+    document.getElementById('stats').textContent = 
+        `Moths: ${moths.length} | Target: ${cfg.targetPop} | Max: ${cfg.maxPop} | ` +
+        `Predators: ${predators.length} (${(predators.length/moths.length*100).toFixed(1)}% ratio)`;
+};
+
+const update = () => {
+    if (!running) return;
+
+    drawBg();
+    
+    // Update moths
+    const currentBr = calcBreedingRate(moths.length);
+    const aged = moths
+        .map(m => ({...m, age: m.age + 1}))
+        .filter(m => {
+            if (m.age < cfg.maxAge / 2) return true;
+            const deathProb = (m.age - cfg.maxAge / 2) / (cfg.maxAge / 2);
+            return Math.random() > deathProb;
+        });
+
+    const newMoths = aged.map(m => {
+        if (Math.random() < cfg.mc) {
+            m.mov = !m.mov;
+            if (m.mov) {
+                m.vx = (Math.random() - 0.5) * cfg.ms;
+                m.vy = (Math.random() - 0.5) * cfg.ms;
+            } else {
+                m.vx = m.vy = 0;
+            }
+        }
+
+        let nx = m.x + m.vx;
+        let ny = m.y + m.vy;
+
+        const d = Math.hypot(nx - m.sx, ny - m.sy);
+        if (d > cfg.mm) {
+            const a = Math.atan2(m.sy - ny, m.sx - nx);
+            m.vx = Math.cos(a) * cfg.ms;
+            m.vy = Math.sin(a) * cfg.ms;
+            nx = m.x + m.vx;
+            ny = m.y + m.vy;
+        }
+
+        return {...m, 
+            x: Math.min(Math.max(0, nx), cfg.w),
+            y: Math.min(Math.max(0, ny), cfg.h)
+        };
+    });
+
+    // Breeding
+    const kids = [];
+    if (newMoths.length >= 2 && newMoths.length < cfg.maxPop) {
+        newMoths.forEach(m => {
+            const rate = newMoths.length < cfg.mp ? currentBr * 2 : currentBr;
+            if (Math.random() < rate && m.age > 100) {
+                const near = newMoths.filter(o => 
+                    o.id !== m.id && Math.hypot(o.x - m.x, o.y - m.y) < cfg.rr
+                );
+                if (near.length) {
+                    const p = near[Math.floor(Math.random() * near.length)];
+                    const cx = m.x + (Math.random() - 0.5) * 10;
+                    const cy = m.y + (Math.random() - 0.5) * 10;
+                    const baseColor = (m.c + p.c) / 2;
+                    const mutatedColor = mutateColor(baseColor);
+                    kids.push({
+                        x: cx, y: cy, sx: cx, sy: cy,
+                        c: mutatedColor,
+                        vx: 0, vy: 0,
+                        id: Math.random(),
+                        age: 0,
+                        mov: false
+                    });
+                }
+            }
+        });
+    }
+
+    moths = [...newMoths, ...kids];
+
+    // Update predators
+    predators = predators.map(p => {
+        // Draw current path for debugging
+        if (!p.hunting) {
+            drawPath(p.path, p.pathTimer / cfg.pathDuration);
+        }
+
+        // Find visible moths
+        const near = moths.filter(m => isInVisionCone(p, m))
+            .map(m => ({
+                ...m,
+                con: getContrast(m.c, getBg(m.x, m.y)),
+                d: Math.hypot(m.x - p.x, m.y - p.y)
+            }))
+            .filter(m => m.con > cfg.ct)
+            .sort((a, b) => {
+                const contrastWeight = 100;
+                const aScore = a.con * contrastWeight - (a.d / visionRange);
+                const bScore = b.con * contrastWeight - (b.d / visionRange);
+                return bScore - aScore;
+            });
+
+        let newState = { ...p };
+
+        if (near.length) {
+            newState.hunting = true;
+            const t = near[0];
+            const d = Math.hypot(t.x - p.x, t.y - p.y);
+            newState.vx = (t.x - p.x) / d * cfg.ps;
+            newState.vy = (t.y - p.y) / d * cfg.ps;
+        } else {
+            newState.hunting = false;
+            newState.pathTimer++;
+            
+            if (newState.pathTimer >= cfg.pathDuration) {
+                newState.path = newSearchPath({ x: newState.x, y: newState.y });
+                newState.pathTimer = 0;
+            }
+
+            const t = newState.pathTimer / cfg.pathDuration;
+            const nextPos = cubicBezier(
+                newState.path.start,
+                newState.path.control1,
+                newState.path.control2,
+                newState.path.end,
+                t
+            );
+
+            const speed = cfg.psSearch;
+            const dx = nextPos.x - newState.x;
+            const dy = nextPos.y - newState.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist > 0) {
+                newState.vx = (dx / dist) * speed;
+                newState.vy = (dy / dist) * speed;
+            }
+        }
+
+        let x = newState.x + newState.vx;
+        let y = newState.y + newState.vy;
+
+        if (x < 0 || x > cfg.w) {
+            newState.vx *= -1;
+            x = Math.max(0, Math.min(cfg.w, x));
+        }
+        if (y < 0 || y > cfg.h) {
+            newState.vy *= -1;
+            y = Math.max(0, Math.min(cfg.h, y));
+        }
+
+        newState.x = x;
+        newState.y = y;
+
+        // Draw vision cone
+        drawVisionCone(newState);
+
+        // Predation
+        moths = moths.filter(m => {
+            if (hit(newState, m)) {
+                const bg = getBg(m.x, m.y);
+                return getContrast(m.c, bg) <= cfg.ct;
+            }
+            return true;
+        });
+
+        return newState;
+    });
+
+    // Draw moths with visibility indicators
+    moths.forEach(m => {
+        const contrast = getContrast(m.c, getBg(m.x, m.y));
+        if (contrast > cfg.ct) {
+            ctx.beginPath();
+            ctx.arc(m.x, m.y, cfg.mr2 + 2, 0, 2*Math.PI);
+            ctx.strokeStyle = 'rgba(255,0,0,0.2)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, cfg.mr2, 0, 2*Math.PI);
+        const c = Math.floor(m.c * 255);
+        ctx.fillStyle = `rgb(${c},${c},${c})`;
+        ctx.fill();
+    });
+
+    // Draw predators
+    predators.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, cfg.pr, 0, 2*Math.PI);
+        ctx.fillStyle = p.hunting ? 'red' : 'orange';
+        ctx.fill();
+
+        // Draw direction indicator
+        if (p.vx || p.vy) {
+            const angle = Math.atan2(p.vy, p.vx);
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(
+                p.x + Math.cos(angle) * cfg.pr * 2,
+                p.y + Math.sin(angle) * cfg.pr * 2
+            );
+            ctx.strokeStyle = p.hunting ? 'red' : 'orange';
+            ctx.stroke();
+        }
+    });
+
+    generation++;
+    updateStats();
+    animationFrame = requestAnimationFrame(update);
+};
+
+// Event Listeners
+document.getElementById('playPause').addEventListener('click', () => {
+    running = !running;
+    document.getElementById('playPause').textContent = running ? 'Pause' : 'Play';
+    if (running) {
+        animationFrame = requestAnimationFrame(update);
+    } else {
+        cancelAnimationFrame(animationFrame);
+    }
+});
+
+document.getElementById('reset').addEventListener('click', () => {
+    running = false;
+    document.getElementById('playPause').textContent = 'Play';
+    cancelAnimationFrame(animationFrame);
+    initMoths();
+});
+
+document.getElementById('visionRangeSlider').addEventListener('input', (e) => {
+    visionRange = parseInt(e.target.value);
+    document.getElementById('visionRange').textContent = visionRange;
+});
+
+document.getElementById('fovSlider').addEventListener('input', (e) => {
+    fovAngle = parseInt(e.target.value);
+    document.getElementById('fovAngle').textContent = fovAngle;
+});
+
+// Initialize simulation
+initMoths();
+</script>
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <canvas id="blackholeCanvas" style="background: black;"></canvas>
+  <script>
+    const canvas = document.getElementById('blackholeCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Set canvas size
+    canvas.width = 800;
+    canvas.height = 600;
+    
+    // Black hole parameters
+    const blackHoleRadius = 20;
+    let blackHoleX = canvas.width / 2;
+    let blackHoleY = canvas.height / 2;
+    
+    // Physics parameters - dramatically increased
+    const schwarzschildRadius = blackHoleRadius * 2;
+    const gravitationalStrength = 15000; // Increased from 2000
+    const distortionRange = 300; // Range of significant distortion
+    
+    // Star field
+    const stars = [];
+    const numStars = 3000; // Increased star count for more dramatic effect
+    
+    function createStars() {
+      for (let i = 0; i < numStars; i++) {
+        stars.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          brightness: Math.random() * 0.8 + 0.2,
+          size: Math.random() * 1.5 + 0.5
+        });
+      }
+    }
+    
+    function calculateLensing(starX, starY, holeX, holeY) {
+      const dx = starX - holeX;
+      const dy = starY - holeY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distance < schwarzschildRadius) {
+        return null; // Inside event horizon
+      }
+      
+      // Enhanced non-linear distortion
+      const deflectionStrength = (gravitationalStrength / (distance * distance)) * 
+                               (1 + Math.pow(distortionRange / distance, 2));
+      
+      // Calculate spiral warping effect
+      const angle = Math.atan2(dy, dx);
+      const spiralFactor = Math.min(1, deflectionStrength * 0.1);
+      const spiralAngle = angle + (spiralFactor * Math.PI * 0.5);
+      
+      // Calculate apparent position with spiral warping
+      const distortedDistance = distance * (1 - deflectionStrength * 0.2);
+      const distortedX = holeX + Math.cos(spiralAngle) * distortedDistance;
+      const distortedY = holeY + Math.sin(spiralAngle) * distortedDistance;
+      
+      // Enhanced magnification
+      const magnification = 1 + (gravitationalStrength / (distance * distance * 2));
+      
+      // Create multiple images for stars very close to the black hole
+      const images = [];
+      images.push({
+        x: distortedX,
+        y: distortedY,
+        magnification: magnification
+      });
+      
+      // Generate additional images for close stars
+      if (distance < distortionRange * 0.5) {
+        const numImages = Math.floor(3 * (1 - distance / (distortionRange * 0.5)));
+        for (let i = 1; i <= numImages; i++) {
+          const extraAngle = spiralAngle + (Math.PI * 2 * i / (numImages + 1));
+          images.push({
+            x: holeX + Math.cos(extraAngle) * distortedDistance,
+            y: holeY + Math.sin(extraAngle) * distortedDistance,
+            magnification: magnification * 0.7
+          });
+        }
+      }
+      
+      return images;
+    }
+    
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw original stars (dimmer)
+      stars.forEach(star => {
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(255, 255, 255, ${star.brightness * 0.2})`;
+        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      
+      // Draw lensed stars with multiple images
+      stars.forEach(star => {
+        const lensedImages = calculateLensing(star.x, star.y, blackHoleX, blackHoleY);
+        if (lensedImages) {
+          lensedImages.forEach(image => {
+            ctx.beginPath();
+            ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, star.brightness * image.magnification)})`;
+            const distortedSize = star.size * image.magnification;
+            ctx.arc(image.x, image.y, distortedSize, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Add glow effect for highly magnified stars
+            if (image.magnification > 2) {
+              const gradient = ctx.createRadialGradient(
+                image.x, image.y, 0,
+                image.x, image.y, distortedSize * 3
+              );
+              gradient.addColorStop(0, `rgba(255, 255, 255, ${Math.min(0.3, image.magnification * 0.1)})`);
+              gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+              ctx.fillStyle = gradient;
+              ctx.arc(image.x, image.y, distortedSize * 3, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          });
+        }
+      });
+      
+      // Draw black hole
+      ctx.beginPath();
+      ctx.fillStyle = 'black';
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 2;
+      ctx.arc(blackHoleX, blackHoleY, schwarzschildRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      
+      requestAnimationFrame(render);
+    }
+    
+    createStars();
+    render();
+    
+    // Mouse interaction
+    let isDragging = false;
+    
+    canvas.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      const rect = canvas.getBoundingClientRect();
+      blackHoleX = e.clientX - rect.left;
+      blackHoleY = e.clientY - rect.top;
+    });
+    
+    canvas.addEventListener('mousemove', (e) => {
+      if (isDragging) {
+        const rect = canvas.getBoundingClientRect();
+        blackHoleX = e.clientX - rect.left;
+        blackHoleY = e.clientY - rect.top;
+      }
+    });
+    
+    canvas.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
+  </script>
+</body>
+</html>

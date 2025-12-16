@@ -1,0 +1,2402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Examiner's Advice</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #1a1a2e;
+            --secondary: #16213e;
+            --tertiary: #0f3460;
+            --accent: #e94560;
+            --accent-dark: #c73e54;
+            --success: #4caf50;
+            --warning: #ff9800;
+            --error: #f44336;
+            --neutral: #607d8b;
+            --text: #ffffff;
+            --text-muted: #b0b0b0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--primary);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+
+        /* Loading State */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .loading-overlay.hidden {
+            display: none;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--tertiary);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+
+        /* Error State */
+        .error-message {
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid var(--error);
+            color: var(--text);
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            margin: 2rem auto;
+            max-width: 500px;
+        }
+
+        .error-message h2 {
+            color: var(--error);
+            margin-bottom: 0.5rem;
+        }
+
+        /* State Selection Screen */
+        .state-selection {
+            text-align: center;
+            padding: 4rem 2rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .state-selection h2 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+            color: var(--accent);
+        }
+
+        .state-selection .subtitle {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+        }
+
+        .state-selection-label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+            text-align: left;
+        }
+
+        .state-selection select {
+            width: 100%;
+            padding: 1rem;
+            background: var(--tertiary);
+            border: 2px solid var(--accent-dark);
+            color: var(--text);
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-bottom: 1.5rem;
+        }
+
+        .state-selection select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .state-selection select option {
+            background: var(--secondary);
+            color: var(--text);
+        }
+
+        .state-selection select option:disabled {
+            color: var(--neutral);
+        }
+
+        .state-selection .state-info {
+            background: var(--tertiary);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            text-align: left;
+            display: none;
+        }
+
+        .state-selection .state-info.show {
+            display: block;
+        }
+
+        .state-selection .state-info h4 {
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+        }
+
+        .state-selection .state-info p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .state-selection button {
+            padding: 1rem 3rem;
+            background: var(--accent-dark);
+            border: 2px solid var(--accent);
+            color: var(--text);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .state-selection button:hover:not(:disabled) {
+            background: var(--accent);
+            transform: translateY(-2px);
+        }
+
+        .state-selection button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Header */
+        header {
+            background: var(--secondary);
+            padding: 0.75rem 1rem;
+            border-bottom: 2px solid var(--accent);
+            margin-bottom: 0.5rem;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        h1 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .current-state-badge {
+            background: var(--tertiary);
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .current-state-badge strong {
+            color: var(--accent);
+        }
+
+        .header-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: flex-end;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        .control-group label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .control-group input,
+        .control-group select {
+            padding: 0.4rem 0.6rem;
+            background: var(--tertiary);
+            border: 1px solid var(--accent-dark);
+            color: var(--text);
+            border-radius: 4px;
+            font-size: 0.85rem;
+            min-width: 180px;
+        }
+
+        .control-group input::placeholder {
+            color: var(--neutral);
+        }
+
+        .control-group select:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .control-group select option:disabled {
+            color: var(--neutral);
+        }
+
+        .control-group select option {
+            background: var(--secondary);
+            color: var(--text);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0.4rem;
+            background: var(--secondary);
+            padding: 0.4rem;
+            border-radius: 4px;
+            margin-top: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 0.5rem;
+            background: var(--tertiary);
+            border: 1px solid transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            text-align: center;
+            border-radius: 4px;
+            transition: all 0.3s;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .tab:hover {
+            background: var(--secondary);
+            border-color: var(--accent-dark);
+        }
+
+        .tab.active {
+            background: var(--accent-dark);
+            color: var(--text);
+            border-color: var(--accent);
+        }
+
+        .tab-content {
+            display: none;
+            background: var(--secondary);
+            padding: 1rem;
+            border-radius: 4px;
+            min-height: 400px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* No Subject Selected */
+        .no-subject {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-muted);
+        }
+
+        .no-subject h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--text);
+        }
+
+        .no-subject p {
+            font-size: 1rem;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        /* Category Select */
+        .category-select {
+            margin-bottom: 0.5rem;
+        }
+
+        .category-select select {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            background: linear-gradient(180deg, var(--tertiary) 0%, rgba(233, 69, 96, 0.15) 100%);
+            border: 1px solid var(--accent-dark);
+            color: var(--text);
+            border-radius: 4px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            font-weight: 500;
+            box-shadow: 0 4px 15px rgba(233, 69, 96, 0.1);
+        }
+
+        /* Progress Bar */
+        .progress-bar {
+            background: var(--tertiary);
+            height: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-dark), var(--accent));
+            transition: width 0.3s;
+        }
+
+        .progress-text {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+
+        /* Question Card */
+        .question-card {
+            background: var(--tertiary);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            margin-bottom: 0.5rem;
+            transition: all 0.3s;
+        }
+
+        .question-card.active {
+            border-color: var(--accent);
+            box-shadow: 0 0 15px rgba(233, 69, 96, 0.2);
+        }
+
+        .question-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .question-concept {
+            font-size: 0.75rem;
+            color: var(--accent);
+            margin-bottom: 0.25rem;
+            font-weight: 500;
+        }
+
+        .question-text {
+            font-size: 1.2rem;
+            line-height: 1.6;
+            margin-bottom: 1rem;
+            color: var(--text);
+            padding: 0.75rem;
+            border-radius: 8px;
+            background: linear-gradient(180deg, transparent 0%, rgba(233, 69, 96, 0.12) 100%);
+            animation: subtlePulse 3s ease-in-out infinite;
+        }
+
+        @keyframes subtlePulse {
+            0%, 100% {
+                background: linear-gradient(180deg, transparent 0%, rgba(233, 69, 96, 0.08) 100%);
+                box-shadow: 0 4px 20px rgba(233, 69, 96, 0.05);
+            }
+            50% {
+                background: linear-gradient(180deg, transparent 0%, rgba(233, 69, 96, 0.15) 100%);
+                box-shadow: 0 4px 25px rgba(233, 69, 96, 0.12);
+            }
+        }
+
+        .answer-buttons {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .answer-btn {
+            flex: 1;
+            padding: 0.75rem;
+            border: 2px solid var(--accent-dark);
+            background: var(--secondary);
+            color: var(--text);
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.3s;
+            min-height: 48px; /* Touch-friendly */
+        }
+
+        .answer-btn:hover:not(:disabled) {
+            background: var(--tertiary);
+            border-color: var(--accent);
+            transform: translateY(-2px);
+        }
+
+        .answer-btn:active {
+            transform: translateY(0);
+        }
+
+        .answer-btn.selected {
+            background: var(--accent-dark);
+            border-color: var(--accent);
+        }
+
+        .answer-btn.correct {
+            background: var(--success);
+            border-color: var(--success);
+        }
+
+        .answer-btn.incorrect {
+            background: var(--error);
+            border-color: var(--error);
+        }
+
+        .answer-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Feedback */
+        .feedback {
+            padding: 0.75rem;
+            border-radius: 4px;
+            margin-top: 0.5rem;
+            display: none;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .feedback.show {
+            display: block;
+        }
+
+        .feedback.correct {
+            background: rgba(76, 175, 80, 0.2);
+            border-left: 4px solid var(--success);
+        }
+
+        .feedback.incorrect {
+            background: rgba(244, 67, 54, 0.2);
+            border-left: 4px solid var(--error);
+        }
+
+        .feedback-header {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .study-tip {
+            margin-top: 0.5rem;
+            padding-top: 0.5rem;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            font-style: italic;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Status Indicator */
+        .status-indicator {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-unanswered {
+            background: var(--tertiary);
+            color: var(--neutral);
+        }
+
+        .status-correct {
+            background: rgba(76, 175, 80, 0.2);
+            color: var(--success);
+        }
+
+        .status-incorrect {
+            background: rgba(244, 67, 54, 0.2);
+            color: var(--error);
+        }
+
+        /* Navigation - Above Question Card */
+        .navigation {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .nav-btn {
+            padding: 0.5rem 1.25rem;
+            background: var(--tertiary);
+            border: 1px solid var(--accent-dark);
+            color: var(--text);
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            transition: all 0.3s;
+            min-height: 44px; /* Touch-friendly */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .nav-btn:hover {
+            background: var(--accent-dark);
+            border-color: var(--accent);
+        }
+
+        .nav-btn.primary {
+            background: var(--accent-dark);
+            border-color: var(--accent);
+        }
+
+        .nav-btn.primary:hover {
+            background: var(--accent);
+        }
+
+        .nav-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            background: var(--tertiary);
+            border-color: var(--neutral);
+        }
+
+        .nav-btn:disabled:hover {
+            background: var(--tertiary);
+            border-color: var(--neutral);
+        }
+
+        /* Touch device handling */
+        @media (hover: none) {
+            .nav-btn:hover {
+                background: var(--tertiary);
+                border-color: var(--accent-dark);
+            }
+            
+            .nav-btn.primary:hover {
+                background: var(--accent-dark);
+            }
+            
+            .nav-btn:active {
+                background: var(--accent-dark);
+                border-color: var(--accent);
+            }
+            
+            .nav-btn.primary:active {
+                background: var(--accent);
+            }
+
+            .answer-btn:hover:not(:disabled) {
+                background: var(--secondary);
+                border-color: var(--accent-dark);
+                transform: none;
+            }
+
+            .answer-btn:active:not(:disabled) {
+                background: var(--tertiary);
+                border-color: var(--accent);
+            }
+        }
+
+        /* Category Summary */
+        .category-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .category-card {
+            background: var(--tertiary);
+            padding: 0.6rem 0.8rem;
+            border-radius: 6px;
+            border-left: 3px solid var(--accent);
+        }
+
+        .category-card h3 {
+            font-size: 0.85rem;
+            margin-bottom: 0.25rem;
+            color: var(--accent);
+        }
+
+        .category-card .stats {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* Keyboard Hint */
+        .keyboard-hint {
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--neutral);
+            margin-top: 0.5rem;
+            padding: 0.4rem;
+            background: var(--primary);
+            border-radius: 4px;
+        }
+
+        /* Mastery Overview */
+        .mastery-overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .mastery-card {
+            background: var(--tertiary);
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .mastery-number {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .mastery-card.mastered .mastery-number {
+            color: var(--success);
+        }
+
+        .mastery-card.partial .mastery-number {
+            color: var(--warning);
+        }
+
+        .mastery-card.needs-work .mastery-number {
+            color: var(--error);
+        }
+
+        .mastery-card.not-attempted .mastery-number {
+            color: var(--neutral);
+        }
+
+        .mastery-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Concept List */
+        .concept-list {
+            margin-top: 1rem;
+        }
+
+        .concept-item {
+            background: var(--tertiary);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            border-left: 4px solid var(--neutral);
+        }
+
+        .concept-item.mastered {
+            border-left-color: var(--success);
+        }
+
+        .concept-item.partial {
+            border-left-color: var(--warning);
+        }
+
+        .concept-item.needs-work {
+            border-left-color: var(--error);
+        }
+
+        .concept-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .concept-title {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .concept-details {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        /* Filter Buttons */
+        .filter-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 0.5rem 1rem;
+            background: var(--tertiary);
+            border: 1px solid var(--accent-dark);
+            color: var(--text);
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+        }
+
+        .filter-btn:hover {
+            background: var(--secondary);
+        }
+
+        .filter-btn.active {
+            background: var(--accent-dark);
+            border-color: var(--accent);
+        }
+
+        /* Utility Section */
+        .utility-section {
+            background: var(--tertiary);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .utility-section h3 {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            color: var(--accent);
+        }
+
+        .utility-buttons {
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        .utility-btn {
+            padding: 1rem;
+            background: var(--secondary);
+            border: 1px solid var(--accent-dark);
+            color: var(--text);
+            cursor: pointer;
+            border-radius: 4px;
+            text-align: left;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+        }
+
+        .utility-btn:hover {
+            background: var(--tertiary);
+            border-color: var(--accent);
+        }
+
+        .utility-btn.warning {
+            border-color: var(--error);
+            color: var(--error);
+        }
+
+        .utility-btn .btn-description {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+            font-weight: normal;
+        }
+
+        /* Stat Grid */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .stat-item {
+            background: var(--secondary);
+            padding: 1rem;
+            border-radius: 8px;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-value {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--secondary);
+            padding: 2rem;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 100%;
+            border: 2px solid var(--accent);
+        }
+
+        .modal-header {
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            color: var(--accent);
+        }
+
+        .modal-body {
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: flex-end;
+        }
+
+        .modal-btn {
+            padding: 0.75rem 1.5rem;
+            border: 1px solid var(--accent-dark);
+            background: var(--tertiary);
+            color: var(--text);
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.3s;
+        }
+
+        .modal-btn:hover {
+            background: var(--accent-dark);
+        }
+
+        .modal-btn.primary {
+            background: var(--accent-dark);
+            border-color: var(--accent);
+        }
+
+        .modal-btn.primary:hover {
+            background: var(--accent);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 0.5rem;
+            }
+
+            header {
+                padding: 1rem;
+            }
+
+            h1 {
+                font-size: 1.2rem;
+            }
+
+            .header-top {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+
+            .header-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .control-group input,
+            .control-group select {
+                min-width: 100%;
+            }
+
+            .question-text {
+                font-size: 1rem;
+            }
+
+            .answer-buttons {
+                flex-direction: column;
+            }
+
+            .navigation {
+                justify-content: center;
+            }
+
+            .nav-btn {
+                flex: 1;
+                min-width: 100px;
+            }
+
+            .mastery-overview {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .state-selection {
+                padding: 2rem 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading Examiner's Advice...</div>
+    </div>
+
+    <!-- Main App Container -->
+    <div class="container" id="appContainer" style="display: none;">
+        
+        <!-- State Selection Screen (First Run) -->
+        <div id="stateSelectionScreen" style="display: none;">
+            <div class="state-selection">
+                <h2>Welcome to Examiner's Advice</h2>
+                <p class="subtitle">Select your examination system to get started</p>
+                
+                <label class="state-selection-label" for="stateSelectInit">Examination System</label>
+                <select id="stateSelectInit">
+                    <option value="">-- Select Examination System --</option>
+                </select>
+                
+                <div class="state-info" id="stateInfoInit">
+                    <h4 id="stateInfoName"></h4>
+                    <p id="stateInfoDetails"></p>
+                </div>
+                
+                <button id="confirmStateBtn" disabled>Continue</button>
+            </div>
+        </div>
+
+        <!-- Main Application Screen -->
+        <div id="mainAppScreen" style="display: none;">
+            <header>
+                <div class="header-top">
+                    <h1 id="appTitle">Examiner's Advice</h1>
+                    <div class="current-state-badge">
+                        <strong id="currentStateName">-</strong> | <span id="currentStateRegion">-</span>
+                    </div>
+                </div>
+                <div class="header-controls">
+                    <div class="control-group">
+                        <label for="studentName">Student Name</label>
+                        <input type="text" id="studentName" placeholder="Enter your name">
+                    </div>
+                    <div class="control-group">
+                        <label for="categorySelect">Study Area</label>
+                        <select id="categorySelect" disabled>
+                            <option value="">Loading...</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="subjectSelect">Subject</label>
+                        <select id="subjectSelect" disabled>
+                            <option value="">Select a study area first</option>
+                        </select>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Questions Section (always visible when subject loaded) -->
+            <div id="noSubjectMessage" class="no-subject">
+                <h2>Welcome to Examiner's Advice</h2>
+                <p>Select a study area and subject above to begin practising exam techniques and common misconceptions.</p>
+            </div>
+
+            <div id="questionsContent" style="display: none;">
+                <div class="category-select">
+                    <select id="questionCategorySelect">
+                        <!-- Populated dynamically -->
+                    </select>
+                </div>
+
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                    <div class="progress-text" id="progressText">0/0 (0%)</div>
+                </div>
+
+                <div class="navigation">
+                    <button class="nav-btn" id="prevBtn">← Previous</button>
+                    <button class="nav-btn" id="unansweredBtn">Earliest Unanswered</button>
+                    <button class="nav-btn primary" id="nextBtn">Next →</button>
+                </div>
+
+                <div id="questionContainer"></div>
+
+                <div class="keyboard-hint">
+                    Keyboard shortcuts: T (True) | F (False) | ← → (Navigate) | U (Unanswered)
+                </div>
+            </div>
+
+            <!-- Tabs (below question card) -->
+            <div class="tabs" id="mainTabs" style="display: none;">
+                <div class="tab active" data-tab="questions">Questions</div>
+                <div class="tab" data-tab="feedback">Feedback</div>
+                <div class="tab" data-tab="utility">Utility</div>
+            </div>
+
+            <!-- Questions Tab Content (category summary) -->
+            <div class="tab-content active" id="questions-tab">
+                <div class="category-summary" id="categorySummary"></div>
+            </div>
+
+            <!-- Feedback Tab -->
+            <div class="tab-content" id="feedback-tab">
+                <div id="noSubjectFeedback" class="no-subject">
+                    <h2>No Subject Selected</h2>
+                    <p>Select a subject to view your progress and mastery levels.</p>
+                </div>
+
+                <div id="feedbackContent" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="overallProgressFill"></div>
+                        <div class="progress-text" id="overallProgressText">0/0 (0%)</div>
+                    </div>
+
+                    <div class="mastery-overview">
+                        <div class="mastery-card mastered">
+                            <div class="mastery-number" id="masteredCount">0</div>
+                            <div class="mastery-label">Mastered (2/2)</div>
+                        </div>
+                        <div class="mastery-card partial">
+                            <div class="mastery-number" id="partialCount">0</div>
+                            <div class="mastery-label">Partial (1/2)</div>
+                        </div>
+                        <div class="mastery-card needs-work">
+                            <div class="mastery-number" id="needsWorkCount">0</div>
+                            <div class="mastery-label">Needs Work (0/2)</div>
+                        </div>
+                        <div class="mastery-card not-attempted">
+                            <div class="mastery-number" id="notAttemptedCount">0</div>
+                            <div class="mastery-label">Not Attempted</div>
+                        </div>
+                    </div>
+
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" data-filter="all">All</button>
+                        <button class="filter-btn" data-filter="mastered">Mastered</button>
+                        <button class="filter-btn" data-filter="partial">Partial</button>
+                        <button class="filter-btn" data-filter="needs-work">Needs Work</button>
+                        <button class="filter-btn" data-filter="not-attempted">Not Attempted</button>
+                    </div>
+
+                    <div class="concept-list" id="conceptList"></div>
+                </div>
+            </div>
+
+            <!-- Utility Tab -->
+            <div class="tab-content" id="utility-tab">
+                <div class="utility-section">
+                    <h3>Session Management</h3>
+                    <div class="utility-buttons">
+                        <button class="utility-btn" id="saveBtn">💾 Save Progress</button>
+                        <button class="utility-btn" id="exportBtn">📊 Export Results</button>
+                        <button class="utility-btn" id="emailBtn">📧 Email to Teacher</button>
+                        <button class="utility-btn warning" id="resetBtn">⚠️ Reset Subject Progress</button>
+                    </div>
+                </div>
+
+                <div class="utility-section">
+                    <h3>Examination System</h3>
+                    <div class="utility-buttons">
+                        <button class="utility-btn" id="changeStateBtn">
+                            🔄 Change Examination System
+                            <span class="btn-description">Switch to a different examination system (e.g., VCE, HSC, NCEA)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="utility-section">
+                    <h3>Statistics</h3>
+                    <div class="stat-grid">
+                        <div class="stat-item">
+                            <div class="stat-label">Questions Answered</div>
+                            <div class="stat-value" id="statAnswered">0/0</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Accuracy Rate</div>
+                            <div class="stat-value" id="statAccuracy">0%</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Current Subject</div>
+                            <div class="stat-value" id="statSubject">-</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Last Session</div>
+                            <div class="stat-value" id="statLastSession">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <div class="modal-header" id="modalHeader">Confirm Action</div>
+            <div class="modal-body" id="modalBody">Are you sure?</div>
+            <div class="modal-buttons">
+                <button class="modal-btn" id="modalCancel">Cancel</button>
+                <button class="modal-btn primary" id="modalConfirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // Examiner's Advice - Main Application
+        // Multi-State Support Version
+        // ========================================
+
+        const CONFIG = {
+            statesPath: './states.json',
+            dataBasePath: './data/',
+            storageKeys: {
+                global: 'examinerAdvice-global',
+                subjectPrefix: 'examinerAdvice-'
+            }
+        };
+
+        // ========================================
+        // State Variables
+        // ========================================
+
+        let statesManifest = null;      // Holds states.json data
+        let manifest = null;             // Current state's manifest
+        let subjectData = null;          // Current subject's data
+        let randomisedQuestions = {};    // Shuffled question order per category
+
+        // Global state (persisted separately)
+        let globalState = {
+            studentName: '',
+            currentState: null           // e.g., 'VCEAU'
+        };
+
+        // Subject-specific state (persisted per subject)
+        let subjectState = {
+            currentQuestionCategory: 0,
+            currentQuestionIndex: 0,
+            responses: {},
+            lastSaved: null
+        };
+
+        // Runtime state (not persisted)
+        let runtimeState = {
+            currentCategory: null,       // Study area selection
+            currentSubject: null,        // Subject ID
+            filter: 'all'
+        };
+
+        // ========================================
+        // Initialisation
+        // ========================================
+
+        async function init() {
+            try {
+                await loadStatesManifest();
+                loadGlobalState();
+                
+                document.getElementById('appContainer').style.display = 'block';
+                
+                if (globalState.currentState) {
+                    // Returning user - load their state
+                    await loadStateManifest(globalState.currentState);
+                    showMainApp();
+                } else {
+                    // First run - show state selection
+                    showStateSelection();
+                }
+                
+                setupEventListeners();
+                hideLoading();
+                
+            } catch (error) {
+                console.error('Initialisation error:', error);
+                showError('Failed to load application. Please refresh the page.');
+            }
+        }
+
+        async function loadStatesManifest() {
+            const response = await fetch(CONFIG.statesPath);
+            if (!response.ok) throw new Error('Failed to load states manifest');
+            statesManifest = await response.json();
+        }
+
+        async function loadStateManifest(stateId) {
+            const state = statesManifest.states.find(s => s.id === stateId);
+            if (!state || !state.available) {
+                throw new Error('State not available');
+            }
+
+            const response = await fetch(state.manifestPath);
+            if (!response.ok) throw new Error('Failed to load state manifest');
+            manifest = await response.json();
+            
+            globalState.currentState = stateId;
+            saveGlobalState();
+        }
+
+        async function loadSubjectData(subjectId) {
+            const subject = findSubjectInManifest(subjectId);
+            if (!subject || !subject.available) {
+                throw new Error('Subject not available');
+            }
+
+            const state = getCurrentState();
+            const dataPath = CONFIG.dataBasePath + state.id + '/' + subject.dataFile;
+            
+            const response = await fetch(dataPath);
+            if (!response.ok) throw new Error('Failed to load subject data');
+            return await response.json();
+        }
+
+        function findSubjectInManifest(subjectId) {
+            if (!manifest) return null;
+            for (const category of manifest.categories) {
+                for (const subject of category.subjects) {
+                    if (subject.id === subjectId) {
+                        return subject;
+                    }
+                }
+            }
+            return null;
+        }
+
+        function getCurrentState() {
+            if (!statesManifest || !globalState.currentState) return null;
+            return statesManifest.states.find(s => s.id === globalState.currentState);
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.add('hidden');
+        }
+
+        function showError(message) {
+            document.getElementById('loadingOverlay').innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // ========================================
+        // Screen Management
+        // ========================================
+
+        function showStateSelection() {
+            document.getElementById('stateSelectionScreen').style.display = 'block';
+            document.getElementById('mainAppScreen').style.display = 'none';
+            populateStateDropdown('stateSelectInit');
+        }
+
+        function showMainApp() {
+            document.getElementById('stateSelectionScreen').style.display = 'none';
+            document.getElementById('mainAppScreen').style.display = 'block';
+            
+            const state = getCurrentState();
+            if (state) {
+                // Update header
+                document.getElementById('appTitle').textContent = `${state.name} Examiner's Advice`;
+                document.getElementById('currentStateName').textContent = state.name;
+                document.getElementById('currentStateRegion').textContent = state.region || state.country;
+                document.title = `${state.name} Examiner's Advice`;
+            }
+            
+            // Load student name
+            document.getElementById('studentName').value = globalState.studentName || '';
+            
+            // Populate dropdowns
+            populateCategoryDropdown();
+        }
+
+        // ========================================
+        // Theme Management
+        // ========================================
+
+        function applyTheme(theme) {
+            const root = document.documentElement;
+            root.style.setProperty('--primary', theme.primary || '#1a1a2e');
+            root.style.setProperty('--secondary', theme.secondary || '#16213e');
+            root.style.setProperty('--tertiary', theme.tertiary || '#0f3460');
+            root.style.setProperty('--accent', theme.accent || '#e94560');
+            root.style.setProperty('--accent-dark', theme.accentDark || '#c73e54');
+            root.style.setProperty('--success', theme.success || '#4caf50');
+            root.style.setProperty('--warning', theme.warning || '#ff9800');
+            root.style.setProperty('--error', theme.error || '#f44336');
+            root.style.setProperty('--neutral', theme.neutral || '#607d8b');
+            root.style.setProperty('--text', theme.text || '#ffffff');
+            root.style.setProperty('--text-muted', theme.textMuted || '#b0b0b0');
+        }
+
+        function resetTheme() {
+            applyTheme({});
+        }
+
+        // ========================================
+        // Question Randomisation
+        // ========================================
+
+        function shuffleArray(array) {
+            const shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+
+        function generateRandomisedQuestions() {
+            if (!subjectData) return;
+
+            randomisedQuestions = {};
+
+            subjectData.categories.forEach((category, catIndex) => {
+                const allQuestions = [];
+                category.concepts.forEach((concept) => {
+                    concept.questions.forEach((question, qIndex) => {
+                        allQuestions.push({
+                            conceptId: concept.id,
+                            conceptTitle: concept.title,
+                            questionIndex: qIndex,
+                            question: question
+                        });
+                    });
+                });
+
+                randomisedQuestions[catIndex] = shuffleArray(allQuestions);
+            });
+        }
+
+        function getCategoryQuestions() {
+            if (!subjectData || subjectState.currentQuestionCategory === null) return [];
+            return randomisedQuestions[subjectState.currentQuestionCategory] || [];
+        }
+
+        function getTotalQuestionCount() {
+            if (!subjectData) return 0;
+            let total = 0;
+            subjectData.categories.forEach(cat => {
+                cat.concepts.forEach(concept => {
+                    total += concept.questions.length;
+                });
+            });
+            return total;
+        }
+
+        // ========================================
+        // Dropdown Population
+        // ========================================
+
+        function populateStateDropdown(selectId) {
+            const select = document.getElementById(selectId);
+            select.innerHTML = '<option value="">-- Select Examination System --</option>';
+
+            // Group by country
+            const byCountry = {};
+            statesManifest.states.forEach(state => {
+                if (!byCountry[state.country]) {
+                    byCountry[state.country] = [];
+                }
+                byCountry[state.country].push(state);
+            });
+
+            Object.keys(byCountry).sort().forEach(country => {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = country;
+
+                byCountry[country].forEach(state => {
+                    const option = document.createElement('option');
+                    option.value = state.id;
+                    const regionText = state.region ? ` (${state.region})` : '';
+                    option.textContent = state.name + regionText + (state.available ? '' : ' - Coming Soon');
+                    if (!state.available) {
+                        option.disabled = true;
+                    }
+                    optgroup.appendChild(option);
+                });
+
+                select.appendChild(optgroup);
+            });
+        }
+
+        function populateCategoryDropdown() {
+            const select = document.getElementById('categorySelect');
+            select.innerHTML = '<option value="">-- Select Study Area --</option>';
+
+            if (!manifest) {
+                select.disabled = true;
+                return;
+            }
+
+            manifest.categories.forEach(category => {
+                const hasAvailable = category.subjects.some(s => s.available);
+                const option = document.createElement('option');
+                option.value = category.name;
+                option.textContent = category.name + (hasAvailable ? '' : ' (Coming Soon)');
+                if (!hasAvailable) {
+                    option.disabled = true;
+                }
+                select.appendChild(option);
+            });
+
+            select.disabled = false;
+        }
+
+        function populateSubjectDropdown(categoryName) {
+            const select = document.getElementById('subjectSelect');
+            select.innerHTML = '<option value="">-- Select Subject --</option>';
+
+            if (!manifest) {
+                select.disabled = true;
+                return;
+            }
+
+            const category = manifest.categories.find(c => c.name === categoryName);
+            if (!category) {
+                select.disabled = true;
+                return;
+            }
+
+            category.subjects.forEach(subject => {
+                const option = document.createElement('option');
+                option.value = subject.id;
+                option.textContent = subject.name + (subject.available ? '' : ' (Coming Soon)');
+                if (!subject.available) {
+                    option.disabled = true;
+                }
+                select.appendChild(option);
+            });
+
+            select.disabled = false;
+        }
+
+        function populateQuestionCategoryDropdown() {
+            const select = document.getElementById('questionCategorySelect');
+            select.innerHTML = '';
+
+            if (!subjectData) return;
+
+            subjectData.categories.forEach((category, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = category.name;
+                select.appendChild(option);
+            });
+
+            select.value = subjectState.currentQuestionCategory || 0;
+        }
+
+        // ========================================
+        // Subject Loading
+        // ========================================
+
+        async function loadSubject(subjectId) {
+            try {
+                document.getElementById('loadingOverlay').classList.remove('hidden');
+                document.querySelector('.loading-text').textContent = 'Loading subject...';
+
+                subjectData = await loadSubjectData(subjectId);
+                runtimeState.currentSubject = subjectId;
+
+                // Load subject-specific state
+                loadSubjectState(subjectId);
+
+                // Apply theme from subject data
+                if (subjectData.theme) {
+                    applyTheme(subjectData.theme);
+                }
+
+                // Update page title
+                const state = getCurrentState();
+                document.title = `${state.name} ${subjectData.subject} - Examiner's Advice`;
+                document.getElementById('appTitle').textContent = `${state.name} ${subjectData.subject} Examiner's Advice`;
+
+                // Generate randomised question order
+                generateRandomisedQuestions();
+
+                // Show content
+                document.getElementById('noSubjectMessage').style.display = 'none';
+                document.getElementById('questionsContent').style.display = 'block';
+                document.getElementById('mainTabs').style.display = 'flex';
+                document.getElementById('noSubjectFeedback').style.display = 'none';
+                document.getElementById('feedbackContent').style.display = 'block';
+
+                // Populate and render
+                populateQuestionCategoryDropdown();
+                renderCurrentQuestion();
+                updateProgress();
+                updateNextButton();
+                updateUnansweredButton();
+                renderCategorySummary();
+                updateFeedbackTab();
+                updateUtilityStats();
+
+                hideLoading();
+
+            } catch (error) {
+                console.error('Error loading subject:', error);
+                hideLoading();
+                showModal('Error', 'Failed to load subject data. Please try again.');
+            }
+        }
+
+        // ========================================
+        // State Management - localStorage
+        // ========================================
+
+        function getSubjectStorageKey(subjectId) {
+            return CONFIG.storageKeys.subjectPrefix + globalState.currentState + '-' + subjectId;
+        }
+
+        function loadGlobalState() {
+            const saved = localStorage.getItem(CONFIG.storageKeys.global);
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    globalState = { ...globalState, ...parsed };
+                } catch (e) {
+                    console.error('Error loading global state:', e);
+                }
+            }
+        }
+
+        function saveGlobalState() {
+            localStorage.setItem(CONFIG.storageKeys.global, JSON.stringify(globalState));
+        }
+
+        function loadSubjectState(subjectId) {
+            const key = getSubjectStorageKey(subjectId);
+            const saved = localStorage.getItem(key);
+            
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    subjectState = { 
+                        currentQuestionCategory: 0,
+                        currentQuestionIndex: 0,
+                        responses: {},
+                        lastSaved: null,
+                        ...parsed 
+                    };
+                } catch (e) {
+                    console.error('Error loading subject state:', e);
+                    resetSubjectState();
+                }
+            } else {
+                resetSubjectState();
+            }
+        }
+
+        function saveSubjectState() {
+            if (!runtimeState.currentSubject) return;
+            
+            subjectState.lastSaved = new Date().toISOString();
+            const key = getSubjectStorageKey(runtimeState.currentSubject);
+            localStorage.setItem(key, JSON.stringify(subjectState));
+        }
+
+        function resetSubjectState() {
+            subjectState = {
+                currentQuestionCategory: 0,
+                currentQuestionIndex: 0,
+                responses: {},
+                lastSaved: null
+            };
+        }
+
+        function getResponseKey(conceptId, questionIndex) {
+            return `${conceptId}-${questionIndex}`;
+        }
+
+        // ========================================
+        // Event Listeners
+        // ========================================
+
+        function setupEventListeners() {
+            // State selection (first run)
+            document.getElementById('stateSelectInit').addEventListener('change', (e) => {
+                const stateId = e.target.value;
+                const infoDiv = document.getElementById('stateInfoInit');
+                const confirmBtn = document.getElementById('confirmStateBtn');
+                
+                if (stateId) {
+                    const state = statesManifest.states.find(s => s.id === stateId);
+                    if (state) {
+                        document.getElementById('stateInfoName').textContent = state.fullName;
+                        document.getElementById('stateInfoDetails').textContent = 
+                            state.region ? `${state.region}, ${state.country}` : state.country;
+                        infoDiv.classList.add('show');
+                        confirmBtn.disabled = false;
+                    }
+                } else {
+                    infoDiv.classList.remove('show');
+                    confirmBtn.disabled = true;
+                }
+            });
+
+            document.getElementById('confirmStateBtn').addEventListener('click', async () => {
+                const stateId = document.getElementById('stateSelectInit').value;
+                if (stateId) {
+                    try {
+                        document.getElementById('loadingOverlay').classList.remove('hidden');
+                        document.querySelector('.loading-text').textContent = 'Loading examination system...';
+                        await loadStateManifest(stateId);
+                        showMainApp();
+                        hideLoading();
+                    } catch (error) {
+                        console.error('Error loading state:', error);
+                        hideLoading();
+                        showModal('Error', 'Failed to load examination system. Please try again.');
+                    }
+                }
+            });
+
+            // Tab switching
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+            });
+
+            // Category selection
+            document.getElementById('categorySelect').addEventListener('change', (e) => {
+                const categoryName = e.target.value;
+                runtimeState.currentCategory = categoryName;
+
+                if (categoryName) {
+                    populateSubjectDropdown(categoryName);
+                } else {
+                    document.getElementById('subjectSelect').innerHTML = '<option value="">Select a study area first</option>';
+                    document.getElementById('subjectSelect').disabled = true;
+                }
+            });
+
+            // Subject selection
+            document.getElementById('subjectSelect').addEventListener('change', async (e) => {
+                const subjectId = e.target.value;
+                if (subjectId) {
+                    await loadSubject(subjectId);
+                }
+            });
+
+            // Question category selection
+            document.getElementById('questionCategorySelect').addEventListener('change', (e) => {
+                subjectState.currentQuestionCategory = parseInt(e.target.value);
+                subjectState.currentQuestionIndex = 0;
+                renderCurrentQuestion();
+                updateProgress();
+                updateNextButton();
+                updateUnansweredButton();
+                saveSubjectState();
+            });
+
+            // Student name
+            document.getElementById('studentName').addEventListener('change', (e) => {
+                globalState.studentName = e.target.value;
+                saveGlobalState();
+            });
+
+            // Navigation
+            document.getElementById('prevBtn').addEventListener('click', () => navigateQuestion(-1));
+            document.getElementById('unansweredBtn').addEventListener('click', goToEarliestUnanswered);
+            // Note: nextBtn onclick is managed by updateNextButton() function
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+                if (!subjectData) return;
+
+                switch (e.key.toLowerCase()) {
+                    case 't':
+                        answerQuestion(true);
+                        break;
+                    case 'f':
+                        answerQuestion(false);
+                        break;
+                    case 'arrowleft':
+                        navigateQuestion(-1);
+                        break;
+                    case 'arrowright':
+                        // Mirror the next button behaviour
+                        handleNextAction();
+                        break;
+                    case 'u':
+                        goToEarliestUnanswered();
+                        break;
+                }
+            });
+
+            // Filter buttons
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    runtimeState.filter = btn.dataset.filter;
+                    updateFeedbackTab();
+                });
+            });
+
+            // Utility buttons
+            document.getElementById('saveBtn').addEventListener('click', () => {
+                saveSubjectState();
+                saveGlobalState();
+                showModal('Progress Saved', 'Your progress has been saved successfully.');
+            });
+
+            document.getElementById('exportBtn').addEventListener('click', exportResults);
+            document.getElementById('emailBtn').addEventListener('click', emailResults);
+            
+            document.getElementById('resetBtn').addEventListener('click', () => {
+                if (!runtimeState.currentSubject) {
+                    showModal('No Subject', 'Please select a subject first.');
+                    return;
+                }
+                showModal(
+                    'Reset Subject Progress', 
+                    'This will delete all your responses for the current subject. This cannot be undone. Are you sure?', 
+                    true, 
+                    resetProgress
+                );
+            });
+
+            document.getElementById('changeStateBtn').addEventListener('click', () => {
+                showModal(
+                    'Change Examination System',
+                    'Changing your examination system will switch to a different set of subjects. Your progress in the current system will be preserved but you won\'t see it until you switch back. Continue?',
+                    true,
+                    () => {
+                        // Clear current subject
+                        subjectData = null;
+                        runtimeState.currentSubject = null;
+                        runtimeState.currentCategory = null;
+                        resetSubjectState();
+                        
+                        // Hide tabs and question content
+                        document.getElementById('mainTabs').style.display = 'none';
+                        document.getElementById('questionsContent').style.display = 'none';
+                        document.getElementById('noSubjectMessage').style.display = 'block';
+                        
+                        // Show state selection
+                        showStateSelection();
+                    }
+                );
+            });
+
+            // Modal
+            document.getElementById('modalCancel').addEventListener('click', hideModal);
+        }
+
+        // ========================================
+        // Tab Switching
+        // ========================================
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+
+            if (tabName === 'feedback') {
+                updateFeedbackTab();
+            } else if (tabName === 'utility') {
+                updateUtilityStats();
+            }
+        }
+
+        // ========================================
+        // Question Rendering
+        // ========================================
+
+        function renderCurrentQuestion() {
+            const questions = getCategoryQuestions();
+            if (questions.length === 0) {
+                document.getElementById('questionContainer').innerHTML = '<p class="no-subject">No questions available in this category.</p>';
+                return;
+            }
+
+            const currentQ = questions[subjectState.currentQuestionIndex];
+            if (!currentQ) {
+                subjectState.currentQuestionIndex = 0;
+                return renderCurrentQuestion();
+            }
+
+            const responseKey = getResponseKey(currentQ.conceptId, currentQ.questionIndex);
+            const response = subjectState.responses[responseKey];
+
+            const html = `
+                <div class="question-card active">
+                    <div class="question-header">
+                        <span>Question ${subjectState.currentQuestionIndex + 1}/${questions.length}</span>
+                        <span class="status-indicator ${response ? (response.correct ? 'status-correct' : 'status-incorrect') : 'status-unanswered'}">
+                            ${response ? (response.correct ? 'Correct' : 'Incorrect') : 'Unanswered'}
+                        </span>
+                    </div>
+                    <div class="question-concept">${currentQ.conceptTitle}</div>
+                    <div class="question-text">${currentQ.question.text}</div>
+                    <div class="answer-buttons">
+                        <button class="answer-btn ${response && response.answer === true ? (response.correct ? 'correct' : 'incorrect') : ''}"
+                                onclick="answerQuestion(true)" ${response ? 'disabled' : ''}>
+                            TRUE
+                        </button>
+                        <button class="answer-btn ${response && response.answer === false ? (response.correct ? 'correct' : 'incorrect') : ''}"
+                                onclick="answerQuestion(false)" ${response ? 'disabled' : ''}>
+                            FALSE
+                        </button>
+                    </div>
+                    ${response ? `
+                        <div class="feedback show ${response.correct ? 'correct' : 'incorrect'}">
+                            <div class="feedback-header">${response.correct ? '✓ Correct' : '✗ Incorrect'}</div>
+                            <div>${currentQ.question.explanation}</div>
+                            ${currentQ.question.studyTip ? `<div class="study-tip">💡 Study Tip: ${currentQ.question.studyTip}</div>` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+
+            document.getElementById('questionContainer').innerHTML = html;
+        }
+
+        function answerQuestion(answer) {
+            const questions = getCategoryQuestions();
+            if (questions.length === 0) return;
+
+            const currentQ = questions[subjectState.currentQuestionIndex];
+            const responseKey = getResponseKey(currentQ.conceptId, currentQ.questionIndex);
+
+            if (subjectState.responses[responseKey]) return; // Already answered
+
+            const correct = answer === currentQ.question.answer;
+
+            subjectState.responses[responseKey] = {
+                answer: answer,
+                correct: correct,
+                timestamp: new Date().toISOString()
+            };
+
+            saveSubjectState();
+            renderCurrentQuestion();
+            updateProgress();
+            updateNextButton();
+            updateUnansweredButton();
+            renderCategorySummary();
+            updateFeedbackTab();
+            updateUtilityStats();
+        }
+
+        function navigateQuestion(direction) {
+            const questions = getCategoryQuestions();
+            subjectState.currentQuestionIndex += direction;
+
+            if (subjectState.currentQuestionIndex < 0) {
+                subjectState.currentQuestionIndex = 0;
+            } else if (subjectState.currentQuestionIndex >= questions.length) {
+                subjectState.currentQuestionIndex = questions.length - 1;
+            }
+
+            renderCurrentQuestion();
+            updateProgress();
+            updateNextButton();
+            updateUnansweredButton();
+            saveSubjectState();
+        }
+
+        function advanceToNextCategory() {
+            if (!subjectData) return;
+            
+            const totalCategories = subjectData.categories.length;
+            const currentCat = subjectState.currentQuestionCategory;
+            
+            if (currentCat < totalCategories - 1) {
+                // Advance to next category
+                subjectState.currentQuestionCategory = currentCat + 1;
+                subjectState.currentQuestionIndex = 0;
+                
+                // Update dropdown
+                document.getElementById('questionCategorySelect').value = subjectState.currentQuestionCategory;
+                
+                // Re-render
+                renderCurrentQuestion();
+                updateProgress();
+                updateNextButton();
+                updateUnansweredButton();
+                saveSubjectState();
+            }
+        }
+
+        function updateNextButton() {
+            const nextBtn = document.getElementById('nextBtn');
+            if (!subjectData || !nextBtn) return;
+
+            const questions = getCategoryQuestions();
+            const totalCategories = subjectData.categories.length;
+            const currentCat = subjectState.currentQuestionCategory;
+            const isLastQuestion = subjectState.currentQuestionIndex >= questions.length - 1;
+            const isLastCategory = currentCat >= totalCategories - 1;
+
+            if (isLastQuestion && isLastCategory) {
+                // Last question of last category - disable
+                nextBtn.textContent = 'Next →';
+                nextBtn.disabled = true;
+                nextBtn.onclick = null;
+            } else if (isLastQuestion && !isLastCategory) {
+                // Last question but more categories exist
+                nextBtn.textContent = 'Next Category →';
+                nextBtn.disabled = false;
+                nextBtn.onclick = handleNextAction;
+            } else {
+                // Normal navigation
+                nextBtn.textContent = 'Next →';
+                nextBtn.disabled = false;
+                nextBtn.onclick = handleNextAction;
+            }
+        }
+
+        function handleNextAction() {
+            // Centralised logic for "next" action (used by button and keyboard)
+            if (!subjectData) return;
+
+            const questions = getCategoryQuestions();
+            const totalCategories = subjectData.categories.length;
+            const currentCat = subjectState.currentQuestionCategory;
+            const isLastQuestion = subjectState.currentQuestionIndex >= questions.length - 1;
+            const isLastCategory = currentCat >= totalCategories - 1;
+
+            if (isLastQuestion && isLastCategory) {
+                // Do nothing - at the very end
+                return;
+            } else if (isLastQuestion && !isLastCategory) {
+                // Advance to next category
+                advanceToNextCategory();
+            } else {
+                // Normal navigation
+                navigateQuestion(1);
+            }
+        }
+
+        function findEarliestUnanswered() {
+            // Returns { categoryIndex, questionIndex } of earliest unanswered, or null if all answered
+            if (!subjectData) return null;
+
+            for (let catIndex = 0; catIndex < subjectData.categories.length; catIndex++) {
+                const categoryQuestions = randomisedQuestions[catIndex] || [];
+                
+                for (let qIndex = 0; qIndex < categoryQuestions.length; qIndex++) {
+                    const q = categoryQuestions[qIndex];
+                    const responseKey = getResponseKey(q.conceptId, q.questionIndex);
+                    
+                    if (!subjectState.responses[responseKey]) {
+                        return { categoryIndex: catIndex, questionIndex: qIndex };
+                    }
+                }
+            }
+            
+            return null; // All answered
+        }
+
+        function goToEarliestUnanswered() {
+            const earliest = findEarliestUnanswered();
+            
+            if (!earliest) return; // All answered, button should be disabled
+            
+            const categoryChanged = earliest.categoryIndex !== subjectState.currentQuestionCategory;
+            
+            // Update state
+            subjectState.currentQuestionCategory = earliest.categoryIndex;
+            subjectState.currentQuestionIndex = earliest.questionIndex;
+            
+            // Update dropdown if category changed
+            if (categoryChanged) {
+                document.getElementById('questionCategorySelect').value = earliest.categoryIndex;
+            }
+            
+            // Re-render
+            renderCurrentQuestion();
+            updateProgress();
+            updateNextButton();
+            updateUnansweredButton();
+            saveSubjectState();
+        }
+
+        function updateUnansweredButton() {
+            const btn = document.getElementById('unansweredBtn');
+            if (!btn || !subjectData) return;
+
+            const earliest = findEarliestUnanswered();
+            
+            if (earliest) {
+                btn.disabled = false;
+                // Show which category it will go to if different
+                if (earliest.categoryIndex !== subjectState.currentQuestionCategory) {
+                    const catName = subjectData.categories[earliest.categoryIndex].name;
+                    btn.textContent = `Earliest Unanswered (${catName})`;
+                } else {
+                    btn.textContent = 'Earliest Unanswered';
+                }
+            } else {
+                btn.disabled = true;
+                btn.textContent = 'All Answered ✓';
+            }
+        }
+
+        // ========================================
+        // Progress Updates
+        // ========================================
+
+        function updateProgress() {
+            const questions = getCategoryQuestions();
+            let answered = 0;
+
+            questions.forEach((q) => {
+                const key = getResponseKey(q.conceptId, q.questionIndex);
+                if (subjectState.responses[key]) answered++;
+            });
+
+            const percentage = questions.length > 0 ? Math.round((answered / questions.length) * 100) : 0;
+
+            document.getElementById('progressFill').style.width = percentage + '%';
+            document.getElementById('progressText').textContent = `${answered}/${questions.length} (${percentage}%)`;
+        }
+
+        function renderCategorySummary() {
+            if (!subjectData) return;
+
+            const html = subjectData.categories.map((category, index) => {
+                const totalQuestions = category.concepts.reduce((sum, c) => sum + c.questions.length, 0);
+                let answered = 0;
+
+                category.concepts.forEach((concept) => {
+                    concept.questions.forEach((q, qIndex) => {
+                        const key = getResponseKey(concept.id, qIndex);
+                        if (subjectState.responses[key]) answered++;
+                    });
+                });
+
+                const percentage = totalQuestions > 0 ? Math.round((answered / totalQuestions) * 100) : 0;
+
+                return `
+                    <div class="category-card">
+                        <h3>${category.name}</h3>
+                        <div class="stats">
+                            ${answered}/${totalQuestions} answered (${percentage}%)
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('categorySummary').innerHTML = html;
+        }
+
+        // ========================================
+        // Feedback Tab
+        // ========================================
+
+        function updateFeedbackTab() {
+            if (!subjectData) return;
+
+            const conceptMastery = {};
+
+            // Calculate mastery for each concept
+            subjectData.categories.forEach((category) => {
+                category.concepts.forEach((concept) => {
+                    const key = concept.id;
+                    conceptMastery[key] = {
+                        concept: concept,
+                        categoryName: category.name,
+                        responses: []
+                    };
+
+                    concept.questions.forEach((q, qIndex) => {
+                        const responseKey = getResponseKey(concept.id, qIndex);
+                        const response = subjectState.responses[responseKey];
+                        conceptMastery[key].responses.push(response);
+                    });
+                });
+            });
+
+            // Count mastery levels
+            let mastered = 0, partial = 0, needsWork = 0, notAttempted = 0;
+
+            Object.values(conceptMastery).forEach(cm => {
+                const answered = cm.responses.filter(r => r !== undefined);
+                const correct = answered.filter(r => r && r.correct);
+
+                if (answered.length === 0) {
+                    notAttempted++;
+                } else if (answered.length === cm.responses.length && correct.length === cm.responses.length) {
+                    mastered++;
+                } else if (correct.length > 0) {
+                    partial++;
+                } else {
+                    needsWork++;
+                }
+            });
+
+            document.getElementById('masteredCount').textContent = mastered;
+            document.getElementById('partialCount').textContent = partial;
+            document.getElementById('needsWorkCount').textContent = needsWork;
+            document.getElementById('notAttemptedCount').textContent = notAttempted;
+
+            // Overall progress
+            const totalQuestions = getTotalQuestionCount();
+            const totalAnswered = Object.keys(subjectState.responses).length;
+            const overallPercentage = totalQuestions > 0 ? Math.round((totalAnswered / totalQuestions) * 100) : 0;
+
+            document.getElementById('overallProgressFill').style.width = overallPercentage + '%';
+            document.getElementById('overallProgressText').textContent = `${totalAnswered}/${totalQuestions} (${overallPercentage}%)`;
+
+            // Render concept list
+            renderConceptList(conceptMastery);
+        }
+
+        function renderConceptList(conceptMastery) {
+            const filtered = Object.entries(conceptMastery).filter(([key, cm]) => {
+                const answered = cm.responses.filter(r => r !== undefined);
+                const correct = answered.filter(r => r && r.correct);
+
+                if (runtimeState.filter === 'all') return true;
+                if (runtimeState.filter === 'mastered') return answered.length === cm.responses.length && correct.length === cm.responses.length;
+                if (runtimeState.filter === 'partial') return answered.length > 0 && correct.length > 0 && correct.length < cm.responses.length;
+                if (runtimeState.filter === 'needs-work') return answered.length > 0 && correct.length === 0;
+                if (runtimeState.filter === 'not-attempted') return answered.length === 0;
+                return false;
+            });
+
+            const html = filtered.map(([key, cm]) => {
+                const answered = cm.responses.filter(r => r !== undefined);
+                const correct = answered.filter(r => r && r.correct);
+                const total = cm.responses.length;
+
+                let status = 'not-attempted';
+                let statusText = 'Not Attempted';
+
+                if (answered.length === total && correct.length === total) {
+                    status = 'mastered';
+                    statusText = `Mastered (${correct.length}/${total})`;
+                } else if (correct.length > 0) {
+                    status = 'partial';
+                    statusText = `Partial (${correct.length}/${total})`;
+                } else if (answered.length > 0) {
+                    status = 'needs-work';
+                    statusText = `Needs Work (0/${total})`;
+                }
+
+                return `
+                    <div class="concept-item ${status}">
+                        <div class="concept-header">
+                            <span class="concept-title">${cm.concept.title}</span>
+                            <span>${statusText}</span>
+                        </div>
+                        <div class="concept-details">
+                            Category: ${cm.categoryName}<br>
+                            ${cm.responses.map((r, i) =>
+                                r ? `Q${i + 1}: ${r.correct ? '✓ Correct' : '✗ Incorrect'}` : `Q${i + 1}: Not attempted`
+                            ).join(' | ')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('conceptList').innerHTML = html || '<p style="text-align: center; color: var(--neutral); padding: 2rem;">No concepts match this filter.</p>';
+        }
+
+        // ========================================
+        // Utility Functions
+        // ========================================
+
+        function updateUtilityStats() {
+            if (!subjectData) {
+                document.getElementById('statAnswered').textContent = '0/0';
+                document.getElementById('statAccuracy').textContent = '0%';
+                document.getElementById('statSubject').textContent = '-';
+                document.getElementById('statLastSession').textContent = '-';
+                return;
+            }
+
+            const totalQuestions = getTotalQuestionCount();
+            const totalAnswered = Object.keys(subjectState.responses).length;
+            const correct = Object.values(subjectState.responses).filter(r => r && r.correct).length;
+            const accuracy = totalAnswered > 0 ? Math.round((correct / totalAnswered) * 100) : 0;
+
+            document.getElementById('statAnswered').textContent = `${totalAnswered}/${totalQuestions}`;
+            document.getElementById('statAccuracy').textContent = `${accuracy}%`;
+            document.getElementById('statSubject').textContent = subjectData.subject || '-';
+            document.getElementById('statLastSession').textContent = subjectState.lastSaved ? new Date(subjectState.lastSaved).toLocaleString() : 'Never';
+        }
+
+        function exportResults() {
+            if (!subjectData) {
+                showModal('No Subject', 'Please select a subject first.');
+                return;
+            }
+
+            const results = generateResultsText();
+            const blob = new Blob([results], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const state = getCurrentState();
+            a.download = `${state.name}_${subjectData.subject}_Results_${globalState.studentName || 'Student'}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function emailResults() {
+            if (!subjectData) {
+                showModal('No Subject', 'Please select a subject first.');
+                return;
+            }
+
+            const results = generateResultsText();
+            const state = getCurrentState();
+            const subject = encodeURIComponent(`${state.name} ${subjectData.subject} Progress - ${globalState.studentName || 'Student'}`);
+            const body = encodeURIComponent(results);
+            window.location.href = `mailto:?subject=${subject}&body=${body}`;
+        }
+
+        function generateResultsText() {
+            const state = getCurrentState();
+            const totalQuestions = getTotalQuestionCount();
+            const totalAnswered = Object.keys(subjectState.responses).length;
+            const correct = Object.values(subjectState.responses).filter(r => r && r.correct).length;
+            const accuracy = totalAnswered > 0 ? Math.round((correct / totalAnswered) * 100) : 0;
+
+            let text = `${state.name} ${subjectData.subject} Examiner's Advice - Progress Report\n`;
+            text += `${'='.repeat(50)}\n\n`;
+            text += `Student: ${globalState.studentName || 'Not provided'}\n`;
+            text += `Examination System: ${state.fullName}\n`;
+            text += `Date: ${new Date().toLocaleString()}\n\n`;
+            text += `Overall Progress: ${totalAnswered}/${totalQuestions} (${Math.round((totalAnswered / totalQuestions) * 100)}%)\n`;
+            text += `Accuracy: ${accuracy}%\n\n`;
+
+            text += `Category Breakdown:\n`;
+            text += `${'-'.repeat(30)}\n`;
+
+            subjectData.categories.forEach((category) => {
+                const categoryQuestions = category.concepts.reduce((sum, c) => sum + c.questions.length, 0);
+                let categoryAnswered = 0;
+
+                category.concepts.forEach((concept) => {
+                    concept.questions.forEach((q, qIndex) => {
+                        const key = getResponseKey(concept.id, qIndex);
+                        if (subjectState.responses[key]) categoryAnswered++;
+                    });
+                });
+
+                text += `• ${category.name}: ${categoryAnswered}/${categoryQuestions}\n`;
+            });
+
+            return text;
+        }
+
+        function resetProgress() {
+            if (!runtimeState.currentSubject) return;
+
+            // Clear subject state
+            resetSubjectState();
+            
+            // Remove from localStorage
+            const key = getSubjectStorageKey(runtimeState.currentSubject);
+            localStorage.removeItem(key);
+
+            // Re-randomise questions
+            generateRandomisedQuestions();
+
+            renderCurrentQuestion();
+            updateProgress();
+            updateNextButton();
+            updateUnansweredButton();
+            renderCategorySummary();
+            updateFeedbackTab();
+            updateUtilityStats();
+            hideModal();
+        }
+
+        // ========================================
+        // Modal
+        // ========================================
+
+        function showModal(header, body, showConfirm = false, confirmCallback = null) {
+            document.getElementById('modalHeader').textContent = header;
+            document.getElementById('modalBody').textContent = body;
+            document.getElementById('modal').classList.add('show');
+
+            const confirmBtn = document.getElementById('modalConfirm');
+            if (showConfirm) {
+                confirmBtn.style.display = 'block';
+                confirmBtn.onclick = () => {
+                    if (confirmCallback) confirmCallback();
+                    hideModal();
+                };
+            } else {
+                confirmBtn.style.display = 'none';
+            }
+        }
+
+        function hideModal() {
+            document.getElementById('modal').classList.remove('show');
+        }
+
+        // ========================================
+        // Global Functions for onclick handlers
+        // ========================================
+
+        window.answerQuestion = answerQuestion;
+
+        // ========================================
+        // Start Application
+        // ========================================
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Interactive Experiment Hypothesis Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    /* General container styling */
+    .container {
+      margin-bottom: 20px;
+    }
+    /* Style for the drop zones */
+    .zone {
+      border: 2px dashed #aaa;
+      border-radius: 5px;
+      padding: 10px;
+      min-height: 50px;
+      margin-bottom: 20px;
+    }
+    .zone.hovered {
+      border-color: #555;
+      background-color: #f0f0f0;
+    }
+    /* Style for draggable variable items */
+    .draggable {
+      padding: 5px 10px;
+      margin: 5px;
+      background-color: #ddd;
+      border: 1px solid #aaa;
+      border-radius: 3px;
+      cursor: grab;
+      display: inline-block;
+    }
+    /* Style for select elements */
+    select, input[type="text"] {
+      padding: 5px;
+      margin: 5px 0;
+      font-size: 1em;
+    }
+    button {
+      padding: 5px 10px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Interactive Experiment Hypothesis Generator</h1>
+
+  <!-- Experiment Selection -->
+  <div class="container">
+    <label for="experimentSelect"><strong>Select an Experiment:</strong></label><br>
+    <select id="experimentSelect">
+      <option value="">-- Choose an Experiment --</option>
+      <optgroup label="Physics Experiments">
+        <option value="pendulum">Pendulum Period Experiment</option>
+        <option value="projectile">Projectile Motion Experiment</option>
+        <option value="friction">Friction on an Inclined Plane</option>
+        <option value="hooke">Hooke's Law Experiment</option>
+        <option value="resistance">Electrical Resistance Experiment</option>
+      </optgroup>
+      <optgroup label="Chemistry Experiments">
+        <option value="reaction">Reaction Rate Experiment</option>
+        <option value="solubility">Solubility Experiment</option>
+        <option value="titration">Titration Experiment</option>
+        <option value="electrolysis">Electrolysis Experiment</option>
+        <option value="diffusion">Diffusion Experiment</option>
+      </optgroup>
+      <optgroup label="Biology Experiments">
+        <option value="plant">Plant Growth Experiment</option>
+        <option value="enzyme">Enzyme Activity Experiment</option>
+        <option value="photosynthesis">Photosynthesis Experiment</option>
+        <option value="bacteria">Bacterial Growth Experiment</option>
+        <option value="respiration">Respiration Experiment</option>
+      </optgroup>
+    </select>
+  </div>
+
+  <!-- Variable Pool -->
+  <div id="variable-pool" class="container">
+    <strong>Variables Pool:</strong>
+    <p>(Select an experiment to load its variables.)</p>
+  </div>
+
+  <!-- Drop zones for IV, DV, and CV -->
+  <div class="container">
+    <h3>Independent Variable (IV)</h3>
+    <div id="iv-zone" class="zone"></div>
+  </div>
+  <div class="container">
+    <h3>Dependent Variable (DV)</h3>
+    <div id="dv-zone" class="zone"></div>
+  </div>
+  
+  <!-- Add All CV Button (appears when both IV and DV are selected) -->
+  <div class="container">
+    <button id="addCVButton" style="display: none;">Add All Control Variables</button>
+  </div>
+  
+  <div class="container">
+    <h3>Control Variables (CV)</h3>
+    <div id="cv-zone" class="zone"></div>
+  </div>
+
+  <!-- Relationship Selectors for IV and DV -->
+  <div class="container">
+    <h3>Select How Variables Change</h3>
+    <div>
+      <label for="ivAction"><strong>IV Action:</strong></label><br>
+      <select id="ivAction">
+        <option value="">-- Select Relationship --</option>
+        <option value="increases">increases</option>
+        <option value="decreases">decreases</option>
+        <option value="increases exponentially">increases exponentially</option>
+        <option value="decreases exponentially">decreases exponentially</option>
+        <option value="increases with the square root">increases with the square root</option>
+        <option value="decreases with the square root">decreases with the square root</option>
+      </select>
+    </div>
+    <div>
+      <label for="dvAction"><strong>DV Response:</strong></label><br>
+      <select id="dvAction">
+        <option value="">-- Select Relationship --</option>
+        <option value="increases">increases</option>
+        <option value="decreases">decreases</option>
+        <option value="increases exponentially">increases exponentially</option>
+        <option value="decreases exponentially">decreases exponentially</option>
+        <option value="increases with the square root">increases with the square root</option>
+        <option value="decreases with the square root">decreases with the square root</option>
+        <option value="remains constant">remains constant</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Hypothesis Display -->
+  <div class="container">
+    <h2>Your Hypothesis:</h2>
+    <p id="hypothesisText">Select an experiment, assign variables, and choose relationships to see your hypothesis.</p>
+  </div>
+
+  <!-- Reset Button -->
+  <div class="container">
+    <button id="resetButton">Reset Experiment</button>
+  </div>
+
+  <script>
+    /*********************
+     * Experiment Data
+     *********************/
+    const experiments = {
+      // Physics Experiments
+      pendulum: {
+        name: "Pendulum Period Experiment",
+        variables: ["Pendulum Length", "Pendulum Mass", "Angle", "Period", "Gravitational Acceleration"]
+      },
+      projectile: {
+        name: "Projectile Motion Experiment",
+        variables: ["Launch Angle", "Initial Speed", "Air Resistance", "Range", "Time of Flight"]
+      },
+      friction: {
+        name: "Friction on an Inclined Plane",
+        variables: ["Incline Angle", "Mass", "Friction Coefficient", "Acceleration", "Surface Roughness"]
+      },
+      hooke: {
+        name: "Hooke's Law Experiment",
+        variables: ["Applied Force", "Spring Extension", "Spring Constant", "Mass", "Initial Length"]
+      },
+      resistance: {
+        name: "Electrical Resistance Experiment",
+        variables: ["Voltage", "Current", "Resistance", "Wire Length", "Wire Temperature"]
+      },
+      // Chemistry Experiments
+      reaction: {
+        name: "Reaction Rate Experiment",
+        variables: ["Temperature", "Concentration", "Reaction Rate", "Catalyst Amount", "pH Level"]
+      },
+      solubility: {
+        name: "Solubility Experiment",
+        variables: ["Solvent Temperature", "Solute Mass", "Solubility", "Stirring Speed", "Time"]
+      },
+      titration: {
+        name: "Titration Experiment",
+        variables: ["Titrant Volume", "Titrand Concentration", "pH Change", "Indicator", "Endpoint"]
+      },
+      electrolysis: {
+        name: "Electrolysis Experiment",
+        variables: ["Voltage", "Electrolyte Concentration", "Gas Volume", "Current", "Electrode Surface Area"]
+      },
+      diffusion: {
+        name: "Diffusion Experiment",
+        variables: ["Membrane Permeability", "Concentration Gradient", "Diffusion Rate", "Temperature", "Molecule Size"]
+      },
+      // Biology Experiments
+      plant: {
+        name: "Plant Growth Experiment",
+        variables: ["Water Volume", "Sunlight Exposure", "Growth Rate", "Soil Nutrient", "Plant Species"]
+      },
+      enzyme: {
+        name: "Enzyme Activity Experiment",
+        variables: ["Temperature", "pH", "Enzyme Concentration", "Reaction Rate", "Substrate Concentration"]
+      },
+      photosynthesis: {
+        name: "Photosynthesis Experiment",
+        variables: ["Light Intensity", "CO₂ Concentration", "Oxygen Production", "Temperature", "Chlorophyll Concentration"]
+      },
+      bacteria: {
+        name: "Bacterial Growth Experiment",
+        variables: ["Incubation Temperature", "Nutrient Concentration", "Growth Rate", "pH Level", "Oxygen Level"]
+      },
+      respiration: {
+        name: "Respiration Experiment",
+        variables: ["Oxygen Concentration", "Carbon Dioxide Production", "Respiration Rate", "Temperature", "Activity Level"]
+      }
+    };
+
+    /*********************
+     * Experiment Standards & Accepted Variations
+     *********************/
+    // For each experiment we now list the accepted IVs and DVs.
+    // In addition, expectedEffects (by IV) can be used to validate the chosen DV relationship.
+    const experimentStandards = {
+      pendulum: {
+        acceptedIVs: ["Pendulum Length"],
+        acceptedDVs: ["Period"],
+        expectedEffects: {
+          "Pendulum Length": { effect: "increases with the square root" },
+          "Pendulum Mass": { effect: "remains constant" },
+          "Angle": { effect: "remains constant" },
+          "Gravitational Acceleration": { effect: "decreases" }
+        }
+      },
+      projectile: {
+        acceptedIVs: ["Initial Speed", "Launch Angle"],
+        acceptedDVs: ["Range", "Time of Flight"],
+        expectedEffects: {
+          "Initial Speed": { effect: "increases" },
+          "Launch Angle": { effect: "varies - optimal angle is 45°" },
+          "Air Resistance": { effect: "decreases" }
+        }
+      },
+      friction: {
+        acceptedIVs: ["Incline Angle"],
+        acceptedDVs: ["Acceleration"],
+        expectedEffects: {
+          "Incline Angle": { effect: "increases" },
+          "Mass": { effect: "increases" },
+          "Friction Coefficient": { effect: "decreases" }
+        }
+      },
+      hooke: {
+        acceptedIVs: ["Applied Force"],
+        acceptedDVs: ["Spring Extension"],
+        expectedEffects: {
+          "Applied Force": { effect: "increases" },
+          "Spring Constant": { effect: "decreases" }
+        }
+      },
+      resistance: {
+        acceptedIVs: ["Voltage"],
+        acceptedDVs: ["Current"],
+        expectedEffects: {
+          "Voltage": { effect: "increases" },
+          "Wire Temperature": { effect: "increases" }
+        }
+      },
+      reaction: {
+        acceptedIVs: ["Temperature"],
+        acceptedDVs: ["Reaction Rate"],
+        expectedEffects: {
+          "Temperature": { effect: "increases" },
+          "Concentration": { effect: "increases" }
+        }
+      },
+      solubility: {
+        acceptedIVs: ["Solvent Temperature"],
+        acceptedDVs: ["Solubility"],
+        expectedEffects: {
+          "Solvent Temperature": { effect: "increases" },
+          "Solute Mass": { effect: "increases" }
+        }
+      },
+      titration: {
+        acceptedIVs: ["Titrant Volume"],
+        acceptedDVs: ["pH Change"],
+        expectedEffects: {
+          "Titrant Volume": { effect: "increases" },
+          "Titrand Concentration": { effect: "increases" }
+        }
+      },
+      electrolysis: {
+        acceptedIVs: ["Voltage", "Electrolyte Concentration"],
+        acceptedDVs: ["Gas Volume"],
+        expectedEffects: {
+          "Voltage": { effect: "increases" },
+          "Electrolyte Concentration": { effect: "increases" }
+        }
+      },
+      diffusion: {
+        acceptedIVs: ["Concentration Gradient", "Temperature"],
+        acceptedDVs: ["Diffusion Rate"],
+        expectedEffects: {
+          "Concentration Gradient": { effect: "increases" },
+          "Temperature": { effect: "increases" }
+        }
+      },
+      plant: {
+        acceptedIVs: ["Water Volume", "Sunlight Exposure", "Soil Nutrient"],
+        acceptedDVs: ["Growth Rate"],
+        expectedEffects: {
+          "Water Volume": { effect: "increases" },
+          "Sunlight Exposure": { effect: "increases" }
+        }
+      },
+      enzyme: {
+        acceptedIVs: ["Temperature", "pH", "Enzyme Concentration", "Substrate Concentration"],
+        acceptedDVs: ["Reaction Rate"],
+        expectedEffects: {
+          "Temperature": { effect: "increases" },
+          "pH": { effect: "varies" }
+        }
+      },
+      photosynthesis: {
+        acceptedIVs: ["Light Intensity", "CO₂ Concentration", "Temperature"],
+        acceptedDVs: ["Oxygen Production"],
+        expectedEffects: {
+          "Light Intensity": { effect: "increases" },
+          "CO₂ Concentration": { effect: "increases" }
+        }
+      },
+      bacteria: {
+        acceptedIVs: ["Nutrient Concentration", "Incubation Temperature", "pH Level", "Oxygen Level"],
+        acceptedDVs: ["Growth Rate"],
+        expectedEffects: {
+          "Nutrient Concentration": { effect: "increases" },
+          "Incubation Temperature": { effect: "increases" }
+        }
+      },
+      respiration: {
+        acceptedIVs: ["Oxygen Concentration", "Temperature"],
+        acceptedDVs: ["Respiration Rate"],
+        expectedEffects: {
+          "Oxygen Concentration": { effect: "increases" },
+          "Temperature": { effect: "increases" }
+        }
+      }
+    };
+
+    let currentExperiment = null; // Will hold the currently selected experiment
+
+    /*********************
+     * Populate Experiment Variables
+     *********************/
+    const experimentSelect = document.getElementById("experimentSelect");
+    const variablePool = document.getElementById("variable-pool");
+
+    experimentSelect.addEventListener("change", function() {
+      const expKey = this.value;
+      variablePool.innerHTML = ""; // Clear previous pool
+      if (expKey && experiments[expKey]) {
+        currentExperiment = experiments[expKey];
+        // Create a heading and list the variables as draggable items
+        const heading = document.createElement("strong");
+        heading.textContent = "Variables Pool:";
+        variablePool.appendChild(heading);
+        currentExperiment.variables.forEach(variable => {
+          const varElem = document.createElement("div");
+          varElem.className = "draggable";
+          varElem.setAttribute("draggable", "true");
+          varElem.setAttribute("data-variable", variable);
+          varElem.textContent = variable;
+          varElem.addEventListener("dragstart", dragStart);
+          variablePool.appendChild(varElem);
+        });
+      } else {
+        currentExperiment = null;
+        variablePool.innerHTML = "<p>(Select an experiment to load its variables.)</p>";
+      }
+      updateHypothesis();
+    });
+
+    /*********************
+     * Drag and Drop Functionality
+     *********************/
+    // For any pre–existing draggables (if any)
+    document.querySelectorAll('.draggable').forEach(elem => {
+      elem.addEventListener('dragstart', dragStart);
+    });
+
+    function dragStart(e) {
+      e.dataTransfer.setData('text/plain', e.target.getAttribute('data-variable'));
+    }
+
+    // Set up drop zones (IV, DV, and CV)
+    const zones = document.querySelectorAll('.zone');
+    zones.forEach(zone => {
+      zone.addEventListener('dragover', dragOver);
+      zone.addEventListener('dragleave', dragLeave);
+      zone.addEventListener('drop', drop);
+    });
+
+    function dragOver(e) {
+      e.preventDefault();
+      e.currentTarget.classList.add('hovered');
+    }
+
+    function dragLeave(e) {
+      e.currentTarget.classList.remove('hovered');
+    }
+
+    function drop(e) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('hovered');
+      const variable = e.dataTransfer.getData('text/plain');
+      // Create a clone of the variable for the drop zone
+      const newElem = document.createElement('div');
+      newElem.className = 'draggable';
+      newElem.textContent = variable;
+      newElem.setAttribute('data-variable', variable);
+      newElem.setAttribute('draggable', 'true');
+      newElem.addEventListener('dragstart', dragStart);
+      // Allow removal on double-click
+      newElem.addEventListener('dblclick', function() {
+        e.currentTarget.removeChild(newElem);
+        updateAddCVButton();
+        updateHypothesis();
+      });
+      // Prevent duplicates in the same zone
+      if (!isVariableInZone(e.currentTarget, variable)) {
+        e.currentTarget.appendChild(newElem);
+      }
+      updateAddCVButton();
+      updateHypothesis();
+    }
+
+    // Helper to check for duplicates in a zone
+    function isVariableInZone(zone, variableName) {
+      return Array.from(zone.children).some(child => child.getAttribute('data-variable') === variableName);
+    }
+
+    /*********************
+     * Add All Control Variables Button
+     *********************/
+    const addCVButton = document.getElementById("addCVButton");
+    addCVButton.addEventListener("click", function() {
+      if (!currentExperiment) return;
+      const ivZone = document.getElementById("iv-zone");
+      const dvZone = document.getElementById("dv-zone");
+      const cvZone = document.getElementById("cv-zone");
+      currentExperiment.variables.forEach(variable => {
+        if (!isVariableInZone(ivZone, variable) &&
+            !isVariableInZone(dvZone, variable) &&
+            !isVariableInZone(cvZone, variable)) {
+          const newElem = document.createElement('div');
+          newElem.className = 'draggable';
+          newElem.textContent = variable;
+          newElem.setAttribute('data-variable', variable);
+          newElem.setAttribute('draggable', 'true');
+          newElem.addEventListener('dragstart', dragStart);
+          newElem.addEventListener('dblclick', function() {
+            cvZone.removeChild(newElem);
+            updateHypothesis();
+          });
+          cvZone.appendChild(newElem);
+        }
+      });
+      updateHypothesis();
+    });
+
+    // Show or hide the "Add All CV" button when both IV and DV zones have at least one variable.
+    function updateAddCVButton() {
+      const ivZone = document.getElementById("iv-zone");
+      const dvZone = document.getElementById("dv-zone");
+      if (ivZone.children.length > 0 && dvZone.children.length > 0) {
+        addCVButton.style.display = "inline-block";
+      } else {
+        addCVButton.style.display = "none";
+      }
+    }
+
+    /*********************
+     * Hypothesis Generator & Validation
+     *********************/
+    const ivActionSelect = document.getElementById("ivAction");
+    const dvActionSelect = document.getElementById("dvAction");
+
+    // When relationship selections change, update the hypothesis.
+    ivActionSelect.addEventListener('change', updateHypothesis);
+    dvActionSelect.addEventListener('change', updateHypothesis);
+
+    function updateHypothesis() {
+      const ivZone = document.getElementById("iv-zone");
+      const dvZone = document.getElementById("dv-zone");
+      const cvZone = document.getElementById("cv-zone");
+
+      const ivVariables = Array.from(ivZone.children).map(child => child.getAttribute('data-variable'));
+      const dvVariables = Array.from(dvZone.children).map(child => child.getAttribute('data-variable'));
+      const cvVariables = Array.from(cvZone.children).map(child => child.getAttribute('data-variable'));
+
+      const ivAction = ivActionSelect.value || "[does something]";
+      const dvAction = dvActionSelect.value || "[does something else]";
+
+      let hypothesis = "";
+      if (ivVariables.length === 0 && dvVariables.length === 0 && cvVariables.length === 0) {
+        hypothesis = "Select an experiment, assign variables, and choose relationships to see your hypothesis.";
+      } else {
+        hypothesis += "If " + (ivVariables.length > 0 ? ivVariables.join(" and ") : "[Independent Variable]") + " " + ivAction;
+        hypothesis += ", then " + (dvVariables.length > 0 ? dvVariables.join(" and ") : "[Dependent Variable]") + " " + dvAction;
+        hypothesis += " provided that " + (cvVariables.length > 0 ? cvVariables.join(", ") : "all other variables") + " remain constant.";
+      }
+      document.getElementById('hypothesisText').textContent = hypothesis;
+
+      // Validate the variable choices and the relationship selections.
+      validateChoices();
+    }
+
+    // Validate the IV, DV, and relationship against the accepted experiment design.
+    function validateChoices() {
+      if (!currentExperiment) return;
+      const currentExpKey = experimentSelect.value;
+      if (!experimentStandards[currentExpKey]) return;
+      const standards = experimentStandards[currentExpKey];
+
+      const ivZone = document.getElementById("iv-zone");
+      const dvZone = document.getElementById("dv-zone");
+
+      // Validate IV zone: check if each variable is in the acceptedIVs array.
+      Array.from(ivZone.children).forEach(child => {
+        const variable = child.getAttribute("data-variable");
+        if (standards.acceptedIVs.includes(variable)) {
+          child.style.backgroundColor = "#c8e6c9"; // light green
+        } else {
+          child.style.backgroundColor = "#ffcdd2"; // light red
+        }
+      });
+
+      // Validate DV zone: check if each variable is in the acceptedDVs array.
+      Array.from(dvZone.children).forEach(child => {
+        const variable = child.getAttribute("data-variable");
+        if (standards.acceptedDVs.includes(variable)) {
+          child.style.backgroundColor = "#c8e6c9";
+        } else {
+          child.style.backgroundColor = "#ffcdd2";
+        }
+      });
+
+      // Validate the DV relationship if there is exactly one IV & one DV.
+      if (ivZone.children.length === 1 && dvZone.children.length === 1) {
+        const chosenIV = ivZone.children[0].getAttribute("data-variable");
+        const expected = standards.expectedEffects[chosenIV];
+        if (expected) {
+          // Check if the DV relationship selection matches the expected outcome.
+          if (dvActionSelect.value === expected.effect) {
+            dvActionSelect.style.border = "2px solid green";
+          } else {
+            dvActionSelect.style.border = "2px solid red";
+          }
+        } else {
+          dvActionSelect.style.border = "";
+        }
+      } else {
+        dvActionSelect.style.border = "";
+      }
+    }
+
+    /*********************
+     * Reset Button Functionality
+     *********************/
+    document.getElementById("resetButton").addEventListener("click", function() {
+      document.getElementById("iv-zone").innerHTML = "";
+      document.getElementById("dv-zone").innerHTML = "";
+      document.getElementById("cv-zone").innerHTML = "";
+      ivActionSelect.selectedIndex = 0;
+      dvActionSelect.selectedIndex = 0;
+      updateAddCVButton();
+      updateHypothesis();
+    });
+  </script>
+</body>
+</html>

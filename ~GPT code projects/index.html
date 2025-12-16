@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Index of HTML Files</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 2rem; max-width: 800px; margin: 0 auto; }
+    h1 { margin-bottom: 0.5rem; }
+    #error { color: red; }
+    #breadcrumbs { margin-bottom: 1rem; color: #555; }
+    #breadcrumbs a { color: #0066cc; text-decoration: none; }
+    #breadcrumbs a:hover { text-decoration: underline; }
+    ul { list-style: none; padding: 0; }
+    li { padding: 0.4rem 0; border-bottom: 1px solid #eee; }
+    li a { text-decoration: none; color: #0066cc; }
+    li a:hover { text-decoration: underline; }
+    .folder::before { content: '📁 '; }
+    .file::before { content: '📄 '; }
+  </style>
+</head>
+<body>
+  <h1>Available Pages</h1>
+  <nav id="breadcrumbs"></nav>
+  <div id="error"></div>
+  <ul id="file-list"></ul>
+
+  <script>
+    const GITHUB_USER = 'scriffle';
+    const GITHUB_REPO = 'apps';
+    const API_BASE = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/`;
+
+    function getPathFromHash() {
+      const hash = window.location.hash.slice(1); // remove '#'
+      return decodeURIComponent(hash);
+    }
+
+    function renderBreadcrumbs(path) {
+      const container = document.getElementById('breadcrumbs');
+      container.innerHTML = '';
+
+      const rootLink = document.createElement('a');
+      rootLink.href = '#';
+      rootLink.textContent = 'root';
+      container.appendChild(rootLink);
+
+      if (path) {
+        const parts = path.split('/');
+        let accumulated = '';
+        parts.forEach((part, i) => {
+          accumulated += (i === 0 ? '' : '/') + part;
+          const span = document.createTextNode(' / ');
+          container.appendChild(span);
+
+          if (i === parts.length - 1) {
+            container.appendChild(document.createTextNode(part));
+          } else {
+            const link = document.createElement('a');
+            link.href = '#' + encodeURIComponent(accumulated);
+            link.textContent = part;
+            container.appendChild(link);
+          }
+        });
+      }
+    }
+
+    function loadDirectory(path = '') {
+      const ul = document.getElementById('file-list');
+      const errorDiv = document.getElementById('error');
+      ul.innerHTML = '';
+      errorDiv.textContent = '';
+
+      renderBreadcrumbs(path);
+
+      fetch(API_BASE + path)
+        .then(res => {
+          if (!res.ok) throw new Error(`GitHub API returned status ${res.status}`);
+          return res.json();
+        })
+        .then(data => {
+          if (!Array.isArray(data)) throw new Error('Unexpected API response format');
+
+          // Sort: folders first, then files
+          data.sort((a, b) => {
+            if (a.type === 'dir' && b.type !== 'dir') return -1;
+            if (a.type !== 'dir' && b.type === 'dir') return 1;
+            return a.name.localeCompare(b.name);
+          });
+
+          data
+            .filter(f => f.name !== 'index.html')
+            .forEach(f => {
+              const li = document.createElement('li');
+              const a = document.createElement('a');
+
+              if (f.type === 'dir') {
+                li.className = 'folder';
+                a.href = '#' + encodeURIComponent((path ? path + '/' : '') + f.name);
+                a.textContent = f.name;
+              } else {
+                li.className = 'file';
+                a.href = (path ? path + '/' : '') + f.name;
+                a.textContent = f.name;
+              }
+
+              li.appendChild(a);
+              ul.appendChild(li);
+            });
+        })
+        .catch(err => {
+          errorDiv.textContent = err.message;
+          console.error(err);
+        });
+    }
+
+    // Listen for hash changes (folder navigation)
+    window.addEventListener('hashchange', () => {
+      loadDirectory(getPathFromHash());
+    });
+
+    // Initial load
+    loadDirectory(getPathFromHash());
+  </script>
+</body>
+</html>

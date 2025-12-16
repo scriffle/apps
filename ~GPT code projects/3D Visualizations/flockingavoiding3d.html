@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Two Species Flocking</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: monospace;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 8px;
+            font-size: 12px;
+            z-index: 100;
+        }
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 8px;
+            font-size: 11px;
+            z-index: 100;
+        }
+        #controls label {
+            display: block;
+            margin: 3px 0;
+        }
+        #controls input {
+            width: 80px;
+            margin-left: 5px;
+        }
+        .species1 { color: #0ff; }
+        .species2 { color: #f0f; }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <div>Total: <span id="count">0</span></div>
+        <div><span class="species1">Cyan: <span id="count1">0</span></span></div>
+        <div><span class="species2">Magenta: <span id="count2">0</span></span></div>
+        <div>FPS: <span id="fps">0</span></div>
+        <div>Mouse: rotate | Scroll: zoom</div>
+    </div>
+    <div id="controls">
+        <label>Sep: <input type="range" id="separation" min="0" max="5" step="0.5" value="1.5"></label>
+        <label>Ali: <input type="range" id="alignment" min="0" max="5" step="0.5" value="1"></label>
+        <label>Coh: <input type="range" id="cohesion" min="0" max="5" step="0.5" value="1"></label>
+        <label>Avoid: <input type="range" id="avoidOther" min="0" max="10" step="0.5" value="4"></label>
+        <label>Spd: <input type="range" id="maxSpeed" min="1" max="10" step="1" value="4"></label>
+        <label>Cnt: <input type="range" id="arrowCount" min="500" max="5000" step="500" value="2000"></label>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.Fog(0x000000, 100, 500);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 50, 150);
+        camera.lookAt(0, 0, 0);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.body.appendChild(renderer.domElement);
+        
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight.position.set(1, 1, 0.5);
+        scene.add(directionalLight);
+        
+        // Bounds
+        const boundSize = 200;
+        const boundHeight = 100;
+        const boundGeometry = new THREE.BoxGeometry(boundSize, boundHeight, boundSize);
+        const boundMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x111111, 
+            wireframe: true,
+            transparent: true,
+            opacity: 0.2
+        });
+        const boundBox = new THREE.Mesh(boundGeometry, boundMaterial);
+        scene.add(boundBox);
+        
+        // Bird geometry
+        const birdGeometry = new THREE.ConeGeometry(0.5, 2, 4);
+        birdGeometry.rotateX(Math.PI / 2);
+        
+        // Materials
+        const material1 = new THREE.MeshPhongMaterial({ 
+            color: 0x00ffff,
+            emissive: 0x002222,
+            shininess: 100
+        });
+        const material2 = new THREE.MeshPhongMaterial({ 
+            color: 0xff00ff,
+            emissive: 0x220022,
+            shininess: 100
+        });
+        
+        // Create instanced meshes
+        const maxBirdsPerSpecies = 2500;
+        const mesh1 = new THREE.InstancedMesh(birdGeometry, material1, maxBirdsPerSpecies);
+        const mesh2 = new THREE.InstancedMesh(birdGeometry, material2, maxBirdsPerSpecies);
+        mesh1.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        mesh2.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        scene.add(mesh1);
+        scene.add(mesh2);
+        
+        // Flocking parameters
+        let sepWeight = 1.5;
+        let aliWeight = 1;
+        let cohWeight = 1;
+        let avoidOtherWeight = 4;
+        let maxSpeed = 4;
+        let maxForce = 0.2;
+        const perceptionRadius = 15;
+        const perceptionRadiusSq = perceptionRadius * perceptionRadius;
+        const avoidRadius = 8;
+        const avoidRadiusSq = avoidRadius * avoidRadius;
+        const otherSpeciesRadius = 20;
+        const otherSpeciesRadiusSq = otherSpeciesRadius * otherSpeciesRadius;
+        
+        // Bird class
+        class Bird {
+            constructor(x, y, z, speciesType) {
+                this.pos = new THREE.Vector3(x, y, z);
+                this.vel = new THREE.Vector3(
+                    (Math.random() - 0.5) * maxSpeed,
+                    (Math.random() - 0.5) * maxSpeed * 0.5,
+                    (Math.random() - 0.5) * maxSpeed
+                );
+                this.acc = new THREE.Vector3(0, 0, 0);
+                this.species = speciesType;
+            }
+            
+            update() {
+                this.vel.add(this.acc);
+                this.vel.clampLength(0, maxSpeed);
+                this.pos.add(this.vel);
+                this.acc.multiplyScalar(0);
+                
+                // Bounce off bounds
+                const halfSize = boundSize / 2;
+                const halfHeight = boundHeight / 2;
+                
+                if (Math.abs(this.pos.x) > halfSize) {
+                    this.vel.x *= -1;
+                    this.pos.x = Math.sign(this.pos.x) * halfSize;
+                }
+                if (Math.abs(this.pos.y) > halfHeight) {
+                    this.vel.y *= -1;
+                    this.pos.y = Math.sign(this.pos.y) * halfHeight;
+                }
+                if (Math.abs(this.pos.z) > halfSize) {
+                    this.vel.z *= -1;
+                    this.pos.z = Math.sign(this.pos.z) * halfSize;
+                }
+            }
+        }
+        
+        // Birds array
+        let birds = [];
+        let birdCount = 2000;
+        let species1Count = 0;
+        let species2Count = 0;
+        
+        // Initialize birds
+        function initBirds(count) {
+            birds = [];
+            birdCount = count;
+            species1Count = Math.floor(count / 2);
+            species2Count = count - species1Count;
+            
+            // Create species 1
+            for (let i = 0; i < species1Count; i++) {
+                birds.push(new Bird(
+                    (Math.random() - 0.5) * boundSize * 0.5 - boundSize * 0.25,
+                    (Math.random() - 0.5) * boundHeight,
+                    (Math.random() - 0.5) * boundSize,
+                    0
+                ));
+            }
+            
+            // Create species 2
+            for (let i = 0; i < species2Count; i++) {
+                birds.push(new Bird(
+                    (Math.random() - 0.5) * boundSize * 0.5 + boundSize * 0.25,
+                    (Math.random() - 0.5) * boundHeight,
+                    (Math.random() - 0.5) * boundSize,
+                    1
+                ));
+            }
+            
+            mesh1.count = species1Count;
+            mesh2.count = species2Count;
+            
+            document.getElementById('count').textContent = count;
+            document.getElementById('count1').textContent = species1Count;
+            document.getElementById('count2').textContent = species2Count;
+        }
+        
+        // Spatial grid
+        const gridSize = 30;
+        const gridDim = Math.ceil(boundSize / gridSize) + 1;
+        const gridHeight = Math.ceil(boundHeight / gridSize) + 1;
+        const grid = new Map();
+        
+        function getGridKey(x, y, z) {
+            const gx = Math.floor((x + boundSize / 2) / gridSize);
+            const gy = Math.floor((y + boundHeight / 2) / gridSize);
+            const gz = Math.floor((z + boundSize / 2) / gridSize);
+            return `${gx},${gy},${gz}`;
+        }
+        
+        function buildGrid() {
+            grid.clear();
+            for (let i = 0; i < birds.length; i++) {
+                const bird = birds[i];
+                const key = getGridKey(bird.pos.x, bird.pos.y, bird.pos.z);
+                if (!grid.has(key)) grid.set(key, []);
+                grid.get(key).push(i);
+            }
+        }
+        
+        function getNeighbors(bird) {
+            const neighbors = [];
+            const gx = Math.floor((bird.pos.x + boundSize / 2) / gridSize);
+            const gy = Math.floor((bird.pos.y + boundHeight / 2) / gridSize);
+            const gz = Math.floor((bird.pos.z + boundSize / 2) / gridSize);
+            
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dz = -1; dz <= 1; dz++) {
+                        const key = `${gx + dx},${gy + dy},${gz + dz}`;
+                        const cell = grid.get(key);
+                        if (cell) {
+                            for (const idx of cell) {
+                                if (birds[idx] !== bird) {
+                                    const d = bird.pos.distanceToSquared(birds[idx].pos);
+                                    if (d < perceptionRadiusSq || 
+                                        (bird.species !== birds[idx].species && d < otherSpeciesRadiusSq)) {
+                                        neighbors.push(birds[idx]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return neighbors;
+        }
+        
+        // Temporary vectors for calculations
+        const sepVec = new THREE.Vector3();
+        const aliVec = new THREE.Vector3();
+        const cohVec = new THREE.Vector3();
+        const avoidVec = new THREE.Vector3();
+        const steer = new THREE.Vector3();
+        
+        function flock(bird) {
+            sepVec.set(0, 0, 0);
+            aliVec.set(0, 0, 0);
+            cohVec.set(0, 0, 0);
+            avoidVec.set(0, 0, 0);
+            
+            let sepCount = 0;
+            let total = 0;
+            let avoidCount = 0;
+            
+            const neighbors = getNeighbors(bird);
+            
+            for (const other of neighbors) {
+                const d = bird.pos.distanceToSquared(other.pos);
+                
+                if (bird.species === other.species) {
+                    if (d > 0 && d < avoidRadiusSq) {
+                        steer.copy(bird.pos).sub(other.pos);
+                        steer.divideScalar(Math.sqrt(d));
+                        sepVec.add(steer);
+                        sepCount++;
+                    }
+                    
+                    if (d < perceptionRadiusSq) {
+                        aliVec.add(other.vel);
+                        cohVec.add(other.pos);
+                        total++;
+                    }
+                } else if (d < otherSpeciesRadiusSq && d > 0) {
+                    steer.copy(bird.pos).sub(other.pos);
+                    steer.divideScalar(Math.sqrt(d));
+                    avoidVec.add(steer);
+                    avoidCount++;
+                }
+            }
+            
+            // Apply separation
+            if (sepCount > 0) {
+                sepVec.divideScalar(sepCount);
+                sepVec.setLength(maxSpeed);
+                sepVec.sub(bird.vel);
+                sepVec.clampLength(0, maxForce);
+                sepVec.multiplyScalar(sepWeight);
+                bird.acc.add(sepVec);
+            }
+            
+            // Apply alignment and cohesion
+            if (total > 0) {
+                // Alignment
+                aliVec.divideScalar(total);
+                aliVec.setLength(maxSpeed);
+                aliVec.sub(bird.vel);
+                aliVec.clampLength(0, maxForce);
+                aliVec.multiplyScalar(aliWeight);
+                bird.acc.add(aliVec);
+                
+                // Cohesion
+                cohVec.divideScalar(total);
+                cohVec.sub(bird.pos);
+                cohVec.setLength(maxSpeed);
+                cohVec.sub(bird.vel);
+                cohVec.clampLength(0, maxForce);
+                cohVec.multiplyScalar(cohWeight);
+                bird.acc.add(cohVec);
+            }
+            
+            // Apply avoidance
+            if (avoidCount > 0) {
+                avoidVec.divideScalar(avoidCount);
+                avoidVec.setLength(maxSpeed * 1.5);
+                avoidVec.sub(bird.vel);
+                avoidVec.clampLength(0, maxForce * 2);
+                avoidVec.multiplyScalar(avoidOtherWeight);
+                bird.acc.add(avoidVec);
+            }
+        }
+        
+        // Update loop
+        const dummy = new THREE.Object3D();
+        
+        function update() {
+            buildGrid();
+            
+            // Update birds
+            for (const bird of birds) {
+                flock(bird);
+                bird.update();
+            }
+            
+            // Update instance matrices
+            let count1 = 0;
+            let count2 = 0;
+            
+            for (const bird of birds) {
+                dummy.position.copy(bird.pos);
+                
+                if (bird.vel.lengthSq() > 0) {
+                    dummy.lookAt(
+                        bird.pos.x + bird.vel.x,
+                        bird.pos.y + bird.vel.y,
+                        bird.pos.z + bird.vel.z
+                    );
+                }
+                
+                dummy.updateMatrix();
+                
+                if (bird.species === 0) {
+                    mesh1.setMatrixAt(count1++, dummy.matrix);
+                } else {
+                    mesh2.setMatrixAt(count2++, dummy.matrix);
+                }
+            }
+            
+            mesh1.instanceMatrix.needsUpdate = true;
+            mesh2.instanceMatrix.needsUpdate = true;
+        }
+        
+        // Mouse controls
+        let mouseX = 0, mouseY = 0;
+        
+        document.addEventListener('mousemove', (e) => {
+            mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+            mouseY = (e.clientY / window.innerHeight) * 2 - 1;
+        });
+        
+        document.addEventListener('wheel', (e) => {
+            camera.position.z += e.deltaY * 0.1;
+            camera.position.z = Math.max(50, Math.min(300, camera.position.z));
+        });
+        
+        // Performance tracking
+        let lastTime = performance.now();
+        let frameCount = 0;
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Update camera
+            camera.position.x = mouseX * 100;
+            camera.position.y = -mouseY * 50 + 50;
+            camera.lookAt(0, 0, 0);
+            
+            update();
+            renderer.render(scene, camera);
+            
+            // FPS counter
+            frameCount++;
+            const now = performance.now();
+            if (now - lastTime >= 1000) {
+                document.getElementById('fps').textContent = frameCount;
+                frameCount = 0;
+                lastTime = now;
+            }
+        }
+        
+        // Resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Control handlers
+        document.getElementById('separation').addEventListener('input', (e) => {
+            sepWeight = parseFloat(e.target.value);
+        });
+        
+        document.getElementById('alignment').addEventListener('input', (e) => {
+            aliWeight = parseFloat(e.target.value);
+        });
+        
+        document.getElementById('cohesion').addEventListener('input', (e) => {
+            cohWeight = parseFloat(e.target.value);
+        });
+        
+        document.getElementById('avoidOther').addEventListener('input', (e) => {
+            avoidOtherWeight = parseFloat(e.target.value);
+        });
+        
+        document.getElementById('maxSpeed').addEventListener('input', (e) => {
+            maxSpeed = parseFloat(e.target.value);
+        });
+        
+        document.getElementById('arrowCount').addEventListener('input', (e) => {
+            initBirds(parseInt(e.target.value));
+        });
+        
+        // Initialize and start
+        initBirds(birdCount);
+        animate();
+    </script>
+</body>
+</html>

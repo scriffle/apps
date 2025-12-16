@@ -1,0 +1,1872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Physics Lootbox Quiz System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .stats-bar {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-around;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #764ba2;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .lootbox-grid {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .box {
+            aspect-ratio: 1;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .box.unopened {
+            background: linear-gradient(145deg, #f0f0f0, #d0d0d0);
+            border: 2px solid #999;
+        }
+
+        .box.unopened:hover {
+            transform: scale(1.1) rotate(5deg);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            background: linear-gradient(145deg, #fff, #e0e0e0);
+        }
+
+        .box.hidden {
+            visibility: hidden;
+            cursor: default;
+        }
+
+        .box.collected {
+            border: 2px solid #4CAF50;
+            cursor: default;
+            background: linear-gradient(145deg, #a8d5a8, #90c090);
+            opacity: 0.7;
+        }
+
+        .box.collected::after {
+            content: '✓';
+            position: absolute;
+            color: white;
+            font-size: 36px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            z-index: 1;
+        }
+
+        .box.collected .box-emoji {
+            opacity: 0.3;
+        }
+
+        .box-emoji {
+            font-size: 36px;
+            transition: transform 0.3s ease;
+        }
+
+        .box.unopened:hover .box-emoji {
+            transform: scale(1.2);
+        }
+
+        .box-number {
+            position: absolute;
+            bottom: 2px;
+            right: 4px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-size: 9px;
+        }
+
+        .collection-panel {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            margin-bottom: 100px;
+        }
+
+        .collection-header {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #764ba2;
+        }
+
+        .collection-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .collection-item {
+            background: linear-gradient(145deg, #f5f5f5, #e0e0e0);
+            border-radius: 8px;
+            padding: 12px;
+            position: relative;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .collection-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .collection-item .topic {
+            font-weight: bold;
+            color: #764ba2;
+            margin-bottom: 5px;
+        }
+
+        .collection-item .dot-point {
+            color: #666;
+            font-size: 11px;
+            margin-bottom: 5px;
+            line-height: 1.3;
+        }
+
+        .collection-item .attempts {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #FFD700;
+            color: #333;
+            padding: 2px 6px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .quiz-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .quiz-modal.active {
+            display: flex;
+        }
+
+        .quiz-content {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .quiz-header {
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .quiz-progress {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar {
+            flex-grow: 1;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            margin: 0 15px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .quiz-topic {
+            color: #764ba2;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .quiz-cost {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .question {
+            margin: 20px 0;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        .options {
+            margin: 20px 0;
+        }
+
+        .option {
+            display: block;
+            width: 100%;
+            padding: 12px 15px;
+            margin: 10px 0;
+            background: #f5f5f5;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .option:hover {
+            background: #e8e8e8;
+            border-color: #764ba2;
+        }
+
+        .quiz-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .btn-submit {
+            background: linear-gradient(145deg, #667eea, #764ba2);
+            color: white;
+            flex-grow: 1;
+        }
+
+        .btn-quit {
+            background: #f44336;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .feedback {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .feedback.wrong {
+            background: #ffebee;
+            color: #c62828;
+            border: 2px solid #ef5350;
+        }
+
+        .feedback.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 2px solid #66bb6a;
+        }
+
+        .rarity-common { border-color: #9E9E9E !important; }
+        .rarity-uncommon { border-color: #4CAF50 !important; }
+        .rarity-rare { border-color: #2196F3 !important; }
+        .rarity-epic { border-color: #9C27B0 !important; }
+        .rarity-legendary { 
+            border-color: #FFD700 !important;
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+
+        .reset-btn {
+            background: linear-gradient(145deg, #666, #333);
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 12px;
+            margin: 10px auto;
+            display: block;
+            transition: all 0.3s ease;
+        }
+
+        .reset-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .grind-btn {
+            background: linear-gradient(45deg, #FF6B6B, #FFD93D);
+            color: white;
+            border: none;
+            padding: 20px 50px;
+            font-size: 1.3em;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s;
+            animation: grind-pulse 1s infinite;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            display: none;
+            margin: 20px auto;
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+        }
+
+        @keyframes grind-pulse {
+            0%, 100% { 
+                transform: translateX(-50%) scale(1);
+                box-shadow: 0 0 20px rgba(255,107,107,0.5);
+            }
+            50% { 
+                transform: translateX(-50%) scale(1.05);
+                box-shadow: 0 0 40px rgba(255,217,61,0.8);
+            }
+        }
+
+        .grind-btn:hover {
+            transform: translateX(-50%) scale(1.1);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+        }
+
+        .flappy-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .flappy-container {
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            border-radius: 20px;
+            padding: 20px;
+            text-align: center;
+            border: 3px solid #FFD700;
+            box-shadow: 0 0 50px rgba(255,215,0,0.5);
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .flappy-header {
+            margin-bottom: 15px;
+            color: white;
+        }
+
+        .flappy-header h2 {
+            color: #FFD700;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        #flappyCanvas {
+            border: 2px solid #FFD700;
+            border-radius: 10px;
+            background: linear-gradient(180deg, #87CEEB 0%, #98D8E8 50%, #B0E0E6 100%);
+            display: block;
+            margin: 0 auto;
+        }
+
+        .flappy-stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 15px 0;
+            color: white;
+        }
+
+        .flappy-stat {
+            background: rgba(255,255,255,0.1);
+            padding: 8px 15px;
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .flappy-stat span:first-child {
+            font-size: 0.8em;
+            opacity: 0.8;
+        }
+
+        .flappy-stat span:last-child {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #FFD700;
+        }
+
+        .flappy-close {
+            background: linear-gradient(45deg, #00D84A, #00A838);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1.1em;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .flappy-close:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        .low-coins-warning {
+            background: linear-gradient(145deg, #ff6b6b, #ff8e53);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 10px;
+            margin: 20px auto;
+            text-align: center;
+            font-weight: bold;
+            animation: warning-pulse 2s infinite;
+            max-width: 600px;
+            box-shadow: 0 5px 15px rgba(255,107,107,0.3);
+        }
+
+        .bonus-indicator {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: linear-gradient(145deg, #FFD700, #FFA500);
+            color: #333;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.5);
+            z-index: 1000;
+            animation: bonus-pulse 1s infinite;
+        }
+
+        @keyframes bonus-pulse {
+            0%, 100% { 
+                transform: scale(1);
+                box-shadow: 0 5px 15px rgba(255, 215, 0, 0.5);
+            }
+            50% { 
+                transform: scale(1.05);
+                box-shadow: 0 5px 25px rgba(255, 215, 0, 0.8);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        @keyframes mystery-glow {
+            0%, 100% { 
+                box-shadow: 0 0 5px rgba(118, 75, 162, 0.3);
+            }
+            50% { 
+                box-shadow: 0 0 20px rgba(118, 75, 162, 0.6);
+            }
+        }
+        
+        @keyframes fadeIn {
+            from { 
+                opacity: 0;
+                transform: scale(0.5) rotate(180deg);
+            }
+            to { 
+                opacity: 1;
+                transform: scale(1) rotate(0deg);
+            }
+        }
+        
+        .box.newly-revealed {
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .box.unopened {
+            animation: mystery-glow 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>⚛️ Physics Lootbox Challenge ⚛️</h1>
+        <p>Master VCE Physics Units 3-4 through gamified learning!</p>
+        <p id="units-loaded" style="font-size: 14px; margin-top: 10px; opacity: 0.9;"></p>
+    </div>
+
+    <div id="bonus-indicator" class="bonus-indicator" style="display: none;">
+        <span id="bonus-text">BONUS ACTIVE!</span>
+    </div>
+
+    <div id="low-coins-warning" class="low-coins-warning" style="display: none;">
+        ⚠️ Low on coins! Play Flappy Quantum to earn more with Fibonacci rewards!
+    </div>
+
+    <button id="grind-btn" class="grind-btn" onclick="startFlappyGame()">
+        🚀 GRIND COINS - Flappy Quantum
+    </button>
+
+    <!-- Flappy Bird Game Modal -->
+    <div id="flappy-modal" class="flappy-modal">
+        <div class="flappy-container">
+            <div class="flappy-header">
+                <h2>🚀 Flappy Quantum 🚀</h2>
+                <p>Each pipe gives Fibonacci rewards: 1→1→2→3→5→8→13→21→34→55→89→144...</p>
+            </div>
+            <canvas id="flappy-canvas"></canvas>
+            <div class="flappy-stats">
+                <div class="flappy-stat">
+                    <span>Pipes Passed:</span>
+                    <span id="pipes-passed">0</span>
+                </div>
+                <div class="flappy-stat">
+                    <span>Next Reward:</span>
+                    <span id="next-reward">1</span> 🪙
+                </div>
+                <div class="flappy-stat">
+                    <span>Total Earned:</span>
+                    <span id="total-earned">0</span> 🪙
+                </div>
+            </div>
+            <button class="flappy-close" onclick="closeFlappyGame()">Collect Coins & Return</button>
+        </div>
+    </div>
+
+    <div class="stats-bar">
+        <div class="stat">
+            <div class="stat-value" id="coins">100</div>
+            <div class="stat-label">Coins</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="collected">0/16</div>
+            <div class="stat-label">Collected</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="streak">0</div>
+            <div class="stat-label">Streak 🔥</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="bonuses">0</div>
+            <div class="stat-label">Bonuses 🎁</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="success-rate">0%</div>
+            <div class="stat-label">Success</div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="lootbox-grid" id="lootbox-grid"></div>
+        
+        <div class="collection-panel">
+            <div class="collection-header">
+                <h2>📚 Your Physics Collection 📚</h2>
+            </div>
+            <div class="collection-grid" id="collection-list"></div>
+            <button class="reset-btn" onclick="resetMapping()">🔄 Reset Box Positions</button>
+        </div>
+    </div>
+
+    <div class="quiz-modal" id="quiz-modal">
+        <div class="quiz-content">
+            <div class="quiz-header">
+                <div class="quiz-progress">
+                    <span id="question-num">Question 1/6</span>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <span id="attempts-count">Attempt: 1</span>
+                </div>
+                <div class="quiz-topic" id="quiz-topic"></div>
+                <div class="quiz-cost" id="quiz-cost"></div>
+            </div>
+            <div id="quiz-body">
+                <div class="question" id="question-text"></div>
+                <div class="options" id="options"></div>
+                <div id="feedback"></div>
+                <div class="quiz-actions">
+                    <button class="btn btn-quit" onclick="quitQuiz()">Quit (Forfeit Coins)</button>
+                    <button class="btn btn-submit" id="submit-btn" onclick="submitAnswer()">Submit Answer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game state
+        let gameState = {
+            coins: 100,
+            collected: [],
+            attempts: {},
+            totalAttempts: 0,
+            successfulAttempts: 0,
+            boxMapping: {},
+            boxEmojis: {},
+            currentQuiz: null,
+            // Bonus tracking
+            bonusActive: null,
+            bonusMultiplier: 1,
+            freeBoxesRemaining: 0,
+            doubleCoinsNext: 0,
+            halfPriceNext: 0,
+            instantWinNext: 0,
+            bonusHistory: [],
+            totalBonuses: 0,
+            // Statistics
+            totalCoinsEarned: 0,
+            totalCoinsSpent: 0,
+            highestStreak: 0,
+            currentStreak: 0,
+            lastPlayDate: null,
+            totalPlayTime: 0,
+            sessionStartTime: Date.now()
+        };
+
+        // Box emojis - diverse icons to hide content
+        const boxEmojis = [
+            '📦', '🎁', '🎀', '💝', '🎉', '✨', '🌟', '⭐', '💫', '🌠',
+            '🔮', '💎', '🏆', '🎯', '🎲', '🎪', '🎨', '🎭', '🌈', '🦄',
+            '🚀', '🛸', '🌌', '🪐', '☄️', '🌙', '⚡', '🔥', '💥', '💢',
+            '❄️', '🌊', '🌪️', '🌀', '🔵', '🟣', '🟡', '🟢', '🔴', '🟠',
+            '♾️', '⚛️', '🧲', '🔬', '🔭', '🧬', '🧪', '⚗️', '🌡️', '🎓',
+            '🎸', '🎺', '🎻', '🥁', '🎹', '🎤', '🎧', '📻', '🔔', '🔊',
+            '🍎', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍒', '🍑',
+            '🦋', '🐝', '🐛', '🦗', '🕷️', '🦂', '🐢', '🐍', '🦎', '🐙',
+            '🌸', '🌺', '🌻', '🌹', '🌷', '🌵', '🌲', '🌴', '🍄', '🌾',
+            '🗿', '⚙️', '🔩', '⚖️', '🔗', '⛓️', '🧰', '🔨', '⛏️', '🪓'
+        ];
+
+        // Data storage
+        let sdContent = null;
+        let questionsData = null;
+        let availableUnits = [];
+        let flappyGame = null;
+
+        // Initialize game
+        async function initGame() {
+            console.log('Initializing Physics Lootbox Game...');
+            console.log('Loading from:', window.location.href);
+            
+            await loadData();
+            loadGameState();
+            setupBoxMapping();
+            renderGrid();
+            updateStats();
+            updateCollection();
+            checkLowCoins(); // Check if coins are low on startup
+            
+            console.log('Game initialized successfully!');
+            console.log('Boxes with content:', Object.keys(gameState.boxMapping).sort((a,b) => Number(a)-Number(b)).join(', '));
+        }
+
+        // Load JSON data
+        async function loadData() {
+            console.log('=================================');
+            console.log('📂 Looking for question files...');
+            console.log('=================================');
+            
+            try {
+                // Load study design content
+                const sdResponse = await fetch('physics34SDDP.json');
+                if (!sdResponse.ok) {
+                    throw new Error(`HTTP error! status: ${sdResponse.status}`);
+                }
+                const sdText = await sdResponse.text();
+                let sdData;
+                try {
+                    sdData = JSON.parse(sdText);
+                } catch (e) {
+                    console.error('Invalid JSON in physics34SDDP.json:', sdText.substring(0, 100));
+                    throw new Error('Invalid JSON format in physics34SDDP.json');
+                }
+                sdContent = sdData.lootbox_items;
+                console.log('✓ Loaded physics34SDDP.json:', sdContent.length, 'items');
+                
+                // Load questions from multiple possible files
+                const questionFiles = [
+                    { file: 'physicsU3AOS1questions.json', unit: 3, aos: 1 },
+                    { file: 'physicsU3AOS2questions.json', unit: 3, aos: 2 },
+                    { file: 'physicsU3AOS3questions.json', unit: 3, aos: 3 },
+                    { file: 'physicsU4AOS1questions.json', unit: 4, aos: 1 },
+                    { file: 'physicsU4AOS2questions.json', unit: 4, aos: 2 }
+                ];
+                
+                let allQuestions = [];
+                availableUnits = [];
+                
+                console.log('\n📚 Checking for question files:');
+                for (const {file, unit, aos} of questionFiles) {
+                    try {
+                        const response = await fetch(file);
+                        if (response.ok) {
+                            const text = await response.text();
+                            const data = JSON.parse(text);
+                            allQuestions = allQuestions.concat(data.questions);
+                            availableUnits.push(`U${unit} AOS${aos}`);
+                            console.log(`  ✓ ${file}: ${data.questions.length} questions`);
+                        } else {
+                            console.log(`  ○ ${file}: not found (status ${response.status})`);
+                        }
+                    } catch (error) {
+                        console.log(`  ○ ${file}: not found`);
+                    }
+                }
+                
+                if (allQuestions.length === 0) {
+                    throw new Error('No question files found');
+                }
+                
+                questionsData = { questions: allQuestions };
+                
+                console.log('\n=================================');
+                console.log('📊 Summary:');
+                console.log(`  • Study design items: ${sdContent.length}`);
+                console.log(`  • Total questions: ${allQuestions.length}`);
+                console.log(`  • Available units: ${availableUnits.join(', ')}`);
+                console.log('=================================\n');
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+                alert(`Note: Could not load question files. Using demo data.\n\nExpected files in same folder:\n• physics34SDDP.json\n• physicsU3AOS1questions.json (and other units/AOS)\n\nCurrently loading from: ${window.location.href}`);
+                // Fallback to embedded data if files not available
+                sdContent = generateFallbackSDContent();
+                questionsData = generateFallbackQuestions();
+                availableUnits = ['Demo Mode'];
+            }
+        }
+
+        // Setup box mapping (items with questions randomly distributed)
+        function setupBoxMapping() {
+            if (Object.keys(gameState.boxMapping).length > 0) return;
+            
+            // Find which dot points have questions available
+            const dotPointsWithQuestions = new Set();
+            questionsData.questions.forEach(q => {
+                dotPointsWithQuestions.add(q.dot_point_id);
+            });
+            
+            const availableDotPoints = Array.from(dotPointsWithQuestions).sort((a, b) => a - b);
+            console.log(`Dot points with questions: ${availableDotPoints.join(', ')}`);
+            
+            // Randomly distribute available items across 100 boxes
+            const availableBoxes = Array.from({length: 100}, (_, i) => i);
+            const shuffled = availableBoxes.sort(() => Math.random() - 0.5);
+            
+            // Shuffle emojis for random assignment
+            const shuffledEmojis = [...boxEmojis].sort(() => Math.random() - 0.5);
+            
+            // Map dot points to random boxes and assign emojis
+            availableDotPoints.forEach((dotPointId, index) => {
+                if (index < shuffled.length) {
+                    const boxId = shuffled[index];
+                    gameState.boxMapping[boxId] = dotPointId;
+                    // Assign a random emoji to this box
+                    gameState.boxEmojis[boxId] = shuffledEmojis[index % shuffledEmojis.length];
+                }
+            });
+            
+            console.log(`Mapped ${availableDotPoints.length} items to random boxes`);
+            saveGameState();
+        }
+
+        // Calculate cost based on complexity (inverse linear)
+        function calculateCost(complexity) {
+            return Math.max(1, 11 - complexity); // Complexity 1 = 10 coins, Complexity 10 = 1 coin
+        }
+
+        // Render grid
+        function renderGrid() {
+            const grid = document.getElementById('lootbox-grid');
+            grid.innerHTML = '';
+            
+            for (let i = 0; i < 100; i++) {
+                const box = document.createElement('div');
+                box.className = 'box';
+                box.dataset.boxId = i;
+                
+                if (gameState.boxMapping[i] !== undefined) {
+                    const dotPointId = gameState.boxMapping[i];
+                    const item = sdContent.find(item => item.id === dotPointId);
+                    
+                    if (!item) {
+                        // No item data - hide box
+                        box.classList.add('hidden');
+                        grid.appendChild(box);
+                        continue;
+                    }
+                    
+                    const cost = calculateCost(item.complexity_score);
+                    const emoji = gameState.boxEmojis[i] || '📦';
+                    
+                    if (gameState.collected.includes(dotPointId)) {
+                        // Collected box
+                        box.classList.add('collected');
+                        box.innerHTML = `
+                            <span class="box-emoji">${emoji}</span>
+                            <span class="box-number">${i + 1}</span>
+                        `;
+                    } else if (gameState.coins >= cost) {
+                        // Unopened but affordable
+                        box.classList.add('unopened');
+                        box.innerHTML = `
+                            <span class="box-emoji">${emoji}</span>
+                            <span class="box-number">${i + 1}</span>
+                        `;
+                        box.onclick = () => startQuiz(i, dotPointId);
+                    } else {
+                        // Unaffordable - hide it
+                        box.classList.add('hidden');
+                    }
+                } else {
+                    // No content - hide box
+                    box.classList.add('hidden');
+                }
+                
+                grid.appendChild(box);
+            }
+        }
+
+        // Start quiz
+        function startQuiz(boxId, dotPointId) {
+            const item = sdContent.find(item => item.id === dotPointId);
+            if (!item) {
+                alert('Item data not found!');
+                return;
+            }
+            
+            let cost = calculateCost(item.complexity_score);
+            let bonusApplied = '';
+            
+            // Apply bonuses
+            if (gameState.freeBoxesRemaining > 0) {
+                cost = 0;
+                gameState.freeBoxesRemaining--;
+                bonusApplied = ' (FREE BOX!)';
+            } else if (gameState.halfPriceNext > 0) {
+                cost = Math.ceil(cost / 2);
+                gameState.halfPriceNext--;
+                bonusApplied = ' (HALF PRICE!)';
+            }
+            
+            if (gameState.coins < cost) {
+                alert(`Not enough coins! You need ${cost} coins.`);
+                return;
+            }
+            
+            // Get questions for this dot point
+            const questions = questionsData.questions.filter(q => q.dot_point_id === dotPointId);
+            
+            if (questions.length < 6) {
+                alert(`Not enough questions for this item! Found only ${questions.length} questions.`);
+                return;
+            }
+            
+            // Deduct coins
+            gameState.coins -= cost;
+            gameState.totalCoinsSpent += cost;
+            saveGameState();
+            updateStats();
+            checkLowCoins();
+            
+            // Check for instant win bonus
+            if (gameState.instantWinNext > 0) {
+                gameState.instantWinNext--;
+                gameState.currentQuiz = {
+                    boxId: boxId,
+                    dotPointId: dotPointId,
+                    questions: [],
+                    currentQuestion: 0,
+                    attempts: 1,
+                    cost: cost,
+                    item: item,
+                    instantWin: true
+                };
+                
+                // Instant complete!
+                gameState.collected.push(dotPointId);
+                gameState.attempts[dotPointId] = 1;
+                gameState.totalAttempts++;
+                gameState.successfulAttempts++;
+                gameState.currentStreak++;
+                
+                alert(`🌟 INSTANT WIN BONUS! 🌟\n\nYou automatically collected:\n${item.topic}\n\nNo questions needed!`);
+                
+                saveGameState();
+                renderGrid();
+                updateStats();
+                updateCollection();
+                return;
+            }
+            
+            // Initialize quiz state
+            gameState.currentQuiz = {
+                boxId: boxId,
+                dotPointId: dotPointId,
+                questions: shuffleArray([...questions]).slice(0, 6),
+                currentQuestion: 0,
+                attempts: 1,
+                cost: cost,
+                item: item,
+                bonusApplied: bonusApplied
+            };
+            
+            // Track attempt
+            if (!gameState.attempts[dotPointId]) {
+                gameState.attempts[dotPointId] = 0;
+            }
+            
+            showQuizModal();
+            displayQuestion();
+        }
+
+        // Show quiz modal
+        function showQuizModal() {
+            const modal = document.getElementById('quiz-modal');
+            modal.classList.add('active');
+            
+            const quiz = gameState.currentQuiz;
+            const bonusText = quiz.bonusApplied || '';
+            document.getElementById('quiz-topic').textContent = `Mystery Box #${gameState.currentQuiz.boxId + 1}: ${quiz.item.topic}`;
+            document.getElementById('quiz-cost').textContent = `Paid: ${quiz.cost} coins${bonusText} | Difficulty: ${quiz.item.rarity}`;
+            document.getElementById('attempts-count').textContent = `Attempt: ${quiz.attempts}`;
+        }
+
+        // Display current question
+        function displayQuestion() {
+            const quiz = gameState.currentQuiz;
+            const question = quiz.questions[quiz.currentQuestion];
+            
+            // Update progress
+            document.getElementById('question-num').textContent = `Question ${quiz.currentQuestion + 1}/6`;
+            document.getElementById('progress-fill').style.width = `${(quiz.currentQuestion / 6) * 100}%`;
+            
+            // Display question
+            document.getElementById('question-text').textContent = question.question;
+            
+            // Randomize options
+            const options = Object.entries(question.options);
+            const shuffledOptions = shuffleArray(options);
+            quiz.correctAnswerIndex = shuffledOptions.findIndex(([key, _]) => key === question.correct_answer);
+            
+            // Display options
+            const optionsDiv = document.getElementById('options');
+            optionsDiv.innerHTML = '';
+            
+            shuffledOptions.forEach(([key, text], index) => {
+                const button = document.createElement('button');
+                button.className = 'option';
+                button.textContent = `${String.fromCharCode(65 + index)}. ${text}`;
+                button.dataset.index = index;
+                button.onclick = () => selectOption(index);
+                optionsDiv.appendChild(button);
+            });
+            
+            // Clear feedback
+            document.getElementById('feedback').innerHTML = '';
+            document.getElementById('feedback').className = 'feedback';
+            
+            // Reset selected option
+            quiz.selectedOption = null;
+        }
+
+        // Select option
+        function selectOption(index) {
+            const options = document.querySelectorAll('.option');
+            options.forEach(opt => opt.style.background = '#f5f5f5');
+            options[index].style.background = '#e0e0ff';
+            gameState.currentQuiz.selectedOption = index;
+        }
+
+        // Submit answer
+        function submitAnswer() {
+            const quiz = gameState.currentQuiz;
+            
+            if (quiz.selectedOption === null) {
+                alert('Please select an answer!');
+                return;
+            }
+            
+            if (quiz.selectedOption === quiz.correctAnswerIndex) {
+                // Correct answer
+                quiz.currentQuestion++;
+                
+                if (quiz.currentQuestion >= 6) {
+                    // All questions answered correctly!
+                    completeQuiz();
+                } else {
+                    // Next question
+                    displayQuestion();
+                }
+            } else {
+                // Wrong answer
+                showWrongFeedback();
+            }
+        }
+
+        // Show wrong feedback and restart
+        function showWrongFeedback() {
+            const quiz = gameState.currentQuiz;
+            const feedback = document.getElementById('feedback');
+            feedback.className = 'feedback wrong';
+            feedback.innerHTML = `
+                <p>❌ Wrong answer! You reached question ${quiz.currentQuestion + 1}/6</p>
+                <p>Starting over... (Attempt ${quiz.attempts + 1})</p>
+                <p style="font-size: 12px; opacity: 0.8;">Streak lost! 😢</p>
+            `;
+            
+            // Increment attempts and reset streak
+            quiz.attempts++;
+            gameState.attempts[quiz.dotPointId]++;
+            gameState.totalAttempts++;
+            gameState.currentStreak = 0; // Reset streak on wrong answer
+            saveGameState();
+            
+            // Reset to first question after delay
+            setTimeout(() => {
+                quiz.currentQuestion = 0;
+                quiz.questions = shuffleArray(quiz.questions);
+                document.getElementById('attempts-count').textContent = `Attempt: ${quiz.attempts}`;
+                displayQuestion();
+                updateStats(); // Update to show lost streak
+            }, 2000);
+        }
+
+        // Complete quiz successfully
+        function completeQuiz() {
+            const quiz = gameState.currentQuiz;
+            
+            // Add to collection
+            gameState.collected.push(quiz.dotPointId);
+            gameState.attempts[quiz.dotPointId] = (gameState.attempts[quiz.dotPointId] || 0) + quiz.attempts;
+            gameState.totalAttempts++;
+            gameState.successfulAttempts++;
+            gameState.currentStreak++;
+            if (gameState.currentStreak > gameState.highestStreak) {
+                gameState.highestStreak = gameState.currentStreak;
+            }
+            
+            // Check for bonus
+            const bonus = checkForBonus();
+            let bonusMessage = '';
+            
+            if (bonus) {
+                gameState.totalBonuses++;
+                gameState.bonusHistory.push({
+                    type: bonus.type,
+                    date: new Date().toISOString(),
+                    boxId: quiz.boxId
+                });
+                bonusMessage = `<p style="color: #FFD700; font-size: 18px; margin-top: 10px;">🎊 BONUS: ${bonus.message} 🎊</p>`;
+            }
+            
+            // Show success message
+            const feedback = document.getElementById('feedback');
+            feedback.className = 'feedback success';
+            feedback.innerHTML = `
+                <p>🎉 Congratulations! You've collected:</p>
+                <p><strong>${quiz.item.topic}</strong></p>
+                <p>Completed in ${quiz.attempts} attempt${quiz.attempts > 1 ? 's' : ''}</p>
+                ${bonusMessage}
+            `;
+            
+            // Close modal after delay
+            setTimeout(() => {
+                closeQuizModal();
+                renderGrid();
+                updateStats();
+                updateCollection();
+                checkLowCoins();
+            }, bonusMessage ? 4000 : 3000);
+            
+            saveGameState();
+        }
+        
+        // Check for random bonus
+        function checkForBonus() {
+            const roll = Math.random();
+            
+            // 10% chance of bonus
+            if (roll < 0.1) {
+                const bonusRoll = Math.random();
+                
+                if (bonusRoll < 0.3) {
+                    // 30% - Free next box
+                    gameState.freeBoxesRemaining = 1;
+                    return {
+                        type: 'free_box',
+                        message: 'Next box is FREE!'
+                    };
+                } else if (bonusRoll < 0.5) {
+                    // 20% - Double coins on next success
+                    gameState.doubleCoinsNext = 1;
+                    return {
+                        type: 'double_coins',
+                        message: 'Double coins on next success!'
+                    };
+                } else if (bonusRoll < 0.7) {
+                    // 20% - Instant 50 coins
+                    gameState.coins += 50;
+                    gameState.totalCoinsEarned += 50;
+                    return {
+                        type: 'instant_coins',
+                        message: '+50 bonus coins!'
+                    };
+                } else if (bonusRoll < 0.85) {
+                    // 15% - Half price next 3 boxes
+                    gameState.halfPriceNext = 3;
+                    return {
+                        type: 'half_price',
+                        message: 'Next 3 boxes half price!'
+                    };
+                } else {
+                    // 15% - Instant win next quiz
+                    gameState.instantWinNext = 1;
+                    return {
+                        type: 'instant_win',
+                        message: 'Next quiz: INSTANT WIN!'
+                    };
+                }
+            }
+            
+            // Extra bonus for streaks
+            if (gameState.currentStreak >= 5 && roll < 0.2) {
+                gameState.coins += 100;
+                gameState.totalCoinsEarned += 100;
+                return {
+                    type: 'streak_bonus',
+                    message: `5-Streak Bonus! +100 coins!`
+                };
+            }
+            
+            return null;
+        }
+
+        // Quit quiz
+        function quitQuiz() {
+            if (confirm('Are you sure? You will forfeit the coins spent and lose your streak!')) {
+                gameState.totalAttempts++;
+                gameState.currentStreak = 0; // Reset streak on quit
+                saveGameState();
+                closeQuizModal();
+                updateStats();
+                checkLowCoins();
+            }
+        }
+
+        // Close quiz modal
+        function closeQuizModal() {
+            document.getElementById('quiz-modal').classList.remove('active');
+            gameState.currentQuiz = null;
+        }
+
+        // Update stats
+        function updateStats() {
+            document.getElementById('coins').textContent = gameState.coins;
+            
+            const totalAvailable = Object.keys(gameState.boxMapping).length;
+            const affordableCount = countAffordableBoxes();
+            
+            document.getElementById('collected').textContent = `${gameState.collected.length}/${totalAvailable}`;
+            document.getElementById('streak').textContent = gameState.currentStreak;
+            document.getElementById('bonuses').textContent = gameState.totalBonuses;
+            
+            const successRate = gameState.totalAttempts > 0 
+                ? Math.round((gameState.successfulAttempts / gameState.totalAttempts) * 100)
+                : 0;
+            document.getElementById('success-rate').textContent = `${successRate}%`;
+            
+            // Show active bonuses in header
+            const unitsDisplay = document.getElementById('units-loaded');
+            let bonusText = '';
+            if (gameState.freeBoxesRemaining > 0) {
+                bonusText += ` | 🆓 ${gameState.freeBoxesRemaining} free box${gameState.freeBoxesRemaining > 1 ? 'es' : ''}`;
+            }
+            if (gameState.halfPriceNext > 0) {
+                bonusText += ` | 💸 ${gameState.halfPriceNext} half price`;
+            }
+            if (gameState.instantWinNext > 0) {
+                bonusText += ` | ⭐ ${gameState.instantWinNext} instant win`;
+            }
+            if (gameState.doubleCoinsNext > 0) {
+                bonusText += ` | 💰 Double coins next`;
+            }
+            
+            if (availableUnits.length > 0 && availableUnits[0] !== 'Demo Mode') {
+                unitsDisplay.innerHTML = `📚 Loaded: ${availableUnits.join(', ')} | 🎁 ${affordableCount} boxes available${bonusText}`;
+            } else {
+                unitsDisplay.innerHTML = `🎁 ${affordableCount} boxes available${bonusText}`;
+            }
+            
+            checkLowCoins();
+        }
+        
+        // Count affordable boxes
+        function countAffordableBoxes() {
+            let count = 0;
+            Object.keys(gameState.boxMapping).forEach(boxId => {
+                const dotPointId = gameState.boxMapping[boxId];
+                if (!gameState.collected.includes(dotPointId)) {
+                    const item = sdContent.find(item => item.id === dotPointId);
+                    if (item) {
+                        const cost = calculateCost(item.complexity_score);
+                        if (gameState.coins >= cost) {
+                            count++;
+                        }
+                    }
+                }
+            });
+            return count;
+        }
+
+        // Check if coins are low and show/hide grind button
+        function checkLowCoins() {
+            const grindBtn = document.getElementById('grind-btn');
+            const warning = document.getElementById('low-coins-warning');
+            const bonusIndicator = document.getElementById('bonus-indicator');
+            const bonusText = document.getElementById('bonus-text');
+            
+            // Check for low coins
+            if (gameState.coins < 10) {
+                grindBtn.style.display = 'block';
+                warning.style.display = 'block';
+            } else {
+                grindBtn.style.display = 'none';
+                warning.style.display = 'none';
+            }
+            
+            // Check for active bonuses
+            const activeBonuses = [];
+            if (gameState.freeBoxesRemaining > 0) {
+                activeBonuses.push(`🆓 ${gameState.freeBoxesRemaining} FREE`);
+            }
+            if (gameState.halfPriceNext > 0) {
+                activeBonuses.push(`💸 ${gameState.halfPriceNext} HALF`);
+            }
+            if (gameState.instantWinNext > 0) {
+                activeBonuses.push(`⭐ INSTANT WIN`);
+            }
+            if (gameState.doubleCoinsNext > 0) {
+                activeBonuses.push(`💰 DOUBLE COINS`);
+            }
+            
+            if (activeBonuses.length > 0) {
+                bonusIndicator.style.display = 'block';
+                bonusText.textContent = activeBonuses.join(' | ');
+            } else {
+                bonusIndicator.style.display = 'none';
+            }
+        }
+
+        // Update collection display
+        function updateCollection() {
+            const list = document.getElementById('collection-list');
+            list.innerHTML = '';
+            
+            if (gameState.collected.length === 0) {
+                list.innerHTML = '<div style="text-align: center; opacity: 0.6; padding: 40px;">No items collected yet. Open lootboxes to build your collection!</div>';
+                return;
+            }
+            
+            gameState.collected.sort((a, b) => a - b).forEach(dotPointId => {
+                const item = sdContent.find(item => item.id === dotPointId);
+                if (!item) return;
+                
+                const attempts = gameState.attempts[dotPointId] || 1;
+                
+                const div = document.createElement('div');
+                div.className = `collection-item rarity-${item.rarity}`;
+                div.innerHTML = `
+                    <div class="topic"><strong>${item.topic}</strong></div>
+                    <div class="dot-point" style="font-size: 11px; margin-top: 5px;">${item.dot_point}</div>
+                    <div class="attempts">${attempts} attempt${attempts > 1 ? 's' : ''}</div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        // Flappy Quantum Game Class
+        class FlappyQuantum {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                
+                // Set canvas size
+                this.canvas.width = 400;
+                this.canvas.height = 500;
+                
+                // Game state
+                this.gameRunning = false;
+                this.gameOver = false;
+                this.gameStarted = false;
+                this.countdown = 3;
+                this.pipesPassed = 0;
+                this.coinsEarned = 0;
+                
+                // Fibonacci sequence for rewards
+                this.fibonacci = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765];
+                
+                // Bird properties
+                this.bird = {
+                    x: 80,
+                    y: this.canvas.height / 2,
+                    radius: 15,
+                    velocity: 0,
+                    gravity: 0.5,
+                    jumpPower: -8
+                };
+                
+                // Pipes
+                this.pipes = [];
+                this.pipeWidth = 60;
+                this.pipeGap = 150;
+                this.pipeSpeed = 3;
+                this.pipeSpawnTimer = 0;
+                
+                // Bind methods
+                this.handleClick = this.handleClick.bind(this);
+                this.handleKey = this.handleKey.bind(this);
+                
+                // Start
+                this.init();
+            }
+            
+            getFibonacciReward(n) {
+                if (n <= 0) return 0;
+                if (n <= this.fibonacci.length) {
+                    return this.fibonacci[n - 1];
+                }
+                // Calculate additional Fibonacci numbers if needed
+                let a = this.fibonacci[this.fibonacci.length - 2];
+                let b = this.fibonacci[this.fibonacci.length - 1];
+                for (let i = this.fibonacci.length; i < n; i++) {
+                    let temp = a + b;
+                    a = b;
+                    b = temp;
+                }
+                return b;
+            }
+            
+            init() {
+                this.canvas.addEventListener('click', this.handleClick);
+                document.addEventListener('keydown', this.handleKey);
+                this.startCountdown();
+            }
+            
+            startCountdown() {
+                const countdownInterval = setInterval(() => {
+                    this.countdown--;
+                    this.draw();
+                    
+                    if (this.countdown <= 0) {
+                        clearInterval(countdownInterval);
+                        this.gameStarted = true;
+                        this.gameRunning = true;
+                        this.gameLoop();
+                    }
+                }, 1000);
+                
+                this.draw();
+            }
+            
+            handleClick() {
+                if (this.gameOver) {
+                    closeFlappyGame();
+                } else if (this.gameStarted && !this.gameOver) {
+                    this.bird.velocity = this.bird.jumpPower;
+                }
+            }
+            
+            handleKey(e) {
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    if (this.gameOver) {
+                        closeFlappyGame();
+                    } else if (this.gameStarted && !this.gameOver) {
+                        this.bird.velocity = this.bird.jumpPower;
+                    }
+                } else if (e.key === 'Escape') {
+                    closeFlappyGame();
+                }
+            }
+            
+            update() {
+                if (this.gameOver || !this.gameStarted) return;
+                
+                // Update bird
+                this.bird.velocity += this.bird.gravity;
+                this.bird.y += this.bird.velocity;
+                
+                // Check boundaries
+                if (this.bird.y < this.bird.radius || this.bird.y > this.canvas.height - this.bird.radius) {
+                    this.endGame();
+                    return;
+                }
+                
+                // Spawn pipes
+                this.pipeSpawnTimer++;
+                if (this.pipeSpawnTimer > 90) {
+                    this.pipeSpawnTimer = 0;
+                    const gapY = Math.random() * (this.canvas.height - this.pipeGap - 100) + 50;
+                    this.pipes.push({
+                        x: this.canvas.width,
+                        gapY: gapY,
+                        passed: false
+                    });
+                }
+                
+                // Update pipes
+                for (let i = this.pipes.length - 1; i >= 0; i--) {
+                    const pipe = this.pipes[i];
+                    pipe.x -= this.pipeSpeed;
+                    
+                    // Remove off-screen pipes
+                    if (pipe.x + this.pipeWidth < 0) {
+                        this.pipes.splice(i, 1);
+                        continue;
+                    }
+                    
+                    // Check if bird passed pipe
+                    if (!pipe.passed && pipe.x + this.pipeWidth < this.bird.x) {
+                        pipe.passed = true;
+                        this.pipesPassed++;
+                        const reward = this.getFibonacciReward(this.pipesPassed);
+                        this.coinsEarned += reward;
+                        this.updateStats();
+                    }
+                    
+                    // Check collision
+                    if (this.checkCollision(pipe)) {
+                        this.endGame();
+                        return;
+                    }
+                }
+            }
+            
+            checkCollision(pipe) {
+                if (this.bird.x + this.bird.radius > pipe.x && 
+                    this.bird.x - this.bird.radius < pipe.x + this.pipeWidth) {
+                    if (this.bird.y - this.bird.radius < pipe.gapY || 
+                        this.bird.y + this.bird.radius > pipe.gapY + this.pipeGap) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            
+            draw() {
+                // Clear canvas
+                const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+                gradient.addColorStop(0, '#87CEEB');
+                gradient.addColorStop(0.5, '#98D8E8');
+                gradient.addColorStop(1, '#B0E0E6');
+                this.ctx.fillStyle = gradient;
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // Draw countdown
+                if (!this.gameStarted) {
+                    this.ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                    
+                    this.ctx.fillStyle = '#FFD700';
+                    this.ctx.font = 'bold 80px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+                    
+                    if (this.countdown > 0) {
+                        this.ctx.fillText(this.countdown, this.canvas.width / 2, this.canvas.height / 2);
+                        this.ctx.font = '24px Arial';
+                        this.ctx.fillStyle = '#FFF';
+                        this.ctx.fillText('Get Ready!', this.canvas.width / 2, this.canvas.height / 2 + 60);
+                    }
+                    return;
+                }
+                
+                // Draw pipes
+                this.ctx.fillStyle = '#00AA00';
+                for (const pipe of this.pipes) {
+                    // Top pipe
+                    this.ctx.fillRect(pipe.x, 0, this.pipeWidth, pipe.gapY);
+                    // Bottom pipe
+                    this.ctx.fillRect(pipe.x, pipe.gapY + this.pipeGap, this.pipeWidth, 
+                                     this.canvas.height - pipe.gapY - this.pipeGap);
+                    
+                    // Pipe borders
+                    this.ctx.strokeStyle = '#006600';
+                    this.ctx.lineWidth = 3;
+                    this.ctx.strokeRect(pipe.x, 0, this.pipeWidth, pipe.gapY);
+                    this.ctx.strokeRect(pipe.x, pipe.gapY + this.pipeGap, this.pipeWidth, 
+                                       this.canvas.height - pipe.gapY - this.pipeGap);
+                }
+                
+                // Draw bird as quantum particle
+                this.ctx.save();
+                this.ctx.translate(this.bird.x, this.bird.y);
+                
+                // Glow effect
+                const glowGradient = this.ctx.createRadialGradient(0, 0, 0, 0, 0, this.bird.radius * 2);
+                glowGradient.addColorStop(0, 'rgba(255, 215, 0, 0.8)');
+                glowGradient.addColorStop(0.5, 'rgba(255, 165, 0, 0.4)');
+                glowGradient.addColorStop(1, 'rgba(255, 165, 0, 0)');
+                this.ctx.fillStyle = glowGradient;
+                this.ctx.beginPath();
+                this.ctx.arc(0, 0, this.bird.radius * 2, 0, Math.PI * 2);
+                this.ctx.fill();
+                
+                // Core particle
+                this.ctx.fillStyle = '#FFD700';
+                this.ctx.beginPath();
+                this.ctx.arc(0, 0, this.bird.radius, 0, Math.PI * 2);
+                this.ctx.fill();
+                
+                // Atom symbol
+                this.ctx.fillStyle = '#000';
+                this.ctx.font = 'bold 16px Arial';
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'middle';
+                this.ctx.fillText('⚛', 0, 0);
+                
+                this.ctx.restore();
+                
+                // Draw score
+                this.ctx.fillStyle = '#FFF';
+                this.ctx.strokeStyle = '#000';
+                this.ctx.lineWidth = 3;
+                this.ctx.font = 'bold 30px Arial';
+                this.ctx.textAlign = 'center';
+                this.ctx.strokeText(`Pipes: ${this.pipesPassed}`, this.canvas.width / 2, 50);
+                this.ctx.fillText(`Pipes: ${this.pipesPassed}`, this.canvas.width / 2, 50);
+                
+                // Draw instructions
+                if (this.pipesPassed === 0 && !this.gameOver && this.gameStarted) {
+                    this.ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                    this.ctx.fillRect(this.canvas.width/2 - 150, this.canvas.height/2 - 50, 300, 100);
+                    this.ctx.fillStyle = '#FFF';
+                    this.ctx.font = '20px Arial';
+                    this.ctx.fillText('Click or Press Space to Jump!', this.canvas.width / 2, this.canvas.height/2 - 10);
+                    this.ctx.fillText('Fibonacci rewards!', this.canvas.width / 2, this.canvas.height/2 + 20);
+                }
+                
+                // Game over message
+                if (this.gameOver) {
+                    this.ctx.fillStyle = 'rgba(0,0,0,0.8)';
+                    this.ctx.fillRect(this.canvas.width/2 - 150, this.canvas.height/2 - 100, 300, 200);
+                    this.ctx.fillStyle = '#FFD700';
+                    this.ctx.font = 'bold 30px Arial';
+                    this.ctx.fillText('GAME OVER!', this.canvas.width / 2, this.canvas.height/2 - 50);
+                    this.ctx.fillStyle = '#FFF';
+                    this.ctx.font = '24px Arial';
+                    this.ctx.fillText(`Earned: ${this.coinsEarned} coins!`, this.canvas.width / 2, this.canvas.height/2);
+                    this.ctx.font = '18px Arial';
+                    this.ctx.fillText('Click or press Space/Esc', this.canvas.width / 2, this.canvas.height/2 + 40);
+                    this.ctx.fillText('to return', this.canvas.width / 2, this.canvas.height/2 + 65);
+                }
+            }
+            
+            updateStats() {
+                document.getElementById('pipes-passed').textContent = this.pipesPassed;
+                const nextReward = this.getFibonacciReward(this.pipesPassed + 1);
+                document.getElementById('next-reward').textContent = nextReward;
+                document.getElementById('total-earned').textContent = this.coinsEarned;
+            }
+            
+            endGame() {
+                this.gameOver = true;
+                this.gameRunning = false;
+            }
+            
+            gameLoop() {
+                if (!this.gameRunning) return;
+                
+                this.update();
+                this.draw();
+                requestAnimationFrame(() => this.gameLoop());
+            }
+            
+            destroy() {
+                this.gameRunning = false;
+                this.canvas.removeEventListener('click', this.handleClick);
+                document.removeEventListener('keydown', this.handleKey);
+            }
+        }
+
+        // Start Flappy Game
+        function startFlappyGame() {
+            const modal = document.getElementById('flappy-modal');
+            modal.style.display = 'flex';
+            
+            // Reset stats display
+            document.getElementById('pipes-passed').textContent = '0';
+            document.getElementById('next-reward').textContent = '1';
+            document.getElementById('total-earned').textContent = '0';
+            
+            // Start game
+            const canvas = document.getElementById('flappy-canvas');
+            flappyGame = new FlappyQuantum(canvas);
+        }
+
+        // Close Flappy Game
+        function closeFlappyGame() {
+            if (flappyGame) {
+                // Add earned coins
+                const earned = flappyGame.coinsEarned;
+                gameState.coins += earned;
+                gameState.totalCoinsEarned += earned;
+                
+                // Apply double coins bonus if active
+                if (gameState.doubleCoinsNext > 0 && earned > 0) {
+                    gameState.coins += earned; // Double it!
+                    gameState.totalCoinsEarned += earned;
+                    gameState.doubleCoinsNext--;
+                    alert(`🎉 DOUBLE COINS BONUS! You earned ${earned * 2} coins from Flappy Quantum!`);
+                } else if (earned > 0) {
+                    alert(`🎉 You earned ${earned} coins from Flappy Quantum!`);
+                }
+                
+                saveGameState();
+                updateStats();
+                renderGrid();
+                
+                // Cleanup
+                flappyGame.destroy();
+                flappyGame = null;
+            }
+            
+            // Hide modal
+            document.getElementById('flappy-modal').style.display = 'none';
+        }
+
+        // Utility functions
+        function shuffleArray(array) {
+            const newArray = [...array];
+            for (let i = newArray.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+            }
+            return newArray;
+        }
+
+        // Save game state to localStorage
+        function saveGameState() {
+            // Don't save temporary quiz state
+            const stateToSave = {...gameState};
+            delete stateToSave.currentQuiz;
+            stateToSave.lastPlayDate = new Date().toISOString();
+            
+            // Calculate total play time
+            if (stateToSave.sessionStartTime) {
+                const sessionTime = Date.now() - stateToSave.sessionStartTime;
+                stateToSave.totalPlayTime = (stateToSave.totalPlayTime || 0) + sessionTime;
+                stateToSave.sessionStartTime = Date.now(); // Reset for next save
+            }
+            
+            localStorage.setItem('physicsLootboxState', JSON.stringify(stateToSave));
+        }
+
+        // Load game state from localStorage
+        function loadGameState() {
+            const saved = localStorage.getItem('physicsLootboxState');
+            if (saved) {
+                const savedState = JSON.parse(saved);
+                
+                // Merge with default state to ensure all properties exist
+                gameState = {
+                    ...gameState,  // Default values
+                    ...savedState  // Saved values override defaults
+                };
+                
+                // Ensure boxEmojis exists for older saves
+                if (!gameState.boxEmojis) {
+                    gameState.boxEmojis = {};
+                    const shuffledEmojis = [...boxEmojis].sort(() => Math.random() - 0.5);
+                    Object.keys(gameState.boxMapping).forEach((boxId, index) => {
+                        gameState.boxEmojis[boxId] = shuffledEmojis[index % shuffledEmojis.length];
+                    });
+                }
+                
+                // Initialize new properties for older saves
+                if (gameState.totalBonuses === undefined) gameState.totalBonuses = 0;
+                if (!gameState.bonusHistory) gameState.bonusHistory = [];
+                if (!gameState.freeBoxesRemaining) gameState.freeBoxesRemaining = 0;
+                if (!gameState.halfPriceNext) gameState.halfPriceNext = 0;
+                if (!gameState.instantWinNext) gameState.instantWinNext = 0;
+                if (!gameState.doubleCoinsNext) gameState.doubleCoinsNext = 0;
+                if (!gameState.currentStreak) gameState.currentStreak = 0;
+                if (!gameState.highestStreak) gameState.highestStreak = 0;
+                if (!gameState.totalCoinsEarned) gameState.totalCoinsEarned = 0;
+                if (!gameState.totalCoinsSpent) gameState.totalCoinsSpent = 0;
+                
+                // Update session time
+                gameState.sessionStartTime = Date.now();
+                if (gameState.lastPlayDate) {
+                    const lastPlay = new Date(gameState.lastPlayDate);
+                    const now = new Date();
+                    const hoursSinceLastPlay = (now - lastPlay) / (1000 * 60 * 60);
+                    
+                    // Daily bonus - 50 coins if haven't played in 24 hours
+                    if (hoursSinceLastPlay >= 24) {
+                        gameState.coins += 50;
+                        gameState.totalCoinsEarned += 50;
+                        setTimeout(() => {
+                            alert('🎉 Welcome back! Daily bonus: +50 coins!');
+                        }, 1000);
+                    }
+                }
+                gameState.lastPlayDate = new Date().toISOString();
+            }
+        }
+
+        // Fallback data generators with realistic VCE Physics content
+        function generateFallbackSDContent() {
+            return [
+                {id: 1, topic: "Newton's Laws", dot_point: "Investigate Newton's three laws of motion", rarity: "common", complexity_score: 2},
+                {id: 2, topic: "Circular Motion", dot_point: "Analyse uniform circular motion in horizontal plane", rarity: "uncommon", complexity_score: 4},
+                {id: 3, topic: "Circular Motion", dot_point: "Vehicle moving around circular road", rarity: "common", complexity_score: 3},
+                {id: 4, topic: "Circular Motion", dot_point: "Vehicle on banked track", rarity: "rare", complexity_score: 5},
+                {id: 5, topic: "Cone Pendulum", dot_point: "Object suspended by string in circular path", rarity: "rare", complexity_score: 5},
+                {id: 6, topic: "Satellite Motion", dot_point: "Satellites in orbit around Earth", rarity: "epic", complexity_score: 7},
+                {id: 7, topic: "Vertical Circular Motion", dot_point: "Object in vertical circular path", rarity: "legendary", complexity_score: 8},
+                {id: 8, topic: "Projectile Motion", dot_point: "Motion of projectiles near Earth's surface", rarity: "uncommon", complexity_score: 4},
+                {id: 9, topic: "Conservation Laws", dot_point: "Energy and momentum conservation", rarity: "uncommon", complexity_score: 4},
+                {id: 10, topic: "Impulse", dot_point: "Impulse in collisions", rarity: "uncommon", complexity_score: 3},
+                {id: 11, topic: "Work", dot_point: "Work done = force × displacement", rarity: "common", complexity_score: 2},
+                {id: 12, topic: "Kinetic Energy", dot_point: "Kinetic energy and work-energy theorem", rarity: "common", complexity_score: 2},
+                {id: 13, topic: "Elastic Potential Energy", dot_point: "Energy in springs and elastic materials", rarity: "uncommon", complexity_score: 3},
+                {id: 14, topic: "Strain Potential Energy", dot_point: "Energy transformation in collisions", rarity: "rare", complexity_score: 5},
+                {id: 15, topic: "Collisions", dot_point: "Elastic and inelastic collisions", rarity: "epic", complexity_score: 6},
+                {id: 16, topic: "Gravitational Potential Energy", dot_point: "GPE near Earth's surface", rarity: "uncommon", complexity_score: 3}
+            ];
+        }
+
+        function generateFallbackQuestions() {
+            const bloomLevels = ['Remembering', 'Understanding', 'Applying', 'Analyzing', 'Evaluating', 'Creating'];
+            const questions = [];
+            
+            // Generate realistic physics questions for demo
+            const sampleQuestions = [
+                "According to Newton's Second Law, the net force on an object equals:",
+                "A 5.0 kg box experiences forces. What is the magnitude of acceleration?",
+                "Two forces act on an object. What is the direction of acceleration?",
+                "Which statement correctly describes Newton's Third Law?",
+                "A student claims F≠ma when pushing a crate. What's the error?",
+                "Design an experiment to verify F=ma. Which approach works best?"
+            ];
+            
+            for (let dotPoint = 1; dotPoint <= 16; dotPoint++) {
+                for (let level = 0; level < 6; level++) {
+                    questions.push({
+                        dot_point_id: dotPoint,
+                        bloom_level: bloomLevels[level],
+                        question: sampleQuestions[level] || `${bloomLevels[level]} question for concept ${dotPoint}`,
+                        options: {
+                            A: "First option",
+                            B: "Second option", 
+                            C: "Third option",
+                            D: "Fourth option"
+                        },
+                        correct_answer: ['A', 'B', 'C', 'D'][Math.floor(Math.random() * 4)]
+                    });
+                }
+            }
+            return { questions };
+        }
+
+        // Reset box mapping (useful when adding new question files)
+        function resetMapping() {
+            if (confirm('This will shuffle all box positions. Your collection will be preserved. Continue?')) {
+                gameState.boxMapping = {};
+                gameState.boxEmojis = {};
+                saveGameState();
+                location.reload();
+            }
+        }
+
+        // Start game
+        initGame();
+    </script>
+</body>
+</html>

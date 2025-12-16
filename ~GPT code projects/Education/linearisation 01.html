@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Physics Linearization Tool</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #1a1a1a;
+            padding: 15px;
+            margin: 0 auto;
+            color: #ffffff;
+        }
+
+        .container {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .title {
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .data-section {
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .data-table {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #444;
+            border-radius: 8px;
+            background: #2a2a2a;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 1rem;
+        }
+
+        th, td {
+            padding: 8px;
+            text-align: right;
+            border-bottom: 1px solid #444;
+            color: #ffffff;
+        }
+
+        th { 
+            position: sticky;
+            top: 0;
+            background: #444;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .charts-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .chart-container {
+            aspect-ratio: 4/3;
+            position: relative;
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .radio-group {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .radio-option {
+            position: relative;
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-height: 50px;
+            background: #333;
+        }
+
+        .radio-option:hover {
+            background: #444;
+        }
+
+        .radio-option input {
+            position: absolute;
+            opacity: 0;
+        }
+
+        .radio-option label {
+            display: block;
+            width: 100%;
+            cursor: pointer;
+            font-size: 1.1rem;
+            padding-left: 30px;
+            color: #ffffff;
+        }
+
+        .radio-option label:before {
+            content: '';
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 18px;
+            height: 18px;
+            border: 2px solid #666;
+            border-radius: 50%;
+        }
+
+        .radio-option input:checked + label:after {
+            content: '';
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #4CAF50;
+        }
+
+        .correct {
+            animation: glowGreen 2s ease-out;
+        }
+
+        .incorrect {
+            animation: glowRed 2s ease-out;
+        }
+
+        @keyframes glowGreen {
+    0% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.6); }
+    25% { box-shadow: 0 0 30px 10px rgba(255, 255, 255, 0.6); }
+    50% { box-shadow: 0 0 50px 15px rgba(76, 175, 80, 0.8); }
+    75% { box-shadow: 0 0 30px 10px rgba(255, 255, 255, 0.6); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.6); }
+}
+
+@keyframes glowRed {
+    0% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.6); }
+    25% { box-shadow: 0 0 30px 10px rgba(255, 255, 255, 0.6); }
+    50% { box-shadow: 0 0 50px 15px rgba(244, 67, 54, 0.8); }
+    75% { box-shadow: 0 0 30px 10px rgba(255, 255, 255, 0.6); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.6); }
+}
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        button {
+            min-height: 50px;
+            border: none;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 1.2rem;
+            font-weight: 500;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        #next-btn {
+            background: #2196F3;
+        }
+
+        #check-btn {
+            background: #4CAF50;
+        }
+
+        button:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        @media (max-width: 768px) {
+            .charts-container {
+                grid-template-columns: 1fr;
+            }
+            .radio-group {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin: 10px 0;
+}
+        }
+    </style>
+</head>
+<body>
+    <body>
+        <div class="container">
+            <h1 class="title" id="experiment-title">Physics Linearization Practice</h1>
+            
+            <div class="charts-container">
+                <div class="chart-container">
+                    <canvas id="original-plot"></canvas>
+                </div>
+                <div class="chart-container">
+                    <canvas id="linearized-plot"></canvas>
+                </div>
+            </div>
+            
+            <div class="radio-group" id="function-options"></div>
+            
+            <div class="button-group">
+                <button id="check-btn">Check</button>
+                <button id="next-btn">Next</button>
+            </div>
+    
+            <div class="data-section">
+                <div class="data-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th id="x-header">x</th>
+                                <th id="y-header">y</th>
+                            </tr>
+                        </thead>
+                        <tbody id="data-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    <script>
+        // Trial data with noise and occasional outliers
+        const experimentalData = {
+            experiment1: {
+                name: "Light Intensity vs Distance",
+                units: ["meters", "lux"],
+                correctFunction: "inverseSquare",
+                data: [
+                    [0.5, 410.3], [1.0, 95.8], [1.5, 46.2], [2.0, 23.1], [2.5, 16.4],
+                    [3.0, 10.8], [3.5, 8.4], [4.0, 6.7], [4.5, 5.2], [5.0, 4.2],
+                    [5.5, 3.1], [6.0, 2.9], [6.5, 2.3], [7.0, 2.2], [7.5, 1.9],
+                    [8.0, 1.7], [8.5, 1.5], [9.0, 1.4], [9.5, 1.3], [10.0, 0.85]
+                ]
+            },
+            experiment2: {
+                name: "Spring Energy vs Extension",
+                units: ["meters", "joules"],
+                correctFunction: "square",
+                data: [
+                    [0.05, 0.0028], [0.10, 0.0097], [0.15, 0.0235], [0.20, 0.0412], [0.25, 0.0658],
+                    [0.30, 0.0923], [0.35, 0.128], [0.40, 0.167], [0.45, 0.213], [0.50, 0.262],
+                    [0.55, 0.315], [0.60, 0.378], [0.65, 0.441], [0.70, 0.512], [0.75, 0.590],
+                    [0.80, 0.672], [0.85, 0.758], [0.90, 0.851], [0.95, 0.947], [1.00, 1.150]
+                ]
+            },
+            experiment3: {
+                name: "Capacitor Discharge",
+                units: ["seconds", "volts"],
+                correctFunction: "exponential",
+                data: [
+                    [0.0, 12.1], [0.5, 7.42], [1.0, 4.52], [1.5, 2.76], [2.0, 1.69],
+                    [2.5, 1.03], [3.0, 0.63], [3.5, 0.39], [4.0, 0.24], [4.5, 0.15],
+                    [5.0, 0.09], [5.5, 0.06], [6.0, 0.04], [6.5, 0.02], [7.0, 0.015],
+                    [7.5, 0.009], [8.0, 0.006], [8.5, 0.004], [9.0, 0.003], [9.5, 0.005]
+                ]
+            },
+            experiment4: {
+                name: "Current vs Voltage",
+                units: ["volts", "amperes"],
+                correctFunction: "linear",
+                data: [
+                    [0.5, 0.104], [1.0, 0.201], [1.5, 0.308], [2.0, 0.395], [2.5, 0.512],
+                    [3.0, 0.592], [3.5, 0.708], [4.0, 0.805], [4.5, 0.897], [5.0, 1.002],
+                    [5.5, 1.108], [6.0, 1.204], [6.5, 1.307], [7.0, 1.392], [7.5, 1.509],
+                    [8.0, 1.605], [8.5, 1.708], [9.0, 1.802], [9.5, 1.908], [10.0, 2.205]
+                ]
+            }
+        };
+
+        // Linearization functions with clear labels
+        const linearizationFunctions = [
+    { 
+        id: 'linear', 
+        label: 'Linear (y = x)', 
+        transform: (x, y) => [x, y] 
+    },
+    { 
+        id: 'square', 
+        label: 'Square (y = x²)', 
+        transform: (x, y) => [x * x, y] 
+    },
+    { 
+        id: 'squareRoot', 
+        label: 'Square Root (y = √x)', 
+        transform: (x, y) => [Math.sqrt(x), y] 
+    },
+    { 
+        id: 'inverse', 
+        label: 'Inverse (y = 1/x)', 
+        transform: (x, y) => [1/x, y] 
+    },
+    { 
+        id: 'inverseSquare', 
+        label: 'Inverse Square (y = 1/x²)', 
+        transform: (x, y) => [1/(x * x), y] 
+    },
+    { 
+        id: 'inverseCube', 
+        label: 'Inverse Cube (y = 1/x³)', 
+        transform: (x, y) => [1/(x * x * x), y] 
+    },
+    { 
+        id: 'cubic', 
+        label: 'Cubic (y = x³)', 
+        transform: (x, y) => [x * x * x, y] 
+    },
+    { 
+        id: 'naturalLog', 
+        label: 'Natural Log (y = ln x)', 
+        transform: (x, y) => [Math.log(x), y] 
+    },
+    { 
+        id: 'exponential', 
+        label: 'Exponential (y = eˣ)', 
+        transform: (x, y) => [x, Math.log(y)] 
+    },
+    { 
+        id: 'sine', 
+        label: 'Sine (y = sin x)', 
+        transform: (x, y) => [Math.sin(x), y] 
+    }
+];
+
+
+        // Global variables
+        let currentExperiment = null;
+        let originalPlot = null;
+        let linearizedPlot = null;
+
+        // Calculate linear regression
+        function calculateRegression(data) {
+            const n = data.length;
+            const sumX = data.reduce((sum, p) => sum + p.x, 0);
+            const sumY = data.reduce((sum, p) => sum + p.y, 0);
+            const sumXY = data.reduce((sum, p) => sum + p.x * p.y, 0);
+            const sumX2 = data.reduce((sum, p) => sum + p.x * p.x, 0);
+            
+            const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+            const intercept = (sumY - slope * sumX) / n;
+            
+            const minX = Math.min(...data.map(p => p.x));
+            const maxX = Math.max(...data.map(p => p.x));
+            
+            // Generate more points for a smoother line
+            const points = [];
+            const steps = 100;
+            for (let i = 0; i <= steps; i++) {
+                const x = minX + (maxX - minX) * (i / steps);
+                points.push({ x, y: slope * x + intercept });
+            }
+            
+            return points;
+        }
+
+        // Initialize the application
+        function init() {
+            setupEventListeners();
+            createRadioButtons();
+            selectRandomExperiment();
+        }
+
+        // Set up event listeners
+        function setupEventListeners() {
+            document.getElementById('next-btn').addEventListener('click', selectRandomExperiment);
+            document.getElementById('check-btn').addEventListener('click', checkAnswer);
+        }
+
+        // Create radio buttons
+        function createRadioButtons() {
+            const container = document.getElementById('function-options');
+            container.innerHTML = '';
+            linearizationFunctions.forEach(func => {
+                const div = document.createElement('div');
+                div.className = 'radio-option';
+                div.innerHTML = `
+                    <input type="radio" id="${func.id}" name="linearization" value="${func.id}">
+                    <label for="${func.id}">${func.label}</label>
+                `;
+                container.appendChild(div);
+            });
+
+            document.querySelectorAll('input[name="linearization"]').forEach(radio => {
+                radio.addEventListener('change', handleFunctionSelect);
+            });
+        }
+
+        // Select random experiment
+        function selectRandomExperiment() {
+            const experiments = Object.keys(experimentalData);
+            const randomKey = experiments[Math.floor(Math.random() * experiments.length)];
+            currentExperiment = experimentalData[randomKey];
+            
+            document.getElementById('experiment-title').textContent = currentExperiment.name;
+            document.getElementById('x-header').textContent = currentExperiment.units[0];
+            document.getElementById('y-header').textContent = currentExperiment.units[1];
+            
+            document.querySelectorAll('input[name="linearization"]').forEach(radio => radio.checked = false);
+            document.querySelector('.container').classList.remove('correct', 'incorrect');
+            
+            updateDataTable();
+            updatePlots();
+        }
+
+        function calculateSmoothCurve(data) {
+    const sortedData = [...data].sort((a, b) => a.x - b.x);
+    const points = [];
+    const windowSize = 3; // Changed to 3-point moving average
+    
+    for (let i = 0; i < sortedData.length; i++) {
+        const windowStart = Math.max(0, i - Math.floor(windowSize/2));
+        const windowEnd = Math.min(sortedData.length - 1, i + Math.floor(windowSize/2));
+        
+        let sum = 0;
+        for (let j = windowStart; j <= windowEnd; j++) {
+            sum += sortedData[j].y;
+        }
+        const average = sum / (windowEnd - windowStart + 1);
+        
+        points.push({
+            x: sortedData[i].x,
+            y: average
+        });
+    }
+    
+    return points;
+}
+        
+        // Update data table
+        function updateDataTable() {
+            const tbody = document.getElementById('data-table-body');
+            tbody.innerHTML = '';
+            currentExperiment.data.forEach(([x, y]) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${x.toFixed(3)}</td>
+                    <td>${y.toFixed(3)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function updatePlots() {
+            if (originalPlot) originalPlot.destroy();
+            if (linearizedPlot) linearizedPlot.destroy();
+
+            const originalData = currentExperiment.data.map(([x, y]) => ({x, y}));
+            const smoothCurve = calculateSmoothCurve(originalData);
+
+            const originalCtx = document.getElementById('original-plot').getContext('2d');
+            originalPlot = new Chart(originalCtx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Raw Data',
+                        data: originalData,
+                        backgroundColor: 'rgba(54, 162, 235, 0.7)'
+                    }, {
+    label: 'Trend Line',
+    data: smoothCurve,
+    type: 'line',
+    borderColor: 'rgba(75, 192, 192, 0.8)',
+    tension: 0.4,
+    fill: false,
+    pointRadius: 0
+}]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Original Data',
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            },
+                            color: '#ffffff'
+                        },
+                        legend: {
+                            labels: {
+                                font: {
+                                    size: 14
+                                },
+                                color: '#ffffff'
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: currentExperiment.units[0],
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                },
+                                color: '#ffffff'
+                            },
+                            ticks: {
+                                font: {
+                                    size: 12
+                                },
+                                color: '#ffffff'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: currentExperiment.units[1],
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                },
+                                color: '#ffffff'
+                            },
+                            ticks: {
+                                font: {
+                                    size: 12
+                                },
+                                color: '#ffffff'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            const linearizedCtx = document.getElementById('linearized-plot').getContext('2d');
+            linearizedPlot = new Chart(linearizedCtx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Linearized Data',
+                        data: [],
+                        backgroundColor: 'rgba(255, 99, 132, 0.7)'
+                    }, {
+                        label: 'Best Fit Line',
+                        data: [],
+                        type: 'line',
+                        borderColor: 'rgba(75, 192, 192, 0.8)',
+                        fill: false,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Linearized Data',
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            },
+                            color: '#ffffff'
+                        },
+                        legend: {
+                            labels: {
+                                font: {
+                                    size: 14
+                                },
+                                color: '#ffffff'
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Transformed X',
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                },
+                                color: '#ffffff'
+                            },
+                            ticks: {
+                                font: {
+                                    size: 12
+                                },
+                                color: '#ffffff'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Transformed Y',
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                },
+                                color: '#ffffff'
+                            },
+                            ticks: {
+                                font: {
+                                    size: 12
+                                },
+                                color: '#ffffff'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function handleFunctionSelect(event) {
+            const functionId = event.target.value;
+            const transformer = linearizationFunctions.find(f => f.id === functionId).transform;
+            
+            const transformedData = currentExperiment.data.map(([x, y]) => {
+                const [transformedX, transformedY] = transformer(x, y);
+                return {x: transformedX, y: transformedY};
+            });
+
+            const regressionLine = calculateRegression(transformedData);
+
+            linearizedPlot.data.datasets[0].data = transformedData;
+            linearizedPlot.data.datasets[1].data = regressionLine;
+            linearizedPlot.update();
+        }
+
+        function checkAnswer() {
+            const selectedFunction = document.querySelector('input[name="linearization"]:checked');
+            const container = document.querySelector('.container');
+            
+            if (!selectedFunction) return;
+
+            const isCorrect = selectedFunction.value === currentExperiment.correctFunction;
+            
+            container.classList.remove('correct', 'incorrect');
+            void container.offsetWidth;
+            container.classList.add(isCorrect ? 'correct' : 'incorrect');
+        }
+
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>

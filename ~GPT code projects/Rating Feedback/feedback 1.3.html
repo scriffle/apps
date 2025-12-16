@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Rating Applet</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #e0f7fa; /* Soft cyan background */
+            margin: 0;
+        }
+        canvas {
+            border: 2px solid #000;
+            background-color: #fff;
+        }
+        #controls {
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-around;
+            width: 600px; /* Match canvas width */
+        }
+        #decayTime, #maxRange {
+            width: 150px; /* 1/4 of the canvas width */
+        }
+        label {
+            font-size: 16px;
+        }
+        #ratingTitle {
+            font-size: 24px;
+            margin-bottom: 10px;
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div id="ratingTitle">Rating</div>
+    <canvas id="ratingCanvas" width="600" height="400"></canvas>
+    <div id="controls">
+        <div>
+            <label for="decayTime">Decay</label>
+            <input type="range" id="decayTime" min="5" max="300" value="5">
+            <span id="decayTimeValue" style="display: none;">5</span>
+        </div>
+        <div>
+            <label for="maxRange">Max</label>
+            <input type="range" id="maxRange" min="3" max="9" value="9">
+            <span id="maxRangeValue" style="display: none;">9</span>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('ratingCanvas');
+        const ctx = canvas.getContext('2d');
+        const decayTimeSlider = document.getElementById('decayTime');
+        const decayTimeValue = document.getElementById('decayTimeValue');
+        const maxRangeSlider = document.getElementById('maxRange');
+        const maxRangeValue = document.getElementById('maxRangeValue');
+
+        const maxPresses = 100;
+        let decayTime = decayTimeSlider.value;
+        let maxRange = maxRangeSlider.value;
+        let keyPresses = Array(10).fill(0);
+        const lastPressTime = Array(10).fill(0);
+
+        decayTimeSlider.addEventListener('input', () => {
+            decayTimeValue.textContent = decayTimeSlider.value;
+            decayTime = decayTimeSlider.value;
+        });
+
+        maxRangeSlider.addEventListener('input', () => {
+            maxRangeValue.textContent = maxRangeSlider.value;
+            maxRange = maxRangeSlider.value;
+            keyPresses = Array(parseInt(maxRange) + 1).fill(0);
+        });
+
+        document.addEventListener('keydown', (event) => {
+            const key = event.key;
+            if (key >= '0' && key <= '9' && key <= maxRange) {
+                const index = parseInt(key, 10);
+                keyPresses[index] += 1;
+                lastPressTime[index] = performance.now();
+            }
+        });
+
+        function getColor(index) {
+            const gradientStart = [255, 99, 71]; // Darker red (tomato)
+            const gradientMiddle = [255, 215, 0]; // Darker yellow (gold)
+            const gradientEnd = [0, 128, 0]; // Darker green (green)
+
+            let r, g, b;
+            if (index <= maxRange / 2) {
+                const ratio = index / (maxRange / 2);
+                r = gradientStart[0] + ratio * (gradientMiddle[0] - gradientStart[0]);
+                g = gradientStart[1] + ratio * (gradientMiddle[1] - gradientStart[1]);
+                b = gradientStart[2] + ratio * (gradientMiddle[2] - gradientStart[2]);
+            } else {
+                const ratio = (index - maxRange / 2) / (maxRange / 2);
+                r = gradientMiddle[0] + ratio * (gradientEnd[0] - gradientMiddle[0]);
+                g = gradientMiddle[1] + ratio * (gradientEnd[1] - gradientMiddle[1]);
+                b = gradientMiddle[2] + ratio * (gradientEnd[2] - gradientMiddle[2]);
+            }
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
+        function drawGraph() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const barWidth = canvas.width / (parseInt(maxRange) + 1);
+            const maxBarHeight = canvas.height * 2; // 200% of the canvas height
+
+            const currentTime = performance.now();
+            for (let i = 0; i <= maxRange; i++) {
+                const elapsed = (currentTime - lastPressTime[i]) / 1000; // Convert to seconds
+                const decayFactor = Math.exp(-elapsed / decayTime);
+                const effectivePresses = keyPresses[i] * decayFactor;
+                const barHeight = (Math.log1p(effectivePresses) / Math.log1p(maxPresses)) * maxBarHeight;
+                const x = i * barWidth;
+                const y = canvas.height - barHeight;
+
+                const gradient = ctx.createLinearGradient(x, y, x, canvas.height);
+                gradient.addColorStop(0, getColor(i));
+                gradient.addColorStop(1, '#fff');
+
+                ctx.fillStyle = gradient;
+                ctx.fillRect(x, y, barWidth - 2, barHeight);
+
+                // Draw the number centered in the middle of the bar height
+                ctx.fillStyle = '#000';
+                ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(i, x + barWidth / 2, y + barHeight / 2);
+
+                // Update key presses to reflect decay
+                if (effectivePresses > 0) {
+                    keyPresses[i] = effectivePresses;
+                } else {
+                    keyPresses[i] = 0;
+                }
+            }
+
+            requestAnimationFrame(drawGraph);
+        }
+
+        drawGraph();
+    </script>
+</body>
+</html>

@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Conical Pendulum & Banked Circular Motion Simulation</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #eef;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px;
+    }
+    h1 {
+      margin-bottom: 0.5em;
+    }
+    .controls {
+      margin-bottom: 1em;
+      text-align: center;
+    }
+    .controls label {
+      margin: 0 10px;
+    }
+    .simulations {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .sim-panel {
+      margin: 10px;
+      text-align: center;
+    }
+    canvas {
+      border: 1px solid #ccc;
+      background: #f9f9f9;
+    }
+    .equations {
+      margin-top: 0.5em;
+      font-size: 0.9em;
+      text-align: left;
+      width: 400px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Conical Pendulum & Banked Circular Motion Simulation</h1>
+    <div class="controls">
+      <!-- Slider controls: Period (seconds), Length (meters) and Mass (kg) -->
+      <label>
+        Period (s):
+        <input type="range" id="periodSlider" min="0.5" max="5" step="0.1" value="2">
+        <span id="periodValue"></span>
+      </label>
+      <label>
+        Length (m):
+        <input type="range" id="lengthSlider" min="1" max="5" step="0.1" value="3">
+        <span id="lengthValue"></span>
+      </label>
+      <label>
+        Mass (kg):
+        <input type="range" id="massSlider" min="0.1" max="10" step="0.1" value="1">
+        <span id="massValue"></span>
+      </label>
+    </div>
+    <div class="simulations">
+      <div class="sim-panel">
+        <canvas id="pendulumCanvas" width="400" height="400"></canvas>
+        <div class="equations" id="pendulumEquations"></div>
+      </div>
+      <div class="sim-panel">
+        <canvas id="bankedCanvas" width="400" height="400"></canvas>
+        <div class="equations" id="bankedEquations"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /***********************
+     * Global Variables
+     ***********************/
+    let period = parseFloat(document.getElementById("periodSlider").value);
+    let length = parseFloat(document.getElementById("lengthSlider").value);
+    let mass = parseFloat(document.getElementById("massSlider").value);
+    const g = 9.8; // gravitational acceleration (m/s^2)
+    const scale = 50; // pixels per meter (for drawing)
+    let lastTime = null;
+    let animationTime = 0;
+
+    // Get slider elements and displayed values
+    const periodSlider = document.getElementById("periodSlider");
+    const lengthSlider = document.getElementById("lengthSlider");
+    const massSlider   = document.getElementById("massSlider");
+    const periodValue  = document.getElementById("periodValue");
+    const lengthValue  = document.getElementById("lengthValue");
+    const massValue    = document.getElementById("massValue");
+
+    // Canvas contexts
+    const pendulumCanvas = document.getElementById("pendulumCanvas");
+    const pCtx = pendulumCanvas.getContext("2d");
+    const bankedCanvas = document.getElementById("bankedCanvas");
+    const bCtx = bankedCanvas.getContext("2d");
+
+    /***********************
+     * Update Parameters from Sliders
+     ***********************/
+    function updateParameters() {
+      period = parseFloat(periodSlider.value);
+      length = parseFloat(lengthSlider.value);
+      mass   = parseFloat(massSlider.value);
+
+      periodValue.textContent = period.toFixed(2);
+      lengthValue.textContent = length.toFixed(2);
+      massValue.textContent   = mass.toFixed(2);
+
+      // For the conical pendulum, physics requires
+      // cos(θ) = (g P²)/(4π² L) ≤ 1  →  P ≤ 2π√(L/g)
+      const periodMax = 2 * Math.PI * Math.sqrt(length / g);
+      periodSlider.max = periodMax.toFixed(2);
+    }
+    periodSlider.addEventListener("input", updateParameters);
+    lengthSlider.addEventListener("input", updateParameters);
+    massSlider.addEventListener("input", updateParameters);
+    updateParameters();
+
+    /***********************
+     * Helper Function: Draw an Arrow with Label
+     ***********************/
+    function drawArrow(ctx, fromx, fromy, tox, toy, label, magnitude) {
+      ctx.beginPath();
+      ctx.moveTo(fromx, fromy);
+      ctx.lineTo(tox, toy);
+      ctx.strokeStyle = "green";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Draw arrowhead
+      let angle = Math.atan2(toy - fromy, tox - fromx);
+      let headlen = 10;
+      ctx.beginPath();
+      ctx.moveTo(tox, toy);
+      ctx.lineTo(tox - headlen * Math.cos(angle - Math.PI/6), toy - headlen * Math.sin(angle - Math.PI/6));
+      ctx.lineTo(tox - headlen * Math.cos(angle + Math.PI/6), toy - headlen * Math.sin(angle + Math.PI/6));
+      ctx.lineTo(tox, toy);
+      ctx.fillStyle = "green";
+      ctx.fill();
+
+      // Label the arrow
+      ctx.font = "12px sans-serif";
+      ctx.fillStyle = "black";
+      ctx.fillText(label + " " + magnitude, tox + 5, toy + 5);
+    }
+
+    /***********************
+     * Conical Pendulum Simulation (Isometric View)
+     ***********************/
+    function drawConicalPendulum(ctx, t) {
+      // Clear the canvas
+      ctx.clearRect(0, 0, pendulumCanvas.width, pendulumCanvas.height);
+
+      // Compute the pendulum’s half-angle (θ) from:
+      //    cos(θ) = (g P²)/(4π² L)
+      let cosTheta = (g * period * period) / (4 * Math.PI * Math.PI * length);
+      if (cosTheta > 1) cosTheta = 1; // limit to physical values
+      let theta = Math.acos(cosTheta);
+
+      // Angular speed (rad/s) and horizontal radius:
+      let omega = 2 * Math.PI / period;
+      let R = length * Math.sin(theta);
+
+      // 3D coordinates for the mass:
+      // Place the pivot at (0,0,0). The mass then is at:
+      //    x = R cos(ωt),  y = R sin(ωt),  z = –L cos(θ) (below the pivot)
+      let x = R * Math.cos(omega * t);
+      let y = R * Math.sin(omega * t);
+      let z = -length * Math.cos(theta);
+
+      // Isometric projection:
+      // We use:
+      //    screenX = pivotX + (x – y) cos(30°)
+      //    screenY = pivotY + (x + y) sin(30°) – z
+      const cos30 = Math.cos(Math.PI/6); // ~0.866
+      const sin30 = Math.sin(Math.PI/6); // 0.5
+
+      // Set the pivot’s projection at (canvasWidth/2, 50)
+      let pivotScreenX = pendulumCanvas.width / 2;
+      let pivotScreenY = 50;
+      let massScreenX = pivotScreenX + (x - y) * cos30;
+      let massScreenY = pivotScreenY + (x + y) * sin30 - z;  // subtracting z (which is negative) lowers the mass
+
+      // Draw the string (line from pivot to mass)
+      ctx.beginPath();
+      ctx.moveTo(pivotScreenX, pivotScreenY);
+      ctx.lineTo(massScreenX, massScreenY);
+      ctx.strokeStyle = "black";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Draw the pivot as a small red circle
+      ctx.beginPath();
+      ctx.arc(pivotScreenX, pivotScreenY, 5, 0, 2 * Math.PI);
+      ctx.fillStyle = "red";
+      ctx.fill();
+
+      // Draw the mass as a blue circle
+      ctx.beginPath();
+      ctx.arc(massScreenX, massScreenY, 15, 0, 2 * Math.PI);
+      ctx.fillStyle = "blue";
+      ctx.fill();
+
+      // Force calculations for the pendulum:
+      // Tension: T = m*g / cos(θ)
+      let tension = mass * g / Math.cos(theta);
+      // Net (centripetal) force: F_c = T sin(θ) = m*g tan(θ)
+      let netForce = mass * g * Math.tan(theta);
+
+      // Choose a (visual) scaling factor for the force arrows:
+      let forceScale = 0.5;
+
+      // Draw gravity: a vertical arrow starting at the mass (value: m*g)
+      let gravLength = mass * g * forceScale;
+      drawArrow(ctx, massScreenX, massScreenY, massScreenX, massScreenY + gravLength, "mg", (mass * g).toFixed(1));
+
+      // Draw tension: arrow from the mass toward the pivot.
+      let tx = pivotScreenX - massScreenX;
+      let ty = pivotScreenY - massScreenY;
+      let tensionVecLength = Math.sqrt(tx * tx + ty * ty);
+      let tensionDisplayLength = tension * forceScale * 0.2; // scaled down for clarity
+      let tensionEndX = massScreenX + (tx / tensionVecLength) * tensionDisplayLength;
+      let tensionEndY = massScreenY + (ty / tensionVecLength) * tensionDisplayLength;
+      drawArrow(ctx, massScreenX, massScreenY, tensionEndX, tensionEndY, "T", tension.toFixed(1));
+
+      // Draw net centripetal force: its 3D horizontal direction is (–x, –y, 0).
+      // We project the horizontal vector as:
+      let netFx = -x;
+      let netFy = -y;
+      let netForceDisplayLength = netForce * forceScale * 0.2;
+      // Project the horizontal vector:
+      let netScreenX = (netFx - netFy) * cos30;
+      let netScreenY = (netFx + netFy) * sin30;
+      let netScreenLength = Math.sqrt(netScreenX * netScreenX + netScreenY * netScreenY);
+      if (netScreenLength > 0) {
+        netScreenX = netScreenX / netScreenLength * netForceDisplayLength;
+        netScreenY = netScreenY / netScreenLength * netForceDisplayLength;
+      }
+      drawArrow(ctx, massScreenX, massScreenY, massScreenX + netScreenX, massScreenY + netScreenY, "Fₙ", netForce.toFixed(1));
+
+      // Update the displayed equations for the conical pendulum:
+      let eqDiv = document.getElementById("pendulumEquations");
+      eqDiv.innerHTML = `
+        <b>Conical Pendulum Equations:</b><br>
+        T = m·g / cos(θ) = ${mass.toFixed(2)}·${g.toFixed(2)} / cos(${(theta*180/Math.PI).toFixed(1)}°) = ${tension.toFixed(2)} N<br>
+        cos(θ) = (g·P²)/(4π²·L) = (${(g*period*period).toFixed(2)})/(${(4*Math.PI*Math.PI*length).toFixed(2)}) = ${cosTheta.toFixed(2)}<br>
+        F_c = m·g·tan(θ) = ${mass.toFixed(2)}·${g.toFixed(2)}·tan(${(theta*180/Math.PI).toFixed(1)}°) = ${netForce.toFixed(2)} N<br>
+        v = (2πL·sin(θ))/P = (${(2*Math.PI*length*Math.sin(theta)).toFixed(2)})/(${period.toFixed(2)}) = ${(2*Math.PI*length*Math.sin(theta)/period).toFixed(2)} m/s
+      `;
+    }
+
+    /***********************
+     * Banked Circular Motion Simulation (2D Slice of an Embankment)
+     ***********************/
+    function drawBankedMotion(ctx, t) {
+      // Clear the canvas
+      ctx.clearRect(0, 0, bankedCanvas.width, bankedCanvas.height);
+
+      // Here, we interpret “length” as the radius R of the circular path.
+      let R = length;
+      // Speed: v = (2πR)/P
+      let v = 2 * Math.PI * R / period;
+      // For a frictionless banked curve, the design bank angle φ satisfies:
+      //    tan(φ) = v²/(R·g) = (4π²·R)/(P²·g)
+      let tanPhi = (4 * Math.PI * Math.PI * R) / (period * period * g);
+      let phi = Math.atan(tanPhi);
+
+      // Compute forces:
+      // Normal force: N = m·g / cos(φ)
+      let normal = mass * g / Math.cos(phi);
+      // Centripetal (net) force: F_c = N sin(φ) = m·g·tan(φ)
+      let netForce = mass * g * Math.tan(phi);
+
+      // Draw a simple banked road (an inclined plane) as a trapezoid.
+      let canvasWidth = bankedCanvas.width;
+      let canvasHeight = bankedCanvas.height;
+      let roadHeight = 100;
+      // For simplicity, define the bottom (inner) edge along the bottom and a top edge offset by the road height.
+      let x1 = 0, y1 = canvasHeight;
+      let x2 = canvasWidth, y2 = canvasHeight - canvasWidth * Math.tan(phi);
+      let x3 = canvasWidth, y3 = y2 - roadHeight;
+      let x4 = 0, y4 = canvasHeight - roadHeight;
+
+      ctx.fillStyle = "#ddd";
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.lineTo(x3, y3);
+      ctx.lineTo(x4, y4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "black";
+      ctx.stroke();
+
+      // Draw the “car” as a rectangle on the inner edge.
+      // Here we position the car near the left (inner edge) with a slight offset.
+      let carPosX = x1 + 50;
+      let carPosY = canvasHeight - roadHeight - 20;
+      let carWidth = 40, carHeight = 20;
+      ctx.save();
+      ctx.translate(carPosX, carPosY);
+      ctx.rotate(-phi); // rotate so that the car is aligned with the road
+      ctx.fillStyle = "blue";
+      ctx.fillRect(-carWidth/2, -carHeight, carWidth, carHeight);
+      ctx.restore();
+
+      // Choose a force arrow scale factor.
+      let forceScale = 0.5;
+      // For the car, define a “center” point.
+      let carCenterX = carPosX;
+      let carCenterY = carPosY - carHeight/2;
+
+      // Draw gravity (mg): vertical arrow from the car.
+      let gravLength = mass * g * forceScale;
+      drawArrow(ctx, carCenterX, carCenterY, carCenterX, carCenterY + gravLength, "mg", (mass*g).toFixed(1));
+
+      // Draw normal force (N): perpendicular to the road surface.
+      let normalLength = normal * forceScale * 0.2; // scaled for display
+      let normalEndX = carCenterX - normalLength * Math.sin(phi);
+      let normalEndY = carCenterY - normalLength * Math.cos(phi);
+      drawArrow(ctx, carCenterX, carCenterY, normalEndX, normalEndY, "N", normal.toFixed(1));
+
+      // Draw centripetal (net) force: horizontal (pointing left toward the circle’s center).
+      let netForceLength = netForce * forceScale * 0.2;
+      let netEndX = carCenterX - netForceLength;
+      let netEndY = carCenterY;
+      drawArrow(ctx, carCenterX, carCenterY, netEndX, netEndY, "Fₙ", netForce.toFixed(1));
+
+      // Update the displayed equations for banked motion:
+      let eqDiv = document.getElementById("bankedEquations");
+      eqDiv.innerHTML = `
+        <b>Banked Circular Motion Equations:</b><br>
+        N = m·g / cos(φ) = ${mass.toFixed(2)}·${g.toFixed(2)} / cos(${(phi*180/Math.PI).toFixed(1)}°) = ${normal.toFixed(2)} N<br>
+        tan(φ) = (4π²·R)/(P²·g) = (${(4*Math.PI*Math.PI*R).toFixed(2)})/(${(period*period*g).toFixed(2)}) = ${tanPhi.toFixed(2)}<br>
+        F_c = m·g·tan(φ) = ${mass.toFixed(2)}·${g.toFixed(2)}·tan(${(phi*180/Math.PI).toFixed(1)}°) = ${netForce.toFixed(2)} N<br>
+        v = (2πR)/P = (${(2*Math.PI*R).toFixed(2)})/(${period.toFixed(2)}) = ${v.toFixed(2)} m/s
+      `;
+    }
+
+    /***********************
+     * Animation Loop
+     ***********************/
+    function animate(timestamp) {
+      if (!lastTime) lastTime = timestamp;
+      let delta = (timestamp - lastTime) / 1000; // seconds elapsed
+      lastTime = timestamp;
+      animationTime += delta;
+
+      // Redraw both simulations
+      drawConicalPendulum(pCtx, animationTime);
+      drawBankedMotion(bCtx, animationTime);
+
+      requestAnimationFrame(animate);
+    }
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>

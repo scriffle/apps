@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Tetris Variation</title>
+    <style>
+        body {
+            background: #111;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #fff;
+        }
+        canvas {
+            border: 2px solid #fff;
+            background: #222;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="tetris" width="300" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById('tetris');
+        const context = canvas.getContext('2d');
+        const scale = 30;
+        context.scale(scale, scale);
+
+        const ROWS = 20;
+        const COLUMNS = 10;
+
+        let isPaused = false;
+        let score = 0;
+        let letterScore = 0;
+
+        const board = Array.from({ length: ROWS }, () => Array(COLUMNS).fill(0));
+
+        const colors = [
+            null,
+            '#90ee90',  // Soft green color for all pieces
+            '#FFA500',  // Soft orange for found words
+            '#FFD700',  // Soft yellow
+            '#FFB6C1',  // Light pink
+            '#87CEEB',  // Light blue
+            '#98FB98',  // Pale green
+            '#FF6347'   // Tomato for overlapping words
+        ];
+
+        const scrabbleScores = {
+            a: 1, b: 3, c: 3, d: 2, e: 1, f: 4, g: 2,
+            h: 4, i: 1, j: 8, k: 5, l: 1, m: 3, n: 1,
+            o: 1, p: 3, q: 10, r: 1, s: 1, t: 1, u: 1,
+            v: 4, w: 4, x: 8, y: 4, z: 10
+        };
+
+        const pieces = 'IJLOSTZ';
+
+        const letterFrequencies = {
+            a: 0.13, b: 0.03, c: 0.04, d: 0.04, e: 0.08, f: 0.02, g: 0.02,
+            h: 0.03, i: 0.06, j: 0.01, k: 0.01, l: 0.04, m: 0.03, n: 0.06,
+            o: 0.05, p: 0.03, r: 0.06, s: 0.03, t: 0.06, u: 0.03, v: 0.01,
+            w: 0.01, x: 0.00, y: 0.02, z: 0.00
+        };
+
+        const wordList = [
+            'act', 'add', 'age', 'aid', 'aim', 'air', 'all', 'and', 'any', 'ape', 'are', 'arm', 'art', 'ash', 'ask', 'ate', 'bad', 'bag', 'bar', 'bat', 'bed', 'bee', 'bet', 'big', 'bin', 'bit', 'bog', 'boo', 'bow', 'box', 'boy', 'bra', 'bun', 'bus', 'but', 'buy', 'bye', 'cab', 'can', 'cap', 'car', 'cat', 'cow', 'cry', 'cup', 'cut', 'day', 'dig', 'dip', 'dog', 'dot', 'dry', 'ear', 'eat', 'end', 'fan', 'far', 'fat', 'fit', 'fix', 'fly', 'for', 'fox', 'fun', 'gap', 'gas', 'get', 'god', 'gun', 'guy', 'hat', 'hay', 'hen', 'hit', 'hop', 'hot', 'how', 'ice', 'ink', 'inn', 'jam', 'jar', 'jet', 'job', 'joy', 'key', 'kid', 'kit', 'lab', 'lad', 'lay', 'leg', 'let', 'lid', 'lip', 'lit', 'log', 'low', 'mad', 'man', 'map', 'mat', 'mix', 'mop', 'mud', 'nap', 'net', 'new', 'now', 'nut', 'oak', 'old', 'one', 'pad', 'pan', 'pet', 'pie', 'pig', 'pin', 'pit', 'pot', 'pup', 'rag', 'ram', 'ran', 'rat', 'raw', 'red', 'rid', 'rim', 'rip', 'rod', 'rot', 'row', 'run', 'sad', 'sat', 'sea', 'see', 'set', 'sin', 'sit', 'sky', 'son', 'spy', 'sun', 'tap', 'tan', 'tar', 'tea', 'ten', 'the', 'tin', 'top', 'toy', 'try', 'use', 'van', 'vet', 'vow', 'war', 'way', 'wet', 'win', 'wow', 'yak', 'yet', 'you', 'zip', 'yes'
+        ];
+
+        // Generate dyads (two-letter fragments) from wordList
+        const dyads = [];
+        wordList.forEach(word => {
+            for (let i = 0; i < word.length - 1; i++) {
+                const dyad = word[i] + word[i + 1];
+                dyads.push(dyad);
+            }
+        });
+
+        function getRandomLetter() {
+            // 95% chance of getting a dyad
+            if (Math.random() < 0.95 && dyads.length > 0) {
+                const dyad = dyads[Math.floor(Math.random() * dyads.length)];
+                return dyad[Math.floor(Math.random() * 2)];
+            } else {
+                // Otherwise pick a letter based on frequency
+                const letters = Object.keys(letterFrequencies);
+                let total = 0;
+                const rand = Math.random();
+                for (const letter of letters) {
+                    total += letterFrequencies[letter];
+                    if (rand <= total) {
+                        return letter;
+                    }
+                }
+                return 'a';  // fallback
+            }
+        }
+
+        function createPiece(type) {
+            let matrix;
+            switch (type) {
+                case 'I':
+                    matrix = [
+                        [0, 1, 0, 0],
+                        [0, 1, 0, 0],
+                        [0, 1, 0, 0],
+                        [0, 1, 0, 0]
+                    ];
+                    break;
+                case 'J':
+                    matrix = [
+                        [1, 0, 0],
+                        [1, 1, 1],
+                        [0, 0, 0]
+                    ];
+                    break;
+                case 'L':
+                    matrix = [
+                        [0, 0, 1],
+                        [1, 1, 1],
+                        [0, 0, 0]
+                    ];
+                    break;
+                case 'O':
+                    matrix = [
+                        [1, 1],
+                        [1, 1]
+                    ];
+                    break;
+                case 'S':
+                    matrix = [
+                        [0, 1, 1],
+                        [1, 1, 0],
+                        [0, 0, 0]
+                    ];
+                    break;
+                case 'T':
+                    matrix = [
+                        [0, 1, 0],
+                        [1, 1, 1],
+                        [0, 0, 0]
+                    ];
+                    break;
+                case 'Z':
+                    matrix = [
+                        [1, 1, 0],
+                        [0, 1, 1],
+                        [0, 0, 0]
+                    ];
+                    break;
+            }
+            // Assign letters to each block in the matrix
+            return matrix.map(row => row.map(value => {
+                return value !== 0 ? { filled: value, letter: getRandomLetter(), isPartOfWord: false } : 0;
+            }));
+        }
+
+        let dropCounter = 0;
+        let dropInterval = 1000;
+        let lastTime = 0;
+
+        function update(time = 0) {
+            if (isPaused) {
+                requestAnimationFrame(update);
+                return;
+            }
+
+            const deltaTime = time - lastTime;
+            lastTime = time;
+
+            dropCounter += deltaTime;
+            if (dropCounter > dropInterval) {
+                playerDrop();
+            }
+
+            draw();
+            requestAnimationFrame(update);
+        }
+
+        function playerDrop() {
+            player.pos.y++;
+            if (collide(board, player)) {
+                player.pos.y--;
+                merge(board, player);
+                boardSweep();
+                resetAllBlocksToGreen();
+                checkWords();
+                draw();  // Re-render after checks
+                playerReset();
+            }
+            dropCounter = 0;
+        }
+
+        function playerMove(dir) {
+            player.pos.x += dir;
+            if (collide(board, player)) {
+                player.pos.x -= dir;
+            }
+        }
+
+        function playerRotate() {
+            const pos = player.pos.x;
+            let offset = 1;
+            rotate(player.matrix);
+            while (collide(board, player)) {
+                player.pos.x += offset;
+                offset = -(offset + (offset > 0 ? 1 : -1));
+                if (offset > player.matrix[0].length) {
+                    rotate(player.matrix, -1);
+                    player.pos.x = pos;
+                    return;
+                }
+            }
+        }
+
+        function rotate(matrix, dir = 1) {
+            for (let y = 0; y < matrix.length; ++y) {
+                for (let x = 0; x < y; ++x) {
+                    [
+                        matrix[x][y],
+                        matrix[y][x],
+                    ] = [
+                        matrix[y][x],
+                        matrix[x][y],
+                    ];
+                }
+            }
+
+            if (dir > 0) {
+                matrix.forEach(row => row.reverse());
+            } else {
+                matrix.reverse();
+            }
+        }
+
+        function collide(board, player) {
+            const [m, o] = [player.matrix, player.pos];
+            for (let y = 0; y < m.length; ++y) {
+                for (let x = 0; x < m[y].length; ++x) {
+                    if (m[y][x] !== 0 &&
+                        (board[y + o.y] &&
+                         board[y + o.y][x + o.x]) !== 0) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function merge(board, player) {
+            player.matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        board[y + player.pos.y][x + player.pos.x] = value;
+                        score += 10;  // Increase score for placing a block
+                        letterScore += scrabbleScores[value.letter] || 0;  // Increase letter score
+                    }
+                });
+            });
+        }
+
+        function boardSweep() {
+            let rowCount = 0;
+            outer: for (let y = board.length - 1; y > 0; --y) {
+                for (let x = 0; x < board[y].length; ++x) {
+                    if (board[y][x] === 0) {
+                        continue outer;
+                    }
+                }
+                const row = board.splice(y, 1)[0].fill(0);
+                board.unshift(row);
+                ++y;
+                rowCount++;
+            }
+            if (rowCount > 0) {
+                score += rowCount * 100;  // Score for clearing rows
+            }
+        }
+
+        function resetAllBlocksToGreen() {
+            // Reset all blocks' word status to green (soft green)
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLUMNS; x++) {
+                    if (board[y][x] !== 0) {
+                        board[y][x].isPartOfWord = false;
+                        board[y][x].color = null;
+                    }
+                }
+            }
+        }
+
+        function playerReset() {
+            player.matrix = createPiece(pieces[pieces.length * Math.random() | 0]);
+            player.pos.y = 0;
+            player.pos.x = (board[0].length / 2 | 0) - (player.matrix[0].length / 2 | 0);
+            if (collide(board, player)) {
+                board.forEach(row => row.fill(0));
+                alert(`Game Over\nScore: ${score}\nLetter Score: ${letterScore}`);
+                score = 0;
+                letterScore = 0;
+            }
+        }
+
+        function drawMatrix(matrix, offset) {
+            matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        context.fillStyle = value.color ? value.color : colors[value.filled];
+                        context.fillRect(x + offset.x, y + offset.y, 1, 1);
+                        context.strokeStyle = 'black';
+                        context.lineWidth = 0.05;
+                        context.strokeRect(x + offset.x, y + offset.y, 1, 1);
+
+                        // Draw the letter in a contrasting color and smaller size
+                        context.fillStyle = 'black';
+                        context.font = '0.7px Arial';
+                        context.textAlign = 'center';
+                        context.textBaseline = 'middle';
+                        context.fillText(value.letter, x + offset.x + 0.5, y + offset.y + 0.5);
+                    }
+                });
+            });
+        }
+
+        function draw() {
+            context.fillStyle = '#222';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawMatrix(board, {x: 0, y: 0});
+            drawMatrix(player.matrix, player.pos);
+        }
+
+        function checkWords() {
+            // Reset all blocks' word status to green (soft green)
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLUMNS; x++) {
+                    if (board[y][x] !== 0) {
+                        board[y][x].isPartOfWord = false;
+                        board[y][x].color = null;
+                    }
+                }
+            }
+
+            // Check the board for three-letter words horizontally, vertically, and diagonally
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLUMNS; x++) {
+                    if (board[y][x] !== 0 && board[y][x].letter) {
+                        checkWordAtPosition(x, y);
+                    }
+                }
+            }
+        }
+
+        function checkWordAtPosition(x, y) {
+            const directions = [
+                { dx: 1, dy: 0 },  // Horizontal
+                { dx: 0, dy: 1 },  // Vertical
+                { dx: 1, dy: 1 },  // Diagonal down-right
+                { dx: 1, dy: -1 }  // Diagonal up-right
+            ];
+
+            directions.forEach(({ dx, dy }) => {
+                let word = '';
+                let positions = [];
+                for (let i = 0; i < 3; i++) {
+                    const newX = x + i * dx;
+                    const newY = y + i * dy;
+                    if (newX >= 0 && newX < COLUMNS && newY >= 0 && newY < ROWS) {
+                        const cell = board[newY][newX];
+                        if (cell !== 0 && cell.letter) {
+                            word += cell.letter;
+                            positions.push({ x: newX, y: newY });
+                        }
+                    }
+                }
+                if (wordList.includes(word)) {
+                    // Highlight the word with a range of colors and mark as part of a word
+                    const colorIndex = (Math.floor(Math.random() * 5) + 2);  // Use colors from 2 to 6
+                    positions.forEach(({ x, y }) => {
+                        board[y][x] = { ...board[y][x], filled: colorIndex, color: colors[colorIndex], isPartOfWord: true };
+                    });
+                    // Pulse bright blue for 3 seconds
+                    pulseWord(positions);
+                }
+            });
+        }
+
+        function pulseWord(positions) {
+            const originalColors = positions.map(({ x, y }) => board[y][x].color);
+            positions.forEach(({ x, y }) => {
+                board[y][x].color = '#00f';
+            });
+            draw();
+
+            setTimeout(() => {
+                positions.forEach(({ x, y }, index) => {
+                    board[y][x].color = originalColors[index];
+                });
+                draw();
+            }, 3000);
+        }
+
+        const player = {
+            pos: {x: 0, y: 0},
+            matrix: createPiece(pieces[pieces.length * Math.random() | 0]),
+        };
+
+        document.addEventListener('keydown', event => {
+            if (event.key === 'ArrowLeft') {
+                playerMove(-1);
+            } else if (event.key === 'ArrowRight') {
+                playerMove(1);
+            } else if (event.key === 'ArrowDown') {
+                playerDrop();
+            } else if (event.key === ' ') {
+                // Hard drop
+                while (!collide(board, player)) {
+                    player.pos.y++;
+                }
+                player.pos.y--;
+                merge(board, player);
+                boardSweep();
+                resetAllBlocksToGreen();
+                checkWords();
+                draw();  // Re-render after checks
+                playerReset();
+            } else if (event.key === 'ArrowUp') {
+                playerRotate();
+            } else if (event.key === 'p') {
+                isPaused = !isPaused;
+            }
+        });
+
+        playerReset();
+        update();
+    </script>
+</body>
+</html>

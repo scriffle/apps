@@ -1,0 +1,1713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Physics Mystery Box Grid</title>
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: white;
+    padding: 20px;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 15px;
+    animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+h1 {
+    font-size: 2.2em;
+    margin-bottom: 5px;
+    text-shadow: 0 0 20px rgba(255,255,255,0.5);
+}
+
+.header p {
+    font-size: 0.95em;
+    opacity: 0.9;
+}
+
+.stats-bar {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.stat-card {
+    background: rgba(255,255,255,0.15);
+    padding: 10px 20px;
+    border-radius: 30px;
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+.stat-value {
+    font-size: 1.3em;
+    font-weight: bold;
+}
+
+.stat-card div {
+    font-size: 0.85em;
+}
+
+.box-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 4px;
+    background: rgba(0,0,0,0.4);
+    padding: 12px;
+    border-radius: 15px;
+    max-width: 600px;
+    width: 100%;
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255,255,255,0.1);
+}
+
+.mystery-box {
+    aspect-ratio: 1;
+    background: linear-gradient(145deg, rgba(255,255,255,0.25), rgba(255,255,255,0.1));
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 1em;
+    transition: all 0.5s;
+    position: relative;
+    backdrop-filter: blur(5px);
+    padding: 2px;
+}
+
+.box-emoji {
+    font-size: 1.2em;
+    margin-bottom: 1px;
+}
+
+.box-cost {
+    font-size: 0.6em;
+    font-weight: bold;
+    background: rgba(0,0,0,0.7);
+    padding: 2px 3px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    min-width: 80%;
+    color: #FFF;
+}
+
+/* Different box tiers based on cost - orders of magnitude */
+.mystery-box.tier-penny {
+    background: linear-gradient(145deg, rgba(160,160,160,0.3), rgba(128,128,128,0.15));
+    border-color: rgba(192,192,192,0.5);
+}
+
+.mystery-box.tier-cheap {
+    background: linear-gradient(145deg, rgba(0,216,74,0.3), rgba(0,168,56,0.15));
+    border-color: rgba(0,216,74,0.6);
+}
+
+.mystery-box.tier-normal {
+    background: linear-gradient(145deg, rgba(0,150,255,0.3), rgba(0,72,255,0.15));
+    border-color: rgba(0,150,255,0.6);
+}
+
+.mystery-box.tier-expensive {
+    background: linear-gradient(145deg, rgba(176,38,255,0.3), rgba(123,47,255,0.15));
+    border-color: rgba(176,38,255,0.7);
+}
+
+.mystery-box.tier-premium {
+    background: linear-gradient(145deg, rgba(255,0,128,0.3), rgba(255,0,64,0.15));
+    border-color: rgba(255,0,128,0.8);
+    animation: premium-pulse 2s infinite;
+}
+
+@keyframes premium-pulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(255,0,128,0.5); }
+    50% { box-shadow: 0 0 16px rgba(255,0,128,0.8); }
+}
+
+.mystery-box.tier-legendary {
+    background: linear-gradient(145deg, rgba(255,215,0,0.4), rgba(255,165,0,0.2));
+    border-color: rgba(255,215,0,0.9);
+    animation: legendary-glow 1.5s infinite;
+}
+
+@keyframes legendary-glow {
+    0%, 100% { box-shadow: 0 0 12px rgba(255,215,0,0.6); }
+    50% { box-shadow: 0 0 24px rgba(255,215,0,1), 0 0 36px rgba(255,165,0,0.6); }
+}
+
+.mystery-box:hover:not(.opened):not(.unaffordable) {
+    transform: scale(1.1) rotate(5deg);
+    box-shadow: 0 0 20px rgba(255,255,255,0.5);
+    z-index: 10;
+}
+
+.mystery-box.unaffordable {
+    opacity: 0.2;
+    cursor: not-allowed;
+    filter: grayscale(1) blur(1px);
+    transform: scale(0.9);
+    pointer-events: none;
+}
+
+.mystery-box.unaffordable .box-emoji {
+    visibility: hidden;
+}
+
+.mystery-box.unaffordable .box-cost {
+    background: rgba(100,0,0,0.5);
+    color: #ff9999;
+    font-size: 0.5em;
+}
+
+.mystery-box.opening {
+    animation: boxOpen 0.8s ease-out forwards;
+}
+
+@keyframes boxOpen {
+    0% { 
+        transform: scale(1) rotate(0deg);
+    }
+    25% {
+        transform: scale(1.3) rotate(-10deg);
+    }
+    50% { 
+        transform: scale(1.5) rotate(10deg);
+        opacity: 1;
+    }
+    100% { 
+        transform: scale(0) rotate(360deg);
+        opacity: 0;
+    }
+}
+
+.mystery-box.opened {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.result-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    background: linear-gradient(135deg, rgba(0,0,0,0.95) 0%, rgba(50,0,100,0.95) 100%);
+    border: 3px solid;
+    border-radius: 20px;
+    padding: 30px;
+    text-align: center;
+    z-index: 1000;
+    min-width: 350px;
+    max-width: 90%;
+    transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.result-popup.show {
+    transform: translate(-50%, -50%) scale(1);
+}
+
+.result-popup.coin-reward {
+    border-color: #FFD700;
+    background: linear-gradient(135deg, rgba(255,215,0,0.2) 0%, rgba(255,165,0,0.2) 100%);
+    box-shadow: 0 0 50px #FFD700;
+}
+
+.result-popup.legendary {
+    border-color: #FFD700;
+    box-shadow: 0 0 50px #FFD700;
+    animation: legendary-pulse 2s infinite;
+}
+
+@keyframes legendary-pulse {
+    0%, 100% { box-shadow: 0 0 30px #FFD700; }
+    50% { box-shadow: 0 0 60px #FFD700, 0 0 100px #FFA500; }
+}
+
+.result-popup.epic {
+    border-color: #B026FF;
+    box-shadow: 0 0 40px #B026FF;
+}
+
+.result-popup.rare {
+    border-color: #0096FF;
+    box-shadow: 0 0 30px #0096FF;
+}
+
+.result-popup.uncommon {
+    border-color: #00D84A;
+    box-shadow: 0 0 25px #00D84A;
+}
+
+.result-popup.common {
+    border-color: #A0A0A0;
+    box-shadow: 0 0 20px #808080;
+}
+
+.item-icon {
+    font-size: 4em;
+    margin-bottom: 15px;
+    animation: itemReveal 0.5s ease-out;
+}
+
+@keyframes itemReveal {
+    from { 
+        transform: rotateY(90deg) scale(0);
+    }
+    to { 
+        transform: rotateY(0) scale(1);
+    }
+}
+
+.coin-animation {
+    font-size: 5em;
+    animation: coinSpin 1s ease-out infinite;
+}
+
+@keyframes coinSpin {
+    0% { transform: rotateY(0deg); }
+    100% { transform: rotateY(360deg); }
+}
+
+.rarity-label {
+    display: inline-block;
+    padding: 5px 20px;
+    border-radius: 20px;
+    font-weight: bold;
+    margin-bottom: 15px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.rarity-label.legendary {
+    background: linear-gradient(45deg, #FFD700, #FFA500);
+    color: #000;
+}
+
+.rarity-label.epic {
+    background: linear-gradient(45deg, #B026FF, #7B2FFF);
+}
+
+.rarity-label.rare {
+    background: linear-gradient(45deg, #0096FF, #0048FF);
+}
+
+.rarity-label.uncommon {
+    background: linear-gradient(45deg, #00D84A, #00A838);
+}
+
+.rarity-label.common {
+    background: linear-gradient(45deg, #808080, #A0A0A0);
+    color: #000;
+}
+
+.item-name {
+    font-size: 1.8em;
+    font-weight: bold;
+    margin: 10px 0;
+}
+
+.item-description {
+    font-size: 1em;
+    opacity: 0.9;
+    margin: 15px 0;
+    line-height: 1.4;
+}
+
+.profit-loss {
+    font-size: 1.3em;
+    font-weight: bold;
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 15px;
+}
+
+.profit {
+    background: rgba(0,255,0,0.2);
+    color: #00FF00;
+}
+
+.loss {
+    background: rgba(255,0,0,0.2);
+    color: #FF6666;
+}
+
+.close-btn {
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    font-size: 1.1em;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-top: 10px;
+}
+
+.close-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.particle {
+    position: fixed;
+    width: 6px;
+    height: 6px;
+    pointer-events: none;
+    border-radius: 50%;
+    animation: particleFly 1s ease-out forwards;
+}
+
+@keyframes particleFly {
+    to {
+        transform: translate(var(--tx), var(--ty)) scale(0);
+        opacity: 0;
+    }
+}
+
+.button-row {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+    max-width: 600px;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.reset-btn {
+    background: linear-gradient(45deg, #f093fb, #f5576c);
+    color: white;
+    border: none;
+    padding: 15px 40px;
+    font-size: 1.2em;
+    border-radius: 30px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.reset-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+}
+
+.collection-panel {
+    max-width: 600px;
+    width: 100%;
+    margin: 20px auto;
+    background: linear-gradient(135deg, rgba(30,60,114,0.6), rgba(42,82,152,0.6));
+    border-radius: 15px;
+    padding: 15px;
+    border: 1px solid rgba(255,215,0,0.2);
+    backdrop-filter: blur(10px);
+}
+
+.collection-header {
+    text-align: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid rgba(255,255,255,0.2);
+}
+
+.collection-header h2 {
+    color: #FFD700;
+    margin: 0;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    font-size: 1.5em;
+}
+
+.collection-stats {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 15px;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.collection-stat {
+    background: rgba(255,255,255,0.08);
+    padding: 8px 15px;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.stat-label {
+    font-size: 0.8em;
+    opacity: 0.7;
+    margin-bottom: 3px;
+}
+
+.collection-stat .stat-value {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #FFD700;
+}
+
+.collection-content {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.collection-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.collection-content::-webkit-scrollbar-track {
+    background: rgba(0,0,0,0.2);
+    border-radius: 4px;
+}
+
+.collection-content::-webkit-scrollbar-thumb {
+    background: rgba(255,215,0,0.5);
+    border-radius: 4px;
+}
+
+.collection-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,215,0,0.7);
+}
+
+.rarity-section {
+    background: rgba(0,0,0,0.2);
+    border-radius: 10px;
+    padding: 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.rarity-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.95em;
+}
+
+.rarity-header.legendary {
+    background: linear-gradient(45deg, #FFD700, #FFA500);
+    color: #000;
+}
+
+.rarity-header.epic {
+    background: linear-gradient(45deg, #B026FF, #7B2FFF);
+}
+
+.rarity-header.rare {
+    background: linear-gradient(45deg, #0096FF, #0048FF);
+}
+
+.rarity-header.uncommon {
+    background: linear-gradient(45deg, #00D84A, #00A838);
+}
+
+.rarity-header.common {
+    background: linear-gradient(45deg, #808080, #A0A0A0);
+    color: #000;
+}
+
+.rarity-title {
+    font-size: 1em;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.rarity-count {
+    font-size: 0.9em;
+}
+
+.items-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px;
+}
+
+.collection-item {
+    background: rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 8px;
+    border: 1px solid rgba(255,255,255,0.2);
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.collection-item:hover {
+    background: rgba(255,255,255,0.15);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+}
+
+.item-emoji {
+    font-size: 1.5em;
+}
+
+.item-info {
+    flex: 1;
+}
+
+.item-name {
+    font-weight: bold;
+    font-size: 0.85em;
+    margin-bottom: 2px;
+}
+
+.item-count {
+    font-size: 0.75em;
+    opacity: 0.7;
+}
+
+.empty-section {
+    text-align: center;
+    opacity: 0.5;
+    padding: 40px;
+    font-style: italic;
+    font-size: 1.1em;
+}
+
+.grind-btn {
+    margin-top: 20px;
+    background: linear-gradient(45deg, #FF6B6B, #FFD93D);
+    color: white;
+    border: none;
+    padding: 20px 50px;
+    font-size: 1.3em;
+    font-weight: bold;
+    border-radius: 30px;
+    cursor: pointer;
+    transition: all 0.3s;
+    animation: grind-pulse 1s infinite;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+@keyframes grind-pulse {
+    0%, 100% { 
+        transform: scale(1);
+        box-shadow: 0 0 20px rgba(255,107,107,0.5);
+    }
+    50% { 
+        transform: scale(1.05);
+        box-shadow: 0 0 40px rgba(255,217,61,0.8);
+    }
+}
+
+.grind-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+}
+
+.flappy-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.95);
+    z-index: 2000;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.flappy-container {
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    border-radius: 20px;
+    padding: 15px;
+    text-align: center;
+    border: 3px solid #FFD700;
+    box-shadow: 0 0 50px rgba(255,215,0,0.5);
+    max-width: 95%;
+    max-height: 95vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.flappy-header {
+    margin-bottom: 10px;
+}
+
+.flappy-header h2 {
+    color: #FFD700;
+    margin-bottom: 5px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    font-size: 1.5em;
+}
+
+.flappy-header p {
+    color: #FFF;
+    font-size: 0.9em;
+}
+
+#flappyCanvas {
+    border: 2px solid #FFD700;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #87CEEB 0%, #98D8E8 50%, #B0E0E6 100%);
+    display: block;
+    margin: 0 auto;
+    max-width: 100%;
+    height: auto;
+}
+
+.flappy-stats {
+    display: flex;
+    justify-content: space-around;
+    margin: 15px 0;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.flappy-stat {
+    background: rgba(255,255,255,0.1);
+    padding: 8px 15px;
+    border-radius: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.flappy-stat span:first-child {
+    font-size: 0.8em;
+    opacity: 0.8;
+}
+
+.flappy-stat span:last-child {
+    font-size: 1.3em;
+    font-weight: bold;
+    color: #FFD700;
+}
+
+.flappy-close {
+    background: linear-gradient(45deg, #00D84A, #00A838);
+    color: white;
+    border: none;
+    padding: 15px 40px;
+    font-size: 1.2em;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: bold;
+}
+
+.flappy-close:hover {
+    transform: scale(1.05);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+}
+
+.bankrupt-warning {
+    background: rgba(255,0,0,0.3);
+    padding: 10px 20px;
+    border-radius: 15px;
+    margin: 10px;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.jackpot-text {
+    font-size: 3em;
+    font-weight: bold;
+    background: linear-gradient(45deg, #FFD700, #FFA500);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: jackpot-flash 0.5s infinite alternate;
+}
+
+@keyframes jackpot-flash {
+    0% { transform: scale(1); }
+    100% { transform: scale(1.1); }
+}
+</style>
+</head>
+<body>
+<div class="header">
+<h1>⚛️ Quantum Mystery Grid ⚛️</h1>
+<p>Unaffordable boxes are locked! Gray→Green→Blue→Purple→Pink→Gold</p>
+</div>
+
+<div class="stats-bar">
+<div class="stat-card">
+    <span>💰</span>
+    <div>
+        <div class="stat-value" id="coins">1000</div>
+        <div style="font-size: 0.9em;">Coins</div>
+    </div>
+</div>
+<div class="stat-card">
+    <span>📦</span>
+    <div>
+        <div class="stat-value"><span id="opened">0</span>/100</div>
+        <div style="font-size: 0.9em;">Opened</div>
+    </div>
+</div>
+<div class="stat-card">
+    <span>📈</span>
+    <div>
+        <div class="stat-value" id="totalProfit">0</div>
+        <div style="font-size: 0.9em;">Net Profit</div>
+    </div>
+</div>
+</div>
+
+<div id="bankruptWarning" class="bankrupt-warning" style="display: none;">
+⚠️ Low on coins! Look for gray/green boxes, reset for a fresh grid, or grind in Flappy Quantum!
+</div>
+
+<div class="box-grid" id="boxGrid"></div>
+
+<div class="button-row">
+<button class="reset-btn" onclick="resetGrid()" title="Generate new boxes with different costs">🔄 Reset Grid</button>
+</div>
+
+<!-- Collection Panel (Always Visible) -->
+<div class="collection-panel">
+<div class="collection-header">
+    <h2>⚛️ Your Physics Collection ⚛️</h2>
+</div>
+<div class="collection-stats">
+    <div class="collection-stat">
+        <span class="stat-label">Total Items:</span>
+        <span class="stat-value" id="totalItems">0</span>
+    </div>
+    <div class="collection-stat">
+        <span class="stat-label">Unique Discoveries:</span>
+        <span class="stat-value" id="uniqueDiscoveries">0</span>
+    </div>
+    <div class="collection-stat">
+        <span class="stat-label">Collection Value:</span>
+        <span class="stat-value" id="collectionValue">0</span>
+    </div>
+</div>
+<div class="collection-content" id="collectionContent">
+    <!-- Collection will be populated here -->
+</div>
+</div>
+
+<button id="grindBtn" class="grind-btn" onclick="startFlappyGame()" style="display: none;">🚀 GRIND COINS - Flappy Quantum</button>
+
+<!-- Flappy Bird Game Modal -->
+<div id="flappyModal" class="flappy-modal">
+<div class="flappy-container">
+    <div class="flappy-header">
+        <h2>🚀 Flappy Quantum - Fibonacci Coins! 🚀</h2>
+        <p>Each pipe gives Fibonacci rewards: 1→1→2→3→5→8→13→21→34→55→89→144...</p>
+    </div>
+    <canvas id="flappyCanvas"></canvas>
+    <div class="flappy-stats">
+        <div class="flappy-stat">
+            <span>Pipes Passed:</span>
+            <span id="pipesPassed">0</span>
+        </div>
+        <div class="flappy-stat">
+            <span>Next Reward:</span>
+            <span id="nextReward">1</span> 💰
+        </div>
+        <div class="flappy-stat">
+            <span>Total Earned:</span>
+            <span id="totalEarned">0</span> 💰
+        </div>
+    </div>
+    <button class="flappy-close" onclick="closeFlappyGame()">Collect Coins & Return to Loot Boxes</button>
+</div>
+</div>
+
+<div class="result-popup" id="resultPopup">
+<div class="item-icon" id="itemIcon"></div>
+<div class="rarity-label" id="rarityLabel" style="display: none;"></div>
+<div class="item-name" id="itemName"></div>
+<div class="item-description" id="itemDescription"></div>
+<div class="profit-loss" id="profitLoss" style="display: none;"></div>
+<button class="close-btn" onclick="closePopup()">Continue</button>
+</div>
+
+<script>
+// Box emojis
+const boxEmojis = [
+    '📦', '🎁', '🎀', '💝', '🎉', '✨', '🌟', '⭐', '💫', '🌠',
+    '🔮', '💎', '🏆', '🎯', '🎲', '🎪', '🎨', '🎭', '🌈', '🦄',
+    '🚀', '🛸', '🌌', '🪐', '☄️', '🌙', '⚡', '🔥', '💥', '💢',
+    '❄️', '🌊', '🌪️', '🌀', '🔵', '🟣', '🟡', '🟢', '🔴', '🟠',
+    '♾️', '⚛️', '🧲', '🔬', '🔭', '🧬', '🧪', '⚗️', '🌡️', '🎓'
+];
+
+// Physics items
+const items = [
+    // Legendary (5%)
+    { name: "E=mc²", rarity: "legendary", icon: "⚡", description: "Einstein's mass-energy equivalence!" },
+    { name: "Theory of Everything", rarity: "legendary", icon: "🌌", description: "Unifying all fundamental forces!" },
+    { name: "Higgs Boson", rarity: "legendary", icon: "✨", description: "The God Particle!" },
+    { name: "Black Hole", rarity: "legendary", icon: "🕳️", description: "Nothing can escape!" },
+    { name: "Schrödinger's Cat", rarity: "legendary", icon: "🐱", description: "Both alive and dead!" },
+    
+    // Epic (10%)
+    { name: "Gravitational Waves", rarity: "epic", icon: "🌊", description: "Ripples in spacetime!" },
+    { name: "Quantum Entanglement", rarity: "epic", icon: "🔗", description: "Spooky action at a distance!" },
+    { name: "Dark Matter", rarity: "epic", icon: "🌑", description: "85% of the universe!" },
+    { name: "Wormhole", rarity: "epic", icon: "🌀", description: "Shortcut through spacetime!" },
+    { name: "Time Dilation", rarity: "epic", icon: "⏰", description: "Time is relative!" },
+    
+    // Rare (20%)
+    { name: "Neutron Star", rarity: "rare", icon: "⭐", description: "Super dense stellar remnant!" },
+    { name: "Wave-Particle Duality", rarity: "rare", icon: "〰️", description: "Both wave and particle!" },
+    { name: "Nuclear Fusion", rarity: "rare", icon: "☀️", description: "Power of the stars!" },
+    { name: "Quark", rarity: "rare", icon: "🔴", description: "Fundamental particle!" },
+    { name: "Special Relativity", rarity: "rare", icon: "🚀", description: "Space and time unite!" },
+    
+    // Uncommon (30%)
+    { name: "Newton's Laws", rarity: "uncommon", icon: "🍎", description: "Classical mechanics!" },
+    { name: "Thermodynamics", rarity: "uncommon", icon: "🔥", description: "Heat and energy!" },
+    { name: "Electromagnetic Spectrum", rarity: "uncommon", icon: "🌈", description: "All light waves!" },
+    { name: "Conservation Laws", rarity: "uncommon", icon: "♻️", description: "Nothing lost!" },
+    { name: "Doppler Effect", rarity: "uncommon", icon: "🚑", description: "Frequency shift!" },
+    
+    // Common (35%)
+    { name: "Velocity", rarity: "common", icon: "➡️", description: "Speed with direction!" },
+    { name: "Force", rarity: "common", icon: "💪", description: "Push or pull!" },
+    { name: "Energy", rarity: "common", icon: "⚡", description: "Ability to do work!" },
+    { name: "Mass", rarity: "common", icon: "⚖️", description: "Amount of matter!" },
+    { name: "Gravity", rarity: "common", icon: "⬇️", description: "Attractive force!" }
+];
+
+let coins = 1000;
+let opened = 0;
+let totalProfit = 0;
+let boxData = [];
+let collection = {}; // Track all items collected with counts
+
+// Load saved collection from memory (Note: localStorage not available in Claude.ai)
+// In a real implementation, you'd use: collection = JSON.parse(localStorage.getItem('physicsCollection') || '{}');
+
+// Helper function to format large numbers
+function formatCoins(num) {
+    if (num >= 1000000) return Math.floor(num / 1000000) + 'M';
+    if (num >= 10000) return Math.floor(num / 1000) + 'k';
+    return num.toString();
+}
+
+function generateBoxCost() {
+    const rand = Math.random();
+    
+    // Cost distribution with orders of magnitude difference (10^4 range)
+    if (rand < 0.25) {
+        // 25% penny boxes (1-5 coins)
+        return Math.floor(Math.random() * 5) + 1;
+    } else if (rand < 0.45) {
+        // 20% cheap boxes (6-50 coins)
+        return Math.floor(Math.random() * 45) + 6;
+    } else if (rand < 0.65) {
+        // 20% normal boxes (51-500 coins)
+        return Math.floor(Math.random() * 450) + 51;
+    } else if (rand < 0.80) {
+        // 15% expensive boxes (501-5,000 coins)
+        return Math.floor(Math.random() * 4500) + 501;
+    } else if (rand < 0.92) {
+        // 12% premium boxes (5,001-20,000 coins)
+        return Math.floor(Math.random() * 15000) + 5001;
+    } else {
+        // 8% legendary boxes (20,001-100,000 coins)
+        return Math.floor(Math.random() * 80000) + 20001;
+    }
+}
+
+function getTierClass(cost) {
+    if (cost <= 5) return 'tier-penny';
+    if (cost <= 50) return 'tier-cheap';
+    if (cost <= 500) return 'tier-normal';
+    if (cost <= 5000) return 'tier-expensive';
+    if (cost <= 20000) return 'tier-premium';
+    return 'tier-legendary';
+}
+
+function initGrid() {
+    const grid = document.getElementById('boxGrid');
+    grid.innerHTML = '';
+    boxData = [];
+    
+    // Hide grind button initially
+    document.getElementById('grindBtn').style.display = 'none';
+    
+    // Create shuffled emoji array
+    let shuffledEmojis = [];
+    for (let i = 0; i < 2; i++) {
+        shuffledEmojis = shuffledEmojis.concat([...boxEmojis]);
+    }
+    shuffledEmojis = shuffledEmojis.sort(() => Math.random() - 0.5).slice(0, 100);
+    
+    for (let i = 0; i < 100; i++) {
+        const cost = generateBoxCost();
+        const isCoinBox = Math.random() < 0.15; // 15% chance for coin reward box
+        
+        boxData.push({
+            cost: cost,
+            emoji: shuffledEmojis[i],
+            isCoinBox: isCoinBox,
+            coinReward: isCoinBox ? Math.floor(cost * (0.1 + Math.random() * 10)) : 0 // 0.1x to 10x multiplier
+        });
+        
+        const box = document.createElement('div');
+        box.className = 'mystery-box ' + getTierClass(cost);
+        box.dataset.index = i;
+        
+        // Format cost display
+        let costDisplay;
+        if (cost >= 1000000) {
+            costDisplay = Math.floor(cost / 1000000) + 'M';
+        } else if (cost >= 10000) {
+            costDisplay = Math.floor(cost / 1000) + 'k';
+        } else {
+            costDisplay = cost;
+        }
+        
+        box.innerHTML = `
+            <div class="box-emoji">${shuffledEmojis[i]}</div>
+            <div class="box-cost">${costDisplay}</div>
+        `;
+        box.onclick = () => openBox(box, i);
+        grid.appendChild(box);
+    }
+    
+    updateBoxAffordability(); // Update affordability display
+}
+
+function getRandomItem() {
+    const rand = Math.random() * 100;
+    
+    if (rand < 5) {
+        const legendaryItems = items.filter(i => i.rarity === 'legendary');
+        return legendaryItems[Math.floor(Math.random() * legendaryItems.length)];
+    } else if (rand < 15) {
+        const epicItems = items.filter(i => i.rarity === 'epic');
+        return epicItems[Math.floor(Math.random() * epicItems.length)];
+    } else if (rand < 35) {
+        const rareItems = items.filter(i => i.rarity === 'rare');
+        return rareItems[Math.floor(Math.random() * rareItems.length)];
+    } else if (rand < 65) {
+        const uncommonItems = items.filter(i => i.rarity === 'uncommon');
+        return uncommonItems[Math.floor(Math.random() * uncommonItems.length)];
+    } else {
+        const commonItems = items.filter(i => i.rarity === 'common');
+        return commonItems[Math.floor(Math.random() * commonItems.length)];
+    }
+}
+
+function createParticles(x, y, color, isCoins = false) {
+    for (let i = 0; i < 20; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        particle.style.left = x + 'px';
+        particle.style.top = y + 'px';
+        
+        if (isCoins) {
+            particle.innerHTML = '💰';
+            particle.style.fontSize = '20px';
+            particle.style.background = 'none';
+        } else {
+            particle.style.background = color;
+        }
+        
+        const angle = (Math.PI * 2 * i) / 20;
+        const velocity = 50 + Math.random() * 150;
+        particle.style.setProperty('--tx', Math.cos(angle) * velocity + 'px');
+        particle.style.setProperty('--ty', Math.sin(angle) * velocity + 'px');
+        
+        document.body.appendChild(particle);
+        setTimeout(() => particle.remove(), 1000);
+    }
+}
+
+function openBox(box, index) {
+    if (box.classList.contains('opened') || box.classList.contains('opening')) return;
+    
+    const data = boxData[index];
+    const cost = data.cost;
+    
+    if (coins < cost) {
+        // Don't allow clicking on unaffordable boxes
+        return;
+    }
+    
+    coins -= cost;
+    opened++;
+    box.classList.add('opening');
+    
+    // Get box position for particles
+    const rect = box.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    
+    setTimeout(() => {
+        box.classList.add('opened');
+        box.classList.remove('opening');
+        
+        if (data.isCoinBox) {
+            // Coin reward box!
+            const reward = data.coinReward;
+            coins += reward;
+            const profit = reward - cost;
+            totalProfit += profit;
+            
+            createParticles(centerX, centerY, '#FFD700', true);
+            
+            // Show coin reward popup
+            showCoinResult(reward, cost, profit);
+        } else {
+            // Regular item box
+            const item = getRandomItem();
+            totalProfit -= cost; // Lost the cost
+            
+            // Add to collection
+            if (!collection[item.name]) {
+                collection[item.name] = {
+                    ...item,
+                    count: 0,
+                    firstFound: new Date().toISOString()
+                };
+            }
+            collection[item.name].count++;
+            updateCollection(); // Update the collection display
+            
+            const colors = {
+                legendary: '#FFD700',
+                epic: '#B026FF',
+                rare: '#0096FF',
+                uncommon: '#00D84A',
+                common: '#808080'
+            };
+            
+            createParticles(centerX, centerY, colors[item.rarity]);
+            showItemResult(item, cost);
+        }
+        
+        // Update stats with formatting
+        document.getElementById('coins').textContent = formatCoins(coins);
+        document.getElementById('opened').textContent = opened;
+        document.getElementById('totalProfit').textContent = totalProfit > 0 ? '+' + formatCoins(totalProfit) : formatCoins(totalProfit);
+        
+        checkBankruptcy();
+        
+        // Check if all boxes opened
+        if (opened === 100) {
+            setTimeout(() => {
+                const uniqueItems = Object.keys(collection).length;
+                alert(`🎉 All boxes opened!\n\nFinal Stats:\n• Net Profit: ${totalProfit > 0 ? '+' : ''}${formatCoins(totalProfit)} coins\n• Unique Items: ${uniqueItems}\n• Current Balance: ${formatCoins(coins)} coins\n\nCheck your collection to see all your discoveries!`);
+            }, 1000);
+        }
+    }, 700);
+}
+
+function updateBoxAffordability() {
+    const boxes = document.querySelectorAll('.mystery-box');
+    boxes.forEach((box, index) => {
+        if (!box.classList.contains('opened')) {
+            const cost = boxData[index].cost;
+            const wasUnaffordable = box.classList.contains('unaffordable');
+            
+            if (coins < cost) {
+                box.classList.add('unaffordable');
+                box.classList.remove('just-affordable');
+            } else {
+                box.classList.remove('unaffordable');
+                // Add pulse animation if it just became affordable
+                if (wasUnaffordable) {
+                    box.classList.add('just-affordable');
+                    setTimeout(() => box.classList.remove('just-affordable'), 1000);
+                }
+            }
+        }
+    });
+}
+
+function checkBankruptcy() {
+    const remainingBoxes = boxData.filter((b, i) => 
+        !document.querySelector(`[data-index="${i}"]`).classList.contains('opened')
+    );
+    
+    if (remainingBoxes.length === 0) return;
+    
+    const cheapestBox = Math.min(...remainingBoxes.map(b => b.cost));
+    
+    if (coins < cheapestBox) {
+        document.getElementById('bankruptWarning').style.display = 'block';
+        document.getElementById('grindBtn').style.display = 'block';
+    } else {
+        document.getElementById('bankruptWarning').style.display = 'none';
+        document.getElementById('grindBtn').style.display = 'none';
+    }
+    
+    updateBoxAffordability();
+}
+
+function showCoinResult(reward, cost, profit) {
+    const popup = document.getElementById('resultPopup');
+    popup.className = 'result-popup coin-reward';
+    
+    document.getElementById('itemIcon').innerHTML = '<div class="coin-animation">💰</div>';
+    document.getElementById('rarityLabel').style.display = 'none';
+    
+    if (profit > cost * 2) {
+        document.getElementById('itemName').innerHTML = '<div class="jackpot-text">JACKPOT!</div>';
+    } else if (profit > 0) {
+        document.getElementById('itemName').textContent = 'Coin Treasure!';
+    } else {
+        document.getElementById('itemName').textContent = 'Small Prize';
+    }
+    
+    document.getElementById('itemDescription').textContent = `You found ${formatCoins(reward)} coins!`;
+    
+    const profitDiv = document.getElementById('profitLoss');
+    profitDiv.style.display = 'block';
+    profitDiv.className = profit > 0 ? 'profit-loss profit' : 'profit-loss loss';
+    profitDiv.textContent = `Net: ${profit > 0 ? '+' : ''}${formatCoins(profit)} coins (Cost: ${formatCoins(cost)})`;
+    
+    setTimeout(() => {
+        popup.classList.add('show');
+    }, 100);
+}
+
+function showItemResult(item, cost) {
+    const popup = document.getElementById('resultPopup');
+    popup.className = 'result-popup ' + item.rarity;
+    
+    document.getElementById('itemIcon').textContent = item.icon;
+    document.getElementById('rarityLabel').style.display = 'block';
+    document.getElementById('rarityLabel').textContent = item.rarity;
+    document.getElementById('rarityLabel').className = 'rarity-label ' + item.rarity;
+    document.getElementById('itemName').textContent = item.name;
+    
+    // Show description and collection info
+    let description = item.description;
+    if (collection[item.name] && collection[item.name].count > 1) {
+        description += ` (You now have ×${collection[item.name].count})`;
+    } else if (collection[item.name] && collection[item.name].count === 1) {
+        description += ' (NEW DISCOVERY!)';
+    }
+    document.getElementById('itemDescription').textContent = description;
+    
+    const profitDiv = document.getElementById('profitLoss');
+    profitDiv.style.display = 'block';
+    profitDiv.className = 'profit-loss loss';
+    profitDiv.textContent = `Cost: -${formatCoins(cost)} coins`;
+    
+    setTimeout(() => {
+        popup.classList.add('show');
+    }, 100);
+}
+
+function closePopup() {
+    document.getElementById('resultPopup').classList.remove('show');
+}
+
+function resetGrid() {
+    if (opened > 0 && !confirm('Reset the grid? This will generate 100 new boxes with different costs.')) {
+        return;
+    }
+    opened = 0;
+    document.getElementById('opened').textContent = '0';
+    document.getElementById('bankruptWarning').style.display = 'none';
+    document.getElementById('grindBtn').style.display = 'none';
+    initGrid();
+    checkBankruptcy();
+    updateBoxAffordability();
+}
+
+// Initialize on load
+initGrid();
+checkBankruptcy();
+updateCollection();
+
+// Collection functions
+function updateCollection() {
+    const content = document.getElementById('collectionContent');
+    const rarities = ['legendary', 'epic', 'rare', 'uncommon', 'common'];
+    
+    // Calculate stats
+    let totalItems = 0;
+    let uniqueItems = 0;
+    let totalValue = 0;
+    
+    const itemsByRarity = {
+        legendary: [],
+        epic: [],
+        rare: [],
+        uncommon: [],
+        common: []
+    };
+    
+    // Organize items by rarity
+    for (const [name, item] of Object.entries(collection)) {
+        itemsByRarity[item.rarity].push(item);
+        totalItems += item.count;
+        uniqueItems++;
+        
+        // Estimate value based on rarity
+        const values = {
+            legendary: 10000,
+            epic: 2000,
+            rare: 500,
+            uncommon: 100,
+            common: 20
+        };
+        totalValue += values[item.rarity] * item.count;
+    }
+    
+    // Update stats
+    document.getElementById('totalItems').textContent = totalItems;
+    document.getElementById('uniqueDiscoveries').textContent = uniqueItems;
+    document.getElementById('collectionValue').textContent = formatCoins(totalValue);
+    
+    // Build collection display
+    let html = '';
+    
+    if (totalItems === 0) {
+        html = '<div class="empty-section">Start opening boxes to build your collection!</div>';
+    } else {
+        for (const rarity of rarities) {
+            const items = itemsByRarity[rarity];
+            if (items.length === 0) continue; // Skip empty rarities
+            
+            const totalInRarity = items.reduce((sum, item) => sum + item.count, 0);
+            
+            html += `
+                <div class="rarity-section">
+                    <div class="rarity-header ${rarity}">
+                        <span class="rarity-title">${rarity}</span>
+                        <span class="rarity-count">${items.length} types | ${totalInRarity} total</span>
+                    </div>
+                    <div class="items-grid">
+            `;
+            
+            // Sort items by count (most collected first)
+            items.sort((a, b) => b.count - a.count);
+            
+            for (const item of items) {
+                html += `
+                    <div class="collection-item">
+                        <div class="item-emoji">${item.icon}</div>
+                        <div class="item-info">
+                            <div class="item-name">${item.name}</div>
+                            <div class="item-count">×${item.count} collected</div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += `
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    content.innerHTML = html;
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closePopup();
+    } else if (e.key === 'r' || e.key === 'R') {
+        resetGrid();
+    }
+});
+
+// Flappy Bird Game
+let flappyGame = null;
+
+class FlappyQuantum {
+    constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        
+        // Responsive canvas size
+        const maxHeight = window.innerHeight * 0.6;
+        const maxWidth = window.innerWidth * 0.9;
+        this.canvas.width = Math.min(400, maxWidth);
+        this.canvas.height = Math.min(500, maxHeight);
+        
+        // Game state
+        this.gameRunning = false;
+        this.gameOver = false;
+        this.gameStarted = false;
+        this.countdown = 2;
+        this.pipesPassed = 0;
+        this.coinsEarned = 0;
+        
+        // Fibonacci sequence for rewards
+        this.fibonacci = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368, 75025];
+        
+        // Bird properties
+        this.bird = {
+            x: 80,
+            y: this.canvas.height / 2,
+            radius: 15,
+            velocity: 0,
+            gravity: 0.5,
+            jumpPower: -8
+        };
+        
+        // Pipes
+        this.pipes = [];
+        this.pipeWidth = 60;
+        this.pipeGap = 150;
+        this.pipeSpeed = 3;
+        this.pipeSpawnTimer = 0;
+        
+        // Bind methods
+        this.handleClick = this.handleClick.bind(this);
+        this.handleKey = this.handleKey.bind(this);
+        
+        // Start countdown
+        this.init();
+    }
+    
+    getFibonacciReward(n) {
+        if (n <= 0) return 0;
+        if (n <= this.fibonacci.length) {
+            return this.fibonacci[n - 1];
+        }
+        // Calculate additional Fibonacci numbers if needed
+        let a = this.fibonacci[this.fibonacci.length - 2];
+        let b = this.fibonacci[this.fibonacci.length - 1];
+        for (let i = this.fibonacci.length; i < n; i++) {
+            let temp = a + b;
+            a = b;
+            b = temp;
+        }
+        return b;
+    }
+    
+    init() {
+        this.canvas.addEventListener('click', this.handleClick);
+        document.addEventListener('keydown', this.handleKey);
+        this.startCountdown();
+    }
+    
+    startCountdown() {
+        const countdownInterval = setInterval(() => {
+            this.countdown--;
+            this.draw();
+            
+            if (this.countdown <= 0) {
+                clearInterval(countdownInterval);
+                this.gameStarted = true;
+                this.gameRunning = true;
+                this.gameLoop();
+            }
+        }, 1000);
+        
+        // Initial draw to show countdown
+        this.draw();
+    }
+    
+    handleClick() {
+        if (this.gameOver) {
+            // Click to exit on game over
+            closeFlappyGame();
+        } else if (this.gameStarted && !this.gameOver) {
+            this.bird.velocity = this.bird.jumpPower;
+        }
+    }
+    
+    handleKey(e) {
+        if (e.code === 'Space') {
+            e.preventDefault();
+            if (this.gameOver) {
+                closeFlappyGame();
+            } else if (this.gameStarted && !this.gameOver) {
+                this.bird.velocity = this.bird.jumpPower;
+            }
+        } else if (e.key === 'Escape') {
+            closeFlappyGame();
+        }
+    }
+    
+    update() {
+        if (this.gameOver || !this.gameStarted) return;
+        
+        // Update bird
+        this.bird.velocity += this.bird.gravity;
+        this.bird.y += this.bird.velocity;
+        
+        // Check boundaries
+        if (this.bird.y < this.bird.radius || this.bird.y > this.canvas.height - this.bird.radius) {
+            this.endGame();
+            return;
+        }
+        
+        // Spawn pipes
+        this.pipeSpawnTimer++;
+        if (this.pipeSpawnTimer > 90) {
+            this.pipeSpawnTimer = 0;
+            const gapY = Math.random() * (this.canvas.height - this.pipeGap - 100) + 50;
+            this.pipes.push({
+                x: this.canvas.width,
+                gapY: gapY,
+                passed: false
+            });
+        }
+        
+        // Update pipes
+        for (let i = this.pipes.length - 1; i >= 0; i--) {
+            const pipe = this.pipes[i];
+            pipe.x -= this.pipeSpeed;
+            
+            // Remove off-screen pipes
+            if (pipe.x + this.pipeWidth < 0) {
+                this.pipes.splice(i, 1);
+                continue;
+            }
+            
+            // Check if bird passed pipe
+            if (!pipe.passed && pipe.x + this.pipeWidth < this.bird.x) {
+                pipe.passed = true;
+                this.pipesPassed++;
+                const reward = this.getFibonacciReward(this.pipesPassed);
+                this.coinsEarned += reward;
+                this.updateStats();
+            }
+            
+            // Check collision
+            if (this.checkCollision(pipe)) {
+                this.endGame();
+                return;
+            }
+        }
+    }
+    
+    checkCollision(pipe) {
+        // Check if bird is in pipe x range
+        if (this.bird.x + this.bird.radius > pipe.x && 
+            this.bird.x - this.bird.radius < pipe.x + this.pipeWidth) {
+            // Check if bird is in gap
+            if (this.bird.y - this.bird.radius < pipe.gapY || 
+                this.bird.y + this.bird.radius > pipe.gapY + this.pipeGap) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    draw() {
+        // Clear canvas
+        this.ctx.fillStyle = 'linear-gradient(180deg, #87CEEB 0%, #98D8E8 50%, #B0E0E6 100%)';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Draw background gradient
+        const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+        gradient.addColorStop(0, '#87CEEB');
+        gradient.addColorStop(0.5, '#98D8E8');
+        gradient.addColorStop(1, '#B0E0E6');
+        this.ctx.fillStyle = gradient;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Draw countdown if not started
+        if (!this.gameStarted) {
+            this.ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            
+            this.ctx.fillStyle = '#FFD700';
+            this.ctx.font = 'bold 80px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            
+            if (this.countdown > 0) {
+                this.ctx.fillText(this.countdown, this.canvas.width / 2, this.canvas.height / 2);
+                this.ctx.font = '24px Arial';
+                this.ctx.fillStyle = '#FFF';
+                this.ctx.fillText('Get Ready!', this.canvas.width / 2, this.canvas.height / 2 + 60);
+                this.ctx.font = '16px Arial';
+                this.ctx.fillText('Fibonacci Rewards!', this.canvas.width / 2, this.canvas.height / 2 + 90);
+            }
+            return;
+        }
+        
+        // Draw pipes
+        this.ctx.fillStyle = '#00AA00';
+        for (const pipe of this.pipes) {
+            // Top pipe
+            this.ctx.fillRect(pipe.x, 0, this.pipeWidth, pipe.gapY);
+            // Bottom pipe
+            this.ctx.fillRect(pipe.x, pipe.gapY + this.pipeGap, this.pipeWidth, 
+                             this.canvas.height - pipe.gapY - this.pipeGap);
+            
+            // Pipe borders
+            this.ctx.strokeStyle = '#006600';
+            this.ctx.lineWidth = 3;
+            this.ctx.strokeRect(pipe.x, 0, this.pipeWidth, pipe.gapY);
+            this.ctx.strokeRect(pipe.x, pipe.gapY + this.pipeGap, this.pipeWidth, 
+                               this.canvas.height - pipe.gapY - this.pipeGap);
+        }
+        
+        // Draw bird as quantum particle
+        this.ctx.save();
+        this.ctx.translate(this.bird.x, this.bird.y);
+        
+        // Glow effect
+        const glowGradient = this.ctx.createRadialGradient(0, 0, 0, 0, 0, this.bird.radius * 2);
+        glowGradient.addColorStop(0, 'rgba(255, 215, 0, 0.8)');
+        glowGradient.addColorStop(0.5, 'rgba(255, 165, 0, 0.4)');
+        glowGradient.addColorStop(1, 'rgba(255, 165, 0, 0)');
+        this.ctx.fillStyle = glowGradient;
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, this.bird.radius * 2, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Core particle
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, this.bird.radius, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Atom symbol
+        this.ctx.fillStyle = '#000';
+        this.ctx.font = 'bold 20px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('⚛', 0, 0);
+        
+        this.ctx.restore();
+        
+        // Draw score
+        this.ctx.fillStyle = '#FFF';
+        this.ctx.strokeStyle = '#000';
+        this.ctx.lineWidth = 3;
+        this.ctx.font = 'bold 30px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.strokeText(`Pipes: ${this.pipesPassed}`, this.canvas.width / 2, 50);
+        this.ctx.fillText(`Pipes: ${this.pipesPassed}`, this.canvas.width / 2, 50);
+        
+        // Draw instructions
+        if (this.pipesPassed === 0 && !this.gameOver && this.gameStarted) {
+            this.ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            this.ctx.fillRect(this.canvas.width/2 - 150, this.canvas.height/2 - 50, 300, 100);
+            this.ctx.fillStyle = '#FFF';
+            this.ctx.font = '20px Arial';
+            this.ctx.fillText('Click or Press Space to Jump!', this.canvas.width / 2, this.canvas.height/2 - 10);
+            this.ctx.fillText('Fibonacci sequence rewards!', this.canvas.width / 2, this.canvas.height/2 + 20);
+        }
+        
+        // Game over message
+        if (this.gameOver) {
+            this.ctx.fillStyle = 'rgba(0,0,0,0.8)';
+            this.ctx.fillRect(this.canvas.width/2 - 150, this.canvas.height/2 - 100, 300, 200);
+            this.ctx.fillStyle = '#FFD700';
+            this.ctx.font = 'bold 30px Arial';
+            this.ctx.fillText('GAME OVER!', this.canvas.width / 2, this.canvas.height/2 - 50);
+            this.ctx.fillStyle = '#FFF';
+            this.ctx.font = '24px Arial';
+            this.ctx.fillText(`Earned: ${this.coinsEarned} coins!`, this.canvas.width / 2, this.canvas.height/2);
+            this.ctx.font = '18px Arial';
+            this.ctx.fillText('Click or press Space/Esc', this.canvas.width / 2, this.canvas.height/2 + 40);
+            this.ctx.fillText('to return to loot boxes', this.canvas.width / 2, this.canvas.height/2 + 65);
+        }
+    }
+    
+    updateStats() {
+        document.getElementById('pipesPassed').textContent = this.pipesPassed;
+        const nextReward = this.getFibonacciReward(this.pipesPassed + 1);
+        document.getElementById('nextReward').textContent = nextReward;
+        document.getElementById('totalEarned').textContent = this.coinsEarned;
+    }
+    
+    endGame() {
+        this.gameOver = true;
+        this.gameRunning = false;
+    }
+    
+    gameLoop() {
+        if (!this.gameRunning) return;
+        
+        this.update();
+        this.draw();
+        requestAnimationFrame(() => this.gameLoop());
+    }
+    
+    destroy() {
+        this.gameRunning = false;
+        this.canvas.removeEventListener('click', this.handleClick);
+        document.removeEventListener('keydown', this.handleKey);
+    }
+}
+
+function startFlappyGame() {
+    const modal = document.getElementById('flappyModal');
+    modal.style.display = 'flex';
+    
+    // Reset stats display
+    document.getElementById('pipesPassed').textContent = '0';
+    document.getElementById('nextReward').textContent = '1';
+    document.getElementById('totalEarned').textContent = '0';
+    
+    // Start game
+    const canvas = document.getElementById('flappyCanvas');
+    flappyGame = new FlappyQuantum(canvas);
+}
+
+function closeFlappyGame() {
+    if (flappyGame) {
+        // Add earned coins
+        coins += flappyGame.coinsEarned;
+        totalProfit += flappyGame.coinsEarned; // Add to profit tracking
+        document.getElementById('coins').textContent = formatCoins(coins);
+        document.getElementById('totalProfit').textContent = totalProfit > 0 ? '+' + formatCoins(totalProfit) : formatCoins(totalProfit);
+        
+        if (flappyGame.coinsEarned > 0) {
+            alert(`🎉 You earned ${formatCoins(flappyGame.coinsEarned)} coins! Total: ${formatCoins(coins)}`);
+        }
+        
+        // Clean up game
+        flappyGame.destroy();
+        flappyGame = null;
+    }
+    
+    // Hide modal
+    document.getElementById('flappyModal').style.display = 'none';
+    
+    // Check if player can now afford boxes
+    checkBankruptcy();
+}
+</script>
+</body>
+</html>

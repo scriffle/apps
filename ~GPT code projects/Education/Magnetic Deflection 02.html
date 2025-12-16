@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .simulation-container {
+            border: 1px solid #333;
+            display: flex;
+            flex-direction: row;
+            padding: 0;
+            margin: 0;
+            align-items: stretch;
+            gap: 0;
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 400px;
+        }
+        .button-group {
+            display: flex;
+            gap: 20px;
+            width: 100%;
+            justify-content: center;
+        }
+        .field-controls {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            width: 100%;
+            gap: 15px;
+        }
+        .vector-controls {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 10px;
+        }
+        .vector-control {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .field-control {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 5px;
+        }
+        .field-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            justify-content: space-between;
+        }
+        .auto-switch {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+        .physics-values {
+            font-family: Arial, sans-serif;
+            padding: 15px;
+            width: 200px;
+            white-space: pre;
+            border-left: 1px solid #ccc;
+            margin: 0;
+        }
+        button {
+            padding: 8px 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            flex: 1;
+        }
+        .proton-btn {
+            background: #ffebee;
+            color: red;
+        }
+        .electron-btn {
+            background: #e3f2fd;
+            color: blue;
+        }
+        .neutron-btn {
+            background: #f5f5f5;
+            color: #666;
+        }
+        canvas {
+            display: block;
+            margin: 0;
+            padding: 0;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+        .right-hand-rule {
+            border-left: 1px solid #ccc;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Particle Accelerator Simulation (SI Units)</h2>
+        <div class="controls">
+            <div class="button-group">
+                <button class="proton-btn" id="fireProton">Place Proton</button>
+                <button class="electron-btn" id="fireElectron">Place Electron</button>
+                <button class="neutron-btn" id="fireNeutron">Place Neutron</button>
+            </div>
+            <div class="field-controls">
+                <div class="field-control">
+                    <div class="field-row">
+                        <span id="voltageValue">1000V</span>
+                        <div class="auto-switch">
+                            <input type="checkbox" id="autoSwitch" checked>
+                            <label for="autoSwitch">Automatically Switch Voltage Sign</label>
+                        </div>
+                    </div>
+                    <input type="range" id="voltage" min="-100000" max="100000" value="1000" step="1000">
+                </div>
+                <div class="field-control">
+                    <div class="field-row">
+                        <span id="magneticValue">0T</span>
+                    </div>
+                    <input type="range" id="magneticField" min="-0.5" max="0.5" value="0" step="0.01">
+                </div>
+            </div>
+            <div class="vector-controls">
+                <div class="vector-control">
+                    <input type="checkbox" id="showForce">
+                    <label for="showForce">Show Force Vectors</label>
+                </div>
+                <div class="vector-control">
+                    <input type="checkbox" id="showVelocity">
+                    <label for="showVelocity">Show Velocity Vectors</label>
+                </div>
+                <div class="vector-control">
+                    <input type="checkbox" id="scaleElectron" checked>
+                    <label for="scaleElectron">Scale Electron</label>
+                </div>
+            </div>
+        </div>
+        <div class="simulation-container">
+            <canvas id="accelerator" width="600" height="400"></canvas>
+            <canvas id="rightHandRule" width="150" height="400" class="right-hand-rule"></canvas>
+            <div id="physicsValues" class="physics-values">Calculated Values Will Appear Here</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('accelerator');
+        const rhrCanvas = document.getElementById('rightHandRule');
+        const ctx = canvas.getContext('2d');
+        const rhrCtx = rhrCanvas.getContext('2d');
+        const voltageSlider = document.getElementById('voltage');
+        const voltageValue = document.getElementById('voltageValue');
+        const magneticSlider = document.getElementById('magneticField');
+        const magneticValue = document.getElementById('magneticValue');
+        const autoSwitch = document.getElementById('autoSwitch');
+        const physicsValues = document.getElementById('physicsValues');
+        const showForce = document.getElementById('showForce');
+        const showVelocity = document.getElementById('showVelocity');
+        const scaleElectron = document.getElementById('scaleElectron');
+
+        const ELECTRON_MASS = 9.1093837015e-31;
+        const PROTON_MASS = 1.67262192369e-27;
+        const NEUTRON_MASS = 1.67492749804e-27;
+        const ELECTRON_CHARGE = -1.602176634e-19;
+        const PROTON_CHARGE = 1.602176634e-19;
+        const PLATE_SEPARATION = 0.1;
+        const ACCELERATOR_LENGTH = 1.0;
+        const NEUTRON_LIFETIME = 3000;
+
+        const POSITION_SCALE = 600/ACCELERATOR_LENGTH;
+        const TIME_SCALE = 1e-9;
+        const VELOCITY_SCALE = 1e-6;
+        const ELECTRON_VISUAL_SCALE = 1000;
+        const MAX_TRAIL_LENGTH = 30;
+        const VECTOR_SCALE = 30;
+
+        const ACCELERATION_REGION_WIDTH = 200;
+        const MAGNETIC_FIELD_WIDTH = 400;
+        const VALUES_PANEL_WIDTH = 200;
+        const PLATE_LENGTH = 150;
+        const PLATE_START_X = 30;
+        const PLATE_GAP = 100;
+
+        let lastPhysicsValues = null;
+        let lastParticleType = null;
+
+        function drawVector(ctx, x, y, vx, vy, color, label) {
+            const magnitude = Math.sqrt(vx * vx + vy * vy);
+            if (magnitude === 0) return;
+
+            const scale = VECTOR_SCALE / magnitude;
+            const dx = vx * scale;
+            const dy = vy * scale;
+
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + dx, y + dy);
+
+            const arrowSize = 8;
+            const angle = Math.atan2(dy, dx);
+            ctx.lineTo(x + dx - arrowSize * Math.cos(angle - Math.PI/6),
+                      y + dy - arrowSize * Math.sin(angle - Math.PI/6));
+            ctx.moveTo(x + dx, y + dy);
+            ctx.lineTo(x + dx - arrowSize * Math.cos(angle + Math.PI/6),
+                      y + dy - arrowSize * Math.sin(angle + Math.PI/6));
+
+            ctx.strokeStyle = color;
+            ctx.stroke();
+
+            if (label) {
+                ctx.fillStyle = color;
+                ctx.fillText(label, x + dx + 5, y + dy + 5);
+            }
+        }
+
+        function drawVector3D(ctx, x, y, vx, vy, vz, color, label) {
+            const scale = 40;
+            const cos30 = Math.cos(Math.PI/6);
+            const sin30 = Math.sin(Math.PI/6);
+
+            // Project to 2D
+            const dx = (vx - vz * cos30) * scale;
+            const dy = (vy - vz * sin30) * scale;
+
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + dx, y + dy);
+
+            // Arrow head
+            const arrowSize = 8;
+            const angle = Math.atan2(dy, dx);
+            ctx.lineTo(x + dx - arrowSize * Math.cos(angle - Math.PI/6),
+                      y + dy - arrowSize * Math.sin(angle - Math.PI/6));
+            ctx.moveTo(x + dx, y + dy);
+            ctx.lineTo(x + dx - arrowSize * Math.cos(angle + Math.PI/6),
+                      y + dy - arrowSize * Math.sin(angle + Math.PI/6));
+
+            ctx.strokeStyle = color;
+            ctx.stroke();
+
+            if (label) {
+                ctx.font = '16px Times New Roman';
+                ctx.fillStyle = color;
+                const labelOffsetX = 20;
+                const labelOffsetY = 20;
+                ctx.fillText(label, x + dx + labelOffsetX, y + dy + labelOffsetY);
+            }
+
+            // Draw depth lines if vector has z component
+            if (vz !== 0) {
+                ctx.setLineDash([2, 2]);
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x - vz * cos30 * scale, y - vz * sin30 * scale);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+
+        function drawRightHandRule() {
+            rhrCtx.clearRect(0, 0, rhrCanvas.width, rhrCanvas.height);
+            
+            const centerX = rhrCanvas.width / 2;
+            const centerY = rhrCanvas.height / 2;
+            const magneticField = parseFloat(magneticSlider.value);
+            
+            // Skip drawing if no magnetic field or no particle
+            if (magneticField === 0 || !lastParticleType || lastParticleType === 'neutron') {
+                rhrCtx.fillStyle = 'black';
+                rhrCtx.font = '12px Arial';
+                rhrCtx.textAlign = 'center';
+                rhrCtx.fillText('No magnetic field or', centerX, centerY - 10);
+                rhrCtx.fillText('particle selected', centerX, centerY + 10);
+                return;
+            }
+
+            rhrCtx.font = '14px Arial';
+            rhrCtx.textAlign = 'center';
+            
+            // Calculate directions based on particle type and field
+            const isElectron = lastParticleType === 'electron';
+            const fieldDirection = magneticField > 0 ? 1 : -1;
+            const currentDirection = isElectron ? -1 : 1;
+            const forceDirection = currentDirection * fieldDirection;
+
+            // Draw title and particle info
+            rhrCtx.fillStyle = 'black';
+            rhrCtx.fillText('Magnetic Force', centerX, 40);
+            rhrCtx.font = '16px Times New Roman';
+            rhrCtx.fillText(`F = q(v × B)`, centerX, 60);
+            rhrCtx.fillText(`F = qvB sin θ`, centerX, 80);
+            rhrCtx.fillText(`r = mv/qB`, centerX, 100);
+            rhrCtx.font = '14px Arial';
+            rhrCtx.fillText(`Particle: ${lastParticleType}`, centerX, 140);
+            rhrCtx.fillText(`Convention: I = conventional current`, centerX, 160);
+            
+            const startX = centerX;
+            const startY = centerY + 40;
+
+            // Draw vectors with improved labels
+            drawVector3D(rhrCtx, startX, startY, currentDirection, 0, 0, '#0066cc', 'I');
+            drawVector3D(rhrCtx, startX, startY, 0, 0, fieldDirection, '#cc0000', 'B');
+            drawVector3D(rhrCtx, startX, startY, 0, forceDirection, 0, '#009900', 'F');
+
+            // Add direction indicators
+            rhrCtx.fillStyle = 'black';
+            rhrCtx.font = '14px Arial';
+            rhrCtx.fillText(fieldDirection > 0 ? '⊗ (into screen)' : '⊙ (out of screen)', 
+                          centerX, startY + 80);
+        }
+
+        function setVoltageForParticle(particleType) {
+            if (!autoSwitch.checked) return;
+
+            const currentVoltage = Math.abs(parseFloat(voltageSlider.value));
+            if (particleType === 'proton') {
+                voltageSlider.value = currentVoltage;
+            } else if (particleType === 'electron') {
+                voltageSlider.value = -currentVoltage;
+            }
+            voltageValue.textContent = voltageSlider.value + 'V';
+        }
+
+        function formatScientific(num) {
+            const str = num.toExponential(3);
+            const [base, exp] = str.split('e');
+            const expNum = parseInt(exp);
+            const superscriptMap = {
+                '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+                '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+                '+': '⁺', '-': '⁻'
+            };
+            const superscript = expNum.toString()
+                .split('')
+                .map(char => superscriptMap[char])
+                .join('');
+            return `${parseFloat(base).toFixed(3)}×10${superscript}`;
+        }
+
+        class Particle {
+            constructor(type) {
+                this.type = type;
+                this.x = PLATE_START_X;
+                this.y = canvas.height / 2;
+                this.vx = 0;
+                this.vy = 0;
+                this.fx = 0;
+                this.fy = 0;
+                this.active = true;
+                this.path = [];
+                this.creationTime = Date.now();
+                lastParticleType = type;
+
+                switch(type) {
+                    case 'proton':
+                        this.mass = PROTON_MASS;
+                        this.charge = PROTON_CHARGE;
+                        this.color = 'rgb(255,0,0)';
+                        this.radius = 4;
+                        this.visualScale = 1;
+                        break;
+                    case 'electron':
+                        this.mass = ELECTRON_MASS;
+                        this.charge = ELECTRON_CHARGE;
+                        this.color = 'rgb(0,0,255)';
+                        this.radius = 2;
+                        this.visualScale = scaleElectron.checked ? ELECTRON_VISUAL_SCALE : 1;
+                        break;
+                    case 'neutron':
+                        this.mass = NEUTRON_MASS;
+                        this.charge = 0;
+                        this.color = 'rgb(128,128,128)';
+                        this.radius = 4;
+                        this.visualScale = 1;
+                        break;
+                }
+            }
+
+            update() {
+                if (!this.active) return;
+
+                if (this.type === 'neutron' && 
+                    Date.now() - this.creationTime > NEUTRON_LIFETIME) {
+                    this.active = false;
+                    return;
+                }
+
+                const voltage = parseFloat(voltageSlider.value);
+                const electricField = voltage / PLATE_SEPARATION;
+                const magneticField = parseFloat(magneticSlider.value);
+
+                this.fx = 0;
+                this.fy = 0;
+
+                if (this.x >= PLATE_START_X && this.x <= PLATE_START_X + PLATE_LENGTH) {
+                    const force = this.charge * electricField;
+                    const acceleration = force / this.mass;
+                    this.vx += (acceleration * TIME_SCALE * VELOCITY_SCALE) / this.visualScale;
+                    this.fx = force;
+                    
+                    const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy) * VELOCITY_SCALE;
+                    this.updatePhysicsValues({
+                        voltage: voltage,
+                        force: Math.abs(force),
+                        velocity: speed * this.visualScale,
+                        region: 'Electric Field'
+                    });
+                }
+                else if (this.x >= ACCELERATION_REGION_WIDTH && 
+                         this.x <= ACCELERATION_REGION_WIDTH + MAGNETIC_FIELD_WIDTH) {
+                    
+                    const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy) * VELOCITY_SCALE;
+                    
+                    if (magneticField !== 0) {
+                        const radius = (this.mass * speed * this.visualScale) / 
+                                     (Math.abs(this.charge) * Math.abs(magneticField));
+                        const centripetalAccel = (speed * speed * this.visualScale * this.visualScale) / radius;
+                        const force = Math.abs(this.charge * speed * this.visualScale * Math.abs(magneticField));
+                        
+                        const omega = (this.charge * magneticField) / (this.mass * this.visualScale);
+                        const deltaT = TIME_SCALE;
+                        
+                        const vxOld = this.vx;
+                        this.vx = this.vx * Math.cos(omega * deltaT) - this.vy * Math.sin(omega * deltaT);
+                        this.vy = vxOld * Math.sin(omega * deltaT) + this.vy * Math.cos(omega * deltaT);
+
+                        this.fx = -this.charge * magneticField * this.vy;
+                        this.fy = this.charge * magneticField * this.vx;
+
+                        this.updatePhysicsValues({
+                            magneticField: magneticField,
+                            radius: radius,
+                            force: force,
+                            acceleration: centripetalAccel,
+                            velocity: speed * this.visualScale,
+                            region: 'Magnetic Field'
+                        });
+                    } else {
+                        this.updatePhysicsValues({
+                            magneticField: 0,
+                            force: 0,
+                            velocity: speed * this.visualScale,
+                            region: 'Magnetic Field'
+                        });
+                    }
+                }
+                else if (this.x > ACCELERATION_REGION_WIDTH + MAGNETIC_FIELD_WIDTH) {
+                    this.active = false;
+                    return;
+                }
+
+                this.x += this.vx;
+                this.y += this.vy;
+
+                this.path.push({x: this.x, y: this.y});
+                if (this.path.length > MAX_TRAIL_LENGTH) this.path.shift();
+
+                if (this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    this.active = false;
+                }
+            }
+
+            updatePhysicsValues(values) {
+                let display = `Particle: ${this.type}\n`;
+                display += `Region: ${values.region}\n\n`;
+                display += `m = ${formatScientific(this.mass)} kg\n`;
+                display += `q = ${formatScientific(this.charge)} C\n`;
+                
+                if (values.voltage !== undefined) {
+                    display += `V = ${formatScientific(values.voltage)} V\n`;
+                }
+                if (values.magneticField !== undefined) {
+                    display += `B = ${formatScientific(values.magneticField)} T\n`;
+                }
+                if (values.radius !== undefined && values.magneticField !== 0) {
+                    display += `r = ${formatScientific(values.radius)} m\n`;
+                }
+                
+                display += `F = ${formatScientific(values.force)} N\n`;
+                
+                if (values.acceleration !== undefined) {
+                    display += `a = ${formatScientific(values.acceleration)} m/s²\n`;
+                }
+                
+                display += `v = ${formatScientific(values.velocity)} m/s`;
+                
+                lastPhysicsValues = display;
+                physicsValues.textContent = display;
+            }
+
+            draw() {
+                if (!this.active) return;
+
+                if (this.path.length > 1) {
+                    ctx.lineWidth = 2;
+                    for (let i = 1; i < this.path.length; i++) {
+                        const opacity = i / this.path.length;
+                        const color = this.color.replace('rgb', 'rgba').replace(')', `,${opacity})`);
+                        ctx.strokeStyle = color;
+                        ctx.beginPath();
+                        ctx.moveTo(this.path[i-1].x, this.path[i-1].y);
+                        ctx.lineTo(this.path[i].x, this.path[i].y);
+                        ctx.stroke();
+                    }
+                }
+
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                if (this.type === 'electron') {
+                    ctx.strokeStyle = 'white';
+                    ctx.stroke();
+                }
+                ctx.closePath();
+
+                if (showVelocity.checked) {
+                    drawVector(ctx, this.x, this.y, this.vx, this.vy, 'blue', 'v');
+                }
+                
+                if (showForce.checked && (this.fx !== 0 || this.fy !== 0)) {
+                    drawVector(ctx, this.x, this.y, this.fx, this.fy, 'green', 'F');
+                }
+            }
+        }
+
+        function drawPlates() {
+            const centerX = PLATE_START_X + PLATE_LENGTH/2;
+            const plateWidth = 10;
+            
+            ctx.fillStyle = '#666';
+            ctx.fillRect(centerX - PLATE_GAP/2 - plateWidth, canvas.height/2 - PLATE_LENGTH/2, plateWidth, PLATE_LENGTH);
+            ctx.fillRect(centerX + PLATE_GAP/2, canvas.height/2 - PLATE_LENGTH/2, plateWidth, PLATE_LENGTH);
+
+            ctx.font = '20px Arial';
+            const voltage = parseFloat(voltageSlider.value);
+            const isPositive = voltage >= 0;
+            
+            ctx.fillStyle = isPositive ? 'red' : 'blue';
+            ctx.fillText(isPositive ? '+' : '−', centerX - PLATE_GAP/2 - plateWidth - 20, canvas.height/2);
+            
+            ctx.fillStyle = isPositive ? 'blue' : 'red';
+            ctx.fillText(isPositive ? '−' : '+', centerX + PLATE_GAP/2 + plateWidth + 10, canvas.height/2);
+
+            const lineSpacing = Math.max(5, 40 - (Math.abs(voltage) / 5000));
+            
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.setLineDash([5, 5]);
+            for (let y = canvas.height/2 - PLATE_LENGTH/2 + lineSpacing; 
+                 y < canvas.height/2 + PLATE_LENGTH/2; 
+                 y += lineSpacing) {
+                ctx.beginPath();
+                ctx.moveTo(centerX - PLATE_GAP/2, y);
+                ctx.lineTo(centerX + PLATE_GAP/2, y);
+                ctx.stroke();
+            }
+            ctx.setLineDash([]);
+        }
+
+        function drawMagneticFieldSymbols() {
+            const magneticField = parseFloat(magneticSlider.value);
+            
+            if (Math.abs(magneticField) > 0) {
+                const magneticCenterX = ACCELERATION_REGION_WIDTH + MAGNETIC_FIELD_WIDTH/2;
+                const magneticCenterY = canvas.height/2;
+                
+                const baseSpacing = Math.max(20, 60 - (Math.abs(magneticField) / 0.5) * 50);
+                const symbol = magneticField >= 0 ? '⊗' : '⊙';
+                
+                ctx.font = '14px Arial';
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                
+                const rows = Math.ceil(canvas.height / baseSpacing);
+                const cols = Math.ceil(MAGNETIC_FIELD_WIDTH / baseSpacing);
+                
+                for (let row = -rows/2; row < rows/2; row++) {
+                    for (let col = -cols/2; col < cols/2; col++) {
+                        const x = magneticCenterX + col * baseSpacing;
+                        const y = magneticCenterY + row * baseSpacing;
+                        
+                        const distFromCenter = Math.sqrt(
+                            Math.pow(x - magneticCenterX, 2) + 
+                            Math.pow(y - magneticCenterY, 2)
+                        );
+                        
+                        if (x >= ACCELERATION_REGION_WIDTH && 
+                            x <= ACCELERATION_REGION_WIDTH + MAGNETIC_FIELD_WIDTH &&
+                            y >= 0 && y <= canvas.height &&
+                            distFromCenter <= MAGNETIC_FIELD_WIDTH/2) {
+                            ctx.fillText(symbol, x - 4, y + 4);
+                        }
+                    }
+                }
+            }
+        }
+
+        function drawRegions() {
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.1)';
+            ctx.fillRect(ACCELERATION_REGION_WIDTH, 0, MAGNETIC_FIELD_WIDTH, canvas.height);
+
+            ctx.fillStyle = 'black';
+            ctx.font = '14px Arial';
+            ctx.fillText(`Electric Field (${voltageSlider.value}V)`, 50, 30);
+            ctx.fillText(`Magnetic Field (${magneticSlider.value}T)`, ACCELERATION_REGION_WIDTH + 100, 30);
+
+            drawMagneticFieldSymbols();
+            drawRightHandRule();
+        }
+
+        let particles = [];
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawRegions();
+            drawPlates();
+            
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+
+            particles = particles.filter(p => p.active);
+            
+            if (particles.length === 0 && lastPhysicsValues) {
+                physicsValues.textContent = lastPhysicsValues;
+            }
+            
+            requestAnimationFrame(animate);
+        }
+
+        document.getElementById('fireProton').addEventListener('click', () => {
+            setVoltageForParticle('proton');
+            particles.push(new Particle('proton'));
+        });
+
+        document.getElementById('fireElectron').addEventListener('click', () => {
+            setVoltageForParticle('electron');
+            particles.push(new Particle('electron'));
+        });
+
+        document.getElementById('fireNeutron').addEventListener('click', () => {
+            particles.push(new Particle('neutron'));
+        });
+
+        voltageSlider.addEventListener('input', () => {
+            voltageValue.textContent = voltageSlider.value + 'V';
+        });
+
+        magneticSlider.addEventListener('input', () => {
+            magneticValue.textContent = magneticSlider.value + 'T';
+        });
+
+        scaleElectron.addEventListener('change', () => {
+            particles = [];
+        });
+
+        animate();
+    </script>
+</body>
+</html>

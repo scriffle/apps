@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Doomsday Clock: Calms and Panics</title>
+  <!-- Load Chart.js from a public CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<canvas id="myChart" width="800" height="400"></canvas>
+
+<!-- Buttons to switch Y-axis scale -->
+<button id="linearBtn">Switch to Linear</button>
+<button id="logBtn">Switch to Log</button>
+
+<!-- Buttons to switch data (calms = raw, panics = reciprocal) -->
+<button id="calmsBtn">Calms</button>
+<button id="panicsBtn">Panics</button>
+
+<script>
+  // The Doomsday Clock data
+  const doomsdayData = [
+    { year: 1947, seconds: 420 },
+    { year: 1949, seconds: 180 },
+    { year: 1953, seconds: 120 },
+    { year: 1960, seconds: 420 },
+    { year: 1963, seconds: 720 },
+    { year: 1968, seconds: 420 },
+    { year: 1969, seconds: 600 },
+    { year: 1972, seconds: 720 },
+    { year: 1974, seconds: 540 },
+    { year: 1980, seconds: 420 },
+    { year: 1981, seconds: 240 },
+    { year: 1984, seconds: 180 },
+    { year: 1988, seconds: 360 },
+    { year: 1990, seconds: 600 },
+    { year: 1991, seconds: 1020 },
+    { year: 1995, seconds: 840 },
+    { year: 1998, seconds: 540 },
+    { year: 2002, seconds: 420 },
+    { year: 2007, seconds: 300 },
+    { year: 2010, seconds: 360 },
+    { year: 2012, seconds: 300 },
+    { year: 2015, seconds: 180 },
+    { year: 2017, seconds: 150 },
+    { year: 2018, seconds: 120 },
+    { year: 2020, seconds: 160 },
+    { year: 2022, seconds: 100 },
+    { year: 2023, seconds: 90 },
+    { year: 2024, seconds: 90 },
+    { year: 2025, seconds: 89 }
+  ];
+
+  // Current mode
+  let currentScale = 'linear';  // 'linear' or 'logarithmic'
+  let currentMode  = 'calms';   // 'calms' (raw) or 'panics' (reciprocal)
+
+  // Functions to generate data points
+  function getCalmsData() {
+    return doomsdayData.map(d => ({ x: d.year, y: d.seconds }));
+  }
+
+  function getPanicsData() {
+    return doomsdayData.map(d => ({ x: d.year, y: 1 / d.seconds }));
+  }
+
+  // Return the correct dataset based on currentMode
+  function getDataPoints() {
+    return (currentMode === 'calms') ? getCalmsData() : getPanicsData();
+  }
+
+  // Create the chart
+  const ctx = document.getElementById('myChart').getContext('2d');
+  const myChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [{
+        label: 'Calms (Seconds to Midnight)', // initial label
+        data: getDataPoints(),
+        fill: false
+      }]
+    },
+    options: {
+      responsive: false,
+      plugins: {
+        title: {
+          display: true,
+          text: 'Doomsday Clock: Calms vs. Panics',
+          font: {
+            size: 20 // Larger chart title
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              // Show appropriate tooltip info
+              const i = context.dataIndex;
+              const rawSeconds = doomsdayData[i].seconds;
+              const val = context.parsed.y;
+              if (currentMode === 'panics') {
+                return 'Panics: 1 / ' + rawSeconds + ' = ' + val.toExponential(6);
+              } else {
+                return 'Calms: ' + val + ' seconds';
+              }
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          title: {
+            display: true,
+            text: 'Year',
+            font: {
+              size: 16 // Larger axis label
+            }
+          },
+          ticks: {
+            font: {
+              size: 14 // Larger tick font
+            }
+          }
+        },
+        y: {
+          type: currentScale,
+          title: {
+            display: true,
+            text: 'Calms', // default label
+            font: {
+              size: 16 // Larger axis label
+            }
+          },
+          ticks: {
+            font: {
+              size: 14 // Larger tick font
+            }
+          },
+          min: 0
+        }
+      }
+    }
+  });
+
+  // Handler for scale change
+  function switchScale(newScale) {
+    currentScale = newScale;
+    myChart.config.options.scales.y.type = newScale;
+    myChart.update();
+  }
+
+  // Handler for data mode change
+  function switchMode(newMode) {
+    currentMode = newMode;
+    // Update data
+    myChart.config.data.datasets[0].data = getDataPoints();
+
+    // Update label and axis title
+    if (newMode === 'calms') {
+      myChart.config.data.datasets[0].label = 'Calms (Seconds to Midnight)';
+      myChart.config.options.scales.y.title.text = 'Calms';
+    } else {
+      myChart.config.data.datasets[0].label = 'Panics (1 / Seconds)';
+      myChart.config.options.scales.y.title.text = 'Panics';
+    }
+
+    myChart.update();
+  }
+
+  // Attach click handlers to buttons
+  document.getElementById('linearBtn').addEventListener('click', () => switchScale('linear'));
+  document.getElementById('logBtn').addEventListener('click', () => switchScale('logarithmic'));
+  document.getElementById('calmsBtn').addEventListener('click', () => switchMode('calms'));
+  document.getElementById('panicsBtn').addEventListener('click', () => switchMode('panics'));
+</script>
+
+</body>
+</html>

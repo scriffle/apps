@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Card Shuffling Entropy Experiment</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        canvas {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            display: block;
+            margin: 20px auto;
+            background: #fafafa;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-box {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+            margin-top: 5px;
+        }
+        .info {
+            background: #e8f4f8;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .info h3 {
+            margin-top: 0;
+            color: #667eea;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .info h3:hover {
+            color: #5568d3;
+        }
+        .caret {
+            transition: transform 0.3s ease;
+            font-size: 14px;
+        }
+        .caret.collapsed {
+            transform: rotate(-90deg);
+        }
+        .info-content {
+            max-height: 1000px;
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+            opacity: 1;
+        }
+        .info-content.collapsed {
+            max-height: 0;
+            opacity: 0;
+        }
+        .progress {
+            margin: 20px 0;
+            text-align: center;
+            font-weight: bold;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🃏 Card Shuffling Entropy Experiment</h1>
+        <div class="subtitle">Exploring how shuffles increase disorder in a card deck</div>
+        
+        <div class="controls">
+            <div style="display: flex; gap: 20px; justify-content: center; align-items: center; flex-wrap: wrap; margin-bottom: 15px;">
+                <div>
+                    <label for="shuffleType" style="display: block; margin-bottom: 5px; font-weight: bold;">Shuffle Type:</label>
+                    <select id="shuffleType" style="padding: 8px; border-radius: 5px; border: 2px solid #ddd; width: 180px; cursor: pointer;">
+                        <option value="riffle">Riffle Shuffle</option>
+                        <option value="machine">Machine Shuffle</option>
+                        <option value="random">Random Shuffle</option>
+                        <option value="overhand">Overhand Shuffle</option>
+                        <option value="hindu">Hindu Shuffle</option>
+                        <option value="pile">Pile Shuffle</option>
+                        <option value="wash">Wash Shuffle</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="numShuffles" style="display: block; margin-bottom: 5px; font-weight: bold;">Number of Shuffles:</label>
+                    <input type="number" id="numShuffles" min="1" max="1000" value="10" style="padding: 8px; border-radius: 5px; border: 2px solid #ddd; width: 100px;">
+                </div>
+                <div>
+                    <label for="numRuns" style="display: block; margin-bottom: 5px; font-weight: bold;">Number of Runs:</label>
+                    <input type="number" id="numRuns" min="1" max="1000" value="100" style="padding: 8px; border-radius: 5px; border: 2px solid #ddd; width: 100px;">
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="logScale" style="width: 18px; height: 18px; cursor: pointer;">
+                    <label for="logScale" style="font-weight: bold; cursor: pointer;">Log Scale (X-axis)</label>
+                </div>
+            </div>
+            <button id="runBtn" onclick="runSimulation()">Run Simulation</button>
+        </div>
+
+        <div class="progress" id="progress"></div>
+
+        <canvas id="canvas" width="1000" height="600"></canvas>
+
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-label">Trials Completed</div>
+                <div class="stat-value" id="trials">0</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Initial Entropy</div>
+                <div class="stat-value" id="initialEntropy">- J/K</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Final Entropy (avg)</div>
+                <div class="stat-value" id="finalEntropy">- J/K</div>
+            </div>
+        </div>
+
+        <div class="info">
+            <h3 onclick="toggleInfo('experimentInfo')">
+                <span class="caret collapsed" id="experimentCaret">▼</span>
+                Experiment Design
+            </h3>
+            <div class="info-content collapsed" id="experimentInfo">
+                <p><strong>Macrostate:</strong> Count of each suit (♥♦♠♣) in the top 26 cards</p>
+                <p><strong>Microstate:</strong> Number of ways to achieve the macrostate = 13C<sub>h</sub> × 13C<sub>d</sub> × 13C<sub>s</sub> × 13C<sub>c</sub></p>
+                <p><strong>Entropy:</strong> S = k<sub>B</sub> × ln(W), where W is the number of microstates, k<sub>B</sub> = 1.381×10<sup>-23</sup> J/K</p>
+                <p><strong>Simulation:</strong> Adjustable number of trials and shuffle states</p>
+            </div>
+        </div>
+
+        <div class="info" style="background: #f0f7ff;">
+            <h3 onclick="toggleInfo('shuffleInfo')">
+                <span class="caret collapsed" id="shuffleCaret">▼</span>
+                Shuffle Types
+            </h3>
+            <div class="info-content collapsed" id="shuffleInfo">
+                <p><strong>Riffle Shuffle:</strong> Split deck in half, interleave cards with some randomness (realistic casino shuffle)</p>
+                <p><strong>Machine Shuffle:</strong> Perfect riffle - exact alternation of cards from each half (deterministic)</p>
+                <p><strong>Random Shuffle:</strong> Complete randomization using Fisher-Yates algorithm (maximum entropy per shuffle)</p>
+                <p><strong>Overhand Shuffle:</strong> Take small packets from top, move to bottom (common casual shuffle)</p>
+                <p><strong>Hindu Shuffle:</strong> Take cards from bottom, drop on top in small groups (Asian card game technique)</p>
+                <p><strong>Pile Shuffle:</strong> Deal cards into 7 piles, then stack them (often used in tournament play)</p>
+                <p><strong>Wash Shuffle:</strong> Spread cards on table and scramble with random swaps (thorough mixing)</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const k_B = 1.380649e-23; // Boltzmann constant (J/K)
+        let cachedTrials = null; // Store trials for redrawing
+        
+        // Add event listener for log scale checkbox
+        document.getElementById('logScale').addEventListener('change', function() {
+            if (cachedTrials) {
+                drawGraph(cachedTrials);
+            }
+        });
+
+        // Toggle info panel function
+        function toggleInfo(infoId) {
+            const content = document.getElementById(infoId);
+            const caretId = infoId === 'experimentInfo' ? 'experimentCaret' : 'shuffleCaret';
+            const caret = document.getElementById(caretId);
+            
+            content.classList.toggle('collapsed');
+            caret.classList.toggle('collapsed');
+        }
+        
+        // Calculate nCr (combinations)
+        function combinations(n, r) {
+            if (r > n) return 0;
+            if (r === 0 || r === n) return 1;
+            
+            let result = 1;
+            for (let i = 0; i < r; i++) {
+                result *= (n - i);
+                result /= (i + 1);
+            }
+            return Math.round(result);
+        }
+
+        // Initialize ordered deck
+        function createOrderedDeck() {
+            const deck = [];
+            const suits = ['H', 'D', 'S', 'C']; // Hearts, Diamonds, Spades, Clubs
+            for (let suit of suits) {
+                for (let rank = 1; rank <= 13; rank++) {
+                    deck.push({ suit, rank });
+                }
+            }
+            return deck;
+        }
+
+        // Riffle shuffle (interleave two halves with some randomness)
+        function riffleShuffle(deck) {
+            const newDeck = [...deck];
+            const mid = 26;
+            const left = newDeck.slice(0, mid);
+            const right = newDeck.slice(mid);
+            const shuffled = [];
+            
+            let l = 0, r = 0;
+            while (l < left.length || r < right.length) {
+                // Randomly choose from left or right half
+                if (l >= left.length) {
+                    shuffled.push(right[r++]);
+                } else if (r >= right.length) {
+                    shuffled.push(left[l++]);
+                } else if (Math.random() < 0.5) {
+                    shuffled.push(left[l++]);
+                } else {
+                    shuffled.push(right[r++]);
+                }
+            }
+            return shuffled;
+        }
+
+        // Machine shuffle (perfect riffle - exact alternation)
+        function machineShuffle(deck) {
+            const newDeck = [...deck];
+            const mid = 26;
+            const left = newDeck.slice(0, mid);
+            const right = newDeck.slice(mid);
+            const shuffled = [];
+            
+            for (let i = 0; i < 26; i++) {
+                shuffled.push(left[i]);
+                shuffled.push(right[i]);
+            }
+            return shuffled;
+        }
+
+        // Random shuffle (Fisher-Yates algorithm)
+        function randomShuffle(deck) {
+            const shuffled = [...deck];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+
+        // Overhand shuffle (hand shuffle - take packets from top, move to bottom)
+        function overhandShuffle(deck) {
+            const shuffled = [];
+            let remaining = [...deck];
+            
+            while (remaining.length > 0) {
+                // Take a random packet size (1-20 cards)
+                const packetSize = Math.floor(Math.random() * 20) + 1;
+                const packet = remaining.splice(0, Math.min(packetSize, remaining.length));
+                // Add to bottom of new pile (reversed)
+                shuffled.unshift(...packet);
+            }
+            return shuffled;
+        }
+
+        // Hindu shuffle (take from bottom, drop on top in small groups)
+        function hinduShuffle(deck) {
+            const shuffled = [];
+            let remaining = [...deck];
+            
+            while (remaining.length > 0) {
+                // Take a random packet from bottom (1-15 cards)
+                const packetSize = Math.floor(Math.random() * 15) + 1;
+                const startIndex = Math.max(0, remaining.length - packetSize);
+                const packet = remaining.splice(startIndex);
+                // Drop on top
+                shuffled.push(...packet);
+            }
+            return shuffled;
+        }
+
+        // Pile shuffle (deal into piles, then reassemble)
+        function pileShuffle(deck) {
+            const numPiles = 7; // Common pile shuffle uses 7 piles
+            const piles = Array.from({ length: numPiles }, () => []);
+            
+            // Deal cards into piles
+            deck.forEach((card, index) => {
+                piles[index % numPiles].push(card);
+            });
+            
+            // Reassemble (stack piles)
+            return piles.flat();
+        }
+
+        // Wash shuffle (spread and scramble - multiple random swaps)
+        function washShuffle(deck) {
+            const shuffled = [...deck];
+            const numSwaps = 100; // Do many random swaps
+            
+            for (let i = 0; i < numSwaps; i++) {
+                const idx1 = Math.floor(Math.random() * shuffled.length);
+                const idx2 = Math.floor(Math.random() * shuffled.length);
+                [shuffled[idx1], shuffled[idx2]] = [shuffled[idx2], shuffled[idx1]];
+            }
+            return shuffled;
+        }
+
+        // Get the appropriate shuffle function based on selection
+        function performShuffle(deck, shuffleType) {
+            switch(shuffleType) {
+                case 'riffle': return riffleShuffle(deck);
+                case 'machine': return machineShuffle(deck);
+                case 'random': return randomShuffle(deck);
+                case 'overhand': return overhandShuffle(deck);
+                case 'hindu': return hinduShuffle(deck);
+                case 'pile': return pileShuffle(deck);
+                case 'wash': return washShuffle(deck);
+                default: return riffleShuffle(deck);
+            }
+        }
+
+        // Count suits in top 26 cards (macrostate)
+        function getMacrostate(deck) {
+            const top26 = deck.slice(0, 26);
+            const counts = { H: 0, D: 0, S: 0, C: 0 };
+            for (let card of top26) {
+                counts[card.suit]++;
+            }
+            return counts;
+        }
+
+        // Calculate microstates
+        function calculateMicrostates(macrostate) {
+            const w = combinations(13, macrostate.H) *
+                     combinations(13, macrostate.D) *
+                     combinations(13, macrostate.S) *
+                     combinations(13, macrostate.C);
+            return w;
+        }
+
+        // Calculate entropy
+        function calculateEntropy(microstates) {
+            return k_B * Math.log(microstates);
+        }
+
+        // Run one trial
+        function runTrial(maxShuffles, shuffleType) {
+            let deck = createOrderedDeck();
+            const entropies = [];
+            
+            for (let shuffleNum = 0; shuffleNum <= maxShuffles; shuffleNum++) {
+                if (shuffleNum > 0) {
+                    deck = performShuffle(deck, shuffleType);
+                }
+                
+                const macrostate = getMacrostate(deck);
+                const microstates = calculateMicrostates(macrostate);
+                const entropy = calculateEntropy(microstates);
+                entropies.push(entropy);
+            }
+            
+            return entropies;
+        }
+
+        // Draw graph
+        function drawGraph(allTrials) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const padding = 60;
+            const graphWidth = canvas.width - 2 * padding;
+            const graphHeight = canvas.height - 2 * padding;
+            const useLogScale = document.getElementById('logScale').checked;
+            
+            // Find min and max entropy
+            let minEntropy = Infinity;
+            let maxEntropy = -Infinity;
+            for (let trial of allTrials) {
+                for (let entropy of trial) {
+                    minEntropy = Math.min(minEntropy, entropy);
+                    maxEntropy = Math.max(maxEntropy, entropy);
+                }
+            }
+            
+            // Add some padding to the range
+            const range = maxEntropy - minEntropy;
+            minEntropy -= range * 0.1;
+            maxEntropy += range * 0.1;
+            
+            // Helper function to get x position
+            const getXPos = (shuffleIndex, totalPoints) => {
+                if (useLogScale) {
+                    // Use log scale: log(shuffleIndex + 1) to avoid log(0)
+                    const maxLog = Math.log10(totalPoints);
+                    const currentLog = shuffleIndex === 0 ? 0 : Math.log10(shuffleIndex + 1);
+                    return padding + (currentLog / maxLog) * graphWidth;
+                } else {
+                    // Linear scale
+                    return padding + (shuffleIndex / (totalPoints - 1)) * graphWidth;
+                }
+            };
+            
+            // Draw axes
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, canvas.height - padding);
+            ctx.lineTo(canvas.width - padding, canvas.height - padding);
+            ctx.stroke();
+            
+            // Draw grid
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 1;
+            
+            // Vertical grid lines
+            const numVerticalLines = 10;
+            for (let i = 0; i <= numVerticalLines; i++) {
+                let x;
+                if (useLogScale) {
+                    const maxLog = Math.log10(allTrials[0].length);
+                    const logValue = (i / numVerticalLines) * maxLog;
+                    x = padding + (logValue / maxLog) * graphWidth;
+                } else {
+                    x = padding + (i / numVerticalLines) * graphWidth;
+                }
+                
+                ctx.beginPath();
+                ctx.moveTo(x, padding);
+                ctx.lineTo(x, canvas.height - padding);
+                ctx.stroke();
+            }
+            
+            // Horizontal grid lines
+            for (let i = 0; i <= 10; i++) {
+                const y = padding + (i / 10) * graphHeight;
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(canvas.width - padding, y);
+                ctx.stroke();
+            }
+            
+            // Draw all trials with transparency
+            ctx.globalAlpha = 0.1;
+            for (let trial of allTrials) {
+                ctx.strokeStyle = '#667eea';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                
+                for (let i = 0; i < trial.length; i++) {
+                    const x = getXPos(i, trial.length);
+                    const y = canvas.height - padding - 
+                             ((trial[i] - minEntropy) / (maxEntropy - minEntropy)) * graphHeight;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.stroke();
+            }
+            
+            // Draw average line
+            ctx.globalAlpha = 1;
+            const avgTrial = [];
+            for (let i = 0; i < allTrials[0].length; i++) {
+                let sum = 0;
+                for (let trial of allTrials) {
+                    sum += trial[i];
+                }
+                avgTrial.push(sum / allTrials.length);
+            }
+            
+            ctx.strokeStyle = '#ff6b6b';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            for (let i = 0; i < avgTrial.length; i++) {
+                const x = getXPos(i, avgTrial.length);
+                const y = canvas.height - padding - 
+                         ((avgTrial[i] - minEntropy) / (maxEntropy - minEntropy)) * graphHeight;
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+            
+            // Draw labels
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            
+            // X-axis labels
+            if (useLogScale) {
+                // For log scale, show powers of 10 and intermediate values
+                const maxShuffles = avgTrial.length - 1;
+                const maxLog = Math.log10(maxShuffles + 1);
+                const labelValues = [0, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+                
+                for (let val of labelValues) {
+                    if (val <= maxShuffles) {
+                        const logVal = val === 0 ? 0 : Math.log10(val + 1);
+                        const x = padding + (logVal / maxLog) * graphWidth;
+                        ctx.fillText(val, x, canvas.height - padding + 25);
+                    }
+                }
+            } else {
+                // Linear scale labels
+                const numLabels = Math.min(10, avgTrial.length);
+                for (let i = 0; i < numLabels; i++) {
+                    const shuffleNum = Math.round((i / (numLabels - 1)) * (avgTrial.length - 1));
+                    const x = getXPos(shuffleNum, avgTrial.length);
+                    ctx.fillText(shuffleNum, x, canvas.height - padding + 25);
+                }
+            }
+            
+            // Y-axis labels
+            ctx.textAlign = 'right';
+            for (let i = 0; i <= 5; i++) {
+                const y = canvas.height - padding - (i / 5) * graphHeight;
+                const value = (minEntropy + (i / 5) * (maxEntropy - minEntropy)).toExponential(2);
+                ctx.fillText(value + ' J/K', padding - 10, y + 5);
+            }
+            
+            // Axis titles
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'center';
+            const xAxisLabel = useLogScale ? 'Number of Shuffles (Log Scale)' : 'Number of Shuffles';
+            ctx.fillText(xAxisLabel, canvas.width / 2, canvas.height - 10);
+            
+            ctx.save();
+            ctx.translate(15, canvas.height / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText('Entropy (J/K)', 0, 0);
+            ctx.restore();
+            
+            // Legend
+            ctx.textAlign = 'left';
+            ctx.font = '12px Arial';
+            ctx.fillStyle = '#667eea';
+            ctx.fillText('Individual Trials', canvas.width - padding - 150, padding + 20);
+            ctx.fillStyle = '#ff6b6b';
+            ctx.fillText('Average Entropy', canvas.width - padding - 150, padding + 40);
+            
+            return avgTrial;
+        }
+
+        async function runSimulation() {
+            const btn = document.getElementById('runBtn');
+            btn.disabled = true;
+            
+            const numTrials = parseInt(document.getElementById('numRuns').value);
+            const maxShuffles = parseInt(document.getElementById('numShuffles').value) - 1;
+            const shuffleType = document.getElementById('shuffleType').value;
+            
+            if (numTrials < 1 || numTrials > 1000 || maxShuffles < 0 || maxShuffles > 999) {
+                alert('Please enter valid values (Shuffles: 1-1000, Runs: 1-1000)');
+                btn.disabled = false;
+                return;
+            }
+            
+            const allTrials = [];
+            
+            document.getElementById('progress').textContent = `Running simulation with ${shuffleType} shuffle...`;
+            
+            for (let t = 0; t < numTrials; t++) {
+                const trial = runTrial(maxShuffles, shuffleType);
+                allTrials.push(trial);
+                
+                document.getElementById('trials').textContent = t + 1;
+                
+                // Update progress
+                if ((t + 1) % 10 === 0 || t === numTrials - 1) {
+                    document.getElementById('progress').textContent = 
+                        `Completed ${t + 1}/${numTrials} trials...`;
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+            }
+            
+            // Cache trials for redrawing
+            cachedTrials = allTrials;
+            
+            const avgTrial = drawGraph(allTrials);
+            
+            // Update stats with units
+            const initialEntropy = avgTrial[0];
+            const finalEntropy = avgTrial[avgTrial.length - 1];
+            
+            document.getElementById('initialEntropy').textContent = initialEntropy.toExponential(2) + ' J/K';
+            document.getElementById('finalEntropy').textContent = finalEntropy.toExponential(2) + ' J/K';
+            
+            document.getElementById('progress').textContent = 'Simulation complete!';
+            btn.disabled = false;
+        }
+    </script>
+</body>
+</html>

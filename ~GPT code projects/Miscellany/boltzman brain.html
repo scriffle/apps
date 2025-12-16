@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Thermodynamic Randomness and Entropy Simulator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+      background-color: #f0f0f0;
+    }
+    #controls {
+      margin-bottom: 20px;
+    }
+    #simCanvas {
+      border: 1px solid #333;
+    }
+    .control-group {
+      margin: 10px 0;
+    }
+    button {
+      margin: 0 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Thermodynamic Randomness and Entropy Simulator</h1>
+  <div id="controls">
+    <div class="control-group">
+      <label for="gridSize">Grid Size (N x N, 2–20): </label>
+      <input type="range" id="gridSize" min="2" max="20" value="10">
+      <span id="gridSizeValue">10</span>
+    </div>
+    <div class="control-group">
+      <label for="speed">Simulation Speed (ms, min 0): </label>
+      <input type="range" id="speed" min="0" max="2000" step="100" value="1000">
+      <span id="speedValue">1000</span> ms
+    </div>
+    <div class="control-group">
+      <button id="startStop">Start</button>
+      <button id="step">Step</button>
+      <button id="reset">Reset</button>
+      <button id="turboToggle">Turbo Mode: Off</button>
+    </div>
+    <div class="control-group">
+      <p>Iterations: <span id="iterationCount">0</span></p>
+      <p>Uniform Upper Part Occurrences: <span id="occurrenceCount">0</span></p>
+    </div>
+  </div>
+  <canvas id="simCanvas"></canvas>
+
+  <script>
+    // Grab DOM elements
+    const gridSizeSlider = document.getElementById('gridSize');
+    const gridSizeValue = document.getElementById('gridSizeValue');
+    const speedSlider = document.getElementById('speed');
+    const speedValue = document.getElementById('speedValue');
+    const startStopBtn = document.getElementById('startStop');
+    const stepBtn = document.getElementById('step');
+    const resetBtn = document.getElementById('reset');
+    const turboToggleBtn = document.getElementById('turboToggle');
+    const iterationCountDisplay = document.getElementById('iterationCount');
+    const occurrenceCountDisplay = document.getElementById('occurrenceCount');
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Simulation state variables
+    let gridSize = parseInt(gridSizeSlider.value);
+    let simulationSpeed = parseInt(speedSlider.value);
+    let simulationRunning = false;
+    let turboMode = false;
+    let simulationInterval = null;  // for standard mode
+    let turboUIUpdateTimer = null;  // updates UI every 1 sec in turbo mode
+
+    // For turbo mode simulation loop (using setTimeout recursion)
+    let turboSimActive = false;
+
+    // Global counters and particle array
+    let iterationCount = 0;
+    let occurrenceCount = 0;
+    let particles = [];
+
+    // Resize the canvas based on available screen space and grid size.
+    function resizeCanvas() {
+      // Use 80% of the smaller window dimension
+      const availableSize = Math.min(window.innerWidth, window.innerHeight) * 0.8;
+      // Calculate cell size but enforce a minimum of 5 pixels per cell.
+      const cellSize = Math.max(5, Math.floor(availableSize / gridSize));
+      canvas.width = cellSize * gridSize;
+      canvas.height = cellSize * gridSize;
+    }
+
+    // Sattolo's algorithm for a cyclic permutation (ensuring no element remains in place)
+    function sattoloShuffle(array) {
+      let n = array.length;
+      for (let i = n - 1; i > 0; i--) {
+        let j = Math.floor(Math.random() * i);
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+    }
+
+    // Single simulation iteration.
+    // 'render' is true in standard mode (draws on canvas and updates UI immediately),
+    // false in turbo mode (only updates the counters).
+    function simulationIteration(render) {
+      iterationCount++;
+      if(render) {
+        iterationCountDisplay.textContent = iterationCount;
+      }
+      const cellSize = canvas.width / gridSize;
+      
+      // Initialize particles if grid size changed or first iteration.
+      if (particles.length !== gridSize * gridSize) {
+        particles = [];
+        for (let i = 0; i < gridSize * gridSize; i++) {
+          particles.push(Math.random() < 0.5 ? 0 : 1);
+        }
+      } else {
+        // Sattolo shuffle to move every particle.
+        let newParticles = particles.slice();
+        sattoloShuffle(newParticles);
+        particles = newParticles;
+      }
+      
+      if(render) {
+        // Render each cell.
+        for (let row = 0; row < gridSize; row++) {
+          for (let col = 0; col < gridSize; col++) {
+            const index = row * gridSize + col;
+            const colorValue = particles[index];
+            ctx.fillStyle = colorValue === 0 ? '#FFFFFF' : '#000000';
+            ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+          }
+        }
+      }
+      
+      // Check uniformity in the top ⌈gridSize/2⌉ rows.
+      const rowsToCheck = Math.ceil(gridSize / 2);
+      let uniform = true;
+      const firstColor = particles[0];
+      for (let row = 0; row < rowsToCheck; row++) {
+        for (let col = 0; col < gridSize; col++) {
+          if (particles[row * gridSize + col] !== firstColor) {
+            uniform = false;
+            break;
+          }
+        }
+        if (!uniform) break;
+      }
+      if (uniform) {
+        occurrenceCount++;
+      }
+      if(render) {
+        occurrenceCountDisplay.textContent = occurrenceCount;
+      }
+    }
+
+    // Standard mode iteration (with rendering) – uses simulationSpeed.
+    function runIteration() {
+      simulationIteration(true);
+    }
+
+    // Turbo mode: run many iterations in a short time slice.
+    function turboSimChunk() {
+      const startTime = performance.now();
+      // Run for a 20ms chunk.
+      while (performance.now() - startTime < 20) {
+        simulationIteration(false);
+      }
+      if (turboMode && simulationRunning) {
+        setTimeout(turboSimChunk, 0);
+      }
+    }
+
+    // Update UI counters in turbo mode (runs every 1 second).
+    function updateTurboUI() {
+      iterationCountDisplay.textContent = iterationCount;
+      occurrenceCountDisplay.textContent = occurrenceCount;
+    }
+
+    // Start simulation in standard mode.
+    function startStandardSimulation() {
+      simulationInterval = setInterval(runIteration, simulationSpeed);
+    }
+
+    // Stop any running simulation timers.
+    function stopSimulationLoops() {
+      if (simulationInterval !== null) {
+        clearInterval(simulationInterval);
+        simulationInterval = null;
+      }
+      if (turboUIUpdateTimer !== null) {
+        clearInterval(turboUIUpdateTimer);
+        turboUIUpdateTimer = null;
+      }
+      turboSimActive = false;
+    }
+
+    // Toggle simulation start/stop.
+    function toggleSimulation() {
+      if (!simulationRunning) {
+        simulationRunning = true;
+        startStopBtn.textContent = 'Stop';
+        // When starting, reset counters if desired.
+        // Choose the appropriate simulation loop.
+        if (turboMode) {
+          // Start turbo simulation loop.
+          turboSimChunk();
+          turboUIUpdateTimer = setInterval(updateTurboUI, 1000);
+        } else {
+          startStandardSimulation();
+        }
+      } else {
+        simulationRunning = false;
+        startStopBtn.textContent = 'Start';
+        stopSimulationLoops();
+      }
+    }
+
+    // Step one iteration (only works in standard mode).
+    function stepSimulation() {
+      if (!simulationRunning) {
+        simulationIteration(true);
+      }
+    }
+
+    // Reset counters.
+    function resetSimulation() {
+      iterationCount = 0;
+      occurrenceCount = 0;
+      iterationCountDisplay.textContent = iterationCount;
+      occurrenceCountDisplay.textContent = occurrenceCount;
+    }
+
+    // Toggle turbo mode on or off.
+    function toggleTurboMode() {
+      turboMode = !turboMode;
+      turboToggleBtn.textContent = turboMode ? 'Turbo Mode: On' : 'Turbo Mode: Off';
+      // If simulation is running, switch simulation loops accordingly.
+      if (simulationRunning) {
+        stopSimulationLoops();
+        if (turboMode) {
+          turboSimChunk();
+          turboUIUpdateTimer = setInterval(updateTurboUI, 1000);
+        } else {
+          startStandardSimulation();
+          // Immediately update UI on switching back.
+          iterationCountDisplay.textContent = iterationCount;
+          occurrenceCountDisplay.textContent = occurrenceCount;
+        }
+      }
+    }
+
+    // Event listeners.
+    gridSizeSlider.addEventListener('input', function() {
+      gridSize = parseInt(this.value);
+      gridSizeValue.textContent = gridSize;
+      resizeCanvas();
+      resetSimulation();
+      // Force a re-render in standard mode.
+      if (!turboMode && !simulationRunning) {
+        simulationIteration(true);
+      }
+    });
+
+    speedSlider.addEventListener('input', function() {
+      simulationSpeed = parseInt(this.value);
+      speedValue.textContent = simulationSpeed;
+      if (!turboMode && simulationRunning) {
+        // Restart standard simulation with the new speed.
+        stopSimulationLoops();
+        startStandardSimulation();
+      }
+    });
+
+    startStopBtn.addEventListener('click', toggleSimulation);
+    stepBtn.addEventListener('click', stepSimulation);
+    resetBtn.addEventListener('click', resetSimulation);
+    turboToggleBtn.addEventListener('click', toggleTurboMode);
+
+    window.addEventListener('resize', () => {
+      resizeCanvas();
+      if (!turboMode && !simulationRunning) {
+        simulationIteration(true);
+      }
+    });
+
+    // Initial setup.
+    resizeCanvas();
+    simulationIteration(true);
+  </script>
+</body>
+</html>

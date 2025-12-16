@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zooming Students Explosion Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(45deg, #1a1a2e, #16213e, #0f3460);
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            height: 100vh;
+        }
+
+        .game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .student {
+            position: absolute;
+            padding: 8px 12px;
+            background: linear-gradient(45deg, #ff6b6b, #feca57, #48dbfb, #ff9ff3, #54a0ff);
+            background-size: 300% 300%;
+            border-radius: 20px;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            cursor: pointer;
+            transition: transform 0.1s ease;
+            box-shadow: 0 4px 15px rgba(255,255,255,0.3);
+            border: 2px solid rgba(255,255,255,0.4);
+            animation: gradientShift 3s ease infinite;
+            z-index: 10;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .student:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(255,255,255,0.5);
+        }
+
+        .explosion {
+            position: absolute;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .particle {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: radial-gradient(circle, #ffff00, #ff4757);
+            border-radius: 50%;
+            animation: explode 0.8s ease-out forwards;
+        }
+
+        @keyframes explode {
+            0% {
+                transform: scale(1) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(0) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        .respawn-indicator {
+            position: absolute;
+            color: #feca57;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            animation: respawnGlow 1s ease-in-out;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        @keyframes respawnGlow {
+            0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+            50% { transform: scale(1.2) rotate(0deg); opacity: 1; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+
+        .score-display {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 1000;
+        }
+
+        .instructions {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 14px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 1000;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container" id="gameContainer">
+        <div class="score-display" id="scoreDisplay">Explosions: 0</div>
+        <div class="instructions">
+            Watch the students zoom around!<br>
+            They explode when they collide!<br>
+            Click to make them zoom faster!
+        </div>
+    </div>
+
+    <script>
+        const students = [
+            "AHFAT Angel", "BIDINGAL Amarah", "BLYTH Olivia", "BRAY Tyler",
+            "BRODIE Honey", "GHOSH Rish", "HALL Lucy", "HIGGS Angus",
+            "HU Jacky", "KASAP Lauren", "KENNEDY Joel", "LAIRD Georgia",
+            "LI Derek", "Li Serina", "Li Wendy", "MASON Charlotte",
+            "MAY Lachlan", "MCLAUGHLIN Zoe", "MUTSAERS Ben", "SEDGMAN Nathan",
+            "SHEERAN Inez", "Shi Kirsten", "STAPLETON Cooper", "Yung Winnie"
+        ];
+
+        const gameContainer = document.getElementById('gameContainer');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        let explosionCount = 0;
+        let studentElements = [];
+
+        class Student {
+            constructor(name, index) {
+                this.name = name;
+                this.element = document.createElement('div');
+                this.element.className = 'student';
+                this.element.textContent = name;
+                this.element.style.animationDelay = `${index * 0.2}s`;
+                
+                this.respawn();
+                this.element.addEventListener('click', () => this.boost());
+                gameContainer.appendChild(this.element);
+                studentElements.push(this);
+            }
+
+            respawn() {
+                this.x = Math.random() * (window.innerWidth - 200);
+                this.y = Math.random() * (window.innerHeight - 50);
+                this.vx = (Math.random() - 0.5) * 8;
+                this.vy = (Math.random() - 0.5) * 8;
+                this.width = 0;
+                this.height = 0;
+                this.active = true;
+                
+                this.element.style.display = 'block';
+                this.element.style.left = this.x + 'px';
+                this.element.style.top = this.y + 'px';
+                
+                // Show respawn indicator
+                this.showRespawnIndicator();
+                
+                // Update dimensions after element is visible
+                setTimeout(() => {
+                    const rect = this.element.getBoundingClientRect();
+                    this.width = rect.width;
+                    this.height = rect.height;
+                }, 10);
+            }
+
+            showRespawnIndicator() {
+                const indicator = document.createElement('div');
+                indicator.className = 'respawn-indicator';
+                indicator.textContent = '★ RESPAWN ★';
+                indicator.style.left = this.x + 'px';
+                indicator.style.top = (this.y - 30) + 'px';
+                gameContainer.appendChild(indicator);
+                
+                setTimeout(() => {
+                    if (indicator.parentNode) {
+                        indicator.parentNode.removeChild(indicator);
+                    }
+                }, 1000);
+            }
+
+            boost() {
+                this.vx *= 1.5;
+                this.vy *= 1.5;
+                this.element.style.transform = 'scale(1.2)';
+                setTimeout(() => {
+                    this.element.style.transform = 'scale(1)';
+                }, 200);
+            }
+
+            update() {
+                if (!this.active) return;
+
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Bounce off walls
+                if (this.x <= 0 || this.x >= window.innerWidth - this.width) {
+                    this.vx = -this.vx;
+                    this.x = Math.max(0, Math.min(this.x, window.innerWidth - this.width));
+                }
+                if (this.y <= 0 || this.y >= window.innerHeight - this.height) {
+                    this.vy = -this.vy;
+                    this.y = Math.max(0, Math.min(this.y, window.innerHeight - this.height));
+                }
+
+                this.element.style.left = this.x + 'px';
+                this.element.style.top = this.y + 'px';
+            }
+
+            checkCollision(other) {
+                if (!this.active || !other.active || this === other) return false;
+                
+                const dx = (this.x + this.width/2) - (other.x + other.width/2);
+                const dy = (this.y + this.height/2) - (other.y + other.height/2);
+                const distance = Math.sqrt(dx*dx + dy*dy);
+                const minDistance = (this.width + other.width) / 3;
+                
+                return distance < minDistance;
+            }
+
+            explode() {
+                if (!this.active) return;
+                
+                this.active = false;
+                explosionCount++;
+                scoreDisplay.textContent = `Explosions: ${explosionCount}`;
+
+                // Create explosion effect
+                this.createExplosion();
+                
+                // Hide student
+                this.element.style.display = 'none';
+                
+                // Respawn after delay
+                setTimeout(() => {
+                    this.respawn();
+                }, 2000 + Math.random() * 1000);
+            }
+
+            createExplosion() {
+                const centerX = this.x + this.width / 2;
+                const centerY = this.y + this.height / 2;
+                
+                for (let i = 0; i < 12; i++) {
+                    const particle = document.createElement('div');
+                    particle.className = 'particle';
+                    
+                    const angle = (i / 12) * Math.PI * 2;
+                    const velocity = 50 + Math.random() * 100;
+                    const distance = velocity;
+                    
+                    particle.style.left = centerX + 'px';
+                    particle.style.top = centerY + 'px';
+                    particle.style.setProperty('--end-x', Math.cos(angle) * distance + 'px');
+                    particle.style.setProperty('--end-y', Math.sin(angle) * distance + 'px');
+                    
+                    // Custom animation for each particle
+                    particle.style.animation = `explode 0.8s ease-out forwards`;
+                    particle.style.transform = `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance}px)`;
+                    
+                    gameContainer.appendChild(particle);
+                    
+                    setTimeout(() => {
+                        if (particle.parentNode) {
+                            particle.parentNode.removeChild(particle);
+                        }
+                    }, 800);
+                }
+            }
+        }
+
+        // Initialize students
+        students.forEach((name, index) => {
+            setTimeout(() => {
+                new Student(name, index);
+            }, index * 100);
+        });
+
+        // Game loop
+        function gameLoop() {
+            // Update all students
+            studentElements.forEach(student => {
+                student.update();
+            });
+
+            // Check collisions
+            for (let i = 0; i < studentElements.length; i++) {
+                for (let j = i + 1; j < studentElements.length; j++) {
+                    if (studentElements[i].checkCollision(studentElements[j])) {
+                        studentElements[i].explode();
+                        studentElements[j].explode();
+                    }
+                }
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start the game
+        gameLoop();
+
+        // Add some chaos on click
+        gameContainer.addEventListener('click', (e) => {
+            studentElements.forEach(student => {
+                if (student.active && Math.random() < 0.3) {
+                    student.boost();
+                }
+            });
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            studentElements.forEach(student => {
+                if (student.x > window.innerWidth - student.width) {
+                    student.x = window.innerWidth - student.width;
+                }
+                if (student.y > window.innerHeight - student.height) {
+                    student.y = window.innerHeight - student.height;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

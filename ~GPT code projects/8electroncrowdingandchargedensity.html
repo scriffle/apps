@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>The Electron Squeeze</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #e0f2fe 0%, #f3e8ff 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            overflow-x: hidden;
+        }
+        .container {
+            max-width: 900px;
+            width: 100%;
+            background: white;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        @media (min-width: 640px) {
+            .container { padding: 40px; }
+        }
+        h2 {
+            text-align: center;
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #1f2937;
+        }
+        @media (min-width: 640px) {
+            h2 {
+                font-size: 2rem;
+                margin-bottom: 30px;
+            }
+        }
+        .capacitor-plate {
+            position: relative;
+            background: #fcd34d;
+            border: 4px solid #d97706;
+            border-radius: 12px;
+            height: 300px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            touch-action: none;
+        }
+        @media (min-width: 640px) {
+            .capacitor-plate {
+                height: 400px;
+                margin-bottom: 30px;
+            }
+        }
+        @media (min-width: 768px) {
+            .capacitor-plate { height: 500px; }
+        }
+        .plate-label {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 0.65rem;
+            font-weight: bold;
+            color: #92400e;
+            z-index: 10;
+            pointer-events: none;
+        }
+        @media (min-width: 640px) {
+            .plate-label { font-size: 0.75rem; }
+        }
+        .electron {
+            position: absolute;
+            background: #3b82f6;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.5);
+            will-change: transform;
+            user-select: none;
+            -webkit-user-select: none;
+            cursor: grab;
+            touch-action: none;
+            pointer-events: auto;
+        }
+        .electron.dragging {
+            cursor: grabbing;
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.8);
+            z-index: 100;
+        }
+        .status-display {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        @media (min-width: 640px) {
+            .status-display {
+                padding: 20px;
+                margin-bottom: 20px;
+            }
+        }
+        .status-display p {
+            font-size: 1rem;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+        @media (min-width: 640px) {
+            .status-display p {
+                font-size: 1.125rem;
+                margin-bottom: 10px;
+            }
+        }
+        .status-display .count {
+            color: #3b82f6;
+            font-weight: bold;
+        }
+        .status-display .mood {
+            font-size: 1.5rem;
+            margin-top: 8px;
+        }
+        @media (min-width: 640px) {
+            .status-display .mood {
+                font-size: 2rem;
+                margin-top: 10px;
+            }
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            justify-content: center;
+        }
+        @media (min-width: 640px) {
+            .controls {
+                flex-direction: row;
+                gap: 20px;
+            }
+        }
+        button {
+            padding: 18px 32px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        @media (min-width: 640px) {
+            button {
+                padding: 16px 32px;
+                font-size: 1rem;
+            }
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+        }
+        button:active { transform: translateY(0); }
+        .btn-remove {
+            background: #ef4444;
+            color: white;
+        }
+        .btn-remove:hover { background: #dc2626; }
+        .btn-remove:active { background: #b91c1c; }
+        .btn-add {
+            background: #10b981;
+            color: white;
+        }
+        .btn-add:hover { background: #059669; }
+        .btn-add:active { background: #047857; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>The Electron Squeeze 🔋</h2>
+        <div class="capacitor-plate" id="capacitorPlate">
+            <div class="plate-label">CAPACITOR PLATE</div>
+        </div>
+        <div class="status-display">
+            <p>Electrons on plate: <span class="count" id="electronCount">3</span></p>
+            <p class="mood" id="moodDisplay">😊 Very Low Voltage</p>
+        </div>
+        <div class="controls">
+            <button class="btn-remove" id="btnRemove">Remove e⁻</button>
+            <button class="btn-add" id="btnAdd">Add e⁻ (increase charge density)</button>
+        </div>
+    </div>
+    <script>
+        var CONFIG = {
+            coulombConstant: 8000,
+            damping: 0.95,
+            maxSpeed: 4,
+            jostleMultiplier: 2.5,
+            boundaryRepulsion: 150,
+            exitSpeed: 20
+        };
+        
+        var electrons = [];
+        var nextId = 0;
+        var animationFrameId = null;
+        var plateElement = null;
+        var plateBounds = null;
+        var jostleUntil = 0;
+        var draggedElectron = null;
+        var dragOffset = { x: 0, y: 0 };
+
+        function Electron(id, x, y, status) {
+            this.id = id;
+            this.x = x;
+            this.y = y;
+            this.vx = 0;
+            this.vy = 0;
+            this.status = status || 'settled';
+            this.element = null;
+            this.targetX = x;
+            this.targetY = y;
+        }
+
+        Electron.prototype.createDOMElement = function(size, emoji) {
+            var el = document.createElement('div');
+            el.className = 'electron';
+            el.style.width = size + 'px';
+            el.style.height = size + 'px';
+            el.style.fontSize = (size * 0.6) + 'px';
+            el.textContent = emoji;
+            this.element = el;
+            
+            var self = this;
+            el.addEventListener('mousedown', function(e) {
+                startDrag(e, self);
+            });
+            el.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                startDrag(e.touches[0], self);
+            });
+            
+            return el;
+        };
+
+        Electron.prototype.updatePosition = function() {
+            if (this.element) {
+                var offsetX = this.x - this.element.offsetWidth / 2;
+                var offsetY = this.y - this.element.offsetHeight / 2;
+                this.element.style.transform = 'translate(' + offsetX + 'px, ' + offsetY + 'px)';
+            }
+        };
+
+        function startDrag(e, electron) {
+            if (electron.status !== 'settled') return;
+            draggedElectron = electron;
+            var rect = plateElement.getBoundingClientRect();
+            dragOffset.x = e.clientX - rect.left - electron.x;
+            dragOffset.y = e.clientY - rect.top - electron.y;
+            electron.element.classList.add('dragging');
+            electron.vx = 0;
+            electron.vy = 0;
+            jostleUntil = Date.now() + 1000;
+        }
+
+        function handleDragMove(e) {
+            if (!draggedElectron) return;
+            var rect = plateElement.getBoundingClientRect();
+            var newX = e.clientX - rect.left - dragOffset.x;
+            var newY = e.clientY - rect.top - dragOffset.y;
+            var size = 48;
+            newX = Math.max(size/2, Math.min(plateBounds.width - size/2, newX));
+            newY = Math.max(size/2, Math.min(plateBounds.height - size/2, newY));
+            draggedElectron.x = newX;
+            draggedElectron.y = newY;
+            draggedElectron.vx = 0;
+            draggedElectron.vy = 0;
+        }
+
+        function handleDragEnd() {
+            if (draggedElectron) {
+                draggedElectron.element.classList.remove('dragging');
+                draggedElectron = null;
+            }
+        }
+
+        function init() {
+            plateElement = document.getElementById('capacitorPlate');
+            updatePlateBounds();
+            
+            for (var i = 0; i < 3; i++) {
+                var x = plateBounds.width * (0.25 + i * 0.25);
+                var y = plateBounds.height / 2;
+                electrons.push(new Electron(nextId++, x, y, 'settled'));
+            }
+            
+            render();
+            startPhysicsLoop();
+            
+            window.addEventListener('resize', updatePlateBounds);
+            
+            var btnAdd = document.getElementById('btnAdd');
+            var btnRemove = document.getElementById('btnRemove');
+            
+            btnAdd.addEventListener('click', addElectron);
+            btnAdd.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                addElectron();
+            });
+            
+            btnRemove.addEventListener('click', removeElectron);
+            btnRemove.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                removeElectron();
+            });
+            
+            document.addEventListener('mousemove', handleDragMove);
+            document.addEventListener('mouseup', handleDragEnd);
+            document.addEventListener('touchmove', function(e) {
+                if (draggedElectron) {
+                    e.preventDefault();
+                    handleDragMove(e.touches[0]);
+                }
+            }, { passive: false });
+            document.addEventListener('touchend', handleDragEnd);
+        }
+
+        function updatePlateBounds() {
+            var rect = plateElement.getBoundingClientRect();
+            plateBounds = {
+                width: rect.width,
+                height: rect.height,
+                padding: 35
+            };
+        }
+
+        function calculateCoulombForce(e1, e2) {
+            var dx = e2.x - e1.x;
+            var dy = e2.y - e1.y;
+            var distSq = dx * dx + dy * dy;
+            var minDist = 48;
+            
+            if (distSq < minDist * minDist) {
+                var force = CONFIG.coulombConstant / (minDist * minDist);
+                var angle = Math.atan2(dy, dx);
+                return {
+                    fx: -Math.cos(angle) * force,
+                    fy: -Math.sin(angle) * force
+                };
+            }
+            
+            var force = CONFIG.coulombConstant / distSq;
+            var dist = Math.sqrt(distSq);
+            return {
+                fx: -(dx / dist) * force,
+                fy: -(dy / dist) * force
+            };
+        }
+
+        function calculateBoundaryForce(electron) {
+            var margin = plateBounds.padding;
+            var fx = 0;
+            var fy = 0;
+            
+            if (electron.x < margin) {
+                fx += CONFIG.boundaryRepulsion / (electron.x + 1);
+            }
+            if (electron.x > plateBounds.width - margin) {
+                fx -= CONFIG.boundaryRepulsion / (plateBounds.width - electron.x + 1);
+            }
+            if (electron.y < margin) {
+                fy += CONFIG.boundaryRepulsion / (electron.y + 1);
+            }
+            if (electron.y > plateBounds.height - margin) {
+                fy -= CONFIG.boundaryRepulsion / (plateBounds.height - electron.y + 1);
+            }
+            
+            return { fx: fx, fy: fy };
+        }
+
+        function updatePhysics() {
+            var settledElectrons = electrons.filter(function(e) { return e.status === 'settled'; });
+            var isJostling = Date.now() < jostleUntil;
+            var forceMultiplier = isJostling ? CONFIG.jostleMultiplier : 1;
+            
+            for (var i = 0; i < settledElectrons.length; i++) {
+                var e1 = settledElectrons[i];
+                
+                if (draggedElectron && e1.id === draggedElectron.id) continue;
+                
+                var totalFx = 0;
+                var totalFy = 0;
+                
+                for (var j = 0; j < settledElectrons.length; j++) {
+                    var e2 = settledElectrons[j];
+                    if (e1.id !== e2.id) {
+                        var force = calculateCoulombForce(e1, e2);
+                        totalFx += force.fx * forceMultiplier;
+                        totalFy += force.fy * forceMultiplier;
+                    }
+                }
+                
+                var boundaryForce = calculateBoundaryForce(e1);
+                totalFx += boundaryForce.fx;
+                totalFy += boundaryForce.fy;
+                
+                e1.vx += totalFx * 0.01;
+                e1.vy += totalFy * 0.01;
+                
+                e1.vx *= CONFIG.damping;
+                e1.vy *= CONFIG.damping;
+                
+                var speed = Math.sqrt(e1.vx * e1.vx + e1.vy * e1.vy);
+                if (speed > CONFIG.maxSpeed) {
+                    e1.vx = (e1.vx / speed) * CONFIG.maxSpeed;
+                    e1.vy = (e1.vy / speed) * CONFIG.maxSpeed;
+                }
+                
+                e1.x += e1.vx;
+                e1.y += e1.vy;
+                
+                var size = 48;
+                e1.x = Math.max(size/2, Math.min(plateBounds.width - size/2, e1.x));
+                e1.y = Math.max(size/2, Math.min(plateBounds.height - size/2, e1.y));
+            }
+            
+            var enteringElectrons = electrons.filter(function(e) { return e.status === 'entering'; });
+            for (var k = 0; k < enteringElectrons.length; k++) {
+                var e = enteringElectrons[k];
+                var dx = e.targetX - e.x;
+                var dy = e.targetY - e.y;
+                var dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist < 5) {
+                    e.status = 'settled';
+                    e.x = e.targetX;
+                    e.y = e.targetY;
+                    e.vx = 0;
+                    e.vy = 0;
+                } else {
+                    e.x += dx * 0.1;
+                    e.y += dy * 0.1;
+                }
+            }
+            
+            var exitingElectrons = electrons.filter(function(e) { return e.status === 'exiting'; });
+            for (var m = 0; m < exitingElectrons.length; m++) {
+                var ex = exitingElectrons[m];
+                ex.x += ex.vx;
+                ex.y += ex.vy;
+            }
+        }
+
+        function getElectronSize(count) {
+            return 48;
+        }
+
+        function getEmoji(count) {
+            if (count <= 3) return '😊';
+            if (count <= 6) return '😐';
+            if (count <= 9) return '😰';
+            if (count <= 12) return '😫';
+            if (count <= 16) return '😱';
+            if (count <= 20) return '🤯';
+            if (count <= 24) return '😵';
+            if (count <= 28) return '💀';
+            return '💥';
+        }
+
+        function getMood(count) {
+            if (count <= 3) return '😊 Very Low Voltage';
+            if (count <= 6) return '😐 Moderate Voltage';
+            if (count <= 9) return '😰 High Voltage';
+            if (count <= 12) return '😫 Very High Voltage';
+            if (count <= 16) return '😱 EXTREME VOLTAGE';
+            if (count <= 20) return '🤯 CRITICAL VOLTAGE';
+            if (count <= 24) return '😵 OVERLOAD VOLTAGE';
+            if (count <= 28) return '💀 DANGER VOLTAGE';
+            return '💥 EXPLOSIVE VOLTAGE';
+        }
+
+        function updateAllElectronEmojis() {
+            var activeCount = electrons.filter(function(e) { return e.status !== 'exiting'; }).length;
+            var emoji = getEmoji(activeCount);
+            
+            for (var i = 0; i < electrons.length; i++) {
+                var electron = electrons[i];
+                if (electron.element && electron.status !== 'exiting') {
+                    electron.element.textContent = emoji;
+                }
+            }
+        }
+
+        function render() {
+            plateElement.innerHTML = '<div class="plate-label">CAPACITOR PLATE</div>';
+            
+            var size = getElectronSize(electrons.length);
+            var emoji = getEmoji(electrons.length);
+            
+            for (var i = 0; i < electrons.length; i++) {
+                var electron = electrons[i];
+                var el = electron.createDOMElement(size, emoji);
+                plateElement.appendChild(el);
+                electron.updatePosition();
+            }
+            
+            document.getElementById('electronCount').textContent = electrons.length;
+            document.getElementById('moodDisplay').textContent = getMood(electrons.length);
+        }
+
+        function physicsLoop() {
+            updatePhysics();
+            
+            for (var i = 0; i < electrons.length; i++) {
+                electrons[i].updatePosition();
+            }
+            
+            electrons = electrons.filter(function(e) {
+                if (e.status === 'exiting') {
+                    var offScreen = e.x < -100 || e.x > plateBounds.width + 100 || e.y < -100 || e.y > plateBounds.height + 100;
+                    if (offScreen && e.element) {
+                        e.element.remove();
+                    }
+                    return !offScreen;
+                }
+                return true;
+            });
+            
+            animationFrameId = requestAnimationFrame(physicsLoop);
+        }
+
+        function startPhysicsLoop() {
+            if (!animationFrameId) {
+                physicsLoop();
+            }
+        }
+
+        function addElectron() {
+            if (electrons.length >= 32) return;
+            
+            var bestX = plateBounds.width / 2;
+            var bestY = plateBounds.height / 2;
+            var maxMinDist = 0;
+            
+            for (var i = 0; i < 20; i++) {
+                var testX = plateBounds.padding + Math.random() * (plateBounds.width - 2 * plateBounds.padding);
+                var testY = plateBounds.padding + Math.random() * (plateBounds.height - 2 * plateBounds.padding);
+                
+                var minDist = Infinity;
+                for (var j = 0; j < electrons.length; j++) {
+                    var e = electrons[j];
+                    var dist = Math.sqrt(Math.pow(e.x - testX, 2) + Math.pow(e.y - testY, 2));
+                    minDist = Math.min(minDist, dist);
+                }
+                
+                if (minDist > maxMinDist) {
+                    maxMinDist = minDist;
+                    bestX = testX;
+                    bestY = testY;
+                }
+            }
+            
+            var side = Math.floor(Math.random() * 4);
+            var startX, startY;
+            
+            if (side === 0) {
+                startX = bestX;
+                startY = -50;
+            } else if (side === 1) {
+                startX = plateBounds.width + 50;
+                startY = bestY;
+            } else if (side === 2) {
+                startX = bestX;
+                startY = plateBounds.height + 50;
+            } else {
+                startX = -50;
+                startY = bestY;
+            }
+            
+            var electron = new Electron(nextId++, startX, startY, 'entering');
+            electron.targetX = bestX;
+            electron.targetY = bestY;
+            electrons.push(electron);
+            
+            jostleUntil = Date.now() + 1500;
+            
+            render();
+            
+            setTimeout(function() {
+                updateAllElectronEmojis();
+            }, 50);
+        }
+
+        function removeElectron() {
+            if (electrons.length <= 1) return;
+            
+            var settledElectrons = electrons.filter(function(e) { return e.status === 'settled'; });
+            if (settledElectrons.length === 0) return;
+            
+            var randomElectron = settledElectrons[Math.floor(Math.random() * settledElectrons.length)];
+            
+            var angle = Math.random() * Math.PI * 2;
+            randomElectron.vx = Math.cos(angle) * CONFIG.exitSpeed;
+            randomElectron.vy = Math.sin(angle) * CONFIG.exitSpeed - 10;
+            randomElectron.status = 'exiting';
+            
+            jostleUntil = Date.now() + 1000;
+            
+            setTimeout(function() {
+                updateAllElectronEmojis();
+            }, 50);
+            
+            setTimeout(function() {
+                var activeCount = electrons.filter(function(e) { return e.status !== 'exiting'; }).length;
+                document.getElementById('electronCount').textContent = activeCount;
+                document.getElementById('moodDisplay').textContent = getMood(activeCount);
+            }, 100);
+        }
+
+        init();
+    </script>
+</body>
+</html>

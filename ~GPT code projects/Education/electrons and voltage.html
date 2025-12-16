@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { margin: 0; background: #1a1a1a; }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+            pointer-events: none;
+        }
+        .dg.main {
+            position: absolute !important;
+            top: 10px !important;
+            right: 10px !important;
+        }
+        .dg.main.taller-than-window {
+            overflow-y: auto;
+        }
+        .dg.main .close-button.close-bottom {
+            position: relative;
+        }
+        #gui-container {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 5px;
+            padding: 10px;
+            cursor: move;
+        }
+        #collapse-btn {
+            position: absolute;
+            top: 0;
+            right: 0;
+            padding: 5px;
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            z-index: 1000;
+        }
+        #title {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 24px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="title">Electrons on Metal Capsule</div>
+    <div id="info">Drag to rotate (X/Y/Z). Scroll to zoom.</div>
+    <div id="gui-container">
+        <button id="collapse-btn">≡</button>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
+
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x1a1a1a);
+        document.body.appendChild(renderer.domElement);
+
+        // Physics constants (scaled for simulation)
+        const COULOMB_CONSTANT = 0.1;
+        const DAMPING = 0.95;
+        const MIN_DISTANCE = 0.2; // Increased minimum distance
+        const TIMESTEP = 0.016;
+        
+        // Default settings for reset
+        const DEFAULT_SETTINGS = {
+            cylinderLength: 2,
+            radius: 0.5,
+            segments: 32,
+            particles: 10,
+            showParticles: true,
+            rotationX: 0,
+            rotationY: 0,
+            rotationZ: 0,
+            simulating: false,
+            chargeStrength: 1.0,
+            brownianMotion: 0.05  // Increased default Brownian motion
+        };
+
+        // Lighting
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(1, 1, 1);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x404040));
+
+        // Default camera position
+        const defaultCameraPosition = { x: 0, y: 0, z: 5 };
+        camera.position.copy(defaultCameraPosition);
+
+        // Parameters
+        const params = {
+            ...DEFAULT_SETTINGS,
+            resetView: function() {
+                camera.position.copy(defaultCameraPosition);
+                params.rotationX = 0;
+                params.rotationY = 0;
+                params.rotationZ = 0;
+                for (let i in gui.__controllers) {
+                    gui.__controllers[i].updateDisplay();
+                }
+            },
+            resetSettings: function() {
+                Object.keys(DEFAULT_SETTINGS).forEach(key => {
+                    params[key] = DEFAULT_SETTINGS[key];
+                });
+                updateGeometry();
+                for (let i in gui.__controllers) {
+                    gui.__controllers[i].updateDisplay();
+                }
+            }
+        };
+
+        // Particle class for physics
+        class Particle {
+            constructor(mesh) {
+                this.mesh = mesh;
+                this.velocity = new THREE.Vector3();
+                this.charge = -1; // All particles are electrons
+                this.mass = 1;
+            }
+
+            updatePosition(particles, capsuleLength, radius) {
+                // Calculate Coulomb forces from other particles (repulsive only)
+                const force = new THREE.Vector3();
+                
+                particles.forEach(other => {
+                    if (other === this) return;
+                    
+                    const diff = new THREE.Vector3().subVectors(this.mesh.position, other.mesh.position);
+                    const distance = diff.length();
+                    
+                    // Strong repulsion at close distances
+                    if (distance < MIN_DISTANCE) {
+                        const repulsionForce = 5 * COULOMB_CONSTANT / (MIN_DISTANCE * MIN_DISTANCE);
+                        force.add(diff.normalize().multiplyScalar(repulsionForce));
+                        return;
+                    }
+                    
+                    // Normal Coulomb repulsion at larger distances
+                    const forceMagnitude = (COULOMB_CONSTANT * Math.abs(this.charge * other.charge) * params.chargeStrength) / (distance * distance);
+                    force.add(diff.normalize().multiplyScalar(forceMagnitude));
+                });
+
+                // Enhanced Brownian motion
+                if (params.brownianMotion > 0) {
+                    force.add(new THREE.Vector3(
+                        (Math.random() - 0.5) * params.brownianMotion * 4,
+                        (Math.random() - 0.5) * params.brownianMotion * 4,
+                        (Math.random() - 0.5) * params.brownianMotion * 4
+                    ));
+                }
+
+                // Update velocity with increased damping for stability
+                this.velocity.add(force.multiplyScalar(TIMESTEP / this.mass));
+                this.velocity.multiplyScalar(DAMPING);
+
+                // Update position
+                this.mesh.position.add(this.velocity.clone().multiplyScalar(TIMESTEP));
+
+                // Constrain to capsule surface
+                this.constrainToSurface(capsuleLength, radius);
+            }
+
+            constrainToSurface(capsuleLength, radius) {
+                const pos = this.mesh.position;
+                
+                // Project onto cylinder surface for points within cylinder height
+                if (Math.abs(pos.y) <= capsuleLength / 2) {
+                    const xz = new THREE.Vector2(pos.x, pos.z);
+                    xz.setLength(radius);
+                    pos.x = xz.x;
+                    pos.z = xz.y;
+                } else {
+                    // Project onto hemisphere caps
+                    const cap = pos.y > 0 ? capsuleLength/2 : -capsuleLength/2;
+                    const sphere = new THREE.Vector3(pos.x, pos.y - cap, pos.z);
+                    sphere.setLength(radius);
+                    pos.copy(sphere).add(new THREE.Vector3(0, cap, 0));
+                }
+            }
+        }
+
+        // Create capsule geometry with grey material
+        function createCapsule(length, radius, segments) {
+            const geometry = new THREE.Group();
+
+            const material = new THREE.MeshPhongMaterial({ 
+                color: 0x808080,
+                wireframe: false,
+                transparent: true,
+                opacity: 0.9
+            });
+
+            // Cylinder
+            const cylinderGeometry = new THREE.CylinderGeometry(radius, radius, length, segments);
+            const cylinder = new THREE.Mesh(cylinderGeometry, material);
+            geometry.add(cylinder);
+
+            // Hemispheres
+            const sphereGeometry = new THREE.SphereGeometry(radius, segments, segments / 2);
+            
+            const topSphere = new THREE.Mesh(sphereGeometry, material);
+            topSphere.position.y = length / 2;
+            geometry.add(topSphere);
+
+            const bottomSphere = new THREE.Mesh(sphereGeometry, material);
+            bottomSphere.position.y = -length / 2;
+            geometry.add(bottomSphere);
+
+            return geometry;
+        }
+
+        let particleObjects = [];
+
+        // Create blue particles (electrons)
+        function createParticles(count, capsuleLength, radius) {
+            const particles = new THREE.Group();
+            const particleGeometry = new THREE.SphereGeometry(0.05, 12, 12);
+            
+            particleObjects = [];
+
+            // Distribute particles evenly initially
+            for (let i = 0; i < count; i++) {
+                const particleMaterial = new THREE.MeshPhongMaterial({ 
+                    color: 0x4444ff,
+                    emissive: 0x2222ff,
+                    emissiveIntensity: 0.3
+                });
+
+                const mesh = new THREE.Mesh(particleGeometry, particleMaterial);
+                
+                // More evenly distributed initial positions
+                const phi = Math.acos(-1 + (2 * i) / count);
+                const theta = Math.sqrt(count * Math.PI) * phi;
+                
+                mesh.position.x = Math.cos(theta) * Math.sin(phi) * radius;
+                mesh.position.y = (Math.random() - 0.5) * capsuleLength;
+                mesh.position.z = Math.sin(theta) * Math.sin(phi) * radius;
+                
+                particles.add(mesh);
+                particleObjects.push(new Particle(mesh));
+            }
+
+            return particles;
+        }
+
+        let capsule = createCapsule(params.cylinderLength, params.radius, params.segments);
+        let particles = createParticles(params.particles, params.cylinderLength, params.radius);
+        scene.add(capsule);
+        scene.add(particles);
+
+        // GUI setup
+        const guiContainer = document.getElementById('gui-container');
+        const gui = new dat.GUI({ autoPlace: false });
+        guiContainer.appendChild(gui.domElement);
+
+        // Make GUI draggable
+        let isDraggingGui = false;
+        let guiOffset = { x: 0, y: 0 };
+
+        guiContainer.addEventListener('mousedown', (e) => {
+            if (e.target === guiContainer || e.target === document.getElementById('collapse-btn')) {
+                isDraggingGui = true;
+                guiOffset.x = e.clientX - guiContainer.offsetLeft;
+                guiOffset.y = e.clientY - guiContainer.offsetTop;
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isDraggingGui) {
+                guiContainer.style.left = (e.clientX - guiOffset.x) + 'px';
+                guiContainer.style.top = (e.clientY - guiOffset.y) + 'px';
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDraggingGui = false;
+        });
+
+        // Collapsible GUI
+        const collapseBtn = document.getElementById('collapse-btn');
+        let isCollapsed = false;
+
+        collapseBtn.addEventListener('click', () => {
+            isCollapsed = !isCollapsed;
+            gui.domElement.style.display = isCollapsed ? 'none' : 'block';
+            collapseBtn.textContent = isCollapsed ? '☰' : '≡';
+        });
+
+        // GUI controls
+        const geometryFolder = gui.addFolder('Geometry');
+        geometryFolder.add(params, 'cylinderLength', 0.5, 5).onChange(updateGeometry);
+        geometryFolder.add(params, 'radius', 0.1, 2).onChange(updateGeometry);
+        geometryFolder.add(params, 'particles', 1, 50).step(1).onChange(updateGeometry);
+        geometryFolder.add(params, 'showParticles').onChange(value => particles.visible = value);
+
+        const rotationFolder = gui.addFolder('Rotation');
+        rotationFolder.add(params, 'rotationX', 0, Math.PI * 2);
+        rotationFolder.add(params, 'rotationY', 0, Math.PI * 2);
+        rotationFolder.add(params, 'rotationZ', 0, Math.PI * 2);
+
+        const simulationFolder = gui.addFolder('Simulation');
+        simulationFolder.add(params, 'simulating').name('Run Simulation');
+        simulationFolder.add(params, 'chargeStrength', 0.1, 5).name('Charge Strength');
+        simulationFolder.add(params, 'brownianMotion', 0, 0.5).name('Thermal Motion');
+
+        gui.add(params, 'resetView').name('Reset View');
+        gui.add(params, 'resetSettings').name('Reset All Settings');
+
+        geometryFolder.open();
+        rotationFolder.open();
+        simulationFolder.open();
+
+        function updateGeometry() {
+            scene.remove(capsule);
+            scene.remove(particles);
+            capsule = createCapsule(params.cylinderLength, params.radius, params.segments);
+            particles = createParticles(params.particles, params.cylinderLength, params.radius);
+            scene.add(capsule);
+            scene.add(particles);
+        }
+
+        // Orbit controls
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+
+        document.addEventListener('mousedown', (e) => {
+            if (e.target === renderer.domElement) {
+                isDragging = true;
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+
+            const deltaMove = {
+                x: e.clientX - previousMousePosition.x,
+                y: e.clientY - previousMousePosition.y
+            };
+
+            if (e.shiftKey) {
+                // X-axis rotation
+                params.rotationX += deltaMove.y * 0.01;
+            } else if (e.ctrlKey) {
+                // Z-axis rotation
+                params.rotationZ += deltaMove.x * 0.01;
+            } else {
+                // Y-axis rotation
+                params.rotationY += deltaMove.x * 0.01;
+            }
+
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+
+        document.addEventListener('mouseup', () => isDragging = false);
+
+        // Zoom with scroll
+        document.addEventListener('wheel', (e) => {
+            if (e.target === renderer.domElement) {
+                camera.position.z += e.deltaY * 0.01;
+                camera.position.z = Math.max(2, Math.min(10, camera.position.z));
+            }
+        });
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Update rotations
+            capsule.rotation.x = params.rotationX;
+            capsule.rotation.y = params.rotationY;
+            capsule.rotation.z = params.rotationZ;
+            particles.rotation.x = params.rotationX;
+            particles.rotation.y = params.rotationY;
+            particles.rotation.z = params.rotationZ;
+
+            // Update particle physics
+            if (params.simulating) {
+                particleObjects.forEach(particle => {
+                    particle.updatePosition(particleObjects, params.cylinderLength, params.radius);
+                });
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle window resizing
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
+
+
+

@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gravitational Accretion Simulation - Advanced Vector Display</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: black;
+        }
+        canvas {
+            border: 1px solid #333;
+            cursor: grab;
+        }
+        canvas:active {
+            cursor: grabbing;
+        }
+        #controls {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        button {
+            margin: 5px;
+            padding: 5px 10px;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .slider-container {
+            margin: 10px 0;
+        }
+        .slider-container label {
+            display: inline-block;
+            width: 150px;
+        }
+        .checkbox-container, .radio-container {
+            margin: 10px 0;
+            padding: 5px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.1);
+        }
+        .radio-container label {
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <button onclick="togglePause()">Play/Pause</button>
+        <button onclick="resetSimulation()">Reset</button>
+        <button onclick="recenterView()">Recenter</button>
+        <button id="spawnMoonsBtn" onclick="spawnMoons()" disabled>Spawn Moons</button>
+        <div>Particles: <span id="particleCount">0</span></div>
+        <div>Largest Mass: <span id="largestMass">1.0</span></div>
+        
+        <div class="checkbox-container">
+            <label>
+                <input type="checkbox" checked onchange="toggleCenterTracking()">
+                Track Largest Mass
+            </label>
+        </div>
+
+        <div class="radio-container">
+            <label>Force Vectors:</label><br>
+            <input type="radio" name="vectorDisplay" value="off" checked> Off<br>
+            <input type="radio" name="vectorDisplay" value="direction"> Direction Only<br>
+            <input type="radio" name="vectorDisplay" value="force"> Force Magnitude
+        </div>
+
+        <div class="slider-container">
+            <label>Population: </label>
+            <input type="range" min="500" max="5000" step="100" value="2000" oninput="updatePopulation(this.value)">
+            <span id="populationValue">2000</span>
+        </div>
+        <div class="slider-container">
+            <label>Zoom: </label>
+            <input type="range" min="0.001" max="0.2" step="0.001" value="0.05" oninput="updateZoom(this.value)">
+            <span id="zoomValue">0.05x</span>
+        </div>
+        <div class="slider-container">
+            <label>Time Speed: </label>
+            <input type="range" min="0.1" max="5" step="0.1" value="1" oninput="updateTimeStep(this.value)">
+            <span id="timeValue">1.0x</span>
+        </div>
+        <div class="slider-container">
+            <label>Gravity Strength: </label>
+            <input type="range" min="0.1" max="100" step="0.1" value="1" oninput="updateGravity(this.value)">
+            <span id="gravityValue">1.0x</span>
+        </div>
+    </div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let isPaused = true;
+        let zoom = 0.05;
+        let timeMultiplier = 1;
+        let gravityMultiplier = 1;
+        let largestMass = 1;
+        let largestParticle = null;
+        let particleCount = 2000;
+        let trackCenter = true;
+        
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+        let lastTime = Date.now();
+        let cameraTransitionStart = null;
+        let cameraTransitionFrom = { x: 0, y: 0 };
+        let cameraTransitionTo = { x: 0, y: 0 };
+        
+        const WORLD_SIZE = 50000000;
+        const INITIAL_RADIUS = 50000;
+        const BASE_G = 6.67430e-11 * 1e13;
+        let G = BASE_G;
+        const SOFTENING = 100;
+        const BASE_TIME_STEP = 0.2;
+        let TIME_STEP = BASE_TIME_STEP;
+        const BASE_RADIUS = 8;
+        const MAX_VELOCITY = 1000;
+        const REAL_FLASH_DURATION = 1000;
+        const MIN_PARTICLE_SIZE = 2;
+        const CLOCKWISE_COLOR = '#ffff00';
+        const ANTICLOCKWISE_COLOR = '#00ff00';
+        const LARGEST_COLOR = '#ffffff';
+        const CENTER_INDICATOR_COLOR = '#00ffff';
+        const CAMERA_TRANSITION_DURATION = 1500;
+        const PULSE_FREQUENCY = 3;
+        const MIN_MOON_ORBIT = 20;
+        const MAX_MOON_ORBIT = 40;
+        const ORBIT_BLEND_FACTOR = 0.3;
+        const TRAIL_DURATION = 3000; // 3 seconds
+        const MAX_TRAIL_OPACITY = 0.4; // 40% opacity
+        const ARROW_SIZE = 8;
+        const VECTOR_FORCE_SCALE = 0.5;
+
+        function drawArrowHead(fromX, fromY, angle, size) {
+            const arrowAngle = Math.PI / 6; // 30 degrees
+            ctx.beginPath();
+            ctx.moveTo(fromX, fromY);
+            ctx.lineTo(
+                fromX - size * Math.cos(angle - arrowAngle),
+                fromY - size * Math.sin(angle - arrowAngle)
+            );
+            ctx.moveTo(fromX, fromY);
+            ctx.lineTo(
+                fromX - size * Math.cos(angle + arrowAngle),
+                fromY - size * Math.sin(angle + arrowAngle)
+            );
+            ctx.stroke();
+        }
+
+        class Trail {
+            constructor() {
+                this.points = [];
+            }
+
+            addPoint(x, y) {
+                this.points.push({
+                    x: x,
+                    y: y,
+                    timestamp: Date.now()
+                });
+                
+                // Remove old points
+                const cutoffTime = Date.now() - TRAIL_DURATION;
+                while (this.points.length > 0 && this.points[0].timestamp < cutoffTime) {
+                    this.points.shift();
+                }
+            }
+
+            draw() {
+                if (this.points.length < 2) return;
+
+                const currentTime = Date.now();
+                ctx.beginPath();
+                
+                let firstPoint = true;
+                for (let i = 0; i < this.points.length; i++) {
+                    const point = this.points[i];
+                    const screenX = (point.x - cameraX) * zoom + canvas.width / 2;
+                    const screenY = (point.y - cameraY) * zoom + canvas.height / 2;
+                    
+                    if (firstPoint) {
+                        ctx.moveTo(screenX, screenY);
+                        firstPoint = false;
+                    } else {
+                        ctx.lineTo(screenX, screenY);
+                    }
+                }
+
+                // Create gradient along path
+                const gradient = ctx.createLinearGradient(
+                    (this.points[0].x - cameraX) * zoom + canvas.width / 2,
+                    (this.points[0].y - cameraY) * zoom + canvas.height / 2,
+                    (this.points[this.points.length - 1].x - cameraX) * zoom + canvas.width / 2,
+                    (this.points[this.points.length - 1].y - cameraY) * zoom + canvas.height / 2
+                );
+
+                gradient.addColorStop(0, `rgba(255, 255, 255, 0)`);
+                gradient.addColorStop(1, `rgba(255, 255, 255, ${MAX_TRAIL_OPACITY})`);
+                
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+        }
+
+        function spawnMoons() {
+            const newParticles = [];
+            for (const parent of particles) {
+                const orbitRadius = parent.radius * (MIN_MOON_ORBIT + (MAX_MOON_ORBIT - MIN_MOON_ORBIT) * Math.random());
+                const velocity = Math.sqrt((G * parent.mass) / orbitRadius);
+                const angle = Math.random() * Math.PI * 2;
+                
+                const moon = new Particle(
+                    parent.x + orbitRadius * Math.cos(angle),
+                    parent.y + orbitRadius * Math.sin(angle)
+                );
+                
+                moon.vx = parent.vx - velocity * Math.sin(angle);
+                moon.vy = parent.vy + velocity * Math.cos(angle);
+                moon.mass = 1.0;
+                
+                newParticles.push(moon);
+            }
+            particles.push(...newParticles);
+            document.getElementById('particleCount').textContent = particles.length;
+            document.getElementById('spawnMoonsBtn').disabled = particles.length >= 1000;
+        }
+
+        class Flash {
+            constructor(x, y, size) {
+                this.x = x;
+                this.y = y;
+                this.size = size;
+                this.startTime = Date.now();
+            }
+
+            draw() {
+                const age = Date.now() - this.startTime;
+                if (age >= REAL_FLASH_DURATION) return false;
+                
+                const screenX = (this.x - cameraX) * zoom + canvas.width / 2;
+                const screenY = (this.y - cameraY) * zoom + canvas.height / 2;
+                
+                const alpha = 1 - (age / REAL_FLASH_DURATION);
+                const size = this.size * (1 + age / REAL_FLASH_DURATION) * zoom;
+                
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, size, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                ctx.fill();
+                
+                return true;
+            }
+        }
+
+        function drawCenterIndicator(currentTime) {
+            if (!largestParticle) return;
+            
+            const screenX = (largestParticle.x - cameraX) * zoom + canvas.width / 2;
+            const screenY = (largestParticle.y - cameraY) * zoom + canvas.height / 2;
+            
+            const pulsePhase = (currentTime * PULSE_FREQUENCY / 1000) % (Math.PI * 2);
+            const pulseOpacity = (0.2 + 0.4 * Math.abs(Math.sin(pulsePhase)));
+            
+            ctx.beginPath();
+            ctx.arc(screenX, screenY, 50, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(0, 255, 255, ${pulseOpacity})`;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        let flashes = [];
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        let cameraX = WORLD_SIZE / 2;
+        let cameraY = WORLD_SIZE / 2;
+
+        function startCameraTransition(targetX, targetY) {
+            cameraTransitionStart = Date.now();
+            cameraTransitionFrom = { x: cameraX, y: cameraY };
+            cameraTransitionTo = { x: targetX, y: targetY };
+        }
+
+        function updateCamera() {
+            if (cameraTransitionStart) {
+                const age = Date.now() - cameraTransitionStart;
+                if (age >= CAMERA_TRANSITION_DURATION) {
+                    cameraX = cameraTransitionTo.x;
+                    cameraY = cameraTransitionTo.y;
+                    cameraTransitionStart = null;
+                } else {
+                    const progress = age / CAMERA_TRANSITION_DURATION;
+                    const easeProgress = 1 - Math.cos(progress * Math.PI / 2);
+                    cameraX = cameraTransitionFrom.x + (cameraTransitionTo.x - cameraTransitionFrom.x) * easeProgress;
+                    cameraY = cameraTransitionFrom.y + (cameraTransitionTo.y - cameraTransitionFrom.y) * easeProgress;
+                }
+            }
+        }
+
+        function recenterView() {
+            if (largestParticle) {
+                startCameraTransition(largestParticle.x, largestParticle.y);
+            } else {
+                startCameraTransition(WORLD_SIZE / 2, WORLD_SIZE / 2);
+            }
+            trackCenter = true;
+            document.querySelector('.checkbox-container input').checked = true;
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            canvas.style.cursor = 'grabbing';
+            trackCenter = false;
+            cameraTransitionStart = null;
+            document.querySelector('.checkbox-container input').checked = false;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const dx = e.clientX - lastMouseX;
+                const dy = e.clientY - lastMouseY;
+                cameraX -= dx / zoom;
+                cameraY -= dy / zoom;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+            canvas.style.cursor = 'grab';
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            isDragging = false;
+            canvas.style.cursor = 'grab';
+        });
+
+        class Particle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.vx = 0;
+                this.vy = 0;
+                this.mass = 1;
+                this.radius = Math.sqrt(this.mass) * BASE_RADIUS;
+                this.merged = false;
+                this.orbitDirection = 0;
+                this.strongestInfluencer = null;
+                this.strongestForce = 0;
+                this.trail = new Trail();
+                
+                this.lastRadialDistance = null;
+                this.radialDistanceHistory = [];
+                this.lastExtremalPoint = 0;
+            }
+
+            findStrongestInfluence(particles) {
+                if (this === largestParticle) return null;
+                
+                let maxForce = 0;
+                let strongestInfluencer = null;
+                
+                for (let other of particles) {
+                    if (other === this || other.merged) continue;
+                    
+                    const dx = other.x - this.x;
+                    const dy = other.y - this.y;
+                    const distSq = dx * dx + dy * dy;
+                    const force = (G * other.mass) / distSq;
+                    
+                    if (force > maxForce) {
+                        maxForce = force;
+                        strongestInfluencer = other;
+                        this.strongestForce = force;
+                    }
+                }
+                
+                return strongestInfluencer;
+            }
+
+            getOrbitDirection() {
+                if (!largestParticle || this === largestParticle) return 0;
+
+                const dx = this.x - largestParticle.x;
+                const dy = this.y - largestParticle.y;
+                const dvx = this.vx - largestParticle.vx;
+                const dvy = this.vy - largestParticle.vy;
+
+                const crossProduct = dx * dvy - dy * dvx;
+                return Math.sign(crossProduct);
+            }
+
+            drawForceVector(screenX, screenY) {
+                const vectorMode = document.querySelector('input[name="vectorDisplay"]:checked').value;
+                if (vectorMode === 'off' || !this.strongestInfluencer) return;
+
+                const dx = this.strongestInfluencer.x - this.x;
+                const dy = this.strongestInfluencer.y - this.y;
+                const angle = Math.atan2(dy, dx);
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                let lineLength;
+                if (vectorMode === 'direction') {
+                    lineLength = this.radius * 3;
+                } else { // force magnitude
+                    lineLength = Math.min(
+                        this.radius * 10,
+                        this.radius * (1 + Math.log(this.strongestForce * VECTOR_FORCE_SCALE))
+                    );
+                }
+
+                ctx.beginPath();
+                ctx.moveTo(screenX, screenY);
+                const endX = screenX + Math.cos(angle) * lineLength;
+                const endY = screenY + Math.sin(angle) * lineLength;
+                ctx.lineTo(endX, endY);
+                ctx.strokeStyle = 'rgba(255, 0, 0, 0.6)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Draw arrow head
+                drawArrowHead(endX, endY, angle, ARROW_SIZE);
+            }
+
+            circularizeOrbit() {
+                if (!largestParticle || this === largestParticle) return;
+
+                const dx = this.x - largestParticle.x;
+                const dy = this.y - largestParticle.y;
+                const dvx = this.vx - largestParticle.vx;
+                const dvy = this.vy - largestParticle.vy;
+                
+                const r = Math.sqrt(dx * dx + dy * dy);
+                
+                this.radialDistanceHistory.push(r);
+                if (this.radialDistanceHistory.length > 3) {
+                    this.radialDistanceHistory.shift();
+                }
+
+                if (this.radialDistanceHistory.length === 3) {
+                    const [r1, r2, r3] = this.radialDistanceHistory;
+                    
+                    if ((r2 >= r1 && r2 >= r3) || (r2 <= r1 && r2 <= r3)) {
+                        if (this.lastExtremalPoint > 10) {
+                            const speed = Math.sqrt(dvx * dvx + dvy * dvy);
+                            const centralMass = largestParticle.mass;
+                            const idealCircularSpeed = Math.sqrt((G * centralMass) / r);
+                            const crossProduct = dx * dvy - dy * dvx;
+                            const direction = Math.sign(crossProduct);
+                            
+                            const norm = Math.sqrt(dx * dx + dy * dy);
+                            const tangentialX = -dy / norm * direction;
+                            const tangentialY = dx / norm * direction;
+                            
+                            const newSpeed = speed * (1 - ORBIT_BLEND_FACTOR) + idealCircularSpeed * ORBIT_BLEND_FACTOR;
+                            
+                            this.vx = largestParticle.vx + tangentialX * newSpeed;
+                            this.vy = largestParticle.vy + tangentialY * newSpeed;
+                            
+                            this.lastExtremalPoint = 0;
+                        }
+                    }
+                }
+                
+                this.lastExtremalPoint++;
+            }
+
+            update(particles) {
+                if (this.merged) return;
+
+                let fx = 0;
+                let fy = 0;
+
+                this.strongestInfluencer = this.findStrongestInfluence(particles);
+                this.trail.addPoint(this.x, this.y);
+
+                for (let other of particles) {
+                    if (other === this || other.merged) continue;
+
+                    const dx = other.x - this.x;
+                    const dy = other.y - this.y;
+                    const distSq = dx * dx + dy * dy;
+                    const dist = Math.sqrt(distSq);
+
+                    if (dist < (this.radius + other.radius)) {
+                        if (this.mass >= other.mass) {
+                            this.mass += other.mass;
+                            this.radius = Math.sqrt(this.mass) * BASE_RADIUS;
+                            
+                            const massRatio = other.mass / this.mass;
+                            this.vx = this.vx * (1 - massRatio) + other.vx * massRatio;
+                            this.vy = this.vy * (1 - massRatio) + other.vy * massRatio;
+                            
+                            other.merged = true;
+                            flashes.push(new Flash(this.x, this.y, this.radius * 2));
+                            
+                            if (this.mass > largestMass) {
+                                largestMass = this.mass;
+                                largestParticle = this;
+                                document.getElementById('largestMass').textContent = largestMass.toFixed(1);
+                                if (trackCenter) {
+                                    startCameraTransition(this.x, this.y);
+                                }
+                            }
+                        }
+                        continue;
+                    }
+
+                    const massFactor = 1 + Math.log10(this.mass + other.mass);
+                    const timeScaledSoftening = SOFTENING * Math.pow(timeMultiplier, 3) * massFactor;
+                    const softenedDistSq = distSq + timeScaledSoftening;
+                    
+                    const force = G * this.mass * other.mass / softenedDistSq;
+                    const dampening = 1 / (1 + dist * 0.0001 * timeMultiplier);
+                    fx += force * dx / dist * dampening;
+                    fy += force * dy / dist * dampening;
+                }
+
+                const massDamping = 1 / (1 + Math.log10(this.mass) * 0.5);
+                const ax = (fx / this.mass) * massDamping;
+                const ay = (fy / this.mass) * massDamping;
+                
+                this.vx += ax * TIME_STEP;
+                this.vy += ay * TIME_STEP;
+                
+                this.circularizeOrbit();
+                
+                const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                if (speed > MAX_VELOCITY) {
+                    const scale = MAX_VELOCITY / speed;
+                    this.vx *= scale;
+                    this.vy *= scale;
+                }
+                
+                const posDamping = 1 / (1 + Math.log10(this.mass) * 0.2);
+                this.x += this.vx * TIME_STEP * posDamping;
+                this.y += this.vy * TIME_STEP * posDamping;
+
+                if (this.x < 0) this.x = WORLD_SIZE;
+                if (this.x > WORLD_SIZE) this.x = 0;
+                if (this.y < 0) this.y = WORLD_SIZE;
+                if (this.y > WORLD_SIZE) this.y = 0;
+
+                this.orbitDirection = this.getOrbitDirection();
+            }
+
+            draw() {
+                if (this.merged) return;
+
+                // Draw trail first
+                this.trail.draw();
+
+                const screenX = (this.x - cameraX) * zoom + canvas.width / 2;
+                const screenY = (this.y - cameraY) * zoom + canvas.height / 2;
+
+                if (screenX < -100 || screenX > canvas.width + 100 ||
+                    screenY < -100 || screenY > canvas.height + 100) return;
+
+                const renderedSize = Math.max(MIN_PARTICLE_SIZE, this.radius * zoom);
+
+                // Draw particle
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, renderedSize, 0, Math.PI * 2);
+                
+                if (this === largestParticle) {
+                    ctx.fillStyle = LARGEST_COLOR;
+                } else {
+                    switch (this.orbitDirection) {
+                        case 1:  ctx.fillStyle = CLOCKWISE_COLOR; break;
+                        case -1: ctx.fillStyle = ANTICLOCKWISE_COLOR; break;
+                        default: ctx.fillStyle = 'white';
+                    }
+                }
+                ctx.fill();
+
+                // Draw force vector if enabled
+                if (this !== largestParticle) {
+                    this.drawForceVector(screenX, screenY);
+                }
+            }
+        }
+
+        let particles = [];
+
+        function initParticles() {
+            particles = [];
+            flashes = [];
+            largestMass = 1;
+            largestParticle = null;
+            document.getElementById('largestMass').textContent = largestMass.toFixed(1);
+            
+            const centerX = WORLD_SIZE / 2;
+            const centerY = WORLD_SIZE / 2;
+            
+            for (let i = 0; i < particleCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = Math.sqrt(Math.random()) * INITIAL_RADIUS;
+                const x = centerX + radius * Math.cos(angle);
+                const y = centerY + radius * Math.sin(angle);
+                particles.push(new Particle(x, y));
+            }
+            
+            document.getElementById('spawnMoonsBtn').disabled = particles.length >= 1000;
+        }
+
+        function toggleCenterTracking() {
+            trackCenter = !trackCenter;
+            if (trackCenter) {
+                recenterView();
+            }
+        }
+
+        function updateParticles() {
+            if (isPaused) return;
+            
+            for (let particle of particles) {
+                particle.update(particles);
+            }
+            
+            particles = particles.filter(p => !p.merged);
+            document.getElementById('particleCount').textContent = particles.length;
+            document.getElementById('spawnMoonsBtn').disabled = particles.length >= 1000;
+
+            if (!isDragging && trackCenter && largestParticle && !cameraTransitionStart) {
+                cameraX = largestParticle.x;
+                cameraY = largestParticle.y;
+            }
+        }
+
+        function draw() {
+            const currentTime = Date.now();
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+
+            updateCamera();
+
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (let particle of particles) {
+                particle.draw();
+            }
+
+            flashes = flashes.filter(flash => flash.draw());
+            drawCenterIndicator(currentTime);
+
+            requestAnimationFrame(draw);
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+        }
+
+        function updatePopulation(value) {
+            particleCount = parseInt(value);
+            document.getElementById('populationValue').textContent = particleCount;
+            resetSimulation();
+        }
+
+        function resetSimulation() {
+            initParticles();
+            recenterView();
+        }
+
+        function updateZoom(value) {
+            zoom = parseFloat(value);
+            document.getElementById('zoomValue').textContent = zoom.toFixed(3) + 'x';
+        }
+
+        function updateTimeStep(value) {
+            timeMultiplier = parseFloat(value);
+            TIME_STEP = BASE_TIME_STEP * timeMultiplier;
+            document.getElementById('timeValue').textContent = timeMultiplier.toFixed(1) + 'x';
+        }
+
+        function updateGravity(value) {
+            gravityMultiplier = parseFloat(value);
+            G = BASE_G * gravityMultiplier;
+            document.getElementById('gravityValue').textContent = gravityMultiplier.toFixed(1) + 'x';
+        }
+
+        // Initialize simulation
+        initParticles();
+        setInterval(updateParticles, 1000 / 60);
+        draw();
+    </script>
+</body>
+</html>

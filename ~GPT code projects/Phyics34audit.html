@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Student Progress • Fields, Motion & Light</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root{
+      --pri:#214e9c;--mut:#667085;--bg:#f7f8fb;--card:#fff;--bd:#e7ecf3;--acc:#4caf50;--warn:#ff9800;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:#1f2937}
+    header{background:var(--pri);color:#fff;padding:14px 18px}
+    header .row{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+    h1{font-size:1.15rem;margin:0;font-weight:600}
+    .mode{display:flex;gap:8px;align-items:center}
+    .mode label{font-size:.9rem;opacity:.9}
+    .container{max-width:1100px;margin:18px auto;padding:0 14px}
+    .tabs{display:flex;gap:8px;border-bottom:1px solid var(--bd);margin-bottom:12px;overflow:auto}
+    .tab{border:none;background:none;padding:10px 12px;font-size:.95rem;color:var(--mut);cursor:pointer;border-bottom:2px solid transparent}
+    .tab.active{color:var(--pri);border-color:var(--pri);font-weight:600}
+    .page{display:none}
+    .page.active{display:block}
+
+    .tree{display:grid;gap:10px}
+    .card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px}
+    .unit>.title{font-weight:700;color:var(--pri)}
+    .area>.title{font-weight:600}
+    .section>.title{font-weight:600;color:#334155}
+
+    /* per-point turndown */
+    .concept{border:1px dashed var(--bd);border-radius:10px;margin-top:10px}
+    .concept-h{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;padding:10px 12px;cursor:pointer}
+    .concept.open .chev{transform:rotate(180deg)}
+    .chev{transition:transform .2s ease; opacity:.6}
+    .left{min-width:0}
+    .id{font-variant:tabular-nums;color:#64748b;font-weight:600;margin-right:6px}
+    .friendly{font-weight:600}
+    .techonly{font-weight:500}
+    .muted{color:var(--mut)}
+    .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+    .chip{font-size:.75rem;border:1px solid var(--bd);padding:3px 8px;border-radius:999px;background:#fafcff;color:#475569}
+    .concept-b{display:none;border-top:1px dashed var(--bd);padding:12px;background:#fbfdff;border-radius:0 0 10px 10px}
+    .concept.open .concept-b{display:block}
+    details.techbox{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:8px 10px;margin-bottom:10px}
+    details.techbox summary{cursor:pointer;font-weight:600;color:var(--pri)}
+    details.techbox[open]{background:#f7faff}
+
+    .row{display:grid;gap:12px;grid-template-columns:1fr 1fr}
+    @media (max-width:840px){.row{grid-template-columns:1fr}}
+    label{font-size:.9rem;color:var(--mut)}
+    textarea,select,input[type="text"]{width:100%;min-height:80px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:#fff;font-size:.95rem}
+    select{min-height:auto}
+    .btn{border:none;background:var(--pri);color:#fff;padding:8px 12px;border-radius:8px;font-weight:600;cursor:pointer}
+    .btn.gray{background:#64748b}
+    .btn.ghost{background:#eef2ff;color:#273271}
+    .list{display:grid;gap:8px;margin-top:8px}
+    .note{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:8px}
+    .note .ts{color:var(--mut);font-size:.8rem;margin-bottom:4px}
+    .kpi{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+    .stat{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:12px}
+    .bar{height:8px;background:#e9eef7;border-radius:999px;overflow:hidden}
+    .fill{height:100%;background:var(--acc);width:0}
+    .small{font-size:.85rem;color:var(--mut)}
+    .profile-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+    input[type="number"],.short{min-height:auto;height:38px}
+    .foot{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap}
+  </style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <h1>Student Progress Tracker — Fields, Motion & Light</h1>
+    <div class="mode">
+      <label><input type="radio" name="mode" value="learn" checked> Learning mode</label>
+      <label><input type="radio" name="mode" value="exam"> Exam-prep mode (technical wording only)</label>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="tabs">
+    <button class="tab active" data-page="map">Course Map</button>
+    <button class="tab" data-page="dashboard">Dashboard</button>
+    <button class="tab" data-page="profile">Profile</button>
+    <button class="tab" data-page="utilities">Utilities</button>
+  </div>
+
+  <!-- Course Map -->
+  <section id="map" class="page active">
+    <div id="courseTree" class="tree"></div>
+  </section>
+
+  <!-- Dashboard -->
+  <section id="dashboard" class="page">
+    <div class="kpi" id="kpi"></div>
+    <div class="card">
+      <h3 style="margin-top:0">Recent notes & reflections</h3>
+      <div id="recent" class="list"></div>
+    </div>
+  </section>
+
+  <!-- Profile -->
+  <section id="profile" class="page">
+    <div class="card">
+      <h3 style="margin-top:0">About me</h3>
+      <div class="profile-grid">
+        <div>
+          <label>Name</label>
+          <input id="p-name" class="short" type="text" placeholder="e.g., Alex Nguyen"/>
+        </div>
+        <div>
+          <label>Year level / class</label>
+          <input id="p-class" class="short" type="text" placeholder="e.g., Year 12 Physics"/>
+        </div>
+        <div>
+          <label>Goals for this unit</label>
+          <textarea id="p-goals" placeholder="What do you want to achieve?"></textarea>
+        </div>
+        <div>
+          <label>Study plan notes</label>
+          <textarea id="p-plan" placeholder="How will you practise each week?"></textarea>
+        </div>
+      </div>
+      <div class="foot">
+        <button class="btn" onclick="save()">Save profile</button>
+        <span class="small" id="savedat"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Utilities -->
+  <section id="utilities" class="page">
+    <div class="card">
+      <h3 style="margin-top:0">Data</h3>
+      <div class="foot">
+        <button class="btn" onclick="downloadJSON()">Export progress (.json)</button>
+        <label class="btn ghost">
+          Import progress
+          <input type="file" accept="application/json" style="display:none" onchange="importJSON(event)"/>
+        </label>
+        <button class="btn gray" onclick="factoryReset()">Factory reset</button>
+      </div>
+      <p class="small" id="datasize"></p>
+    </div>
+  </section>
+</div>
+
+<script>
+/* ----------------------------------------------------------------
+   HARD-CODED COURSE DATA (ALL POINTS) — technical wording preserved
+-------------------------------------------------------------------*/
+const courseData = [
+  {
+    title: "Unit 3: How do fields explain motion and electricity?",
+    areas: [
+      {
+        title: "Area of Study 1: How do physicists explain motion in two dimensions?",
+        sections: [
+          {
+            title: "3.1.1 Newton's laws of motion",
+            points: [
+              {id:"[001]", tech:"3.1.1.1 Newton's three laws of motion can be investigated and applied theoretically and practically in situations where two or more coplanar forces act along a straight line and in two dimensions"},
+              {id:"[002]", tech:"3.1.1.1a Newton's second law states that the net force equals mass times acceleration: ΣF = ma"},
+              {id:"[003]", tech:"3.1.1.1b Newton's third law states that forces occur in equal and opposite pairs: F_on A by B = -F_on B by A"},
+              {id:"[004]", tech:"3.1.1.2 Uniform circular motion of an object moving in a horizontal plane can be investigated and analysed theoretically and practically"},
+              {id:"[005]", tech:"3.1.1.2a The centripetal force for circular motion is calculated using F_net = mv²/r"},
+              {id:"[006]", tech:"3.1.1.2b The velocity for uniform circular motion is calculated using v = 2πr/T"},
+              {id:"[007]", tech:"3.1.1.2c The centripetal acceleration is calculated using a = v²/r = 4π²r/T²"},
+              {id:"[008]", tech:"3.1.1.2d Applications of circular motion include specific scenarios:"},
+              {id:"[009]", tech:"3.1.1.2d.i A vehicle moving around a circular road experiences centripetal force from friction"},
+              {id:"[010]", tech:"3.1.1.2d.ii A vehicle moving around a banked track requires the banking angle relationship tan θ = v²/(rg)"},
+              {id:"[011]", tech:"3.1.1.2d.iii An object on the end of a string experiences tension providing centripetal force T = mv²/r"},
+              {id:"[012]", tech:"3.1.1.3 Natural and artificial satellite motion can be modelled as uniform circular motion"},
+              {id:"[013]", tech:"3.1.1.3a Satellites are modelled as moving in uniform circular orbits"},
+              {id:"[014]", tech:"3.1.1.3b Gravitational force provides the centripetal force for orbital motion"},
+              {id:"[015]", tech:"3.1.1.3c The gravitational force equals centripetal force for orbits: F_g = Gm₁m₂/r² = mv²/r"},
+              {id:"[016]", tech:"3.1.1.3d Orbital velocity is calculated using v = √(GM/r)"},
+              {id:"[017]", tech:"3.1.1.3e Orbital period is calculated using T = 2π√(r³/GM)"},
+              {id:"[018]", tech:"3.1.1.3f The universal gravitational constant has value G = 6.67 × 10⁻¹¹ N m² kg⁻²"},
+              {id:"[019]", tech:"3.1.1.4 Newton's second law can be applied to circular motion in a vertical plane at the highest and lowest positions only"},
+              {id:"[020]", tech:"3.1.1.4a At the top of vertical circular motion, tension and weight both act inward: T + mg = mv²/r"},
+              {id:"[021]", tech:"3.1.1.4b At the bottom of vertical circular motion, tension acts inward while weight acts outward: T - mg = mv²/r"},
+              {id:"[022]", tech:"3.1.1.4c The gravitational field strength near Earth's surface is g = 9.81 m s⁻²"},
+              {id:"[023]", tech:"3.1.1.5 Projectile motion near Earth's surface can be investigated and analysed theoretically and practically"},
+              {id:"[024]", tech:"3.1.1.5a Horizontal motion of a projectile has constant velocity: x = v_x·t"},
+              {id:"[025]", tech:"3.1.1.5b Vertical motion of a projectile has constant acceleration: y = v_y·t - ½gt²"},
+              {id:"[026]", tech:"3.1.1.5c Air resistance effects on projectile motion can be described qualitatively"}
+            ]
+          },
+          {
+            title: "3.1.2 Relationships between force, energy and mass",
+            points: [
+              {id:"[027]", tech:"3.1.2.1 Impulse and momentum concepts apply to collisions in isolated systems"},
+              {id:"[028]", tech:"3.1.2.1a Impulse equals the change in momentum: FΔt = mΔv"},
+              {id:"[029]", tech:"3.1.2.1b Momentum is the product of mass and velocity: p = mv"},
+              {id:"[030]", tech:"3.1.2.1c Momentum is conserved in isolated systems in one dimension"},
+              {id:"[031]", tech:"3.1.2.2 Work done by a force can be calculated using different methods"},
+              {id:"[032]", tech:"3.1.2.2a Work done by a constant force equals force times displacement times cosine of angle: W = F·s·cos θ"},
+              {id:"[033]", tech:"3.1.2.2b Work done by a variable force equals the area under the force versus distance graph"},
+              {id:"[034]", tech:"3.1.2.3 Energy transformations occur between different forms in mechanical systems"},
+              {id:"[035]", tech:"3.1.2.3a Kinetic energy of a moving object is calculated using E_k = ½mv²"},
+              {id:"[036]", tech:"3.1.2.3b Elastic potential energy is stored in springs and elastic materials:"},
+              {id:"[037]", tech:"3.1.2.3b.i Hooke's Law describes the restoring force in an ideal spring: F = -kx"},
+              {id:"[038]", tech:"3.1.2.3b.ii Elastic potential energy stored in a spring is calculated using E_s = ½kx²"},
+              {id:"[039]", tech:"3.1.2.3b.iii Elastic potential energy can be found from the area under a force versus extension graph"},
+              {id:"[040]", tech:"3.1.2.3c Gravitational potential energy depends on position in a gravitational field:"},
+              {id:"[041]", tech:"3.1.2.3c.i Gravitational potential energy change near Earth's surface is calculated using E_g = mgΔh"},
+              {id:"[042]", tech:"3.1.2.3c.ii Gravitational potential energy can be found from area under force versus distance graph or field versus distance graph multiplied by mass"},
+              {id:"[043]", tech:"3.1.2.3d Total mechanical energy is conserved in isolated systems with no friction"},
+              {id:"[044]", tech:"3.1.2.3e Energy can be dissipated to the environment as heat, sound, and deformation of materials"}
+            ]
+          }
+        ]
+      },
+      {
+        title: "Area of Study 2: How do things move without contact?",
+        sections: [
+          {
+            title: "3.2.1 Fields and interactions",
+            points: [
+              {id:"[045]", tech:"3.2.1.1 Gravitation, magnetism and electricity can be described using field models"},
+              {id:"[046]", tech:"3.2.1.1a A field is a region of influence where forces act on objects without direct contact"},
+              {id:"[047]", tech:"3.2.1.1b Field lines show both the direction and relative strength of fields"},
+              {id:"[048]", tech:"3.2.1.2 Gravitational fields exist around masses and have specific properties"},
+              {id:"[049]", tech:"3.2.1.2a Gravitational field strength is calculated using g = GM/r²"},
+              {id:"[050]", tech:"3.2.1.2b Gravitational fields are always attractive between masses"},
+              {id:"[051]", tech:"3.2.1.2c A point mass creates a radial gravitational field"},
+              {id:"[052]", tech:"3.2.1.2d Gravitational field direction is always toward the center of the mass"},
+              {id:"[053]", tech:"3.2.1.2e Gravitational field shape is radial from a point source"},
+              {id:"[054]", tech:"3.2.1.2f Gravitational field strength follows the inverse square law with distance"},
+              {id:"[055]", tech:"3.2.1.2g Earth's mass is M_E = 5.97 × 10²⁴ kg"},
+              {id:"[056]", tech:"3.2.1.2h Earth's radius is R_E = 6.37 × 10⁶ m"},
+              {id:"[057]", tech:"3.2.1.3 Electric fields exist around charges and have specific properties"},
+              {id:"[058]", tech:"3.2.1.3a Electric field strength around a point charge is calculated using E = kQ/r²"},
+              {id:"[059]", tech:"3.2.1.3b Electric fields can be either attractive or repulsive depending on charge signs"},
+              {id:"[060]", tech:"3.2.1.3c Electric field direction is away from positive charges and toward negative charges"},
+              {id:"[061]", tech:"3.2.1.3d Electric field shape is radial from a point charge"},
+              {id:"[062]", tech:"3.2.1.3e Electric field strength follows the inverse square law with distance"},
+              {id:"[063]", tech:"3.2.1.3f Coulomb's constant is k = 8.99 × 10⁹ N m² C⁻²"},
+              {id:"[064]", tech:"3.2.1.4 Magnetic fields are produced by magnets and moving charges"},
+              {id:"[065]", tech:"3.2.1.4a Magnetic fields can be produced by three sources:"},
+              {id:"[066]", tech:"3.2.1.4a.i Bar magnets produce magnetic fields with north and south poles (dipoles only)"},
+              {id:"[067]", tech:"3.2.1.4a.ii Current-carrying wires produce circular magnetic fields following the right-hand rule"},
+              {id:"[068]", tech:"3.2.1.4a.iii Current loops and solenoids produce magnetic fields similar to bar magnets"},
+              {id:"[069]", tech:"3.2.1.4b Magnetic fields can attract or repel depending on pole orientation"},
+              {id:"[070]", tech:"3.2.1.4c Magnetic monopoles do not exist in nature"},
+              {id:"[071]", tech:"3.2.1.5 Fields can be classified by their characteristics"},
+              {id:"[072]", tech:"3.2.1.5a Fields can be static (unchanging) or changing with time"},
+              {id:"[073]", tech:"3.2.1.5b Fields can be uniform (same everywhere) or non-uniform (varying in space)"}
+            ]
+          },
+          {
+            title: "3.2.2 Effects of fields",
+            points: [
+              {id:"[074]", tech:"3.2.2.1 Electric fields can be used to accelerate charged particles"},
+              {id:"[075]", tech:"3.2.2.1a The force on a charge in an electric field is calculated using F = qE"},
+              {id:"[076]", tech:"3.2.2.1b Coulomb's law gives the force between two point charges: F = kq₁q₂/r²"},
+              {id:"[077]", tech:"3.2.2.1c The electric field between parallel plates is uniform and calculated using E = V/d"},
+              {id:"[078]", tech:"3.2.2.1d Energy transfer to a charge accelerated through a potential difference is W = qV or ½mv² = qV"},
+              {id:"[079]", tech:"3.2.2.1e The magnitude of electron charge is q_e = 1.60 × 10⁻¹⁹ C"},
+              {id:"[080]", tech:"3.2.2.1f The mass of an electron is m_e = 9.11 × 10⁻³¹ kg"},
+              {id:"[081]", tech:"3.2.2.2 Magnetic fields can change the path of charged particles"},
+              {id:"[082]", tech:"3.2.2.2a The magnetic force on a moving charge is F = qvB when velocity is perpendicular to the field"},
+              {id:"[083]", tech:"3.2.2.2b The magnetic force is zero when velocity is parallel to the field"},
+              {id:"[084]", tech:"3.2.2.2c The radius of circular path in a magnetic field is r = mv/(qB) for speeds much less than c"},
+              {id:"[085]", tech:"3.2.2.2d The direction of magnetic force is determined by the right-hand rule"},
+              {id:"[086]", tech:"3.2.2.3 Gravitational fields can accelerate masses"},
+              {id:"[087]", tech:"3.2.2.3a The gravitational force between two masses is calculated using F_g = Gm₁m₂/r²"},
+              {id:"[088]", tech:"3.2.2.3b Gravitational field strength is calculated using g = GM/r²"},
+              {id:"[089]", tech:"3.2.2.3c Potential energy change in a uniform gravitational field is E_g = mgΔh"}
+            ]
+          },
+          {
+            title: "3.2.3 Application of field concepts",
+            points: [
+              {id:"[090]", tech:"3.2.3.1 Satellite orbits are maintained by gravitational forces"},
+              {id:"[091]", tech:"3.2.3.1a Gravity provides the centripetal force for circular orbits"},
+              {id:"[092]", tech:"3.2.3.1b The circular orbit condition requires GMm/r² = mv²/r"},
+              {id:"[093]", tech:"3.2.3.1c Orbital acceleration is calculated using a = v²/r = 4π²r/T²"},
+              {id:"[094]", tech:"3.2.3.2 Different fields interact in characteristic ways"},
+              {id:"[095]", tech:"3.2.3.2a Electric charges can either attract or repel each other"},
+              {id:"[096]", tech:"3.2.3.2b Magnetic poles can either attract or repel each other"},
+              {id:"[097]", tech:"3.2.3.2c Masses can only attract each other through gravity"},
+              {id:"[098]", tech:"3.2.3.3 Current-carrying conductors experience forces in magnetic fields"},
+              {id:"[099]", tech:"3.2.3.3a The force on a current-carrying conductor in a magnetic field is F = nIlB when current is perpendicular to field"},
+              {id:"[100]", tech:"3.2.3.3b The force is zero when current is parallel to the magnetic field"},
+              {id:"[101]", tech:"3.2.3.4 DC motors operate using magnetic forces on current-carrying coils"},
+              {id:"[102]", tech:"3.2.3.4a The torque on a coil in a magnetic field is τ = nBIA sin θ"},
+              {id:"[103]", tech:"3.2.3.4b A split-ring commutator reverses current direction every half rotation"},
+              {id:"[104]", tech:"3.2.3.4c Motor torque is affected by four factors:"},
+              {id:"[105]", tech:"3.2.3.4c.i Current (I) increases torque proportionally"},
+              {id:"[106]", tech:"3.2.3.4c.ii Magnetic field strength (B) increases torque proportionally"},
+              {id:"[107]", tech:"3.2.3.4c.iii Number of loops (n) increases torque proportionally"},
+              {id:"[108]", tech:"3.2.3.4c.iv Coil area (A) increases torque proportionally"},
+              {id:"[109]", tech:"3.2.3.5 Particle accelerators use electric and magnetic fields to control charged particles"},
+              {id:"[110]", tech:"3.2.3.5a Linear acceleration is achieved using uniform electric fields where F = qE"},
+              {id:"[111]", tech:"3.2.3.5b Direction changes are achieved using uniform magnetic fields where F = qvB"},
+              {id:"[112]", tech:"3.2.3.5c Particle motion in accelerators can be modelled as uniform circular motion"}
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    title: "Unit 4: How have creative ideas and investigation revolutionised thinking in physics?",
+    areas: [
+      {
+        title: "Area of Study 1: How has understanding about the physical world changed?",
+        sections: [
+          {
+            title: "4.1.1 Light as a wave",
+            points: [
+              {id:"[150]", tech:"4.1.1.1 Light behaves as a transverse electromagnetic wave"},
+              {id:"[151]", tech:"4.1.1.1a Electromagnetic waves are produced by accelerating charges creating changing electric and magnetic fields"},
+              {id:"[152]", tech:"4.1.1.1b Electric and magnetic field components are perpendicular to each other and to the direction of propagation"},
+              {id:"[153]", tech:"4.1.1.1c All electromagnetic waves travel at the speed of light c = 3.00 × 10⁸ m s⁻¹ in vacuum"},
+              {id:"[154]", tech:"4.1.1.2 Waves have fundamental properties that describe their behavior"},
+              {id:"[155]", tech:"4.1.1.2a The wave equation relates speed, frequency, and wavelength: v = fλ"},
+              {id:"[156]", tech:"4.1.1.2b Period and frequency are reciprocals: T = 1/f"},
+              {id:"[157]", tech:"4.1.1.3 Standing waves form from superposition of incident and reflected waves"},
+              {id:"[158]", tech:"4.1.1.3a Standing waves result from superposition of a travelling wave and its reflection"},
+              {id:"[159]", tech:"4.1.1.3b Standing waves with nodes at both ends have wavelengths related to length: L = nλ/2"},
+              {id:"[160]", tech:"4.1.1.3c Resonant frequencies for standing waves are calculated using f_n = nv/(2L)"},
+              {id:"[161]", tech:"4.1.1.4 Diffraction occurs when waves encounter gaps or obstacles"},
+              {id:"[162]", tech:"4.1.1.4a Significant diffraction occurs when the wavelength to gap width ratio approaches unity: λ/w ≈ 1"},
+              {id:"[163]", tech:"4.1.1.4b The gap width (w) or obstacle size determines the amount of diffraction"},
+              {id:"[164]", tech:"4.1.1.4c Diffraction limits the resolution of imaging systems using electromagnetic waves"},
+              {id:"[165]", tech:"4.1.1.5 Young's double slit experiment demonstrates wave interference"},
+              {id:"[166]", tech:"4.1.1.5a Young's experiment provides evidence for the wave nature of light"},
+              {id:"[167]", tech:"4.1.1.5b Constructive interference occurs when path difference equals nλ"},
+              {id:"[168]", tech:"4.1.1.5c Destructive interference occurs when path difference equals (n + ½)λ"},
+              {id:"[169]", tech:"4.1.1.5d Fringe spacing is calculated using Δx = λL/d when screen distance L >> slit separation d"}
+            ]
+          },
+          {
+            title: "4.1.2 Light as a particle",
+            points: [
+              {id:"[170]", tech:"4.1.2.1 Photons carry quantized energy and momentum"},
+              {id:"[171]", tech:"4.1.2.1a Photon energy is quantized in packets: E = hf = hc/λ"},
+              {id:"[172]", tech:"4.1.2.1b Planck's constant has value h = 6.63 × 10⁻³⁴ J s or 4.14 × 10⁻¹⁵ eV s"},
+              {id:"[173]", tech:"4.1.2.1c Photon momentum is related to wavelength: p = h/λ = E/c"},
+              {id:"[174]", tech:"4.1.2.2 The photoelectric effect demonstrates the particle nature of light"},
+              {id:"[175]", tech:"4.1.2.2a The photoelectric effect provides evidence for the particle nature of light"},
+              {id:"[176]", tech:"4.1.2.2b Einstein's photoelectric equation relates photon energy to electron kinetic energy: KE_max = hf - φ"},
+              {id:"[177]", tech:"4.1.2.2b.i The work function (φ) is the minimum energy needed to remove an electron from the surface"},
+              {id:"[178]", tech:"4.1.2.2b.ii The threshold frequency is the minimum frequency for photoelectron emission: f₀ = φ/h"},
+              {id:"[179]", tech:"4.1.2.2c Light intensity affects the number of photoelectrons but not their maximum kinetic energy"},
+              {id:"[180]", tech:"4.1.2.2d Photoelectron emission is instantaneous with no measurable delay"},
+              {id:"[181]", tech:"4.1.2.2e The electron volt is an energy unit where 1 eV = 1.60 × 10⁻¹⁹ J"}
+            ]
+          },
+          {
+            title: "4.1.3 Matter as particles and waves",
+            points: [
+              {id:"[186]", tech:"4.1.3.1 de Broglie proposed that all matter has wave properties"},
+              {id:"[187]", tech:"4.1.3.1a The de Broglie wavelength of matter is calculated using λ = h/p = h/(mv)"},
+              {id:"[188]", tech:"4.1.3.1b Photons and matter particles with the same wavelength have the same momentum"},
+              {id:"[189]", tech:"4.1.3.2 Electron diffraction confirms the wave nature of matter"},
+              {id:"[190]", tech:"4.1.3.2a The Davisson-Germer experiment demonstrated electron diffraction"},
+              {id:"[191]", tech:"4.1.3.2b Electron diffraction patterns are similar to X-ray diffraction patterns"},
+              {id:"[192]", tech:"4.1.3.2c Electron diffraction provides evidence for the wave nature of matter"},
+              {id:"[193]", tech:"4.1.3.3 Wave-particle duality applies to both light and matter"},
+              {id:"[194]", tech:"4.1.3.3a Single photon and single electron double slit experiments show interference"},
+              {id:"[195]", tech:"4.1.3.3b Interference patterns build up over time from individual particle detections"},
+              {id:"[196]", tech:"4.1.3.3c Both wave and particle properties are exhibited depending on the experimental setup"}
+            ]
+          },
+          {
+            title: "4.1.4 Atomic spectra",
+            points: [
+              {id:"[197]", tech:"4.1.4.1 Electrons in atoms occupy quantized energy levels"},
+              {id:"[198]", tech:"4.1.4.1a Atomic energy levels are quantized with discrete allowed values"},
+              {id:"[199]", tech:"4.1.4.1b Photon emission occurs when electrons transition from higher to lower energy levels: E_photon = E_higher - E_lower"},
+              {id:"[200]", tech:"4.1.4.1c Photon absorption causes electrons to jump to higher energy levels"},
+              {id:"[201]", tech:"4.1.4.1d The energy of emitted or absorbed photons is calculated using E = hf = hc/λ"},
+              {id:"[202]", tech:"4.1.4.2 Atomic spectra reveal the quantized nature of atoms"},
+              {id:"[203]", tech:"4.1.4.2a Emission spectra show bright lines on a dark background"},
+              {id:"[204]", tech:"4.1.4.2b Absorption spectra show dark lines on a continuous spectrum"},
+              {id:"[205]", tech:"4.1.4.2c Each element has a unique spectrum that acts as its fingerprint"}
+            ]
+          },
+          {
+            title: "4.1.5 Einstein's special relativity",
+            points: [
+              {id:"[206]", tech:"4.1.5.1 Classical mechanics has limitations at high speeds"},
+              {id:"[207]", tech:"4.1.5.1a Newton's laws fail to give correct predictions as speeds approach the speed of light"},
+              {id:"[208]", tech:"4.1.5.1b A new framework is needed for understanding motion at relativistic speeds"},
+              {id:"[209]", tech:"4.1.5.2 Einstein's special relativity is based on two postulates"},
+              {id:"[210]", tech:"4.1.5.2a The first postulate states that the laws of physics are the same in all inertial reference frames"},
+              {id:"[211]", tech:"4.1.5.2b The second postulate states that the speed of light is constant for all observers: c = 3.00 × 10⁸ m s⁻¹"},
+              {id:"[212]", tech:"4.1.5.3 The Michelson-Morley experiment supported special relativity"},
+              {id:"[213]", tech:"4.1.5.3a The null result showed no evidence for the luminiferous ether"},
+              {id:"[214]", tech:"4.1.5.3b The experiment supports Einstein's postulate about the constancy of light speed"},
+              {id:"[215]", tech:"4.1.5.4 Time dilation occurs for moving clocks"},
+              {id:"[216]", tech:"4.1.5.4a Proper time (t₀) is the time interval measured where events occur at the same location"},
+              {id:"[217]", tech:"4.1.5.4b Time dilation is calculated using t = γt₀"},
+              {id:"[218]", tech:"4.1.5.4c The Lorentz factor is calculated using γ = 1/√(1 - v²/c²)"},
+              {id:"[219]", tech:"4.1.5.4d Moving clocks run slow relative to stationary observers"},
+              {id:"[220]", tech:"4.1.5.5 Length contraction occurs for moving objects"},
+              {id:"[221]", tech:"4.1.5.5a Proper length (L₀) is the length measured in the object's rest frame"},
+              {id:"[222]", tech:"4.1.5.5b Length contraction is calculated using L = L₀/γ"},
+              {id:"[223]", tech:"4.1.5.5c Contraction occurs only in the direction of motion"},
+              {id:"[224]", tech:"4.1.5.6 Special relativity has practical applications"},
+              {id:"[225]", tech:"4.1.5.6a Muons created in the upper atmosphere reach Earth's surface due to time dilation"},
+              {id:"[226]", tech:"4.1.5.6b Particle accelerator designs must account for length contraction effects"},
+              {id:"[227]", tech:"4.1.5.6c GPS satellites require time corrections due to their orbital velocity"}
+            ]
+          },
+          {
+            title: "4.1.6 Mass-energy equivalence",
+            points: [
+              {id:"[228]", tech:"4.1.6.1 Rest mass has an energy equivalent: E₀ = mc²"},
+              {id:"[229]", tech:"4.1.6.2 Total relativistic energy includes kinetic and rest energy: E_total = γmc²"},
+              {id:"[230]", tech:"4.1.6.3 Relativistic kinetic energy is calculated using E_k = (γ - 1)mc²"},
+              {id:"[231]", tech:"4.1.6.4 Mass-energy equivalence has important applications:"},
+              {id:"[232]", tech:"4.1.6.4a Nuclear fusion in the Sun converts mass to energy"},
+              {id:"[233]", tech:"4.1.6.4b Positron-electron annihilation converts mass entirely to energy"},
+              {id:"[234]", tech:"4.1.6.4c Particle accelerators can create new particles from kinetic energy"}
+            ]
+          }
+        ]
+      },
+      {
+        title: "Area of Study 2: How is scientific inquiry used to investigate fields, motion or light?",
+        sections: [
+          {
+            title: "4.2.1 Investigation requirements",
+            points: [
+              {id:"[235]", tech:"4.2.1.1 Students design and conduct their own investigation on fields, motion or light"},
+              {id:"[236]", tech:"4.2.1.2 The investigation must generate primary quantitative data"},
+              {id:"[237]", tech:"4.2.1.3 The investigation must include one continuous independent variable"},
+              {id:"[238]", tech:"4.2.1.4 Results are presented in scientific poster format"}
+            ]
+          },
+          {
+            title: "4.2.2 Investigation design",
+            points: [
+              {id:"[239]", tech:"4.2.2.1 Physics concepts specific to the investigation must be identified and their significance explained, including definitions of key terms and physics representations"},
+              {id:"[240]", tech:"4.2.2.2 The characteristics of the selected scientific methodology and method must be explained including techniques of primary qualitative and quantitative data generation relevant to the investigation"},
+              {id:"[241]", tech:"4.2.2.3 The appropriateness of independent, dependent and controlled variables in the scientific investigation must be explained"},
+              {id:"[242]", tech:"4.2.2.4 Concepts of accuracy, precision, repeatability, reproducibility, resolution and validity of data must be identified and applied"},
+              {id:"[243]", tech:"4.2.2.5 The distinction between error and uncertainty must be identified and applied"},
+              {id:"[244]", tech:"4.2.2.6 Health, safety and ethical guidelines relevant to the investigation must be identified and applied"}
+            ]
+          },
+          {
+            title: "4.2.3 Scientific evidence",
+            points: [
+              {id:"[245]", tech:"4.2.3.1 The nature of evidence that supports or refutes a hypothesis, model or theory must be discussed"},
+              {id:"[246]", tech:"4.2.3.2 Methods of organising, analysing and evaluating primary data must be applied to identify patterns and relationships"},
+              {id:"[247]", tech:"4.2.3.3 The physical significance of the gradient of linearised data must be determined"},
+              {id:"[248]", tech:"4.2.3.4 Causes of uncertainty in measurements must be identified and analysed"},
+              {id:"[249]", tech:"4.2.3.5 Uncertainty bars must be used appropriately in data presentation"},
+              {id:"[250]", tech:"4.2.3.6 Assumptions and limitations of data, methodologies and methods must be identified"},
+              {id:"[251]", tech:"4.2.3.7 A logbook must be used to authenticate generated primary data following scientific practice"}
+            ]
+          },
+          {
+            title: "4.2.4 Science communication",
+            points: [
+              {id:"[252]", tech:"4.2.4.1 Scientific terminology and representations must be used according to conventions"},
+              {id:"[253]", tech:"4.2.4.2 Symbols, equations and formulas must be applied using standard conventions"},
+              {id:"[254]", tech:"4.2.4.3 Standard abbreviations must be used correctly"},
+              {id:"[255]", tech:"4.2.4.4 Significant figures must be used appropriately"},
+              {id:"[256]", tech:"4.2.4.5 Units of measurement must be used correctly"},
+              {id:"[257]", tech:"4.2.4.6 Scientific poster presentation conventions must be applied including succinct communication of the investigation"},
+              {id:"[258]", tech:"4.2.4.7 References must be acknowledged appropriately"},
+              {id:"[259]", tech:"4.2.4.8 Key findings and implications of the investigation must be explained"}
+            ]
+          },
+          {
+            title: "Miscellaneous Constants and Conversions",
+            points: [
+              {id:"[260]", tech:"5.1.1 Pico (p) represents 10⁻¹²"},
+              {id:"[261]", tech:"5.1.2 Nano (n) represents 10⁻⁹"},
+              {id:"[262]", tech:"5.1.3 Micro (μ) represents 10⁻⁶"},
+              {id:"[263]", tech:"5.1.4 Milli (m) represents 10⁻³"},
+              {id:"[264]", tech:"5.1.5 Kilo (k) represents 10³"},
+              {id:"[265]", tech:"5.1.6 Mega (M) represents 10⁶"},
+              {id:"[266]", tech:"5.1.7 Giga (G) represents 10⁹"},
+              {id:"[267]", tech:"5.1.8 Tera (T) represents 10¹²"},
+              {id:"[268]", tech:"5.2.1 One tonne equals 10³ kilograms: 1 t = 10³ kg"},
+              {id:"[269]", tech:"5.2.2 One kilowatt hour equals 3.6 × 10⁶ joules: 1 kWh = 3.6 × 10⁶ J"},
+              {id:"[270]", tech:"5.2.3 One electron volt equals 1.60 × 10⁻¹⁹ joules: 1 eV = 1.60 × 10⁻¹⁹ J"},
+              {id:"[271]", tech:"5.3.1 Force nomenclature uses subscript notation: F_on A by B"},
+              {id:"[272]", tech:"5.3.2 Force due to gravity is denoted F_g"},
+              {id:"[273]", tech:"5.3.3 Normal force is denoted F_N"},
+              {id:"[274]", tech:"5.4.1 The acceleration due to gravity at Earth's surface is g = 9.81 m s⁻²"},
+              {id:"[275]", tech:"5.4.2 The mass of the electron is m_e = 9.11 × 10⁻³¹ kg"},
+              {id:"[276]", tech:"5.4.3 The magnitude of the charge of the electron is q_e = 1.60 × 10⁻¹⁹ C"},
+              {id:"[277]", tech:"5.4.4 Planck's constant is h = 6.63 × 10⁻³⁴ J s or h = 4.14 × 10⁻¹⁵ eV s"},
+              {id:"[278]", tech:"5.4.5 The speed of light in a vacuum is c = 3.00 × 10⁸ m s⁻¹"},
+              {id:"[279]", tech:"5.4.6 The universal gravitational constant is G = 6.67 × 10⁻¹¹ N m² kg⁻²"},
+              {id:"[280]", tech:"5.4.7 The mass of Earth is M_E = 5.97 × 10²⁴ kg"},
+              {id:"[281]", tech:"5.4.8 The radius of Earth is R_E = 6.37 × 10⁶ m"},
+              {id:"[282]", tech:"5.4.9 Coulomb's constant is k = 8.99 × 10⁹ N m² C⁻²"}
+            ]
+          }
+        ]
+      }
+    ]
+  }
+];
+
+/* ----------------------------------------------------------
+   HAND-WRITTEN STUDENT LINES — done for [001]–[044] in full
+   (fallback to technical text for others so nothing breaks)
+-----------------------------------------------------------*/
+const studentText = {
+  // 3.1.1
+  "[001]": "Use Newton’s three laws to make sense of motion when two or more forces act in the same flat plane (straight-line and 2-D), and practise this in theory and practicals.",
+  "[002]": "Know and use: the net force causes acceleration (ΣF = ma).",
+  "[003]": "Know and use: forces come in equal and opposite pairs (action–reaction).",
+  "[004]": "Understand and practise uniform circular motion in a horizontal plane (constant speed, changing direction).",
+  "[005]": "Work out the inward (centripetal) force with F_net = mv²/r.",
+  "[006]": "Find the speed around a circle with v = 2πr/T.",
+  "[007]": "Find centripetal acceleration with a = v²/r = 4π²r/T².",
+  "[008]": "See where circular motion shows up in real life:",
+  "[009]": "Car on a flat curve: friction supplies the inward (centripetal) force.",
+  "[010]": "Car on a banked track: relate angle and speed with tan θ = v²/(rg).",
+  "[011]": "Object on a string: tension provides the inward force T = mv²/r.",
+  "[012]": "Model satellite motion as uniform circular motion.",
+  "[013]": "Treat satellites as moving in steady circular orbits.",
+  "[014]": "Gravity supplies the centripetal pull that keeps satellites in orbit.",
+  "[015]": "Set gravity equal to centripetal force: F_g = Gm₁m₂/r² = mv²/r.",
+  "[016]": "Calculate orbital speed: v = √(GM/r).",
+  "[017]": "Calculate orbital period: T = 2π√(r³/GM).",
+  "[018]": "Know the constant G = 6.67 × 10⁻¹¹ N·m²·kg⁻².",
+  "[019]": "Apply Newton’s second law at the very top and bottom of a vertical circle.",
+  "[020]": "Top of the loop: T + mg = mv²/r (both point inward).",
+  "[021]": "Bottom of the loop: T − mg = mv²/r (tension in, weight out).",
+  "[022]": "Use g ≈ 9.81 m·s⁻² near Earth’s surface.",
+  "[023]": "Study projectile motion (no significant air resistance) in theory and practice.",
+  "[024]": "Horizontal motion stays constant speed: x = v_x·t.",
+  "[025]": "Vertical motion accelerates at g: y = v_y·t − ½gt².",
+  "[026]": "Describe how air resistance changes real projectile paths (qualitatively).",
+
+  // 3.1.2
+  "[027]": "Use impulse and momentum ideas to understand collisions when no external forces act.",
+  "[028]": "Link impulse to change in momentum: FΔt = mΔv.",
+  "[029]": "Use p = mv for momentum.",
+  "[030]": "In 1-D isolated collisions, total momentum stays the same.",
+  "[031]": "Calculate work in different ways depending on the force.",
+  "[032]": "For constant force at an angle: W = F·s·cosθ.",
+  "[033]": "For changing force: work equals the area under the F–distance graph.",
+  "[034]": "Track how energy changes form in mechanical systems.",
+  "[035]": "Use kinetic energy: E_k = ½mv².",
+  "[036]": "Understand elastic potential energy in springs and elastic materials:",
+  "[037]": "Hooke’s law: F = −kx (spring force is proportional to extension).",
+  "[038]": "Stored spring energy: E_s = ½kx².",
+  "[039]": "You can also find E_s from the area under the force–extension graph.",
+  "[040]": "Understand gravitational potential energy in a field:",
+  "[041]": "Near Earth’s surface: ΔE_g = mgΔh.",
+  "[042]": "Or find it from the area under force–distance (or field–distance × mass).",
+  "[043]": "In frictionless isolated systems, total mechanical energy stays constant.",
+  "[044]": "In real life, some energy spreads as heat, sound, or deformation."
+  // (I’ll continue this hand rewrite for the remaining ids once you confirm the tone)
+};
+
+/* ---------------------
+   App state & storage
+--------------------- */
+const LS_KEY = "studentProgressVCEPhysics_v2";
+let state = {
+  mode: "learn", // "learn" | "exam"
+  profile: { name:"", klass:"", goals:"", plan:"" },
+  progress: {} // [id]: {status, notes:[{t,ts}], reflections:[{t,ts}], mastery}
+};
+
+function save(){
+  state.profile.name = document.getElementById("p-name").value;
+  state.profile.klass = document.getElementById("p-class").value;
+  state.profile.goals = document.getElementById("p-goals").value;
+  state.profile.plan = document.getElementById("p-plan").value;
+  localStorage.setItem(LS_KEY, JSON.stringify(state));
+  document.getElementById("savedat").textContent = "Saved " + new Date().toLocaleString();
+  updateDataSize();
+}
+function load(){
+  const raw = localStorage.getItem(LS_KEY);
+  if(raw){ try{ state = {...state, ...JSON.parse(raw)} }catch{} }
+  document.querySelector(`input[name="mode"][value="${state.mode}"]`).checked = true;
+  document.getElementById("p-name").value = state.profile.name||"";
+  document.getElementById("p-class").value = state.profile.klass||"";
+  document.getElementById("p-goals").value = state.profile.goals||"";
+  document.getElementById("p-plan").value = state.profile.plan||"";
+  updateDataSize();
+}
+
+/* ---------------------
+   Rendering helpers
+--------------------- */
+const byId = id => document.getElementById(id);
+function el(tag, attrs={}, children=[]){
+  const node = document.createElement(tag);
+  for(const [k,v] of Object.entries(attrs||{})){
+    if(k==="class") node.className = v;
+    else if(k==="onclick") node.onclick = v;
+    else if(k==="value") node.value = v;
+    else node.setAttribute(k,v);
+  }
+  (Array.isArray(children)?children:[children]).forEach(c=>{
+    if(c==null) return;
+    node.appendChild(typeof c==="string"?document.createTextNode(c):c);
+  });
+  return node;
+}
+
+/* ---------------------
+   Render Course Map
+--------------------- */
+function render(){
+  renderMap();
+  renderDashboard();
+}
+function renderMap(){
+  const container = byId("courseTree");
+  container.innerHTML = "";
+  courseData.forEach(unit=>{
+    const u = el("div",{class:"card unit"},[ el("div",{class:"title"},[unit.title]) ]);
+    unit.areas.forEach(area=>{
+      const a = el("div",{class:"card area"},[ el("div",{class:"title"},[area.title]) ]);
+      area.sections.forEach(section=>{
+        const s = el("div",{class:"card section"},[ el("div",{class:"title"},[section.title]) ]);
+        section.points.forEach(pt=>{
+          const rec = state.progress[pt.id] || (state.progress[pt.id]={status:"not-started", notes:[], reflections:[], mastery:0});
+
+          const displayLine = state.mode==="exam"
+            ? pt.tech
+            : (studentText[pt.id] || pt.tech);
+
+          const header = el("div",{class:"concept-h"},[
+            el("div",{class:"left"},[
+              el("div",{},[
+                el("span",{class:"id"},[pt.id+" "]),
+                el("span",{class: state.mode==="exam" ? "techonly" : "friendly"},[ displayLine ])
+              ]),
+              el("div",{class:"chips"},[
+                el("span",{class:"chip"},["Status: "+labelStatus(rec.status)]),
+                el("span",{class:"chip"},["Mastery: "+rec.mastery+"%"]),
+                el("span",{class:"chip"},["Notes: "+rec.notes.length]),
+                el("span",{class:"chip"},["Reflections: "+rec.reflections.length])
+              ])
+            ]),
+            el("div",{class:"chev"},["▾"])
+          ]);
+
+          const bodyChildren = [];
+          if(state.mode==="learn"){
+            bodyChildren.push(
+              el("details",{class:"techbox"},[
+                el("summary",{},["Show technical wording"]),
+                el("div",{class:"muted"},[pt.tech])
+              ])
+            );
+          }
+
+          bodyChildren.push(
+            el("div",{class:"row"},[
+              el("div",{},[
+                el("label",{},["My notes"]),
+                el("textarea",{id:`n-${pt.id}`, placeholder:"Add an example, definition or worked step…"}),
+                el("div",{class:"foot"},[
+                  el("button",{class:"btn",onclick:()=>addNote(pt.id)},["Add note"]),
+                  el("button",{class:"btn gray",onclick:()=>clearInput(`n-${pt.id}`)},["Clear"])
+                ]),
+                listView(`notes-${pt.id}`, rec.notes)
+              ]),
+              el("div",{},[
+                el("label",{},["What do I need to practise / ask?"]),
+                el("textarea",{id:`r-${pt.id}`, placeholder:"Write a question, misconception, or next step…"}),
+                el("div",{class:"foot"},[
+                  el("button",{class:"btn",onclick:()=>addReflection(pt.id)},["Add reflection"]),
+                  el("button",{class:"btn gray",onclick:()=>clearInput(`r-${pt.id}`)},["Clear"])
+                ]),
+                listView(`refl-${pt.id}`, rec.reflections)
+              ])
+            ]),
+            el("div",{class:"row"},[
+              el("div",{},[
+                el("label",{},["Status"]),
+                selectStatus(pt.id, rec.status)
+              ]),
+              el("div",{},[
+                el("label",{},["Mastery estimate (%)"]),
+                masterySlider(pt.id, rec.mastery)
+              ])
+            ])
+          );
+
+          const body = el("div",{class:"concept-b"}, bodyChildren);
+
+          const wrap = el("div",{class:"concept"},[header, body]);
+          header.addEventListener("click", ()=>wrap.classList.toggle("open"));
+          s.appendChild(wrap);
+        });
+        a.appendChild(s);
+      });
+      u.appendChild(a);
+    });
+    container.appendChild(u);
+  });
+  save();
+}
+
+function listView(elid, items){
+  const box = el("div",{class:"list",id:elid},
+    items.length? items.map(n=>el("div",{class:"note"},[
+      el("div",{class:"ts"},[ new Date(n.ts).toLocaleString() ]),
+      el("div",{},[ n.t ])
+    ])) : el("div",{class:"small"},["No entries yet."])
+  );
+  return box;
+}
+
+function selectStatus(id, value){
+  const sel = el("select",{id:`s-${id}`},[
+    ["not-started","Not started"],
+    ["learning","Learning"],
+    ["practising","Practising"],
+    ["nearly-there","Nearly there"],
+    ["mastered","Mastered"]
+  ].map(([v,l])=>{
+    const o = el("option",{value:v},[l]); if(v===value) o.selected=true; return o;
+  }));
+  sel.onchange = ()=>{ state.progress[id].status = sel.value; save(); renderDashboard(); };
+  return sel;
+}
+function labelStatus(s){
+  return ({
+    "not-started":"Not started",
+    "learning":"Learning",
+    "practising":"Practising",
+    "nearly-there":"Nearly there",
+    "mastered":"Mastered"
+  })[s] || "Not started";
+}
+function masterySlider(id, val){
+  const wrap = el("div",{},[]);
+  const input = el("input",{type:"range",min:"0",max:"100",value:String(val)});
+  const lab = el("div",{class:"small"},["Drag to update"]);
+  input.oninput = ()=>{ state.progress[id].mastery = Number(input.value); save(); renderDashboard(); };
+  wrap.appendChild(input); wrap.appendChild(lab);
+  return wrap;
+}
+
+function addNote(id){
+  const ta = byId(`n-${id}`); const t = ta.value.trim(); if(!t) return;
+  state.progress[id].notes.unshift({t, ts:new Date().toISOString()});
+  ta.value=""; save();
+  const box = byId(`notes-${id}`); box.prepend(noteEl(t));
+  renderDashboard();
+}
+function noteEl(t){ return el("div",{class:"note"},[
+  el("div",{class:"ts"},[new Date().toLocaleString()]),
+  el("div",{},[t])
+]);}
+function addReflection(id){
+  const ta = byId(`r-${id}`); const t = ta.value.trim(); if(!t) return;
+  state.progress[id].reflections.unshift({t, ts:new Date().toISOString()});
+  ta.value=""; save();
+  const box = byId(`refl-${id}`); box.prepend(noteEl(t));
+  renderDashboard();
+}
+function clearInput(id){ const x = byId(id); if(x) x.value=""; }
+
+/* ---------------------
+   Dashboard
+--------------------- */
+function renderDashboard(){
+  const flatIds = [];
+  courseData.forEach(u=>u.areas.forEach(a=>a.sections.forEach(s=>s.points.forEach(p=>flatIds.push(p.id)))));
+  const total = flatIds.length;
+  let mastered=0, practising=0, started=0;
+  flatIds.forEach(id=>{
+    const r = state.progress[id]; if(!r) return;
+    if(r.status==="mastered") mastered++;
+    if(r.status==="practising"||r.status==="nearly-there") practising++;
+    if(r.status && r.status!=="not-started") started++;
+  });
+  const kpi = byId("kpi");
+  kpi.innerHTML = "";
+  kpi.appendChild(stat("Total points", total, (started/total)));
+  kpi.appendChild(stat("Started", started, (started/total)));
+  kpi.appendChild(stat("Practising / Nearly there", practising, (practising/total)));
+  kpi.appendChild(stat("Mastered", mastered, (mastered/total)));
+
+  const recents = [];
+  Object.entries(state.progress).forEach(([id, r])=>{
+    (r.notes||[]).forEach(n=>recents.push({id, ...n, kind:"Note"}));
+    (r.reflections||[]).forEach(n=>recents.push({id, ...n, kind:"Reflection"}));
+  });
+  recents.sort((a,b)=>new Date(b.ts)-new Date(a.ts));
+  const list = byId("recent");
+  list.innerHTML = "";
+  (recents.slice(0,10)).forEach(x=>{
+    list.appendChild(el("div",{class:"note"},[
+      el("div",{class:"ts"},[`${new Date(x.ts).toLocaleString()} — ${x.kind} on ${x.id}`]),
+      el("div",{},[x.t])
+    ]));
+  });
+  if(!recents.length) list.appendChild(el("div",{class:"small"},["Nothing added yet."]));
+}
+function stat(label, value, frac){
+  const w = Math.max(0, Math.min(100, Math.round(frac*100)));
+  return el("div",{class:"stat"},[
+    el("div",{style:"font-weight:700"},[label]),
+    el("div",{style:"font-size:1.4rem;margin:6px 0"},[String(value)]),
+    el("div",{class:"bar"},[ el("div",{class:"fill",style:`width:${w}%`}) ]),
+    el("div",{class:"small"},[ w+"% of total"])
+  ]);
+}
+
+/* ---------------------
+   Tabs & Mode
+--------------------- */
+document.querySelectorAll(".tab").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll(".tab").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+    byId(btn.dataset.page).classList.add("active");
+  });
+});
+document.querySelectorAll("input[name='mode']").forEach(r=>{
+  r.addEventListener("change", ()=>{
+    state.mode = r.value; save(); renderMap();
+  });
+});
+
+/* ---------------------
+   Import/Export
+--------------------- */
+function downloadJSON(){
+  const blob = new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "student-progress-"+new Date().toISOString().slice(0,10)+".json";
+  a.click();
+}
+function importJSON(e){
+  const f = e.target.files?.[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const data = JSON.parse(reader.result);
+      if(confirm("Import will replace your current progress. Continue?")){
+        state = data; save(); location.reload();
+      }
+    }catch(err){ alert("Invalid JSON file."); }
+  };
+  reader.readAsText(f);
+}
+function factoryReset(){
+  if(!confirm("Factory reset: clear all saved progress?")) return;
+  localStorage.removeItem(LS_KEY); location.reload();
+}
+function updateDataSize(){
+  const s = localStorage.getItem(LS_KEY)||"";
+  byId("datasize").textContent = "Local data size: "+(s.length/1024).toFixed(1)+" KB";
+}
+
+/* ---------------------
+   Boot
+--------------------- */
+load();
+render();
+
+</script>
+</body>
+</html>

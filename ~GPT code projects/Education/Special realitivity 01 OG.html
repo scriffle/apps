@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Special Relativity Simulator</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            position: relative;
+            width: 80vw;
+            height: 60vh;
+            border: 2px solid #000;
+            background-color: #fff;
+            overflow: hidden;
+        }
+        .moving-frame {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            padding: 10px;
+            background-color: #fff;
+            border: 2px solid red;
+            z-index: 1; /* Behind the Lorentz thermometer */
+        }
+        .proper-frame {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            background-color: rgba(128, 128, 128, 0.8); /* Opaque grey background */
+            padding: 10px;
+            border-radius: 10px;
+        }
+        .digital-clock {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #333; /* Dark grey for clock numbers */
+        }
+        .ruler {
+            height: 15px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transform-origin: center;
+        }
+        .ruler .markings {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: space-between;
+        }
+        .ruler .markings div {
+            width: 2px;
+            background-color: black;
+        }
+        .ruler .markings .long {
+            height: 100%;
+        }
+        .ruler .markings .short {
+            height: 50%;
+            align-self: flex-end;
+        }
+        .moving-ruler {
+            background-color: red;
+        }
+        .proper-ruler {
+            width: 200px; /* Fixed length for the proper ruler */
+            background-color: blue;
+            margin-top: 5px;
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%; /* Full width */
+            margin-top: 10px;
+        }
+        .controls label {
+            margin: 5px 0;
+        }
+        .controls input[type="range"] {
+            width: 80%; /* Responsive width */
+            max-width: 600px; /* Limit maximum width */
+        }
+        .controls button {
+            margin: 10px 0;
+        }
+        .thermometer-container {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 40px;
+            height: 200px;
+            background-color: #ddd;
+            border: 2px solid #000;
+            border-radius: 5px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column-reverse;
+            align-items: center;
+            z-index: 2; /* On top of the moving clocks */
+        }
+        .thermometer-bar {
+            width: 100%;
+            background-color: red;
+            height: 0%;
+            transition: height 0.3s;
+        }
+        .thermometer-label {
+            position: absolute;
+            top: 220px;
+            right: 10px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            text-align: center;
+        }
+        .lorentz-factor-display {
+            position: absolute;
+            top: 230px;
+            right: 10px;
+            font-size: 1rem;
+            font-weight: bold;
+        }
+        .info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin-top: 20px;
+            font-size: 1rem;
+            font-weight: bold;
+            color: #000;
+        }
+        .info-item {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="container">
+        <div class="proper-frame">
+            <div class="proper-digital-clock" id="proper-digital-clock">12:00:00</div>
+            <div class="ruler proper-ruler">
+                <div class="markings">
+                    <div class="long"></div>
+                    <div class="short"></div>
+                    <div class="long"></div>
+                    <div class="short"></div>
+                    <div class="long"></div>
+                    <div class="short"></div>
+                    <div class="long"></div>
+                    <div class="short"></div>
+                    <div class="long"></div>
+                </div>
+            </div>
+        </div>
+        <div class="thermometer-container">
+            <div class="thermometer-bar" id="thermometer-bar"></div>
+            <div class="thermometer-label">Lorentz Factor</div>
+        </div>
+        <div class="lorentz-factor-display" id="lorentz-factor-display">γ = 1.00</div>
+    </div>
+    <div class="controls">
+        <label for="speed-slider">Speed (% of c):</label>
+        <input type="range" id="speed-slider" min="0" max="99.999" step="0.001" value="0">
+        <label for="angle-slider">Direction (degrees):</label>
+        <input type="range" id="angle-slider" min="0" max="360" step="1" value="0">
+        <button id="reset-button">Reset Time</button>
+    </div>
+    <div class="info">
+        <div class="info-item" id="direction-info">Direction: 0°</div>
+        <div class="info-item" id="speed-info">Speed: 0.000% of c</div>
+        <div class="info-item" id="distance-info">Distance for Apparent Velocity: 0.00 × 10^0 m</div>
+    </div>
+
+    <script>
+        const container = document.getElementById('container');
+        const speedSlider = document.getElementById('speed-slider');
+        const angleSlider = document.getElementById('angle-slider');
+        const thermometerBar = document.getElementById('thermometer-bar');
+        const lorentzFactorDisplay = document.getElementById('lorentz-factor-display');
+        const directionInfo = document.getElementById('direction-info');
+        const speedInfo = document.getElementById('speed-info');
+        const distanceInfo = document.getElementById('distance-info');
+        const resetButton = document.getElementById('reset-button');
+
+        let speed = 0;
+        let lorentzFactor = 1;
+        let properTime = 0;
+        const movingFrames = [];
+        let angle = 0; // Direction in degrees
+        const speedOfLight = 2.9e8; // Speed of light in m/s
+
+        function createMovingFrame(x, y) {
+            const frame = document.createElement('div');
+            frame.classList.add('moving-frame');
+            frame.style.left = `${x}px`;
+            frame.style.top = `${y}px`;
+
+            const clock = document.createElement('div');
+            clock.classList.add('digital-clock');
+            clock.textContent = '12:00:00';
+
+            const ruler = document.createElement('div');
+            ruler.classList.add('ruler', 'moving-ruler');
+            ruler.style.width = '200px'; // Fixed length for gamma = 1
+
+            // Add ruler markings
+            const markings = document.createElement('div');
+            markings.classList.add('markings');
+
+            for (let i = 0; i < 9; i++) {
+                const line = document.createElement('div');
+                line.classList.add(i % 2 === 0 ? 'long' : 'short');
+                markings.appendChild(line);
+            }
+
+            ruler.appendChild(markings);
+            frame.appendChild(clock);
+            frame.appendChild(ruler);
+            container.appendChild(frame);
+
+            movingFrames.push({ frame, clock, ruler, time: 0 });
+        }
+
+        function initializeFrames() {
+            const gridSize = 3; // 3x3 grid
+            const stepX = container.clientWidth / gridSize;
+            const stepY = container.clientHeight / gridSize;
+
+            // Clear existing frames
+            movingFrames.forEach(({ frame }) => container.removeChild(frame));
+            movingFrames.length = 0; // Clear the array
+
+            for (let i = 0; i < gridSize; i++) {
+                for (let j = 0; j < gridSize; j++) {
+                    createMovingFrame(stepX * i, stepY * j);
+                }
+            }
+        }
+
+        function updateLorentzFactor() {
+            speed = speedSlider.value / 100;  // Speed as a percentage of the speed of light
+            lorentzFactor = 1 / Math.sqrt(1 - Math.pow(speed, 2));
+
+            // Calculate the contracted width (length contraction not needed here, only apparent velocity)
+            const contractedWidth = 200 / lorentzFactor;
+
+            movingFrames.forEach(({ ruler }) => {
+                ruler.style.width = `${contractedWidth}px`;  // Adjust ruler width for contraction (if needed)
+                ruler.style.transform = `rotate(${angle}deg)`;
+            });
+
+            // Update thermometer bar height and Lorentz factor display
+            const barHeight = (lorentzFactor - 1) * 100;
+            thermometerBar.style.height = `${Math.min(barHeight, 100)}%`;
+            lorentzFactorDisplay.textContent = `γ = ${lorentzFactor.toFixed(3)}`;
+
+            // Update speed and direction information
+            directionInfo.textContent = `Direction: ${angle}°`;
+            speedInfo.textContent = `Speed: ${(speed * 100).toFixed(3)}% of c`;
+
+            // Calculate the apparent velocity (how fast the object is moving across the container)
+            const containerWidth = container.clientWidth; // width of the container in pixels
+            const apparentVelocity = (containerWidth * speedOfLight) / (containerWidth / 1000);  // simplified apparent velocity
+
+            // Now calculate the distance at which the object must be to appear to move at the speed shown
+            const distanceForApparentVelocity = (speed * speedOfLight) / apparentVelocity; // Using the formula: d = v_object / v_app
+
+            // Display the distance for apparent velocity in scientific notation
+            const distanceExponent = Math.floor(Math.log10(distanceForApparentVelocity));
+            const distanceMantissa = distanceForApparentVelocity / Math.pow(10, distanceExponent);
+            distanceInfo.textContent = `Distance for Apparent Velocity: ${distanceMantissa.toFixed(2)} × 10^${distanceExponent} m`;
+        }
+
+        // Event listeners
+        speedSlider.addEventListener('input', updateLorentzFactor);
+        angleSlider.addEventListener('input', () => {
+            angle = angleSlider.value;
+            updateLorentzFactor();
+        });
+
+        resetButton.addEventListener('click', () => {
+            properTime = 0;
+            updateLorentzFactor();
+        });
+
+        // Initialize frames
+        initializeFrames();
+    </script>
+</body>
+</html>

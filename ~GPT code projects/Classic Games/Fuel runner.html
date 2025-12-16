@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orbital Fuel Runner - Newtonian Physics</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
+        
+        #gameCanvas {
+            display: block;
+            background: radial-gradient(ellipse at center, #0a0a2e 0%, #000 100%);
+            cursor: crosshair;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border: 1px solid #444;
+            border-radius: 5px;
+            max-width: 300px;
+        }
+        
+        #fuelDisplay {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-top: 10px;
+        }
+        
+        .thruster-fuel {
+            text-align: center;
+            padding: 5px;
+            background: rgba(0, 50, 0, 0.5);
+            border: 1px solid #0f0;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+        
+        .thruster-fuel.active {
+            background: rgba(255, 100, 0, 0.5);
+            border-color: #ff0;
+        }
+        
+        .fuel-bar {
+            width: 100%;
+            height: 15px;
+            background: #111;
+            border: 1px solid #333;
+            margin-top: 3px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .fuel-level {
+            height: 100%;
+            background: linear-gradient(to right, #0f0, #ff0);
+            transition: width 0.3s;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border: 1px solid #444;
+            border-radius: 5px;
+        }
+        
+        #physicsPanel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 15px;
+            border: 1px solid #444;
+            border-radius: 5px;
+            font-size: 12px;
+            min-width: 250px;
+            cursor: pointer;
+        }
+        
+        #physicsPanel.collapsed {
+            min-width: auto;
+        }
+        
+        #physicsPanel.collapsed .details {
+            display: none;
+        }
+        
+        #physicsPanel h4 {
+            margin: 0 0 10px 0;
+            color: #4a90e2;
+        }
+        
+        .physics-value {
+            color: #0f0;
+            font-weight: bold;
+        }
+        
+        .physics-row {
+            margin: 5px 0;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 30px;
+            border: 2px solid #f00;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+        }
+        
+        .warning {
+            color: #f00;
+            animation: blink 0.5s infinite;
+        }
+        
+        @keyframes blink {
+            50% { opacity: 0.5; }
+        }
+        
+        .control-key {
+            display: inline-block;
+            background: #333;
+            padding: 2px 6px;
+            border: 1px solid #666;
+            border-radius: 3px;
+            margin: 0 2px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="ui">
+        <h3>Spacecraft Status</h3>
+        <div>Dry Mass: <span id="dryMass">800</span> kg</div>
+        <div>Fuel Mass: <span id="fuelMass">200</span> kg</div>
+        <div>Total Mass: <span id="totalMass">1000</span> kg</div>
+        <div>Orbital Velocity: <span id="velocity">0</span> m/s</div>
+        <div>Altitude: <span id="altitude">0</span> km</div>
+        <div>Periapsis: <span id="periapsis">0</span> km</div>
+        <div>Apoapsis: <span id="apoapsis">0</span> km</div>
+        <div>Zoom: <span id="zoomLevel">1x</span></div>
+        <div>Time Warp: <span id="timeWarpDisplay">1x</span></div>
+        <div>Mission Time: <span id="missionTime">00:00:00</span></div>
+        <div>Real Time: <span id="realTime">00:00:00</span></div>
+        <div id="fuelDisplay"></div>
+    </div>
+    
+    <div id="controls">
+        <h4>Controls</h4>
+        <div>Thrusters:</div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin: 5px 0;">
+            <span class="control-key">I</span>
+            <span class="control-key">O</span>
+            <span class="control-key">P</span>
+            <span class="control-key">K</span>
+            <span style="text-align: center;">●</span>
+            <span class="control-key">;</span>
+            <span class="control-key">,</span>
+            <span class="control-key">.</span>
+            <span class="control-key">/</span>
+        </div>
+        <div><span class="control-key">A</span><span class="control-key">Z</span> or Scroll: Zoom</div>
+        <div><span class="control-key">1</span><span class="control-key">2</span> Time warp</div>
+        <div><span class="control-key">Space</span> Emergency brake</div>
+        <div><span class="control-key">Tab</span> Toggle physics</div>
+    </div>
+    
+    <div id="physicsPanel" onclick="togglePhysicsPanel()">
+        <h4>Physics Details ▼</h4>
+        <div class="details">
+            <div class="physics-row">
+                <span>Position (km):</span>
+                <span class="physics-value" id="position">0, 0</span>
+            </div>
+            <div class="physics-row">
+                <span>Velocity (m/s):</span>
+                <span class="physics-value" id="velocityVector">0, 0</span>
+            </div>
+            <div class="physics-row">
+                <span>Momentum (kg·m/s):</span>
+                <span class="physics-value" id="momentum">0</span>
+            </div>
+            <div class="physics-row">
+                <span>Kinetic Energy (MJ):</span>
+                <span class="physics-value" id="kineticEnergy">0</span>
+            </div>
+            <div class="physics-row">
+                <span>Potential Energy (MJ):</span>
+                <span class="physics-value" id="potentialEnergy">0</span>
+            </div>
+            <div class="physics-row">
+                <span>Total Energy (MJ):</span>
+                <span class="physics-value" id="totalEnergy">0</span>
+            </div>
+            <div class="physics-row">
+                <span>Orbital Period:</span>
+                <span class="physics-value" id="orbitalPeriod">0</span>
+            </div>
+            <div class="physics-row">
+                <span>Eccentricity:</span>
+                <span class="physics-value" id="eccentricity">0</span>
+            </div>
+            <div class="physics-row">
+                <span>G-Force:</span>
+                <span class="physics-value" id="gforce">0</span>
+            </div>
+        </div>
+    </div>
+    
+    <div id="gameOver">
+        <h2>Game Over</h2>
+        <p>Your spacecraft has crashed!</p>
+        <p>Final Score: <span id="finalScore">0</span></p>
+        <button onclick="location.reload()">Restart</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Set canvas size
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        // Physics constants (real values)
+        const G = 6.67430e-11; // Gravitational constant (m³/kg·s²)
+        const PLANET_MASS = 5.972e24; // Earth mass (kg)
+        const PLANET_RADIUS_REAL = 6.371e6; // Earth radius (m)
+        const SCALE = 50 / PLANET_RADIUS_REAL; // 50 pixels = Earth radius
+        
+        // Camera/zoom system
+        const camera = {
+            x: 0,
+            y: 0,
+            zoom: 1,
+            targetZoom: 1,
+            minZoom: 0.00001,  // 1/100,000x zoom out - can see enormous distances
+            maxZoom: 10000     // 10,000x zoom in - can see individual meters
+        };
+        
+        // Calculate stable circular orbit velocity
+        function getOrbitalVelocity(radius) {
+            return Math.sqrt(G * PLANET_MASS / radius);
+        }
+        
+        // Planet
+        const planet = {
+            x: 0,
+            y: 0,
+            radius: 50, // Visual radius in pixels
+            mass: PLANET_MASS
+        };
+        
+        // Initial position - on Earth's surface (at the equator)
+        const launchLatitude = 0; // Equator launch
+        const surfaceRadius = PLANET_RADIUS_REAL; // Start on surface
+        
+        // Spacecraft properties
+        const spacecraft = {
+            x: 0,
+            y: -surfaceRadius * SCALE, // On surface above planet center
+            vx: 0, // Start stationary (relative to surface)
+            vy: 0,
+            mass: 400, // Total mass in kg (200kg dry + 200kg fuel)
+            dryMass: 200, // Mass without fuel - reduced from 800kg
+            radius: 8, // Visual radius
+            angle: -Math.PI / 2, // Pointing up
+            thrusters: [],
+            lastAcceleration: { x: 0, y: 0 }
+        };
+        
+        // Thruster mapping for new key layout:
+        // o=up, .=down, k=left, ;=right
+        // i=up-left, p=up-right, ,=down-left, /=down-right
+        const thrusterKeys = {
+            'o': 0,  // up (0°)
+            'p': 1,  // up-right (45°)
+            ';': 2,  // right (90°)
+            '/': 3,  // down-right (135°)
+            '.': 4,  // down (180°)
+            ',': 5,  // down-left (225°)
+            'k': 6,  // left (270°)
+            'i': 7   // up-left (315°)
+        };
+        
+        // Initialize 8 thrusters (rotated 90° CCW so "up" is tangent to orbit)
+        for (let i = 0; i < 8; i++) {
+            spacecraft.thrusters.push({
+                angle: (i * Math.PI * 2) / 8 - Math.PI / 2, // Subtract 90° (π/2 radians)
+                fuel: 25, // kg per thruster (200 kg total)
+                maxFuel: 25,
+                thrust: 3000, // N
+                exhaustVelocity: 3000, // m/s (similar to chemical rockets)
+                firing: false,
+                massFlowRate: 1 // kg/s when firing
+            });
+        }
+        
+        // Game state
+        let score = 0;
+        let isPaused = false;
+        let timeWarp = 1;
+        let gameOver = false;
+        let physicsCollapsed = false;
+        let missionTime = 0; // Seconds since start
+        let realTime = 0; // Real seconds elapsed
+        
+        // Fuel pickups
+        const fuelPickups = [];
+        
+        // Orbital trail
+        const trail = [];
+        const maxTrailLength = 300;
+        
+        // Orbital elements
+        let orbitalElements = {
+            periapsis: 0,
+            apoapsis: 0,
+            eccentricity: 0,
+            period: 0
+        };
+        
+        // Input handling
+        const keys = {};
+        
+        window.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+            
+            // Thruster controls
+            if (thrusterKeys.hasOwnProperty(e.key.toLowerCase())) {
+                const thrusterIndex = thrusterKeys[e.key.toLowerCase()];
+                spacecraft.thrusters[thrusterIndex].firing = true;
+            }
+            
+            // Zoom controls (logarithmic)
+            if (e.key.toLowerCase() === 'a') {
+                camera.targetZoom = Math.min(camera.maxZoom, camera.targetZoom * Math.pow(10, 0.2));
+            } else if (e.key.toLowerCase() === 'z') {
+                camera.targetZoom = Math.max(camera.minZoom, camera.targetZoom / Math.pow(10, 0.2));
+            }
+            
+            // Time warp controls (logarithmic from 1x to 10,000x)
+            if (e.key === '1') {
+                timeWarp = Math.max(1, timeWarp / Math.pow(10, 0.25));
+            } else if (e.key === '2') {
+                timeWarp = Math.min(10000, timeWarp * Math.pow(10, 0.25));
+            }
+            
+            // Toggle physics panel
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                togglePhysicsPanel();
+            }
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+            
+            // Stop thruster firing
+            if (thrusterKeys.hasOwnProperty(e.key.toLowerCase())) {
+                const thrusterIndex = thrusterKeys[e.key.toLowerCase()];
+                spacecraft.thrusters[thrusterIndex].firing = false;
+            }
+        });
+        
+        // Mouse wheel zoom (logarithmic)
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = Math.pow(10, 0.1); // Logarithmic zoom - faster for large range
+            if (e.deltaY < 0) {
+                camera.targetZoom = Math.min(camera.maxZoom, camera.targetZoom * zoomFactor);
+            } else {
+                camera.targetZoom = Math.max(camera.minZoom, camera.targetZoom / zoomFactor);
+            }
+        });
+        
+        // Toggle physics panel
+        function togglePhysicsPanel() {
+            physicsCollapsed = !physicsCollapsed;
+            const panel = document.getElementById('physicsPanel');
+            panel.classList.toggle('collapsed');
+            panel.querySelector('h4').textContent = physicsCollapsed ? 'Physics Details ▶' : 'Physics Details ▼';
+        }
+        
+        // Create fuel pickup in various orbits
+        function createFuelPickup(angle, altitudeKm) {
+            const orbitAltitude = altitudeKm * 1000; // Convert km to m
+            const orbitRadius = PLANET_RADIUS_REAL + orbitAltitude;
+            const orbitalVel = getOrbitalVelocity(orbitRadius);
+            
+            fuelPickups.push({
+                x: Math.cos(angle) * orbitRadius * SCALE,
+                y: Math.sin(angle) * orbitRadius * SCALE,
+                vx: -Math.sin(angle) * orbitalVel * SCALE,
+                vy: Math.cos(angle) * orbitalVel * SCALE,
+                fuel: 25 + Math.random() * 25, // 25-50 kg of fuel
+                radius: 8,
+                mass: 100, // kg
+                collected: false
+            });
+        }
+        
+        // Initialize fuel pickups - 16 distributed around various orbits
+        function initializeFuelPickups() {
+            // 4 at 300km altitude
+            for (let i = 0; i < 4; i++) {
+                createFuelPickup((i * Math.PI * 2) / 4, 300);
+            }
+            
+            // 4 at 500km altitude (offset by 45 degrees)
+            for (let i = 0; i < 4; i++) {
+                createFuelPickup((i * Math.PI * 2) / 4 + Math.PI / 4, 500);
+            }
+            
+            // 4 at 700km altitude
+            for (let i = 0; i < 4; i++) {
+                createFuelPickup((i * Math.PI * 2) / 4 + Math.PI / 8, 700);
+            }
+            
+            // 4 at 900km altitude (offset by 45 degrees)
+            for (let i = 0; i < 4; i++) {
+                createFuelPickup((i * Math.PI * 2) / 4 - Math.PI / 8, 900);
+            }
+        }
+        
+        // Calculate gravitational acceleration
+        function calculateGravity(obj) {
+            const dx = planet.x - obj.x;
+            const dy = planet.y - obj.y;
+            const distancePixels = Math.sqrt(dx * dx + dy * dy);
+            const distanceReal = distancePixels / SCALE;
+            
+            // Check collision with a small tolerance for launch pad
+            if (distanceReal < PLANET_RADIUS_REAL - 100) { // 100m below surface = crash
+                return { ax: 0, ay: 0, crashed: true };
+            }
+            
+            // Newton's law of gravitation: F = GMm/r²
+            // Acceleration: a = GM/r²
+            const acceleration = G * PLANET_MASS / (distanceReal * distanceReal);
+            
+            // Direction components
+            const ax = (acceleration * dx / distancePixels) * SCALE;
+            const ay = (acceleration * dy / distancePixels) * SCALE;
+            
+            return { ax, ay, crashed: false };
+        }
+        
+        // Calculate orbital elements
+        function calculateOrbitalElements() {
+            const dx = spacecraft.x - planet.x;
+            const dy = spacecraft.y - planet.y;
+            const r = Math.sqrt(dx * dx + dy * dy) / SCALE;
+            const v = Math.sqrt(spacecraft.vx * spacecraft.vx + spacecraft.vy * spacecraft.vy) / SCALE;
+            
+            // Specific orbital energy
+            const specificEnergy = (v * v) / 2 - G * PLANET_MASS / r;
+            
+            // Semi-major axis
+            const a = -G * PLANET_MASS / (2 * specificEnergy);
+            
+            // Angular momentum
+            const h = r * v * Math.sin(Math.acos((dx * spacecraft.vx + dy * spacecraft.vy) / (r * SCALE * v * SCALE)));
+            
+            // Eccentricity
+            const e = Math.sqrt(1 + (2 * specificEnergy * h * h) / (G * G * PLANET_MASS * PLANET_MASS));
+            
+            // Periapsis and apoapsis
+            const periapsis = a * (1 - e) - PLANET_RADIUS_REAL;
+            const apoapsis = a * (1 + e) - PLANET_RADIUS_REAL;
+            
+            // Orbital period
+            const period = 2 * Math.PI * Math.sqrt(a * a * a / (G * PLANET_MASS));
+            
+            orbitalElements = {
+                periapsis: Math.max(0, periapsis),
+                apoapsis: apoapsis,
+                eccentricity: e,
+                period: period
+            };
+        }
+        
+        // Apply thrust
+        function applyThrust(dt) {
+            let totalThrust = { x: 0, y: 0 };
+            let totalMassFlow = 0;
+            
+            spacecraft.thrusters.forEach((thruster) => {
+                if (thruster.firing && thruster.fuel > 0) {
+                    // Calculate thrust direction (opposite to thruster angle)
+                    const thrustAngle = spacecraft.angle + thruster.angle + Math.PI;
+                    const thrustX = Math.cos(thrustAngle) * thruster.thrust;
+                    const thrustY = Math.sin(thrustAngle) * thruster.thrust;
+                    
+                    totalThrust.x += thrustX;
+                    totalThrust.y += thrustY;
+                    
+                    // Fuel consumption
+                    const fuelUsed = thruster.massFlowRate * dt;
+                    thruster.fuel = Math.max(0, thruster.fuel - fuelUsed);
+                    totalMassFlow += thruster.massFlowRate;
+                }
+            });
+            
+            // Update spacecraft mass
+            if (totalMassFlow > 0) {
+                spacecraft.mass = Math.max(spacecraft.dryMass, spacecraft.mass - totalMassFlow * dt);
+            }
+            
+            // Apply acceleration (F = ma, so a = F/m)
+            const ax = totalThrust.x / spacecraft.mass * SCALE;
+            const ay = totalThrust.y / spacecraft.mass * SCALE;
+            
+            return { ax, ay };
+        }
+        
+        // Predict orbit
+        function predictOrbit() {
+            const predictions = [];
+            let simObj = {
+                x: spacecraft.x,
+                y: spacecraft.y,
+                vx: spacecraft.vx,
+                vy: spacecraft.vy
+            };
+            
+            const steps = 150;
+            const stepTime = 2; // seconds per step
+            
+            for (let i = 0; i < steps; i++) {
+                const gravity = calculateGravity(simObj);
+                if (gravity.crashed) break;
+                
+                simObj.vx += gravity.ax * stepTime;
+                simObj.vy += gravity.ay * stepTime;
+                simObj.x += simObj.vx * stepTime;
+                simObj.y += simObj.vy * stepTime;
+                
+                predictions.push({ x: simObj.x, y: simObj.y });
+            }
+            
+            return predictions;
+        }
+        
+        // Update game state
+        function update(dt) {
+            if (isPaused || gameOver) return;
+            
+            // Update mission time and real time
+            missionTime += dt * timeWarp;
+            realTime += dt;
+            
+            // Use warped time for animation but NOT for physics
+            const animDt = dt * timeWarp;
+            
+            // Apply thrust (using real dt for physics accuracy)
+            const thrust = applyThrust(dt);
+            
+            // Calculate gravity
+            const gravity = calculateGravity(spacecraft);
+            
+            // Only check for crash if we're moving toward the planet and below a certain altitude
+            if (gravity.crashed) {
+                const dx = spacecraft.x - planet.x;
+                const dy = spacecraft.y - planet.y;
+                const radialVelocity = (dx * spacecraft.vx + dy * spacecraft.vy) / Math.sqrt(dx * dx + dy * dy);
+                
+                // Only crash if moving inward and we've launched (altitude > 10m)
+                const currentAltitude = Math.sqrt(dx * dx + dy * dy) / SCALE - PLANET_RADIUS_REAL;
+                if (radialVelocity < -10 && currentAltitude > 10) {
+                    gameOver = true;
+                    document.getElementById('gameOver').style.display = 'block';
+                    document.getElementById('finalScore').textContent = score;
+                    return;
+                }
+            }
+            
+            // Total acceleration
+            const ax = gravity.ax + thrust.ax;
+            const ay = gravity.ay + thrust.ay;
+            spacecraft.lastAcceleration = { x: ax / SCALE, y: ay / SCALE };
+            
+            // Update velocity and position with warped time for animation
+            spacecraft.vx += ax * animDt;
+            spacecraft.vy += ay * animDt;
+            spacecraft.x += spacecraft.vx * animDt;
+            spacecraft.y += spacecraft.vy * animDt;
+            
+            // Update angle based on velocity direction
+            spacecraft.angle = Math.atan2(spacecraft.vy, spacecraft.vx);
+            
+            // Add to trail
+            trail.push({ x: spacecraft.x, y: spacecraft.y });
+            if (trail.length > maxTrailLength) {
+                trail.shift();
+            }
+            
+            // Update fuel pickups with warped time
+            fuelPickups.forEach((pickup, index) => {
+                if (pickup.collected) return; // Skip collected pickups
+                
+                const pickupGravity = calculateGravity(pickup);
+                pickup.vx += pickupGravity.ax * animDt;
+                pickup.vy += pickupGravity.ay * animDt;
+                pickup.x += pickup.vx * animDt;
+                pickup.y += pickup.vy * animDt;
+                
+                // Check collision with spacecraft
+                const dx = spacecraft.x - pickup.x;
+                const dy = spacecraft.y - pickup.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < spacecraft.radius + pickup.radius) {
+                    // Distribute fuel among thrusters
+                    const fuelPerThruster = pickup.fuel / 8;
+                    spacecraft.thrusters.forEach(thruster => {
+                        thruster.fuel = Math.min(thruster.maxFuel, thruster.fuel + fuelPerThruster);
+                    });
+                    
+                    // Update mass
+                    spacecraft.mass += pickup.fuel;
+                    
+                    score += Math.floor(pickup.fuel * 10);
+                    pickup.collected = true; // Mark as collected instead of removing
+                }
+            });
+            
+            // Emergency brake (space key)
+            if (keys[' ']) {
+                // Fire all thrusters in opposite direction of velocity
+                const velAngle = Math.atan2(spacecraft.vy, spacecraft.vx);
+                spacecraft.thrusters.forEach((thruster, i) => {
+                    const thrusterWorldAngle = spacecraft.angle + thruster.angle;
+                    const angleDiff = Math.abs(((thrusterWorldAngle - velAngle + Math.PI) % (2 * Math.PI)) - Math.PI);
+                    if (angleDiff < Math.PI / 2 && thruster.fuel > 0) {
+                        thruster.firing = true;
+                    } else {
+                        thruster.firing = false;
+                    }
+                });
+            }
+            
+            // Calculate orbital elements
+            calculateOrbitalElements();
+            
+            // Update camera
+            camera.zoom += (camera.targetZoom - camera.zoom) * 0.1;
+            camera.x = -spacecraft.x;
+            camera.y = -spacecraft.y;
+        }
+        
+        // Convert world coordinates to screen
+        function worldToScreen(x, y) {
+            return {
+                x: (x + camera.x) * camera.zoom + canvas.width / 2,
+                y: (y + camera.y) * camera.zoom + canvas.height / 2
+            };
+        }
+        
+        // Render game
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Save context for camera transforms
+            ctx.save();
+            
+            // Apply camera transform
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.scale(camera.zoom, camera.zoom);
+            ctx.translate(camera.x, camera.y);
+            
+            // Draw stars (parallax effect)
+            ctx.fillStyle = '#fff';
+            for (let i = 0; i < 200; i++) {
+                const x = ((i * 137.5) % 2000 - 1000) / (1 + camera.zoom * 0.02);
+                const y = ((i * 213.7) % 2000 - 1000) / (1 + camera.zoom * 0.02);
+                const size = (0.5 + (i % 3) * 0.5) / Math.sqrt(camera.zoom);
+                ctx.fillRect(x - spacecraft.x * 0.1, y - spacecraft.y * 0.1, size, size);
+            }
+            
+            // Draw planet
+            const gradient = ctx.createRadialGradient(planet.x, planet.y, 0, planet.x, planet.y, planet.radius);
+            gradient.addColorStop(0, '#4a90e2');
+            gradient.addColorStop(0.7, '#2c5aa0');
+            gradient.addColorStop(1, '#1a3a6e');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(planet.x, planet.y, planet.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw atmosphere
+            const atmosGradient = ctx.createRadialGradient(planet.x, planet.y, planet.radius, planet.x, planet.y, planet.radius * 1.3);
+            atmosGradient.addColorStop(0, 'rgba(135, 206, 235, 0.4)');
+            atmosGradient.addColorStop(1, 'rgba(135, 206, 235, 0)');
+            ctx.fillStyle = atmosGradient;
+            ctx.beginPath();
+            ctx.arc(planet.x, planet.y, planet.radius * 1.3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw launch pad if spacecraft is near surface
+            const spacecraftAltitude = Math.sqrt(spacecraft.x * spacecraft.x + spacecraft.y * spacecraft.y) / SCALE - PLANET_RADIUS_REAL;
+            if (spacecraftAltitude < 5000) { // Show launch pad when below 5km
+                ctx.save();
+                ctx.translate(0, -planet.radius);
+                
+                // Scale launch pad with zoom
+                const padScale = 1 / Math.max(camera.zoom, 1);
+                ctx.scale(padScale, padScale);
+                
+                // Launch tower
+                ctx.fillStyle = '#666';
+                ctx.fillRect(-15, -30, 5, 30);
+                ctx.fillRect(10, -30, 5, 30);
+                
+                // Platform
+                ctx.fillStyle = '#888';
+                ctx.fillRect(-20, -5, 40, 5);
+                
+                // Support legs
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(-20, 0);
+                ctx.lineTo(-25, 10);
+                ctx.moveTo(20, 0);
+                ctx.lineTo(25, 10);
+                ctx.stroke();
+                
+                ctx.restore();
+            }
+            
+            // Draw orbital trail
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 2 / camera.zoom;
+            ctx.beginPath();
+            trail.forEach((point, index) => {
+                if (index === 0) {
+                    ctx.moveTo(point.x, point.y);
+                } else {
+                    ctx.lineTo(point.x, point.y);
+                }
+            });
+            ctx.stroke();
+            
+            // Draw prediction line
+            const predictions = predictOrbit();
+            ctx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
+            ctx.lineWidth = 1 / camera.zoom;
+            ctx.setLineDash([5 / camera.zoom, 5 / camera.zoom]);
+            ctx.beginPath();
+            ctx.moveTo(spacecraft.x, spacecraft.y);
+            predictions.forEach((point, index) => {
+                ctx.globalAlpha = 1 - (index / predictions.length) * 0.7;
+                ctx.lineTo(point.x, point.y);
+            });
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 1;
+            
+            // Draw fuel pickups
+            fuelPickups.forEach(pickup => {
+                if (pickup.collected) return; // Don't draw collected pickups
+                
+                // Draw icon and text at constant screen size
+                ctx.save();
+                ctx.translate(pickup.x, pickup.y);
+                const pickupScale = Math.min(1 / camera.zoom, 1); // Don't scale up beyond 1x
+                ctx.scale(pickupScale, pickupScale);
+                
+                // Fuel canister icon
+                ctx.fillStyle = '#0f0';
+                ctx.strokeStyle = '#0f0';
+                ctx.lineWidth = 2;
+                
+                // Canister body
+                ctx.fillRect(-5, -10, 10, 16);
+                
+                // Canister cap
+                ctx.fillRect(-3, -12, 6, 3);
+                
+                // Canister handle
+                ctx.beginPath();
+                ctx.arc(0, -12, 4, Math.PI, 0, false);
+                ctx.stroke();
+                
+                // Fuel amount text
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(Math.floor(pickup.fuel) + 'kg', 0, 25);
+                ctx.restore();
+            });
+            
+            // Draw spacecraft
+            ctx.save();
+            ctx.translate(spacecraft.x, spacecraft.y);
+            
+            // Scale spacecraft to maintain constant screen size
+            const spacecraftScale = 1 / camera.zoom;
+            ctx.scale(spacecraftScale, spacecraftScale);
+            
+            ctx.rotate(spacecraft.angle);
+            
+            // Main body
+            const bodyGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, spacecraft.radius);
+            bodyGradient.addColorStop(0, '#fff');
+            bodyGradient.addColorStop(0.7, '#ddd');
+            bodyGradient.addColorStop(1, '#999');
+            ctx.fillStyle = bodyGradient;
+            ctx.beginPath();
+            ctx.arc(0, 0, spacecraft.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw thrusters
+            spacecraft.thrusters.forEach((thruster, index) => {
+                ctx.save();
+                ctx.rotate(thruster.angle);
+                ctx.translate(spacecraft.radius, 0);
+                
+                // Thruster body
+                ctx.fillStyle = thruster.fuel > 0 ? '#666' : '#333';
+                if (thruster.firing && thruster.fuel > 0) {
+                    ctx.fillStyle = '#f90';
+                }
+                ctx.fillRect(-3, -4, 6, 8);
+                
+                // Exhaust flame
+                if (thruster.firing && thruster.fuel > 0) {
+                    const flameLength = 15 + Math.random() * 10;
+                    const gradient = ctx.createLinearGradient(0, 0, flameLength, 0);
+                    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+                    gradient.addColorStop(0.2, 'rgba(255, 200, 100, 0.8)');
+                    gradient.addColorStop(0.5, 'rgba(255, 100, 0, 0.6)');
+                    gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.moveTo(3, -3);
+                    ctx.lineTo(flameLength, -6);
+                    ctx.lineTo(flameLength + 5, 0);
+                    ctx.lineTo(flameLength, 6);
+                    ctx.lineTo(3, 3);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                
+                ctx.restore();
+            });
+            
+            ctx.restore();
+            ctx.restore();
+            
+            // Update UI
+            updateUI();
+        }
+        
+        // Format time as HH:MM:SS
+        function formatTime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        // Update UI elements
+        function updateUI() {
+            // Mass calculations
+            let totalFuel = 0;
+            spacecraft.thrusters.forEach(thruster => {
+                totalFuel += thruster.fuel;
+            });
+            
+            document.getElementById('dryMass').textContent = spacecraft.dryMass;
+            document.getElementById('fuelMass').textContent = Math.floor(totalFuel);
+            document.getElementById('totalMass').textContent = Math.floor(spacecraft.mass);
+            
+            // Velocity and position
+            const velocity = Math.sqrt(spacecraft.vx * spacecraft.vx + spacecraft.vy * spacecraft.vy) / SCALE;
+            document.getElementById('velocity').textContent = Math.floor(velocity);
+            
+            const dx = spacecraft.x - planet.x;
+            const dy = spacecraft.y - planet.y;
+            const altitude = Math.max(0, (Math.sqrt(dx * dx + dy * dy) - planet.radius) / SCALE / 1000);
+            document.getElementById('altitude').textContent = Math.floor(altitude);
+            
+            // Hide launch hint after liftoff
+            if (altitude > 1) {
+                document.getElementById('launchHint').style.display = 'none';
+            }
+            
+            // Orbital elements
+            document.getElementById('periapsis').textContent = Math.floor(orbitalElements.periapsis / 1000);
+            document.getElementById('apoapsis').textContent = Math.floor(orbitalElements.apoapsis / 1000);
+            
+            // Update fuel display
+            const fuelDisplay = document.getElementById('fuelDisplay');
+            fuelDisplay.innerHTML = '';
+            
+            spacecraft.thrusters.forEach((thruster, index) => {
+                const div = document.createElement('div');
+                div.className = 'thruster-fuel';
+                if (thruster.fuel < 5) div.classList.add('warning');
+                if (thruster.firing) div.classList.add('active');
+                
+                // Get the key for this thruster
+                let key = '';
+                for (let k in thrusterKeys) {
+                    if (thrusterKeys[k] === index) {
+                        key = k.toUpperCase();
+                        break;
+                    }
+                }
+                
+                div.innerHTML = `
+                    <div>T${index + 1} (${key})</div>
+                    <div class="fuel-bar">
+                        <div class="fuel-level" style="width: ${(thruster.fuel / thruster.maxFuel) * 100}%"></div>
+                    </div>
+                    <div>${thruster.fuel.toFixed(1)}kg</div>
+                `;
+                
+                fuelDisplay.appendChild(div);
+            });
+            
+            // Update zoom and time warp display
+            const zoomDisplay = camera.zoom < 0.01 ? camera.zoom.toExponential(1) : 
+                               camera.zoom > 100 ? camera.zoom.toExponential(1) : 
+                               camera.zoom.toFixed(2);
+            document.getElementById('zoomLevel').textContent = zoomDisplay + 'x';
+            
+            const timeWarpDisplay = timeWarp < 10 ? timeWarp.toFixed(1) : 
+                                   timeWarp < 1000 ? Math.floor(timeWarp) : 
+                                   timeWarp.toExponential(1);
+            document.getElementById('timeWarpDisplay').textContent = timeWarpDisplay + 'x';
+            
+            // Update time displays
+            document.getElementById('missionTime').textContent = formatTime(missionTime);
+            document.getElementById('realTime').textContent = formatTime(realTime);
+            
+            // Physics panel
+            document.getElementById('position').textContent = 
+                `${(spacecraft.x / SCALE / 1000).toFixed(1)}, ${(spacecraft.y / SCALE / 1000).toFixed(1)}`;
+            document.getElementById('velocityVector').textContent = 
+                `${(spacecraft.vx / SCALE).toFixed(1)}, ${(spacecraft.vy / SCALE).toFixed(1)}`;
+            
+            const momentum = spacecraft.mass * velocity;
+            document.getElementById('momentum').textContent = momentum.toExponential(3);
+            
+            const kineticEnergy = 0.5 * spacecraft.mass * velocity * velocity / 1e6;
+            document.getElementById('kineticEnergy').textContent = kineticEnergy.toFixed(1);
+            
+            const r = Math.sqrt(dx * dx + dy * dy) / SCALE;
+            const potentialEnergy = -G * PLANET_MASS * spacecraft.mass / r / 1e6;
+            document.getElementById('potentialEnergy').textContent = potentialEnergy.toFixed(1);
+            
+            document.getElementById('totalEnergy').textContent = (kineticEnergy + potentialEnergy).toFixed(1);
+            
+            const periodMinutes = orbitalElements.period / 60;
+            document.getElementById('orbitalPeriod').textContent = 
+                periodMinutes < 180 ? `${periodMinutes.toFixed(1)} min` : `${(periodMinutes / 60).toFixed(1)} hr`;
+            
+            document.getElementById('eccentricity').textContent = orbitalElements.eccentricity.toFixed(3);
+            
+            const gForce = Math.sqrt(spacecraft.lastAcceleration.x ** 2 + spacecraft.lastAcceleration.y ** 2) / 9.81;
+            document.getElementById('gforce').textContent = gForce.toFixed(2) + ' g';
+        }
+        
+        // Game loop
+        let lastTime = 0;
+        function gameLoop(currentTime) {
+            const dt = Math.min((currentTime - lastTime) / 1000, 0.05);
+            lastTime = currentTime;
+            
+            update(dt);
+            render();
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Start game
+        initializeFuelPickups();
+        requestAnimationFrame(gameLoop);
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>

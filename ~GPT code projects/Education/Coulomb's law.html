@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced 2D Electrical Circuit Simulator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        .sidebar {
+            width: 320px;
+            background: #2a2a2a;
+            border-right: 1px solid #3a3a3a;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        .main-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .toolbar {
+            height: 60px;
+            background: #2a2a2a;
+            border-bottom: 1px solid #3a3a3a;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 20px;
+        }
+        
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            background: #0a0a0a;
+            overflow: hidden;
+        }
+        
+        #circuitCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: crosshair;
+        }
+        
+        .component-section {
+            margin-bottom: 30px;
+        }
+        
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+        }
+        
+        .component-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        
+        .component-item {
+            background: #3a3a3a;
+            border: 1px solid #4a4a4a;
+            border-radius: 8px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        
+        .component-item:hover {
+            background: #4a4a4a;
+            border-color: #5a5a5a;
+            transform: translateY(-2px);
+        }
+        
+        .component-item.selected {
+            background: #4a6a8a;
+            border-color: #5a7a9a;
+        }
+        
+        .component-icon {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        
+        .component-name {
+            font-size: 12px;
+            color: #ccc;
+        }
+        
+        .preset-select {
+            width: 100%;
+            padding: 10px;
+            background: #3a3a3a;
+            border: 1px solid #4a4a4a;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 14px;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        
+        .measurements {
+            background: #3a3a3a;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .measurement-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        .measurement-label {
+            color: #888;
+        }
+        
+        .measurement-value {
+            font-weight: 600;
+            color: #4a9eff;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            background: #4a6a8a;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        .btn:hover {
+            background: #5a7a9a;
+        }
+        
+        .btn.secondary {
+            background: #3a3a3a;
+        }
+        
+        .btn.secondary:hover {
+            background: #4a4a4a;
+        }
+        
+        .status-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(42, 42, 42, 0.9);
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #888;
+        }
+        
+        .tooltip {
+            position: absolute;
+            background: rgba(42, 42, 42, 0.95);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #ccc;
+            pointer-events: none;
+            display: none;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="component-section">
+                <div class="section-title">Circuit Presets</div>
+                <select class="preset-select" id="presetSelect">
+                    <option value="">Select a preset...</option>
+                    <option value="basic-series">Basic Series Circuit</option>
+                    <option value="basic-parallel">Basic Parallel Circuit</option>
+                    <option value="series-parallel">Series-Parallel Mix</option>
+                    <option value="voltage-divider">Voltage Divider</option>
+                    <option value="wire-gauge">Wire Gauge Comparison</option>
+                </select>
+            </div>
+            
+            <div class="component-section">
+                <div class="section-title">Components</div>
+                <div class="component-grid">
+                    <div class="component-item" data-component="voltage-source">
+                        <div class="component-icon">⚡</div>
+                        <div class="component-name">Voltage Source</div>
+                    </div>
+                    <div class="component-item" data-component="resistor">
+                        <div class="component-icon">⬚</div>
+                        <div class="component-name">Resistor</div>
+                    </div>
+                    <div class="component-item" data-component="wire">
+                        <div class="component-icon">━</div>
+                        <div class="component-name">Wire</div>
+                    </div>
+                    <div class="component-item" data-component="switch">
+                        <div class="component-icon">⊸</div>
+                        <div class="component-name">Switch</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="component-section">
+                <div class="section-title">Wire Properties</div>
+                <select class="preset-select" id="wireGaugeSelect">
+                    <option value="12">12 AWG (2.05mm)</option>
+                    <option value="14" selected>14 AWG (1.63mm)</option>
+                    <option value="16">16 AWG (1.29mm)</option>
+                    <option value="18">18 AWG (1.02mm)</option>
+                    <option value="20">20 AWG (0.812mm)</option>
+                </select>
+                <select class="preset-select" id="wireMaterialSelect">
+                    <option value="copper" selected>Copper</option>
+                    <option value="aluminum">Aluminum</option>
+                    <option value="silver">Silver</option>
+                </select>
+            </div>
+            
+            <div class="measurements">
+                <div class="section-title">Real-Time Measurements</div>
+                <div class="measurement-item">
+                    <span class="measurement-label">Total Current:</span>
+                    <span class="measurement-value" id="totalCurrent">0.00 A</span>
+                </div>
+                <div class="measurement-item">
+                    <span class="measurement-label">Total Voltage:</span>
+                    <span class="measurement-value" id="totalVoltage">0.00 V</span>
+                </div>
+                <div class="measurement-item">
+                    <span class="measurement-label">Total Resistance:</span>
+                    <span class="measurement-value" id="totalResistance">0.00 Ω</span>
+                </div>
+                <div class="measurement-item">
+                    <span class="measurement-label">Power Dissipation:</span>
+                    <span class="measurement-value" id="powerDissipation">0.00 W</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-area">
+            <div class="toolbar">
+                <button class="btn secondary" id="clearBtn">Clear Circuit</button>
+                <button class="btn secondary" id="deleteBtn">Delete Mode</button>
+                <button class="btn" id="simulateBtn">Start Simulation</button>
+                <button class="btn secondary" id="gridBtn">Toggle Grid</button>
+            </div>
+            
+            <div class="canvas-container">
+                <canvas id="circuitCanvas"></canvas>
+                <div class="status-bar" id="statusBar">Ready - Select a component to place</div>
+                <div class="tooltip" id="tooltip"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Canvas setup
+        const canvas = document.getElementById('circuitCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            width = container.clientWidth;
+            height = container.clientHeight;
+            canvas.width = width;
+            canvas.height = height;
+            redraw();
+        }
+        
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        
+        // Grid settings
+        const GRID_SIZE = 20;
+        let showGrid = true;
+        
+        // Circuit state
+        let components = [];
+        let wires = [];
+        let electrons = [];
+        let selectedComponent = null;
+        let placingComponent = null;
+        let wireStart = null;
+        let deleteMode = false;
+        let simulating = false;
+        
+        // Physical constants
+        const k = 8.99e9; // Coulomb's constant
+        const e = 1.602e-19; // Elementary charge
+        const SCALE_FACTOR = 1000; // Visual scaling for electron movement
+        
+        // Material resistivities (Ω·m)
+        const RESISTIVITIES = {
+            copper: 1.7e-8,
+            aluminum: 2.6e-8,
+            silver: 1.6e-8
+        };
+        
+        // AWG wire diameters (mm)
+        const AWG_DIAMETERS = {
+            12: 2.05,
+            14: 1.63,
+            16: 1.29,
+            18: 1.02,
+            20: 0.812
+        };
+        
+        // Component classes
+        class Component {
+            constructor(x, y, type) {
+                this.x = Math.round(x / GRID_SIZE) * GRID_SIZE;
+                this.y = Math.round(y / GRID_SIZE) * GRID_SIZE;
+                this.type = type;
+                this.connections = [];
+                this.voltage = 0;
+                this.current = 0;
+            }
+            
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                this.drawComponent(ctx);
+                ctx.restore();
+            }
+            
+            contains(x, y) {
+                return Math.abs(x - this.x) < 30 && Math.abs(y - this.y) < 30;
+            }
+        }
+        
+        class VoltageSource extends Component {
+            constructor(x, y) {
+                super(x, y, 'voltage-source');
+                this.voltage = 9; // 9V battery
+            }
+            
+            drawComponent(ctx) {
+                // Battery symbol
+                ctx.strokeStyle = '#4a9eff';
+                ctx.lineWidth = 3;
+                
+                // Positive terminal
+                ctx.beginPath();
+                ctx.moveTo(-20, -15);
+                ctx.lineTo(-20, 15);
+                ctx.stroke();
+                
+                // Negative terminal
+                ctx.beginPath();
+                ctx.moveTo(-10, -25);
+                ctx.lineTo(-10, 25);
+                ctx.stroke();
+                
+                // Connection points
+                ctx.beginPath();
+                ctx.moveTo(-20, 0);
+                ctx.lineTo(-30, 0);
+                ctx.moveTo(-10, 0);
+                ctx.lineTo(0, 0);
+                ctx.stroke();
+                
+                // Labels
+                ctx.fillStyle = '#4a9eff';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('+', -20, -20);
+                ctx.fillText('-', -10, -30);
+                ctx.fillText(`${this.voltage}V`, -15, 40);
+            }
+        }
+        
+        class Resistor extends Component {
+            constructor(x, y) {
+                super(x, y, 'resistor');
+                this.resistance = 1000; // 1kΩ
+            }
+            
+            drawComponent(ctx) {
+                ctx.strokeStyle = '#ff9a4a';
+                ctx.lineWidth = 3;
+                
+                // Resistor zigzag
+                ctx.beginPath();
+                ctx.moveTo(-30, 0);
+                ctx.lineTo(-20, 0);
+                
+                const peaks = 4;
+                for (let i = 0; i < peaks; i++) {
+                    const x1 = -20 + (i * 10);
+                    const x2 = -15 + (i * 10);
+                    const x3 = -10 + (i * 10);
+                    ctx.lineTo(x1, 0);
+                    ctx.lineTo(x2, -10);
+                    ctx.lineTo(x3, 10);
+                }
+                
+                ctx.lineTo(20, 0);
+                ctx.lineTo(30, 0);
+                ctx.stroke();
+                
+                // Value label
+                ctx.fillStyle = '#ff9a4a';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(`${this.resistance}Ω`, 0, 25);
+            }
+        }
+        
+        class Wire {
+            constructor(start, end) {
+                this.start = start;
+                this.end = end;
+                this.gauge = parseInt(document.getElementById('wireGaugeSelect').value);
+                this.material = document.getElementById('wireMaterialSelect').value;
+                this.current = 0;
+                this.electrons = [];
+            }
+            
+            draw(ctx) {
+                const diameter = AWG_DIAMETERS[this.gauge];
+                const thickness = Math.max(2, diameter * 2); // Scale for visibility
+                
+                // Wire color based on current density
+                const currentDensity = Math.abs(this.current) / (Math.PI * (diameter/2) ** 2);
+                const intensity = Math.min(1, currentDensity / 10); // Scale to reasonable range
+                
+                ctx.strokeStyle = this.current > 0 ? 
+                    `rgba(255, ${255 - intensity * 100}, ${255 - intensity * 200}, 0.8)` : 
+                    '#444';
+                ctx.lineWidth = thickness;
+                ctx.lineCap = 'round';
+                
+                ctx.beginPath();
+                ctx.moveTo(this.start.x, this.start.y);
+                ctx.lineTo(this.end.x, this.end.y);
+                ctx.stroke();
+                
+                // Draw electrons if simulating
+                if (simulating && this.electrons.length > 0) {
+                    ctx.fillStyle = '#4a9eff';
+                    this.electrons.forEach(electron => {
+                        ctx.beginPath();
+                        ctx.arc(electron.x, electron.y, 3, 0, Math.PI * 2);
+                        ctx.fill();
+                    });
+                }
+            }
+            
+            getResistance() {
+                const length = Math.sqrt(
+                    (this.end.x - this.start.x) ** 2 + 
+                    (this.end.y - this.start.y) ** 2
+                ) / 1000; // Convert to meters
+                
+                const area = Math.PI * (AWG_DIAMETERS[this.gauge] / 2000) ** 2; // m²
+                return RESISTIVITIES[this.material] * length / area;
+            }
+        }
+        
+        // Drawing functions
+        function drawGrid() {
+            if (!showGrid) return;
+            
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 1;
+            
+            for (let x = 0; x < width; x += GRID_SIZE) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+                ctx.stroke();
+            }
+            
+            for (let y = 0; y < height; y += GRID_SIZE) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+                ctx.stroke();
+            }
+        }
+        
+        function redraw() {
+            ctx.fillStyle = '#0a0a0a';
+            ctx.fillRect(0, 0, width, height);
+            
+            drawGrid();
+            
+            // Draw wires
+            wires.forEach(wire => wire.draw(ctx));
+            
+            // Draw components
+            components.forEach(component => component.draw(ctx));
+            
+            // Draw wire placement preview
+            if (wireStart) {
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(wireStart.x, wireStart.y);
+                ctx.lineTo(mouseX, mouseY);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+        
+        // Mouse handling
+        let mouseX = 0, mouseY = 0;
+        
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+            
+            // Show component values on hover
+            const hoveredComponent = components.find(c => c.contains(mouseX, mouseY));
+            const tooltip = document.getElementById('tooltip');
+            
+            if (hoveredComponent && !placingComponent) {
+                tooltip.style.display = 'block';
+                tooltip.style.left = (e.clientX + 10) + 'px';
+                tooltip.style.top = (e.clientY - 30) + 'px';
+                
+                if (hoveredComponent.type === 'voltage-source') {
+                    tooltip.textContent = `Voltage: ${hoveredComponent.voltage}V`;
+                } else if (hoveredComponent.type === 'resistor') {
+                    tooltip.textContent = `Resistance: ${hoveredComponent.resistance}Ω`;
+                }
+            } else {
+                tooltip.style.display = 'none';
+            }
+            
+            if (wireStart) {
+                redraw();
+            }
+        });
+        
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            if (deleteMode) {
+                // Delete component or wire at click position
+                const componentIndex = components.findIndex(c => c.contains(x, y));
+                if (componentIndex !== -1) {
+                    components.splice(componentIndex, 1);
+                    redraw();
+                    return;
+                }
+                
+                // Check wires (simplified - would need better hit detection)
+                const wireIndex = wires.findIndex(w => {
+                    const dist = pointToLineDistance(x, y, w.start.x, w.start.y, w.end.x, w.end.y);
+                    return dist < 5;
+                });
+                if (wireIndex !== -1) {
+                    wires.splice(wireIndex, 1);
+                    redraw();
+                }
+                return;
+            }
+            
+            if (placingComponent === 'wire') {
+                if (!wireStart) {
+                    wireStart = {
+                        x: Math.round(x / GRID_SIZE) * GRID_SIZE,
+                        y: Math.round(y / GRID_SIZE) * GRID_SIZE
+                    };
+                } else {
+                    const end = {
+                        x: Math.round(x / GRID_SIZE) * GRID_SIZE,
+                        y: Math.round(y / GRID_SIZE) * GRID_SIZE
+                    };
+                    wires.push(new Wire(wireStart, end));
+                    wireStart = null;
+                    redraw();
+                }
+            } else if (placingComponent) {
+                let component;
+                switch (placingComponent) {
+                    case 'voltage-source':
+                        component = new VoltageSource(x, y);
+                        break;
+                    case 'resistor':
+                        component = new Resistor(x, y);
+                        break;
+                }
+                if (component) {
+                    components.push(component);
+                    redraw();
+                }
+            }
+        });
+        
+        // Helper function for wire hit detection
+        function pointToLineDistance(px, py, x1, y1, x2, y2) {
+            const A = px - x1;
+            const B = py - y1;
+            const C = x2 - x1;
+            const D = y2 - y1;
+            
+            const dot = A * C + B * D;
+            const lenSq = C * C + D * D;
+            let param = -1;
+            
+            if (lenSq !== 0) param = dot / lenSq;
+            
+            let xx, yy;
+            
+            if (param < 0) {
+                xx = x1;
+                yy = y1;
+            } else if (param > 1) {
+                xx = x2;
+                yy = y2;
+            } else {
+                xx = x1 + param * C;
+                yy = y1 + param * D;
+            }
+            
+            const dx = px - xx;
+            const dy = py - yy;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+        
+        // UI Event handlers
+        document.querySelectorAll('.component-item').forEach(item => {
+            item.addEventListener('click', () => {
+                document.querySelectorAll('.component-item').forEach(i => i.classList.remove('selected'));
+                item.classList.add('selected');
+                placingComponent = item.dataset.component;
+                deleteMode = false;
+                document.getElementById('deleteBtn').textContent = 'Delete Mode';
+                updateStatus(`Placing ${item.querySelector('.component-name').textContent}`);
+            });
+        });
+        
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            components = [];
+            wires = [];
+            electrons = [];
+            redraw();
+            updateStatus('Circuit cleared');
+        });
+        
+        document.getElementById('deleteBtn').addEventListener('click', () => {
+            deleteMode = !deleteMode;
+            if (deleteMode) {
+                document.getElementById('deleteBtn').textContent = 'Exit Delete Mode';
+                placingComponent = null;
+                document.querySelectorAll('.component-item').forEach(i => i.classList.remove('selected'));
+                updateStatus('Delete mode - click components or wires to remove');
+            } else {
+                document.getElementById('deleteBtn').textContent = 'Delete Mode';
+                updateStatus('Ready');
+            }
+        });
+        
+        document.getElementById('gridBtn').addEventListener('click', () => {
+            showGrid = !showGrid;
+            redraw();
+        });
+        
+        document.getElementById('simulateBtn').addEventListener('click', () => {
+            simulating = !simulating;
+            document.getElementById('simulateBtn').textContent = simulating ? 'Stop Simulation' : 'Start Simulation';
+            
+            if (simulating) {
+                startSimulation();
+            } else {
+                stopSimulation();
+            }
+        });
+        
+        // Circuit presets
+        document.getElementById('presetSelect').addEventListener('change', (e) => {
+            const preset = e.target.value;
+            if (!preset) return;
+            
+            components = [];
+            wires = [];
+            
+            switch (preset) {
+                case 'basic-series':
+                    createBasicSeriesCircuit();
+                    break;
+                case 'basic-parallel':
+                    createBasicParallelCircuit();
+                    break;
+                case 'voltage-divider':
+                    createVoltageDividerCircuit();
+                    break;
+            }
+            
+            redraw();
+            updateStatus(`Loaded preset: ${e.target.options[e.target.selectedIndex].text}`);
+        });
+        
+        function createBasicSeriesCircuit() {
+            const centerX = width / 2;
+            const centerY = height / 2;
+            
+            // Voltage source
+            const voltage = new VoltageSource(centerX - 200, centerY);
+            components.push(voltage);
+            
+            // Three resistors in series
+            const r1 = new Resistor(centerX - 100, centerY - 100);
+            const r2 = new Resistor(centerX, centerY - 100);
+            const r3 = new Resistor(centerX + 100, centerY - 100);
+            components.push(r1, r2, r3);
+            
+            // Connect with wires
+            wires.push(new Wire({x: voltage.x, y: voltage.y}, {x: r1.x - 30, y: r1.y}));
+            wires.push(new Wire({x: r1.x + 30, y: r1.y}, {x: r2.x - 30, y: r2.y}));
+            wires.push(new Wire({x: r2.x + 30, y: r2.y}, {x: r3.x - 30, y: r3.y}));
+            wires.push(new Wire({x: r3.x + 30, y: r3.y}, {x: r3.x + 30, y: centerY + 100}));
+            wires.push(new Wire({x: r3.x + 30, y: centerY + 100}, {x: voltage.x - 30, y: centerY + 100}));
+            wires.push(new Wire({x: voltage.x - 30, y: centerY + 100}, {x: voltage.x - 30, y: voltage.y}));
+        }
+        
+        function createBasicParallelCircuit() {
+            const centerX = width / 2;
+            const centerY = height / 2;
+            
+            // Voltage source
+            const voltage = new VoltageSource(centerX - 200, centerY);
+            components.push(voltage);
+            
+            // Three resistors in parallel
+            const r1 = new Resistor(centerX, centerY - 100);
+            const r2 = new Resistor(centerX, centerY);
+            const r3 = new Resistor(centerX, centerY + 100);
+            components.push(r1, r2, r3);
+            
+            // Connect with wires
+            // Positive connections
+            wires.push(new Wire({x: voltage.x, y: voltage.y}, {x: centerX - 100, y: voltage.y}));
+            wires.push(new Wire({x: centerX - 100, y: voltage.y}, {x: centerX - 100, y: centerY - 100}));
+            wires.push(new Wire({x: centerX - 100, y: centerY - 100}, {x: r1.x - 30, y: r1.y}));
+            wires.push(new Wire({x: centerX - 100, y: voltage.y}, {x: r2.x - 30, y: r2.y}));
+            wires.push(new Wire({x: centerX - 100, y: voltage.y}, {x: centerX - 100, y: centerY + 100}));
+            wires.push(new Wire({x: centerX - 100, y: centerY + 100}, {x: r3.x - 30, y: r3.y}));
+            
+            // Negative connections
+            wires.push(new Wire({x: r1.x + 30, y: r1.y}, {x: centerX + 100, y: centerY - 100}));
+            wires.push(new Wire({x: centerX + 100, y: centerY - 100}, {x: centerX + 100, y: voltage.y}));
+            wires.push(new Wire({x: r2.x + 30, y: r2.y}, {x: centerX + 100, y: r2.y}));
+            wires.push(new Wire({x: r3.x + 30, y: r3.y}, {x: centerX + 100, y: centerY + 100}));
+            wires.push(new Wire({x: centerX + 100, y: centerY + 100}, {x: centerX + 100, y: voltage.y}));
+            wires.push(new Wire({x: centerX + 100, y: voltage.y}, {x: voltage.x - 30, y: voltage.y}));
+        }
+        
+        function createVoltageDividerCircuit() {
+            const centerX = width / 2;
+            const centerY = height / 2;
+            
+            // Voltage source
+            const voltage = new VoltageSource(centerX - 150, centerY);
+            voltage.voltage = 12; // 12V
+            components.push(voltage);
+            
+            // Two resistors for voltage division
+            const r1 = new Resistor(centerX, centerY - 80);
+            r1.resistance = 1000; // 1kΩ
+            const r2 = new Resistor(centerX, centerY + 80);
+            r2.resistance = 2000; // 2kΩ
+            components.push(r1, r2);
+            
+            // Connect with wires
+            wires.push(new Wire({x: voltage.x, y: voltage.y}, {x: voltage.x + 50, y: voltage.y}));
+            wires.push(new Wire({x: voltage.x + 50, y: voltage.y}, {x: voltage.x + 50, y: centerY - 80}));
+            wires.push(new Wire({x: voltage.x + 50, y: centerY - 80}, {x: r1.x - 30, y: r1.y}));
+            wires.push(new Wire({x: r1.x + 30, y: r1.y}, {x: r2.x - 30, y: r2.y}));
+            wires.push(new Wire({x: r2.x + 30, y: r2.y}, {x: r2.x + 30, y: centerY + 80}));
+            wires.push(new Wire({x: r2.x + 30, y: centerY + 80}, {x: voltage.x - 30, y: centerY + 80}));
+            wires.push(new Wire({x: voltage.x - 30, y: centerY + 80}, {x: voltage.x - 30, y: voltage.y}));
+        }
+        
+        // Simulation functions
+        let animationId = null;
+        
+        function startSimulation() {
+            // Initialize electrons in wires based on current
+            analyzeCircuit();
+            
+            // Create electrons for visualization
+            wires.forEach(wire => {
+                wire.electrons = [];
+                if (Math.abs(wire.current) > 0.001) {
+                    const numElectrons = Math.ceil(Math.abs(wire.current) * 10);
+                    for (let i = 0; i < numElectrons; i++) {
+                        const t = i / numElectrons;
+                        wire.electrons.push({
+                            x: wire.start.x + t * (wire.end.x - wire.start.x),
+                            y: wire.start.y + t * (wire.end.y - wire.start.y),
+                            t: t
+                        });
+                    }
+                }
+            });
+            
+            animate();
+        }
+        
+        function stopSimulation() {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            wires.forEach(wire => wire.electrons = []);
+            redraw();
+        }
+        
+        function animate() {
+            // Update electron positions
+            wires.forEach(wire => {
+                if (wire.current === 0) return;
+                
+                const speed = wire.current * SCALE_FACTOR * 0.001; // Scaled drift velocity
+                wire.electrons.forEach(electron => {
+                    electron.t += speed;
+                    if (electron.t > 1) electron.t -= 1;
+                    if (electron.t < 0) electron.t += 1;
+                    
+                    electron.x = wire.start.x + electron.t * (wire.end.x - wire.start.x);
+                    electron.y = wire.start.y + electron.t * (wire.end.y - wire.start.y);
+                });
+            });
+            
+            redraw();
+            animationId = requestAnimationFrame(animate);
+        }
+        
+        // Circuit analysis (simplified)
+        function analyzeCircuit() {
+            // Find voltage sources
+            const voltageSources = components.filter(c => c.type === 'voltage-source');
+            if (voltageSources.length === 0) {
+                updateMeasurements(0, 0, 0, 0);
+                return;
+            }
+            
+            // Simple analysis for series circuit
+            const resistors = components.filter(c => c.type === 'resistor');
+            let totalResistance = resistors.reduce((sum, r) => sum + r.resistance, 0);
+            
+            // Add wire resistance
+            wires.forEach(wire => {
+                totalResistance += wire.getResistance();
+            });
+            
+            const totalVoltage = voltageSources[0].voltage;
+            const totalCurrent = totalVoltage / totalResistance;
+            
+            // Set current in all wires (simplified - assumes series circuit)
+            wires.forEach(wire => wire.current = totalCurrent);
+            
+            // Update component values
+            components.forEach(component => {
+                if (component.type === 'resistor') {
+                    component.current = totalCurrent;
+                    component.voltage = totalCurrent * component.resistance;
+                }
+            });
+            
+            const power = totalCurrent * totalVoltage;
+            updateMeasurements(totalCurrent, totalVoltage, totalResistance, power);
+        }
+        
+        function updateMeasurements(current, voltage, resistance, power) {
+            document.getElementById('totalCurrent').textContent = current.toFixed(3) + ' A';
+            document.getElementById('totalVoltage').textContent = voltage.toFixed(2) + ' V';
+            document.getElementById('totalResistance').textContent = resistance.toFixed(2) + ' Ω';
+            document.getElementById('powerDissipation').textContent = power.toFixed(3) + ' W';
+        }
+        
+        function updateStatus(message) {
+            document.getElementById('statusBar').textContent = message;
+        }
+        
+        // Initialize
+        updateStatus('Ready - Select a component to place or load a preset circuit');
+    </script>
+</body>
+</html>

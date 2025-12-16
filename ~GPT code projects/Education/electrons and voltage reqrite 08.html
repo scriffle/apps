@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Electron Capsule Simulation</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #1a1a1a;
+            font-family: Arial, sans-serif;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        #gui-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 5px;
+            padding: 10px;
+            color: white;
+            z-index: 1000;
+        }
+
+        #collapse-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 5px;
+        }
+
+        #performance-stats {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: monospace;
+            pointer-events: none;
+        }
+
+        .dg.main {
+            position: absolute !important;
+            top: 45px !important;
+            right: 10px !important;
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Drag electrodes on surface | Scroll to zoom</div>
+    <div id="performance-stats"></div>
+    <div id="gui-container">
+        <button id="collapse-btn">≡</button>
+    </div>
+    <div id="canvas-container"></div>
+
+    <!-- Dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
+
+    <script>
+    // Constants
+    const CONFIG = {
+        simulation: {
+            COULOMB_CONSTANT: 10.0,
+            DAMPING: 0.95,
+            MIN_DISTANCE: 0.2,
+            TIMESTEP: 0.016,
+            ANODE_CAPTURE_DISTANCE: 0.3
+        },
+        rendering: {
+            FOV: 75,
+            NEAR: 0.1,
+            FAR: 1000
+        }
+    };
+    // Surface constraint system with rotation handling
+    class SurfaceConstraint {
+        constructor(capsuleLength, capsuleRadius) {
+            this.length = capsuleLength;
+            this.radius = capsuleRadius;
+            this.rotationMatrix = new THREE.Matrix4();
+        }
+
+        updateRotation(x, y, z) {
+            this.rotationMatrix.makeRotationFromEuler(new THREE.Euler(x, y, z));
+        }
+
+        projectPointToSurface(point, useRotation = true) {
+            // Convert to pre-rotation space if needed
+            let workingPoint = point.clone();
+            if (useRotation) {
+                workingPoint.applyMatrix4(this.rotationMatrix.clone().invert());
+            }
+
+            const localY = workingPoint.y;
+            const halfLength = this.length / 2;
+
+            let result;
+            if (Math.abs(localY) <= halfLength) {
+                // Project to cylinder surface
+                const xz = new THREE.Vector2(workingPoint.x, workingPoint.z);
+                xz.setLength(this.radius);
+                result = new THREE.Vector3(xz.x, localY, xz.y);
+            } else {
+                // Project to sphere cap
+                const cap = localY > 0 ? halfLength : -halfLength;
+                const sphereCenter = new THREE.Vector3(0, cap, 0);
+                const toPoint = workingPoint.clone().sub(sphereCenter);
+                toPoint.setLength(this.radius);
+                result = toPoint.add(sphereCenter);
+            }
+
+            // Apply rotation if needed
+            if (useRotation) {
+                result.applyMatrix4(this.rotationMatrix);
+            }
+            return result;
+        }
+
+        updateDimensions(length, radius) {
+            this.length = length;
+            this.radius = radius;
+        }
+    }
+
+    // Particle class with rotation-aware physics
+    class Particle {
+        constructor(mesh, parentGroup) {
+            this.mesh = mesh;
+            this.parentGroup = parentGroup;
+            this.velocity = new THREE.Vector3();
+            this.charge = -1;
+            this.mass = 1;
+        }
+
+        updatePosition(particles, capsuleLength, radius, anode, surfaceConstraint) {
+            // Transform current position to world space
+            const worldMatrix = this.parentGroup.matrixWorld;
+            const currentPosWorld = this.mesh.position.clone().applyMatrix4(worldMatrix);
+            const force = new THREE.Vector3();
+            
+            // Calculate Coulomb forces in world space
+            particles.forEach(other => {
+                if (other === this) return;
+                
+                const otherPosWorld = other.mesh.position.clone().applyMatrix4(worldMatrix);
+                const diff = currentPosWorld.clone().sub(otherPosWorld);
+                const distance = diff.length();
+                
+                if (distance < CONFIG.simulation.MIN_DISTANCE) {
+                    const repulsionForce = 5 * CONFIG.simulation.COULOMB_CONSTANT / 
+                        (CONFIG.simulation.MIN_DISTANCE * CONFIG.simulation.MIN_DISTANCE);
+                    force.add(diff.normalize().multiplyScalar(repulsionForce));
+                    return;
+                }
+                
+                const forceMagnitude = (CONFIG.simulation.COULOMB_CONSTANT * 
+                    Math.abs(this.charge * other.charge)) / (distance * distance);
+                force.add(diff.normalize().multiplyScalar(forceMagnitude));
+            });
+
+            // Add anode force if enabled
+            if (anode && anode.isEnabled) {
+                const anodeForce = anode.getAttractionForce(this);
+                force.add(anodeForce);
+            }
+
+            // Transform force to local space for Brownian motion
+            const localForce = force.clone().applyMatrix4(new THREE.Matrix4().copy(worldMatrix).invert());
+
+            // Apply Brownian motion in local space
+            if (app.params.brownianMotion > 0) {
+                localForce.add(new THREE.Vector3(
+                    (Math.random() - 0.5) * app.params.brownianMotion * 4,
+                    (Math.random() - 0.5) * app.params.brownianMotion * 4,
+                    (Math.random() - 0.5) * app.params.brownianMotion * 4
+                ));
+            }
+
+            // Update velocity in local space
+            this.velocity.add(localForce.multiplyScalar(CONFIG.simulation.TIMESTEP / this.mass));
+            this.velocity.multiplyScalar(CONFIG.simulation.DAMPING);
+
+            // Calculate new position in local space
+            const newPos = this.mesh.position.clone().add(
+                this.velocity.clone().multiplyScalar(CONFIG.simulation.TIMESTEP)
+            );
+
+            // Project to surface maintaining rotation
+            const constrainedPos = surfaceConstraint.projectPointToSurface(newPos);
+            this.mesh.position.copy(constrainedPos);
+        }
+    }
+    // Electrode class with rotation handling
+    class Electrode {
+        constructor(type, position) {
+            this.type = type;
+            this.radius = 0.15;
+            this.isDragging = false;
+            this.isEnabled = false;
+            this.lastEmissionTime = 0;
+            this.charge = type === 'anode' ? 1 : -1;
+
+            const geometry = new THREE.SphereGeometry(this.radius, 32, 32);
+            const material = new THREE.MeshPhongMaterial({
+                color: type === 'anode' ? 0x00ff00 : 0xff0000,
+                emissive: type === 'anode' ? 0x00aa00 : 0xaa0000,
+                emissiveIntensity: 0.5,
+                shininess: 100
+            });
+
+            this.mesh = new THREE.Mesh(geometry, material);
+            this.mesh.position.copy(position);
+            this.mesh.userData.electrode = this;
+
+            const glowGeometry = new THREE.SphereGeometry(this.radius * 1.3, 32, 32);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: type === 'anode' ? 0x00ff00 : 0xff0000,
+                transparent: true,
+                opacity: 0.3,
+                side: THREE.BackSide
+            });
+            this.glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            this.mesh.add(this.glow);
+        }
+
+        emitElectron(parentGroup, surfaceConstraint) {
+            if (this.type !== 'cathode' || !this.isEnabled) return null;
+            
+            const now = performance.now() / 1000;
+            if (now - this.lastEmissionTime < 1 / app.params.emissionRate) return null;
+            
+            this.lastEmissionTime = now;
+            
+            const particleGeometry = new THREE.SphereGeometry(0.05, 12, 12);
+            const particleMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0x4444ff,
+                emissive: 0x2222ff,
+                emissiveIntensity: 0.3
+            });
+
+            const mesh = new THREE.Mesh(particleGeometry, particleMaterial);
+            
+            // Get emission position in world space
+            const worldEmissionPos = new THREE.Vector3();
+            this.mesh.getWorldPosition(worldEmissionPos);
+            
+            // Convert to local space of parent group
+            const localEmissionPos = worldEmissionPos.clone()
+                .applyMatrix4(new THREE.Matrix4().copy(parentGroup.matrixWorld).invert());
+            
+            // Project to surface
+            const constrainedPos = surfaceConstraint.projectPointToSurface(localEmissionPos);
+            mesh.position.copy(constrainedPos);
+            
+            return new Particle(mesh, parentGroup);
+        }
+
+        getAttractionForce(particle) {
+            if (this.type !== 'anode' || !this.isEnabled) return new THREE.Vector3();
+
+            // Get positions in world space
+            const worldElectrodePos = new THREE.Vector3();
+            this.mesh.getWorldPosition(worldElectrodePos);
+            const worldParticlePos = new THREE.Vector3();
+            particle.mesh.getWorldPosition(worldParticlePos);
+
+            const diff = new THREE.Vector3().subVectors(worldElectrodePos, worldParticlePos);
+            const distance = diff.length();
+            
+            if (distance < CONFIG.simulation.MIN_DISTANCE) return new THREE.Vector3();
+            
+            // Use same force magnitude as electron-electron interaction
+            const forceMagnitude = (CONFIG.simulation.COULOMB_CONSTANT * 
+                Math.abs(particle.charge * particle.charge) * app.params.chargeStrength) / 
+                (distance * distance);
+            
+            return diff.normalize().multiplyScalar(forceMagnitude);
+        }
+
+        checkCapture(particle) {
+            if (this.type !== 'anode' || !this.isEnabled) return false;
+
+            const worldElectrodePos = new THREE.Vector3();
+            this.mesh.getWorldPosition(worldElectrodePos);
+            const worldParticlePos = new THREE.Vector3();
+            particle.mesh.getWorldPosition(worldParticlePos);
+
+            return worldElectrodePos.distanceTo(worldParticlePos) < CONFIG.simulation.ANODE_CAPTURE_DISTANCE;
+        }
+
+        setActive(active) {
+            this.isEnabled = active;
+            this.glow.material.opacity = active ? 0.3 : 0.1;
+            this.mesh.material.emissiveIntensity = active ? 0.5 : 0.2;
+        }
+
+        setDragging(dragging) {
+            this.isDragging = dragging;
+            this.glow.material.opacity = dragging ? 0.5 : (this.isEnabled ? 0.3 : 0.1);
+        }
+
+        isVisible(camera) {
+            const direction = new THREE.Vector3();
+            this.mesh.getWorldPosition(direction);
+            direction.sub(camera.position).normalize();
+            return Math.acos(direction.dot(this.mesh.getWorldDirection(new THREE.Vector3()))) < Math.PI / 2;
+        }
+    }
+
+    // Capsule geometry class
+    class CapsuleGeometry {
+        constructor(length, radius) {
+            this.length = length;
+            this.radius = radius;
+            this.group = new THREE.Group();
+            this.createGeometry();
+        }
+
+        createGeometry() {
+            const material = new THREE.MeshPhongMaterial({
+                color: 0x808080,
+                transparent: true,
+                opacity: 0.9,
+                side: THREE.DoubleSide,
+                shininess: 100
+            });
+
+            // Create cylinder body
+            const cylinderGeom = new THREE.CylinderGeometry(
+                this.radius, this.radius, this.length, 64
+            );
+            const cylinderMesh = new THREE.Mesh(cylinderGeom, material);
+            this.group.add(cylinderMesh);
+
+            // Create end caps
+            const sphereGeom = new THREE.SphereGeometry(this.radius, 64, 32);
+            
+            const topSphere = new THREE.Mesh(sphereGeom, material);
+            topSphere.position.y = this.length / 2;
+            this.group.add(topSphere);
+
+            const bottomSphere = new THREE.Mesh(sphereGeom, material);
+            bottomSphere.position.y = -this.length / 2;
+            this.group.add(bottomSphere);
+
+            // Add electrodes
+            const electrodeRadius = 0.15;
+            const embedDepth = electrodeRadius;
+            
+            // Position electrodes on the outer surface
+            const anode = new Electrode('anode', 
+                new THREE.Vector3(this.radius - embedDepth/2, this.length/2 - electrodeRadius*2, 0)
+            );
+            const cathode = new Electrode('cathode', 
+                new THREE.Vector3(this.radius - embedDepth/2, -this.length/2 + electrodeRadius*2, 0)
+            );
+
+            this.group.add(anode.mesh);
+            this.group.add(cathode.mesh);
+            
+            this.anode = anode;
+            this.cathode = cathode;
+        }
+
+        updateDimensions(length, radius) {
+        this.length = length;
+        this.radius = radius;
+        
+        // Store electrode states before removal
+        const anodeEnabled = this.anode ? this.anode.isEnabled : false;
+        const cathodeEnabled = this.cathode ? this.cathode.isEnabled : false;
+        const lastEmissionTime = this.cathode ? this.cathode.lastEmissionTime : 0;
+        
+        // Clear group and dispose geometries
+        while(this.group.children.length > 0) {
+            const child = this.group.children[0];
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) {
+                if (Array.isArray(child.material)) {
+                    child.material.forEach(m => m.dispose());
+                } else {
+                    child.material.dispose();
+                }
+            }
+            this.group.remove(child);
+        }
+        
+        // Recreate geometry
+        const material = new THREE.MeshPhongMaterial({
+            color: 0x808080,
+            transparent: true,
+            opacity: 0.9,
+            side: THREE.DoubleSide,
+            shininess: 100
+        });
+
+        // Create cylinder body
+        const cylinderGeom = new THREE.CylinderGeometry(
+            this.radius, this.radius, this.length, 64
+        );
+        const cylinderMesh = new THREE.Mesh(cylinderGeom, material);
+        this.group.add(cylinderMesh);
+
+        // Create end caps
+        const sphereGeom = new THREE.SphereGeometry(this.radius, 64, 32);
+        
+        const topSphere = new THREE.Mesh(sphereGeom, material);
+        topSphere.position.y = this.length / 2;
+        this.group.add(topSphere);
+
+        const bottomSphere = new THREE.Mesh(sphereGeom, material);
+        bottomSphere.position.y = -this.length / 2;
+        this.group.add(bottomSphere);
+
+        // Recreate electrodes with updated positions
+        const electrodeRadius = 0.15;
+        const embedDepth = electrodeRadius;
+        
+        const anode = new Electrode('anode', 
+            new THREE.Vector3(this.radius - embedDepth/2, this.length/2 - electrodeRadius*2, 0)
+        );
+        const cathode = new Electrode('cathode', 
+            new THREE.Vector3(this.radius - embedDepth/2, -this.length/2 + electrodeRadius*2, 0)
+        );
+
+        // Restore electrode states and timing
+        anode.setActive(anodeEnabled);
+        cathode.setActive(cathodeEnabled);
+        cathode.lastEmissionTime = lastEmissionTime; // Preserve emission timing
+
+        this.group.add(anode.mesh);
+        this.group.add(cathode.mesh);
+        
+        this.anode = anode;
+        this.cathode = cathode;
+    }
+    }
+    // Main simulation class
+    class ElectronSimulation {
+        params = {
+            capsuleLength: 2,
+            capsuleRadius: 0.5,
+            rotationX: 0,
+            rotationY: 0.5,
+            rotationZ: 0,
+            anodeEnabled: false,
+            cathodeEnabled: false,
+            emissionRate: 1,
+            chargeStrength: 1.0,
+            brownianMotion: 0.05,
+            electronCount: 0
+        };
+
+        constructor() {
+            this.initScene();
+            this.initLights();
+            this.initCapsule();
+            this.initParticles();
+            this.initInteraction();
+            this.initControls();
+            this.setupEventListeners();
+            this.animate();
+        }
+
+        initScene() {
+            this.scene = new THREE.Scene();
+            
+            this.camera = new THREE.PerspectiveCamera(
+                CONFIG.rendering.FOV,
+                window.innerWidth / window.innerHeight,
+                CONFIG.rendering.NEAR,
+                CONFIG.rendering.FAR
+            );
+            this.camera.position.set(0, 0, 5);
+            this.camera.lookAt(0, 0, 0);
+
+            this.renderer = new THREE.WebGLRenderer({ antialias: true });
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+            this.renderer.setClearColor(0x1a1a1a);
+            document.getElementById('canvas-container').appendChild(this.renderer.domElement);
+        }
+
+        initLights() {
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
+            this.scene.add(ambientLight);
+
+            const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            mainLight.position.set(5, 5, 5);
+            this.scene.add(mainLight);
+
+            const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            fillLight.position.set(-5, -5, -5);
+            this.scene.add(fillLight);
+        }
+
+        initCapsule() {
+            this.capsule = new CapsuleGeometry(
+                this.params.capsuleLength,
+                this.params.capsuleRadius
+            );
+            this.scene.add(this.capsule.group);
+            
+            this.surfaceConstraint = new SurfaceConstraint(
+                this.params.capsuleLength,
+                this.params.capsuleRadius
+            );
+        }
+
+        initParticles() {
+            this.particles = new THREE.Group();
+            this.particleObjects = [];
+            this.capsule.group.add(this.particles);
+        }
+
+        initInteraction() {
+            this.raycaster = new THREE.Raycaster();
+            this.mouse = new THREE.Vector2();
+            this.draggedElectrode = null;
+            this.dragPlane = new THREE.Plane();
+        }
+
+        initControls() {
+            this.gui = new dat.GUI({ autoPlace: false });
+            document.getElementById('gui-container').appendChild(this.gui.domElement);
+
+            const geometryFolder = this.gui.addFolder('Geometry');
+            geometryFolder.add(this.params, 'capsuleLength', 0.5, 5).onChange(() => this.updateGeometry());
+            geometryFolder.add(this.params, 'capsuleRadius', 0.1, 1).onChange(() => this.updateGeometry());
+
+            const electrodesFolder = this.gui.addFolder('Electrodes');
+            electrodesFolder.add(this.params, 'cathodeEnabled').name('Enable Emission').onChange((value) => {
+                if (this.capsule && this.capsule.cathode) {
+                    this.capsule.cathode.setActive(value);
+                }
+            });
+            electrodesFolder.add(this.params, 'anodeEnabled').name('Enable Attraction').onChange((value) => {
+                if (this.capsule && this.capsule.anode) {
+                    this.capsule.anode.setActive(value);
+                }
+            });
+            electrodesFolder.add(this.params, 'emissionRate', 0.1, 10).name('Emission Rate (Hz)');
+
+            const simulationFolder = this.gui.addFolder('Simulation');
+            simulationFolder.add(this.params, 'chargeStrength', 0.1, 5).name('Charge Strength');
+            simulationFolder.add(this.params, 'brownianMotion', 0, 5.0).name('Brownian Motion');
+            simulationFolder.add(this.params, 'electronCount').name('Electron Count').listen();
+
+            const rotationFolder = this.gui.addFolder('Rotation');
+            rotationFolder.add(this.params, 'rotationX', 0, Math.PI * 2);
+            rotationFolder.add(this.params, 'rotationY', 0, Math.PI * 2);
+            rotationFolder.add(this.params, 'rotationZ', 0, Math.PI * 2);
+
+            // View reset button
+            this.gui.add({ resetView: () => {
+                this.camera.position.set(0, 0, 5);
+                this.camera.lookAt(0, 0, 0);
+                this.params.rotationX = 0;
+                this.params.rotationY = 0.5;
+                this.params.rotationZ = 0;
+                for (let i in this.gui.__folders) {
+                    const folder = this.gui.__folders[i];
+                    for (let j in folder.__controllers) {
+                        folder.__controllers[j].updateDisplay();
+                    }
+                }
+            }}, 'resetView').name('Reset View');
+
+            geometryFolder.open();
+            electrodesFolder.open();
+            simulationFolder.open();
+            rotationFolder.open();
+        }
+
+        setupEventListeners() {
+            window.addEventListener('resize', () => this.onWindowResize(), false);
+            
+            const collapseBtn = document.getElementById('collapse-btn');
+            const guiElement = this.gui.domElement;
+            
+            collapseBtn.addEventListener('click', () => {
+                guiElement.style.display = guiElement.style.display === 'none' ? 'block' : 'none';
+                collapseBtn.textContent = guiElement.style.display === 'none' ? '☰' : '≡';
+            });
+
+            const canvas = this.renderer.domElement;
+            canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
+            canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
+            canvas.addEventListener('mouseup', this.handleMouseUp.bind(this));
+            canvas.addEventListener('wheel', (e) => {
+                if (e.target === this.renderer.domElement) {
+                    this.camera.position.z += e.deltaY * 0.01;
+                    this.camera.position.z = Math.max(2, Math.min(100, this.camera.position.z));
+                }
+            });
+        }
+        handleMouseDown(event) {
+            event.preventDefault();
+            
+            this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            this.raycaster.setFromCamera(this.mouse, this.camera);
+            
+            const electrodes = [this.capsule.anode.mesh, this.capsule.cathode.mesh];
+            const intersects = this.raycaster.intersectObjects(electrodes);
+
+            if (intersects.length > 0) {
+                const electrode = intersects[0].object.userData.electrode;
+                if (electrode.isVisible(this.camera)) {
+                    this.draggedElectrode = electrode;
+                    electrode.setDragging(true);
+                    
+                    const normal = new THREE.Vector3()
+                        .subVectors(this.camera.position, intersects[0].point)
+                        .normalize();
+                    this.dragPlane.setFromNormalAndCoplanarPoint(
+                        normal,
+                        intersects[0].point
+                    );
+                }
+            }
+        }
+
+        handleMouseMove(event) {
+            event.preventDefault();
+            
+            this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            if (this.draggedElectrode) {
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                const intersects = new THREE.Vector3();
+                this.raycaster.ray.intersectPlane(this.dragPlane, intersects);
+                
+                const localPoint = this.capsule.group.worldToLocal(intersects);
+                const constrainedPoint = this.surfaceConstraint.projectPointToSurface(localPoint, true);
+                
+                this.draggedElectrode.mesh.position.copy(constrainedPoint);
+            }
+        }
+
+        handleMouseUp(event) {
+            event.preventDefault();
+            if (this.draggedElectrode) {
+                this.draggedElectrode.setDragging(false);
+                this.draggedElectrode = null;
+            }
+        }
+
+        onWindowResize() {
+            this.camera.aspect = window.innerWidth / window.innerHeight;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        updateGeometry() {
+            if (this.capsule) {
+                // Store old rotation
+                const oldRotation = this.capsule.group.rotation.clone();
+                
+                // Store particles group reference
+                const particlesGroup = this.particles;
+                
+                // Remove particles group from old capsule before update
+                this.capsule.group.remove(this.particles);
+                
+                // Update capsule dimensions
+                this.capsule.updateDimensions(
+                    this.params.capsuleLength,
+                    this.params.capsuleRadius
+                );
+                
+                // Update surface constraint
+                this.surfaceConstraint.updateDimensions(
+                    this.params.capsuleLength,
+                    this.params.capsuleRadius
+                );
+                
+                // Re-add particles group to new capsule
+                this.capsule.group.add(particlesGroup);
+                
+                // Restore rotation
+                this.capsule.group.rotation.copy(oldRotation);
+            }
+        }
+
+        removeParticle(particle, index) {
+            this.particles.remove(particle.mesh);
+            this.particleObjects.splice(index, 1);
+            this.params.electronCount = this.particleObjects.length;
+        }
+
+        animate() {
+            requestAnimationFrame(() => this.animate());
+            
+            if (this.capsule && this.capsule.group) {
+                // Update capsule rotation
+                this.capsule.group.rotation.set(
+                    this.params.rotationX,
+                    this.params.rotationY,
+                    this.params.rotationZ
+                );
+                
+                // Update surface constraint rotation
+                this.surfaceConstraint.updateRotation(
+                    this.params.rotationX,
+                    this.params.rotationY,
+                    this.params.rotationZ
+                );
+
+                // Update particles
+                const particlesToRemove = [];
+                this.particleObjects.forEach((particle, index) => {
+                    particle.updatePosition(
+                        this.particleObjects,
+                        this.params.capsuleLength,
+                        this.params.capsuleRadius,
+                        this.capsule.anode,
+                        this.surfaceConstraint
+                    );
+                    
+                    if (this.capsule.anode.checkCapture(particle)) {
+                        particlesToRemove.push(index);
+                    }
+                });
+
+                // Remove captured particles
+                for (let i = particlesToRemove.length - 1; i >= 0; i--) {
+                    const index = particlesToRemove[i];
+                    this.removeParticle(this.particleObjects[index], index);
+                }
+
+                // Emit new electrons
+                if (this.capsule.cathode && this.params.cathodeEnabled) {
+                    const newElectron = this.capsule.cathode.emitElectron(this.capsule.group, this.surfaceConstraint);
+                    if (newElectron) {
+                        this.particles.add(newElectron.mesh);
+                        this.particleObjects.push(newElectron);
+                        this.params.electronCount = this.particleObjects.length;
+                    }
+                }
+            }
+
+            this.renderer.render(this.scene, this.camera);
+        }
+    }
+
+    // Initialize application when DOM is ready
+    window.addEventListener('DOMContentLoaded', () => {
+        window.app = new ElectronSimulation();
+    });
+    </script>
+</body>
+</html>

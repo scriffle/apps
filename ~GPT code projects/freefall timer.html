@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Freefall Timer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: white;
+        }
+
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .status-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .status {
+            text-align: center;
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .status.detecting {
+            background: rgba(76, 175, 80, 0.3);
+            border: 2px solid #4CAF50;
+            animation: pulse 2s infinite;
+        }
+
+        .status.freefall {
+            background: rgba(244, 67, 54, 0.3);
+            border: 2px solid #F44336;
+            animation: freefallPulse 0.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.02); opacity: 0.9; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes freefallPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .current-time {
+            text-align: center;
+            font-size: 3em;
+            font-weight: bold;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .acceleration-display {
+            text-align: center;
+            font-size: 1.2em;
+            margin: 15px 0;
+            opacity: 0.9;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.1em;
+            border: none;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.3);
+            font-weight: 600;
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .history {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .history h2 {
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+
+        .history-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .history-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        .history-item:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .history-number {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .history-time {
+            font-size: 1.3em;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+
+        .history-calc {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin-left: 10px;
+        }
+
+        .no-history {
+            text-align: center;
+            opacity: 0.7;
+            padding: 20px;
+        }
+
+        .threshold-control {
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        .threshold-control label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .threshold-control input[type="range"] {
+            width: 100%;
+            margin-bottom: 5px;
+        }
+
+        .threshold-value {
+            text-align: center;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .permission-note {
+            background: rgba(255, 193, 7, 0.2);
+            border: 2px solid #FFC107;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🪂 Freefall Timer</h1>
+        
+        <div id="startScreen" class="status-card" style="text-align: center;">
+            <h2 style="margin-bottom: 20px;">📱 Tap to Start</h2>
+            <p style="margin-bottom: 20px; opacity: 0.9;">The app needs access to motion sensors to detect freefall</p>
+            <button onclick="initializeApp()" style="font-size: 1.3em; padding: 20px;">
+                Start Monitoring
+            </button>
+            <div style="margin-top: 20px; font-size: 0.9em; opacity: 0.8;">
+                <p>iOS: Motion & Fitness must be enabled</p>
+                <p>Android: Allow sensor permissions</p>
+            </div>
+        </div>
+
+        <div id="permissionNote" class="permission-note" style="display: none;">
+            ⚠️ Please allow motion sensor access when prompted
+        </div>
+
+        <div class="status-card" id="mainCard" style="display: none;">
+            <div id="status" class="status detecting">Monitoring...</div>
+            <div class="current-time" id="currentTime">0.000s</div>
+            <div class="acceleration-display">
+                Acceleration: <span id="accelValue">0.00</span> m/s²
+            </div>
+            
+            <div class="threshold-control">
+                <label for="threshold">Freefall Threshold (m/s²):</label>
+                <input type="range" id="threshold" min="0.5" max="10" step="0.1" value="2">
+                <div class="threshold-value" id="thresholdValue">2.0</div>
+            </div>
+
+            <button onclick="clearHistory()" style="margin-bottom: 20px;">Clear History</button>
+        </div>
+        </div>
+        </div>
+
+        <div class="history">
+            <h2>📊 Fall History</h2>
+            <div id="historyList" class="history-list">
+                <div class="no-history">No falls recorded yet</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isMonitoring = false;
+        let isInFreefall = false;
+        let fallStartTime = null;
+        let fallHistory = [];
+        let animationFrame = null;
+        let lastAcceleration = 0;
+        let threshold = 2.0;
+
+        // Load history from localStorage
+        function loadHistory() {
+            const saved = localStorage.getItem('fallHistory');
+            if (saved) {
+                fallHistory = JSON.parse(saved);
+                updateHistoryDisplay();
+            }
+        }
+
+        // Save history to localStorage
+        function saveHistory() {
+            localStorage.setItem('fallHistory', JSON.stringify(fallHistory));
+        }
+
+        // Initialize threshold slider
+        const thresholdSlider = document.getElementById('threshold');
+        const thresholdValueDisplay = document.getElementById('thresholdValue');
+        
+        thresholdSlider.addEventListener('input', (e) => {
+            threshold = parseFloat(e.target.value);
+            thresholdValueDisplay.textContent = threshold.toFixed(1);
+        });
+
+        // Initialize app when user clicks start
+        function initializeApp() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('mainCard').style.display = 'block';
+            requestMotionPermission();
+        }
+
+        // Request permission for motion sensors on iOS 13+
+        function requestMotionPermission() {
+            if (typeof DeviceMotionEvent !== 'undefined' && 
+                typeof DeviceMotionEvent.requestPermission === 'function') {
+                
+                document.getElementById('permissionNote').style.display = 'block';
+                
+                DeviceMotionEvent.requestPermission()
+                    .then(response => {
+                        document.getElementById('permissionNote').style.display = 'none';
+                        if (response === 'granted') {
+                            startMonitoring();
+                        } else {
+                            alert('Motion sensor permission denied. The app needs this to detect freefall. Please reload the page and allow access.');
+                            // Show start screen again
+                            document.getElementById('startScreen').style.display = 'block';
+                            document.getElementById('mainCard').style.display = 'none';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error requesting motion permission:', error);
+                        document.getElementById('permissionNote').style.display = 'none';
+                        // Try to start anyway (might work on some devices)
+                        startMonitoring();
+                    });
+            } else {
+                // No permission needed, start directly
+                document.getElementById('permissionNote').style.display = 'none';
+                startMonitoring();
+            }
+        }
+
+        function startMonitoring() {
+            isMonitoring = true;
+            document.getElementById('status').textContent = 'Monitoring...';
+            document.getElementById('status').className = 'status detecting';
+            
+            // Add event listener for motion
+            window.addEventListener('devicemotion', handleMotion);
+            
+            // Test if we're getting data after a short delay
+            setTimeout(() => {
+                if (lastAcceleration === 0 && isMonitoring) {
+                    document.getElementById('status').textContent = 'No sensor data';
+                    document.getElementById('accelValue').textContent = 'Check permissions';
+                    alert('Motion sensors not working. On iOS, you may need to enable Motion & Fitness in Settings > Safari. On Android, ensure the browser has sensor permissions.');
+                }
+            }, 2000);
+        }
+
+        function handleMotion(event) {
+            if (!isMonitoring) return;
+
+            const acc = event.accelerationIncludingGravity;
+            if (!acc || acc.x === null || acc.y === null || acc.z === null) {
+                // Sensor not available
+                document.getElementById('accelValue').textContent = 'N/A';
+                return;
+            }
+
+            // Calculate total acceleration magnitude
+            const totalAccel = Math.sqrt(
+                acc.x * acc.x + 
+                acc.y * acc.y + 
+                acc.z * acc.z
+            );
+
+            lastAcceleration = totalAccel;
+            document.getElementById('accelValue').textContent = totalAccel.toFixed(2);
+
+            // Detect freefall (acceleration close to 0)
+            if (totalAccel < threshold && !isInFreefall) {
+                startFreefall();
+            } else if (totalAccel >= threshold && isInFreefall) {
+                endFreefall();
+            }
+
+            // Update timer display if in freefall
+            if (isInFreefall && fallStartTime) {
+                updateTimer();
+            }
+        }
+
+        function startFreefall() {
+            isInFreefall = true;
+            fallStartTime = Date.now();
+            document.getElementById('status').textContent = '🪂 FREEFALL!';
+            document.getElementById('status').className = 'status freefall';
+            
+            // Vibrate if available
+            if ('vibrate' in navigator) {
+                navigator.vibrate(100);
+            }
+        }
+
+        function endFreefall() {
+            if (!fallStartTime) return;
+            
+            const duration = (Date.now() - fallStartTime) / 1000;
+            isInFreefall = false;
+            fallStartTime = null;
+            
+            // Only record if duration is meaningful (> 0.1 seconds)
+            if (duration > 0.1) {
+                recordFall(duration);
+                
+                // Vibrate pattern for end
+                if ('vibrate' in navigator) {
+                    navigator.vibrate([50, 50, 50]);
+                }
+            }
+            
+            document.getElementById('status').textContent = 'Monitoring...';
+            document.getElementById('status').className = 'status detecting';
+            document.getElementById('currentTime').textContent = '0.000s';
+        }
+
+        function updateTimer() {
+            if (!fallStartTime) return;
+            
+            const duration = (Date.now() - fallStartTime) / 1000;
+            document.getElementById('currentTime').textContent = duration.toFixed(3) + 's';
+            
+            if (isInFreefall) {
+                animationFrame = requestAnimationFrame(updateTimer);
+            }
+        }
+
+        function recordFall(duration) {
+            const fall = {
+                time: duration,
+                height: calculateHeight(duration),
+                timestamp: new Date().toLocaleTimeString()
+            };
+            
+            fallHistory.unshift(fall);
+            
+            // Keep only last 20 falls
+            if (fallHistory.length > 20) {
+                fallHistory.pop();
+            }
+            
+            saveHistory();
+            updateHistoryDisplay();
+        }
+
+        function calculateHeight(time) {
+            // h = 0.5 * g * t²
+            const g = 9.81; // m/s²
+            return 0.5 * g * time * time;
+        }
+
+        function updateHistoryDisplay() {
+            const historyList = document.getElementById('historyList');
+            
+            if (fallHistory.length === 0) {
+                historyList.innerHTML = '<div class="no-history">No falls recorded yet</div>';
+                return;
+            }
+            
+            historyList.innerHTML = fallHistory.map((fall, index) => `
+                <div class="history-item">
+                    <div>
+                        <span class="history-number">#${fallHistory.length - index}</span>
+                        <span class="history-time">${fall.time.toFixed(3)}s</span>
+                        <span class="history-calc">≈ ${fall.height.toFixed(2)}m</span>
+                    </div>
+                    <div style="opacity: 0.7; font-size: 0.9em">${fall.timestamp}</div>
+                </div>
+            `).join('');
+        }
+
+        function clearHistory() {
+            if (confirm('Clear all fall history?')) {
+                fallHistory = [];
+                saveHistory();
+                updateHistoryDisplay();
+            }
+        }
+
+        // Load history on page load
+        loadHistory();
+        
+        // Check if we need to show the start screen
+        window.addEventListener('load', () => {
+            // Check if we need permission UI
+            if (typeof DeviceMotionEvent !== 'undefined' && 
+                typeof DeviceMotionEvent.requestPermission === 'function') {
+                // iOS 13+ needs user interaction, show start button
+                document.getElementById('startScreen').style.display = 'block';
+                document.getElementById('mainCard').style.display = 'none';
+            } else {
+                // No special permission needed, start directly
+                document.getElementById('startScreen').style.display = 'none';
+                document.getElementById('mainCard').style.display = 'block';
+                startMonitoring();
+            }
+        });
+    </script>
+</body>
+</html>

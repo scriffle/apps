@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>SoloLow (Mockup with Leaderboard & Instructions)</title>
+  <style>
+    /* Reset and Base Styles */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; margin: 0; }
+    header, footer { text-align: center; padding: 1rem; background: #fff; border-bottom: 1px solid #ddd; }
+    footer { border-top: 1px solid #ddd; margin-top: 1rem; }
+
+    /* Page Sections */
+    .page { display: none; min-height: calc(100vh - 120px); padding: 1rem; }
+    .visible { display: block; }
+
+    /* Pastel Backgrounds (Slightly Saturated) */
+    #authPage { background: #f8d7ae; }       /* soft peach */
+    #lobbyPage { background: #ffd1dc; }      /* soft pink */
+    #activeGamePage { background: #d4f1be; }   /* soft green */
+    #resultsPage { background: #cce5ff; }      /* soft blue */
+    #adminPage { background: #e0ccff; }        /* soft lavender */
+    #leaderboardPage { background: #e6ffe6; }  /* soft mint */
+
+    /* Common Button Style */
+    .button { display: inline-block; padding: 0.6rem 1rem; background: #3490dc; color: #fff; text-decoration: none; border-radius: 4px; cursor: pointer; border: none; margin: 0.5rem 0; }
+    .button:disabled { background: #999; cursor: not-allowed; }
+
+    /* Countdown Ring Placeholder */
+    .countdown-ring { width: 60px; height: 60px; border: 6px solid #ddd; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 1rem; margin-bottom: 1rem; }
+
+    /* Red/Green Indicator */
+    .indicator { display: inline-block; width: 20px; height: 20px; border-radius: 50%; vertical-align: middle; margin-left: 0.5rem; }
+    .red { background: #e3342f; }
+    .green { background: #38c172; }
+
+    /* Layout Helpers */
+    .flex-row { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin: 1rem 0; }
+
+    /* Scrollable Text Box for Names (3 lines high) */
+    .scroll-box { width: 100%; height: 4.5em; line-height: 1.5em; overflow-y: auto; border: 1px solid #ccc; padding: 0.5rem; background: #fff; margin: 0.5rem 0; }
+
+    /* Chart / Slider Container */
+    .chart-container { border: 1px solid #ccc; border-radius: 4px; padding: 1rem; margin: 1rem 0; background: #fff; }
+    .histogram-placeholder { width: 100%; height: 150px; background: #eef0f2; display: flex; justify-content: center; align-items: center; margin-bottom: 1rem; }
+
+    /* Mini Puzzle Panel */
+    .mini-puzzle-panel { border: 1px solid #ccc; border-radius: 4px; background: #fff; padding: 1rem; margin: 1rem 0; }
+
+    /* Advice Panel */
+    .advice-panel { border: 1px solid #ccc; border-radius: 4px; background: #fff; padding: 1rem; margin: 1rem 0; }
+
+    /* Leaderboard Panel */
+    .leaderboard-panel { border: 1px solid #ccc; border-radius: 4px; background: #fff; padding: 1rem; margin: 1rem 0; }
+    .leaderboard-panel h3 { margin-bottom: 0.5rem; }
+    .leaderboard-table { width: 100%; border-collapse: collapse; }
+    .leaderboard-table th, .leaderboard-table td { border: 1px solid #ddd; padding: 0.5rem; text-align: center; }
+
+    /* Admin Form */
+    .admin-field { margin: 0.5rem 0; }
+    .admin-field label { display: block; margin-bottom: 0.2rem; font-weight: bold; }
+    .admin-field input { width: 80px; padding: 0.4rem; margin-bottom: 0.4rem; }
+
+    /* Instructions Popup Modal */
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
+    .modal-content { background: #fff; padding: 1rem; border-radius: 4px; width: 80%; max-width: 400px; }
+    .close-btn { float: right; cursor: pointer; font-weight: bold; }
+
+    /* Soft Pulsing Animation */
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+    .pulse-text { animation: pulse 1s infinite; color: #38c172; font-weight: bold; margin-top: 0.5rem; }
+
+    /* Responsive Design */
+    @media (max-width: 600px) {
+      .flex-row { flex-direction: column; align-items: flex-start; }
+      .countdown-ring { margin: 0.5rem 0; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SoloLow (Mockup)</h1>
+  </header>
+
+  <!-- Instructions Modal -->
+  <div id="instructionsModal" class="modal" onclick="closeInstructions()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <span class="close-btn" onclick="closeInstructions()">&times;</span>
+      <h3>Instructions & Rules</h3>
+      <p>Welcome to SoloLow! In each round, submit a positive integer. The goal is to have the lowest unique number. Rounds auto-start when enough players join and end 3 seconds after all active players have submitted. Good luck!</p>
+    </div>
+  </div>
+
+  <!-- Suggestions Email Box (for feedback) -->
+  <div id="suggestionsBox" class="modal" onclick="closeSuggestions()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <span class="close-btn" onclick="closeSuggestions()">&times;</span>
+      <h3>Suggestions & Feedback</h3>
+      <p>If you have any suggestions, please email us at <a href="mailto:feedback@sololow.com">feedback@sololow.com</a>.</p>
+    </div>
+  </div>
+
+  <!-- AUTH PAGE -->
+  <section id="authPage" class="page visible">
+    <h2>Sign in</h2>
+    <p>Choose a provider:</p>
+    <div>
+      <button class="button" onclick="oauthLogin('google')">Sign in with Google</button>
+      <button class="button" onclick="oauthLogin('facebook')">Sign in with Facebook</button>
+      <button class="button" onclick="oauthLogin('apple')">Sign in with Apple</button>
+    </div>
+    <hr style="margin:1rem 0;" />
+    <h3>Pick a Screen Name</h3>
+    <p id="screenNameError" style="color:red; display:none;">Invalid name or contains offensive words.</p>
+    <input type="text" id="screenNameInput" placeholder="Enter screen name..." />
+    <button class="button" onclick="submitScreenName()">Continue</button>
+    <div style="margin-top:1rem;">
+      <button class="button" onclick="goToAdminPage()">Admin Settings</button>
+    </div>
+  </section>
+
+  <!-- LOBBY PAGE -->
+  <section id="lobbyPage" class="page">
+    <h2>Lobby</h2>
+    <p>Players in Lobby: <span id="lobbyPlayerCount">0</span> / <span id="maxPlayersText">500</span></p>
+    <div id="lobbyNames" class="scroll-box"></div>
+    <p>Round Status: <span id="lobbyStatusText">Waiting for round to start automatically...</span></p>
+    <p>Minimum players required: <span id="minPlayersText">4</span></p>
+    <div class="flex-row">
+      <div class="countdown-ring">
+        <span id="lobbyTimerText">--:--</span>
+      </div>
+      <!-- In production auto-starts; mock button provided -->
+      <button class="button" onclick="mockStartRound()">[Mock] Force Start Round</button>
+      <button class="button" onclick="goToAdminPage()">Admin Settings</button>
+      <button class="button" onclick="openInstructions()">Instructions & Rules</button>
+    </div>
+    <!-- History Slider -->
+    <div class="chart-container">
+      <h3>Round History</h3>
+      <div class="histogram-placeholder">
+        <p>Lobby History Chart</p>
+      </div>
+      <p id="lobbyChartLabel">Showing Round: 0 (Current)</p>
+      <p>Players in This Round: <span id="lobbyChartPlayerCount">0</span></p>
+      <input type="range" min="0" max="0" value="0" id="lobbyHistorySlider" oninput="lobbyHistorySliderChange(this.value)" style="width:100%;">
+    </div>
+    <!-- Mini Puzzle Panel -->
+    <div class="mini-puzzle-panel">
+      <h3>Mini Puzzle Game</h3>
+      <p>Placeholder puzzle content here...</p>
+      <p>[Mock] This area is for a simple puzzle to keep you engaged.</p>
+    </div>
+    <!-- Advice Panel -->
+    <div class="advice-panel">
+      <h3>Some advice to ignore:</h3>
+      <ul style="margin-left:1rem;">
+        <li>Avoid Obvious Choices: Maybe don’t pick 1 or 2 as they are often picked by others. Or maybe do.</li>
+        <li>Randomized Choices: Choosing numbers randomly might help. Or maybe not.</li>
+        <li>Psychology: People choose numbers ending in 3 and 7 because they feel random. So there's that.</li>
+        <li>Mixed Strategy: Pick lower numbers more frequently. This might help.</li>
+        <li>Mid-Range Numbers: Choose numbers in the middle of the range. This might be better.</li>
+        <li>Adaptive: Change your picks based on observing others’ choices. Yeah, do this.</li>
+        <li>Game Size: Pick lower numbers in small games and higher numbers in large games.</li>
+        <li>Paradox: If everyone takes this advice, it won’t help. But perhaps it will.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ACTIVE GAME PAGE -->
+  <section id="activeGamePage" class="page">
+    <h2>Round in Progress</h2>
+    <div class="flex-row">
+      <div class="countdown-ring"><span id="activeTimerText">2:00</span></div>
+      <p>Players: <span id="activePlayerCount">0</span></p>
+      <p style="margin-left:1rem;">Submissions: <span id="submissionCount">0</span></p>
+      <p style="margin-left:1rem;">Is there a winner? <span id="winnerIndicator" class="indicator red"></span></p>
+    </div>
+    <div id="activeNames" class="scroll-box"></div>
+    <div style="margin:1rem 0;">
+      <label for="guessInput">Your Guess:</label>
+      <input type="number" id="guessInput" min="1" oninput="validateGuessInput()" style="width:100px;">
+      <button class="button" id="submitGuessButton" onclick="submitGuess()" disabled>Submit</button>
+    </div>
+    <!-- Submission Confirmation -->
+    <div id="submissionConfirmation" class="pulse-text" style="display:none;"></div>
+    <hr>
+    <div class="chart-container">
+      <h3>Current/Historical Rounds</h3>
+      <div class="histogram-placeholder" id="histogramDisplay">
+        <p>Histogram Placeholder</p>
+      </div>
+      <p id="chartRoundLabel">Showing Round: Current</p>
+      <p>Players in this round: <span id="chartPlayerCount">0</span></p>
+      <input type="range" id="historySlider" min="0" max="0" value="0" oninput="historySliderChange(this.value)" style="width:100%;">
+    </div>
+    <button class="button" onclick="endRound()">[Mock] End Round</button>
+  </section>
+
+  <!-- RESULTS PAGE -->
+  <section id="resultsPage" class="page">
+    <h2>Round Results</h2>
+    <p id="winnerText">No Winner</p>
+    <div class="chart-container">
+      <div class="histogram-placeholder"><p>Final Histogram Placeholder</p></div>
+      <p>Players: <span id="resultsPlayerCount">0</span></p>
+    </div>
+    <div class="flex-row">
+      <div class="countdown-ring"><span id="resultsTimerText">0:30</span></div>
+      <p>Next round starts soon...</p>
+    </div>
+    <button class="button" onclick="returnToLobby()">[Mock] Return to Lobby</button>
+  </section>
+
+  <!-- LEADERBOARD PAGE -->
+  <section id="leaderboardPage" class="page">
+    <h2>Leaderboards</h2>
+    <div class="leaderboard-panel">
+      <h3>All-Time Leaderboard (Top 10)</h3>
+      <table class="leaderboard-table">
+        <thead>
+          <tr><th>Rank</th><th>Screen Name</th><th>Wins</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>Alice</td><td>25</td></tr>
+          <tr><td>2</td><td>Bob</td><td>22</td></tr>
+          <tr><td>3</td><td>Charlie</td><td>20</td></tr>
+          <tr><td>4</td><td>Dave</td><td>18</td></tr>
+          <tr><td>5</td><td>Eve</td><td>15</td></tr>
+          <tr><td>6</td><td>Frank</td><td>14</td></tr>
+          <tr><td>7</td><td>Grace</td><td>12</td></tr>
+          <tr><td>8</td><td>Heidi</td><td>10</td></tr>
+          <tr><td>9</td><td>Ivan</td><td>9</td></tr>
+          <tr><td>10</td><td>Judy</td><td>8</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="leaderboard-panel">
+      <h3>Last 100 Rounds Leaderboard (Top 10)</h3>
+      <table class="leaderboard-table">
+        <thead>
+          <tr><th>Rank</th><th>Screen Name</th><th>Wins</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>Charlie</td><td>8</td></tr>
+          <tr><td>2</td><td>Alice</td><td>7</td></tr>
+          <tr><td>3</td><td>Eve</td><td>6</td></tr>
+          <tr><td>4</td><td>Bob</td><td>6</td></tr>
+          <tr><td>5</td><td>Frank</td><td>5</td></tr>
+          <tr><td>6</td><td>Grace</td><td>4</td></tr>
+          <tr><td>7</td><td>Heidi</td><td>4</td></tr>
+          <tr><td>8</td><td>Ivan</td><td>3</td></tr>
+          <tr><td>9</td><td>Judy</td><td>3</td></tr>
+          <tr><td>10</td><td>Kevin</td><td>2</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <button class="button" onclick="returnToLobby()">Return to Lobby</button>
+  </section>
+
+  <!-- ADMIN PAGE -->
+  <section id="adminPage" class="page">
+    <h2>Admin Settings</h2>
+    <div class="admin-field">
+      <label for="adminRoundDuration">Round Duration (seconds):</label>
+      <input type="number" id="adminRoundDuration" min="10" value="120">
+    </div>
+    <div class="admin-field">
+      <label for="adminDowntime">Downtime (seconds):</label>
+      <input type="number" id="adminDowntime" min="10" value="30">
+    </div>
+    <div class="admin-field">
+      <label for="adminMinPlayers">Min Players to Start:</label>
+      <input type="number" id="adminMinPlayers" min="2" value="4">
+    </div>
+    <button class="button" onclick="saveAdminSettings()">Save Settings</button>
+    <button class="button" onclick="returnToLobby()">Back to Lobby</button>
+    <p style="margin-top:1rem; color:gray;">[Mock] Changes would update server config in a real app.</p>
+  </section>
+
+  <footer>
+    <p>SoloLow</p>
+    <button class="button" onclick="openSuggestions()">Feedback / Suggestions</button>
+  </footer>
+
+  <script>
+    "use strict";
+
+    /***********************************************
+     * Mock Data & Navigation
+     ***********************************************/
+    const MAX_PLAYERS = 500;
+    let currentUser = { provider: null, screenName: null };
+    let roundDuration = 120, downtime = 30, minPlayers = 4;
+    let roundHistory = [ {id:1}, {id:2}, {id:3} ]; // For demo, assume 3 past rounds.
+    function updateHistorySliderMax() {
+      let slider = document.getElementById("historySlider");
+      let lobbySlider = document.getElementById("lobbyHistorySlider");
+      let max = roundHistory.length;
+      slider.max = max;
+      lobbySlider.max = max;
+    }
+    updateHistorySliderMax();
+
+    let playersInLobby = [], playersInRound = [];
+    let submissionCount = 0, winnerExists = false;
+
+    function showPage(pageId) {
+      const pages = ["authPage", "lobbyPage", "activeGamePage", "resultsPage", "leaderboardPage", "adminPage"];
+      pages.forEach(pid => { document.getElementById(pid).classList.remove("visible"); });
+      document.getElementById(pageId).classList.add("visible");
+    }
+
+    /***********************************************
+     * AUTH PAGE LOGIC
+     ***********************************************/
+    function oauthLogin(provider) {
+      currentUser.provider = provider;
+      console.log("OAuth with", provider);
+    }
+    function submitScreenName() {
+      const candidate = (document.getElementById("screenNameInput").value || "").trim();
+      const lower = candidate.toLowerCase();
+      const blockedWords = ["fuck", "shit", "bitch"];
+      let isOffensive = blockedWords.some(word => lower.includes(word));
+      if (!candidate || isOffensive) {
+        document.getElementById("screenNameError").style.display = "block";
+        return;
+      } else {
+        document.getElementById("screenNameError").style.display = "none";
+      }
+      currentUser.screenName = candidate;
+      console.log("Screen name:", candidate);
+      showPage("lobbyPage");
+      updateLobby();
+    }
+
+    /***********************************************
+     * LOBBY LOGIC
+     ***********************************************/
+    function updateLobby() {
+      if (playersInLobby.length >= MAX_PLAYERS) {
+        alert("Lobby is full (500 players). Please wait until someone leaves.");
+        return;
+      }
+      playersInLobby = [
+        { screenName: currentUser.screenName },
+        { screenName: "Alice" },
+        { screenName: "Bob" },
+        { screenName: "Charlie" }
+      ];
+      document.getElementById("lobbyPlayerCount").textContent = playersInLobby.length;
+      document.getElementById("maxPlayersText").textContent = MAX_PLAYERS;
+      document.getElementById("minPlayersText").textContent = minPlayers;
+      document.getElementById("lobbyNames").textContent = playersInLobby.map(p => p.screenName).join(", ");
+      document.getElementById("lobbyChartPlayerCount").textContent = playersInLobby.length;
+    }
+    function lobbyHistorySliderChange(value) {
+      if (value === "0") {
+        document.getElementById("lobbyChartLabel").textContent = "Showing Round: 0 (Current)";
+        document.getElementById("lobbyChartPlayerCount").textContent = playersInLobby.length;
+      } else {
+        document.getElementById("lobbyChartLabel").textContent = `Showing Round: ${value}`;
+        document.getElementById("lobbyChartPlayerCount").textContent = "5";
+      }
+    }
+    function mockStartRound() {
+      if (playersInLobby.length < minPlayers) {
+        alert(`Need at least ${minPlayers} players to start!`);
+        return;
+      }
+      showPage("activeGamePage");
+      playersInRound = [...playersInLobby];
+      document.getElementById("activePlayerCount").textContent = playersInRound.length;
+      document.getElementById("activeNames").textContent = playersInRound.map(p => p.screenName).join(", ");
+      submissionCount = 0;
+      document.getElementById("submissionCount").textContent = "0";
+      winnerExists = false;
+      updateWinnerIndicator();
+      document.getElementById("chartRoundLabel").textContent = "Showing Round: Current";
+      document.getElementById("chartPlayerCount").textContent = playersInRound.length;
+      document.getElementById("historySlider").value = "0";
+    }
+
+    /***********************************************
+     * ACTIVE GAME LOGIC
+     ***********************************************/
+    function validateGuessInput() {
+      const val = parseInt(document.getElementById("guessInput").value, 10);
+      document.getElementById("submitGuessButton").disabled = !(val >= 1 && Number.isInteger(val));
+    }
+    function submitGuess() {
+      const guessVal = parseInt(document.getElementById("guessInput").value, 10);
+      if (!guessVal || guessVal < 1) { alert("Invalid guess!"); return; }
+      submissionCount++;
+      document.getElementById("submissionCount").textContent = submissionCount;
+      document.getElementById("guessInput").disabled = true;
+      document.getElementById("submitGuessButton").disabled = true;
+      winnerExists = true;  // For demo, assume at least one guess means a potential winner.
+      updateWinnerIndicator();
+      let confirmMsg = document.getElementById("submissionConfirmation");
+      confirmMsg.textContent = `You have submitted the number ${guessVal}`;
+      confirmMsg.style.display = "block";
+      // In a real game, after last submission, auto-close 3 seconds later.
+    }
+    function updateWinnerIndicator() {
+      const indicator = document.getElementById("winnerIndicator");
+      if (winnerExists) { indicator.classList.remove("red"); indicator.classList.add("green"); }
+      else { indicator.classList.remove("green"); indicator.classList.add("red"); }
+    }
+    function historySliderChange(value) {
+      if (value === "0") {
+        document.getElementById("chartRoundLabel").textContent = "Showing Round: Current";
+        document.getElementById("chartPlayerCount").textContent = playersInRound.length;
+      } else {
+        document.getElementById("chartRoundLabel").textContent = `Showing Round: #${value}`;
+        document.getElementById("chartPlayerCount").textContent = "6";
+      }
+    }
+    function endRound() {
+      showPage("resultsPage");
+      if (winnerExists) {
+        document.getElementById("winnerText").textContent = "Winning Number: 12 by " + currentUser.screenName;
+      } else {
+        document.getElementById("winnerText").textContent = "No Winner This Round!";
+      }
+      document.getElementById("resultsPlayerCount").textContent = playersInRound.length;
+    }
+
+    /***********************************************
+     * RESULTS LOGIC
+     ***********************************************/
+    function returnToLobby() {
+      showPage("lobbyPage");
+      updateLobby();
+    }
+
+    /***********************************************
+     * LEADERBOARD LOGIC
+     ***********************************************/
+    function goToLeaderboard() { showPage("leaderboardPage"); }
+
+    /***********************************************
+     * ADMIN LOGIC
+     ***********************************************/
+    function goToAdminPage() {
+      document.getElementById("adminRoundDuration").value = roundDuration;
+      document.getElementById("adminDowntime").value = downtime;
+      document.getElementById("adminMinPlayers").value = minPlayers;
+      showPage("adminPage");
+    }
+    function saveAdminSettings() {
+      roundDuration = parseInt(document.getElementById("adminRoundDuration").value, 10) || 120;
+      downtime = parseInt(document.getElementById("adminDowntime").value, 10) || 30;
+      minPlayers = parseInt(document.getElementById("adminMinPlayers").value, 10) || 4;
+      alert(`Settings saved:\nRound Duration = ${roundDuration}s\nDowntime = ${downtime}s\nMin Players = ${minPlayers}`);
+    }
+
+    /***********************************************
+     * INSTRUCTIONS POPUP
+     ***********************************************/
+    function openInstructions() { document.getElementById("instructionsModal").style.display = "flex"; }
+    function closeInstructions() { document.getElementById("instructionsModal").style.display = "none"; }
+
+    /***********************************************
+     * SUGGESTIONS / FEEDBACK POPUP
+     ***********************************************/
+    function openSuggestions() { document.getElementById("suggestionsBox").style.display = "flex"; }
+    function closeSuggestions() { document.getElementById("suggestionsBox").style.display = "none"; }
+  </script>
+</body>
+</html>

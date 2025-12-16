@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unit Calculator</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #workspace {
+            flex-grow: 1;
+            background: #f5f5f5;
+            position: relative;
+            overflow: auto;
+            padding: 20px;
+        }
+
+        #unitPanel {
+            height: 120px;
+            background: #e0e0e0;
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+        }
+
+        .unit-tile {
+            min-width: 80px;
+            min-height: 60px;
+            padding: 8px;
+            background: white;
+            border: 2px solid #333;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: move;
+            position: absolute;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .unit-tile.base {
+            position: static;
+        }
+
+        .unit-tile .symbol {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .unit-tile .name {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .unit-tile .compound-name {
+            font-size: 14px;
+            color: #0066cc;
+            margin-top: 4px;
+        }
+
+        .unit-tile.dragging {
+            opacity: 0.8;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+
+        .unit-tile.glow-right {
+            box-shadow: 5px 0 15px rgba(0,128,255,0.5);
+        }
+
+        .unit-tile.glow-below {
+            box-shadow: 0 5px 15px rgba(255,128,0,0.5);
+        }
+
+        .unit-tile.glow-above {
+            box-shadow: 0 -5px 15px rgba(0,255,128,0.5);
+        }
+
+        .invalid-combination {
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+    </style>
+</head>
+<body>
+    <div id="workspace"></div>
+    <div id="unitPanel"></div>
+
+    <script>
+        const baseUnits = [
+            { symbol: 'm', name: 'meter', color: '#b3e0ff' },
+            { symbol: 'kg', name: 'kilogram', color: '#ffb3b3' },
+            { symbol: 's', name: 'second', color: '#b3ffb3' },
+            { symbol: 'A', name: 'ampere', color: '#ffb3ff' },
+            { symbol: 'K', name: 'kelvin', color: '#ffffb3' },
+            { symbol: 'mol', name: 'mole', color: '#b3ffff' },
+            { symbol: 'cd', name: 'candela', color: '#ffb3d9' }
+        ];
+
+        const commonCompoundUnits = {
+            'm/s': {
+                name: 'meters per second',
+                symbol: 'm/s',
+                components: ['m', 's'],
+                operation: 'divide',
+                displayName: 'velocity'
+            },
+            'm/s²': {
+                name: 'meters per second squared',
+                symbol: 'm/s²',
+                components: ['m', 's', 's'],
+                operations: ['divide', 'divide'],
+                displayName: 'acceleration'
+            },
+            'kg⋅m/s²': {
+                name: 'newton',
+                symbol: 'N',
+                components: ['kg', 'm', 's', 's'],
+                operations: ['multiply', 'divide', 'divide'],
+                displayName: 'force'
+            },
+            'kg/(m⋅s²)': {
+                name: 'pascal',
+                symbol: 'Pa',
+                components: ['kg', 'm', 's', 's'],
+                operations: ['divide', 'multiply', 'divide'],
+                displayName: 'pressure'
+            },
+            'kg⋅m²/s²': {
+                name: 'joule',
+                symbol: 'J',
+                components: ['kg', 'm', 'm', 's', 's'],
+                operations: ['multiply', 'multiply', 'divide', 'divide'],
+                displayName: 'energy'
+            },
+            'kg⋅m²/s³': {
+                name: 'watt',
+                symbol: 'W',
+                components: ['kg', 'm', 'm', 's', 's', 's'],
+                operations: ['multiply', 'multiply', 'divide', 'divide', 'divide'],
+                displayName: 'power'
+            },
+            'A⋅s': {
+                name: 'coulomb',
+                symbol: 'C',
+                components: ['A', 's'],
+                operation: 'multiply',
+                displayName: 'electric charge'
+            }
+        };
+
+        let draggedTile = null;
+        let dragOffset = { x: 0, y: 0 };
+        let workspaceTiles = [];
+
+        function createUnitTile(unit, isBase = false) {
+            const tile = document.createElement('div');
+            tile.className = `unit-tile ${isBase ? 'base' : ''}`;
+            tile.style.backgroundColor = unit.color;
+            
+            let innerHTML = `
+                <div class="symbol">${unit.symbol}</div>
+                <div class="name">${unit.name}</div>
+            `;
+
+            if (unit.compoundName) {
+                innerHTML += `<div class="compound-name">${unit.compoundName}</div>`;
+                tile.style.minWidth = '120px';
+                tile.style.minHeight = '80px';
+            }
+
+            tile.innerHTML = innerHTML;
+            tile.addEventListener('mousedown', startDrag);
+            tile.addEventListener('touchstart', startDrag);
+            
+            tile.unit = unit;
+            return tile;
+        }
+
+        function standardizeUnitOrder(units) {
+            // Define unit order priority (standard physics convention)
+            const unitOrder = {
+                'kg': 1, // Mass first
+                'm': 2,  // Length second
+                's': 3,  // Time third
+                'A': 4,  // Current fourth
+                'K': 5,  // Temperature fifth
+                'mol': 6,// Amount sixth
+                'cd': 7  // Luminous intensity last
+            };
+
+            return units.sort((a, b) => {
+                return (unitOrder[a] || 99) - (unitOrder[b] || 99);
+            });
+        }
+
+        function findMatchingCompoundUnit(components, operations) {
+            // Create a standardized string representation
+            const standardComponents = standardizeUnitOrder([...components]);
+            const unitString = createUnitString(standardComponents, operations);
+
+            // Check if this matches any known compound unit
+            return Object.entries(commonCompoundUnits).find(([key, unit]) => {
+                const standardUnit = createUnitString(
+                    standardizeUnitOrder([...unit.components]),
+                    Array.isArray(unit.operations) ? unit.operations : [unit.operation]
+                );
+                return standardUnit === unitString;
+            });
+        }
+
+        function createUnitString(components, operations) {
+            if (!operations || operations.length === 0) return components.join('⋅');
+
+            let numerator = [];
+            let denominator = [];
+            let currentOperation = 'multiply';
+
+            components.forEach((component, index) => {
+                if (operations[index - 1]) {
+                    currentOperation = operations[index - 1];
+                }
+                
+                if (currentOperation === 'multiply') {
+                    numerator.push(component);
+                } else {
+                    denominator.push(component);
+                }
+            });
+
+            let result = numerator.join('⋅');
+            if (denominator.length > 0) {
+                result += '/' + denominator.join('⋅');
+            }
+            return result;
+        }
+
+        function startDrag(e) {
+            e.preventDefault();
+            const tile = e.target.closest('.unit-tile');
+            if (!tile) return;
+
+            const workspace = document.getElementById('workspace');
+            const workspaceRect = workspace.getBoundingClientRect();
+
+            if (tile.classList.contains('base')) {
+                draggedTile = createUnitTile(tile.unit);
+                workspace.appendChild(draggedTile);
+            } else {
+                draggedTile = tile;
+            }
+
+            draggedTile.classList.add('dragging');
+
+            const tileRect = tile.getBoundingClientRect();
+            if (e.type === 'mousedown') {
+                dragOffset.x = e.clientX - tileRect.left;
+                dragOffset.y = e.clientY - tileRect.top;
+            } else {
+                dragOffset.x = e.touches[0].clientX - tileRect.left;
+                dragOffset.y = e.touches[0].clientY - tileRect.top;
+            }
+
+            const x = e.type === 'mousedown' ? e.clientX : e.touches[0].clientX;
+            const y = e.type === 'mousedown' ? e.clientY : e.touches[0].clientY;
+            
+            updateDragPosition(x, y);
+
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', stopDrag);
+            document.addEventListener('touchmove', drag);
+            document.addEventListener('touchend', stopDrag);
+        }
+
+        function drag(e) {
+            e.preventDefault();
+            const x = e.type === 'mousemove' ? e.clientX : e.touches[0].clientX;
+            const y = e.type === 'mousemove' ? e.clientY : e.touches[0].clientY;
+            updateDragPosition(x, y);
+            checkInteractions(x, y);
+        }
+
+        function updateDragPosition(x, y) {
+            if (!draggedTile) return;
+            const workspace = document.getElementById('workspace');
+            const rect = workspace.getBoundingClientRect();
+            
+            const left = x - rect.left - dragOffset.x + workspace.scrollLeft;
+            const top = y - rect.top - dragOffset.y + workspace.scrollTop;
+
+            draggedTile.style.left = left + 'px';
+            draggedTile.style.top = top + 'px';
+        }
+
+        function checkInteractions(x, y) {
+            workspaceTiles.forEach(tile => {
+                if (tile === draggedTile) return;
+                
+                const rect = tile.getBoundingClientRect();
+                const dragRect = draggedTile.getBoundingClientRect();
+
+                tile.classList.remove('glow-right', 'glow-below', 'glow-above');
+
+                if (Math.abs(dragRect.left - (rect.right + 20)) < 40 &&
+                    Math.abs(dragRect.top - rect.top) < 30) {
+                    tile.classList.add('glow-right');
+                }
+                else if (Math.abs(dragRect.top - (rect.bottom + 20)) < 40 &&
+                    Math.abs(dragRect.left - rect.left) < 30) {
+                    tile.classList.add('glow-below');
+                }
+                else if (Math.abs(dragRect.bottom - (rect.top - 20)) < 40 &&
+                    Math.abs(dragRect.left - rect.left) < 30) {
+                    tile.classList.add('glow-above');
+                }
+            });
+        }
+
+        function combineUnits(tile1, tile2, operation) {
+            // Get existing components and operations
+            const components1 = tile1.unit.components || [tile1.unit.symbol];
+            const components2 = tile2.unit.components || [tile2.unit.symbol];
+            const operations1 = tile1.unit.operations || [];
+            const operations2 = tile2.unit.operations || [];
+
+            // Combine components and operations
+            const newComponents = [...components1, ...components2];
+            const newOperations = [...operations1, ...operations2, operation];
+
+            // Check if this combination is valid
+            const matchingUnit = findMatchingCompoundUnit(newComponents, newOperations);
+
+            if (matchingUnit) {
+                const [key, unit] = matchingUnit;
+                const newUnit = {
+                    symbol: unit.symbol,
+                    name: unit.name,
+                    components: newComponents,
+                    operations: newOperations,
+                    compoundName: unit.displayName,
+                    color: blendColors(tile1.unit.color, tile2.unit.color)
+                };
+
+                const newTile = createUnitTile(newUnit);
+                newTile.style.left = tile1.style.left;
+                newTile.style.top = tile1.style.top;
+                document.getElementById('workspace').appendChild(newTile);
+                workspaceTiles.push(newTile);
+
+                // Remove old tiles
+                tile1.remove();
+                tile2.remove();
+                workspaceTiles = workspaceTiles.filter(t => t !== tile1 && t !== tile2);
+            } else {
+                // Invalid combination - show feedback
+                draggedTile.classList.add('invalid-combination');
+                setTimeout(() => {
+                    draggedTile.classList.remove('invalid-combination');
+                }, 500);
+            }
+        }
+
+        function blendColors(color1, color2) {
+            const r1 = parseInt(color1.slice(1,3), 16);
+            const g1 = parseInt(color1.slice(3,5), 16);
+            const b1 = parseInt(color1.slice(5,7), 16);
+            const r2 = parseInt(color2.slice(1,3), 16);
+            const g2 = parseInt(color2.slice(3,5), 16);
+            const b2 = parseInt(color2.slice(5,7), 16);
+            
+            const r = Math.round((r1 + r2) / 2);
+            const g = Math.round((g1 + g2) / 2);
+            const b = Math.round((b1 + b2) / 2);
+            
+            return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+        }
+
+        function stopDrag(e) {
+            if (!draggedTile) return;
+
+            const workspace = document.getElementById('workspace');
+            let combined = false;
+
+            workspaceTiles.forEach(tile => {
+                if (tile === draggedTile) return;
+
+                if (tile.classList.contains('glow-right')) {
+                    combined = true;
+                    combineUnits(tile, draggedTile, 'multiply');
+                }
+                else if (tile.classList.contains('glow-below')) {
+                    combined = true;
+                    combineUnits(tile, draggedTile, 'divide');
+                }
+                else if (tile.classList.contains('glow-above')) {
+                    combined = true;
+                    combineUnits(draggedTile, tile, 'divide');
+                }
+
+                tile.classList.remove('glow-right', 'glow-below', 'glow-above');
+            });
+
+            if (!combined) {
+                const rect = workspace.getBoundingClientRect();
+                let inWorkspace = false;
+
+                if (e.type === 'mouseup') {
+                    inWorkspace = e.clientY >= rect.top && 
+                                e.clientY <= rect.bottom &&
+                                e.clientX >= rect.left && 
+                                e.clientX <= rect.right;
+                } else {
+                    const touch = e.changedTouches[0];
+                    inWorkspace = touch.clientY >= rect.top && 
+                                touch.clientY <= rect.bottom &&
+                                touch.clientX >= rect.left && 
+                                touch.clientX <= rect.right;
+                }
+
+                if (inWorkspace) {
+                    workspaceTiles.push(draggedTile);
+                } else {
+                    draggedTile.remove();
+                }
+            }
+
+            draggedTile.classList.remove('dragging');
+            draggedTile = null;
+
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', stopDrag);
+            document.removeEventListener('touchmove', drag);
+            document.removeEventListener('touchend', stopDrag);
+        }
+
+        // Initialize
+        const unitPanel = document.getElementById('unitPanel');
+        baseUnits.forEach(unit => {
+            const tile = createUnitTile(unit, true);
+            unitPanel.appendChild(tile);
+        });
+    </script>
+</body>
+</html>

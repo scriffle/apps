@@ -1,0 +1,1621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Energy Sankey Diagram Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            min-height: 100vh;
+            padding: 15px;
+            color: #1e3a8a;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        h1 {
+            text-align: center;
+            color: #1e3a8a;
+            margin-bottom: 15px;
+            font-size: 2.2em;
+            font-weight: 700;
+            position: relative;
+        }
+
+        .help-btn {
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #f59e0b;
+            color: white;
+            border: 2px solid #1e3a8a;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            z-index: 100;
+        }
+
+        .help-btn:hover {
+            background: #1e3a8a;
+            border-color: #f59e0b;
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .help-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .help-modal.active {
+            display: flex;
+        }
+
+        .help-content {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 700px;
+            max-height: 85vh;
+            overflow-y: auto;
+            position: relative;
+            border: 3px solid #f59e0b;
+        }
+
+        .help-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #dc2626;
+            color: white;
+            border: none;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        .help-close:hover {
+            background: #991b1b;
+            transform: rotate(90deg);
+        }
+
+        .help-content h2 {
+            color: #1e3a8a;
+            margin-bottom: 15px;
+            font-size: 1.6em;
+            border-bottom: 3px solid #f59e0b;
+            padding-bottom: 10px;
+        }
+
+        .help-content h3 {
+            color: #1e3a8a;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+
+        .help-content p {
+            margin-bottom: 12px;
+            line-height: 1.6;
+            color: #0c1e47;
+        }
+
+        .help-content ul {
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+
+        .help-content li {
+            margin-bottom: 8px;
+            line-height: 1.5;
+            color: #0c1e47;
+        }
+
+        .help-content strong {
+            color: #1e3a8a;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: #fffbeb;
+            border-radius: 8px;
+            border: 3px solid #f59e0b;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-weight: 700;
+            margin-bottom: 6px;
+            color: #0c1e47;
+            font-size: 16px;
+        }
+
+        select, input[type="range"] {
+            padding: 10px;
+            border: 3px solid #1e3a8a;
+            border-radius: 6px;
+            font-size: 17px;
+            font-weight: 600;
+            background: white;
+            color: #0c1e47;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        select:hover, select:focus {
+            border-color: #f59e0b;
+            outline: none;
+        }
+
+        input[type="range"] {
+            cursor: grab;
+            height: 30px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+        }
+
+        input[type="range"]::-webkit-slider-track {
+            height: 8px;
+            background: linear-gradient(90deg, #dc2626 0%, #f59e0b 50%, #16a34a 100%);
+            border-radius: 4px;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            background: #1e3a8a;
+            border-radius: 50%;
+            cursor: grab;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+
+        input[type="range"]::-moz-range-track {
+            height: 8px;
+            background: linear-gradient(90deg, #dc2626 0%, #f59e0b 50%, #16a34a 100%);
+            border-radius: 4px;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+            background: #1e3a8a;
+            border-radius: 50%;
+            cursor: grab;
+            border: none;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+
+        .slider-value {
+            text-align: center;
+            font-weight: 700;
+            color: #0c1e47;
+            margin-top: 4px;
+            font-size: 18px;
+        }
+
+        .toggle-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .toggle-btn {
+            flex: 1;
+            padding: 10px;
+            border: 3px solid #1e3a8a;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 700;
+            transition: all 0.3s;
+            color: #0c1e47;
+        }
+
+        .toggle-btn.active {
+            background: #fbbf24;
+            color: #0c1e47;
+            border-color: #f59e0b;
+        }
+
+        #diagram-container {
+            width: 100%;
+            height: 450px;
+            border: 3px solid #1e3a8a;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            background: white;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #sankey-svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            padding: 40px 20px;
+            color: #0c1e47;
+            font-size: 20px;
+            font-weight: 600;
+            width: 80%;
+            background: #fffbeb;
+            border-radius: 8px;
+            border: 3px dashed #f59e0b;
+        }
+
+        .message.not-possible {
+            background: #fef2f2;
+            border-color: #dc2626;
+            color: #7f1d1d;
+            font-weight: 700;
+        }
+
+        .examples {
+            padding: 15px;
+            background: #fffbeb;
+            border-radius: 8px;
+            margin-top: 15px;
+            border: 3px solid #f59e0b;
+        }
+
+        .examples h3 {
+            color: #0c1e47;
+            margin-bottom: 10px;
+            font-size: 1.3em;
+            font-weight: 700;
+        }
+
+        .examples ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .examples li {
+            padding: 6px 0;
+            padding-left: 20px;
+            position: relative;
+            font-size: 16px;
+            color: #0c1e47;
+            font-weight: 500;
+        }
+
+        .examples li:before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #f59e0b;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .flow-label {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .flow-value {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .help-btn {
+                width: 32px;
+                height: 32px;
+                font-size: 18px;
+            }
+
+            .help-content {
+                padding: 20px;
+                max-height: 90vh;
+            }
+
+            .help-content h2 {
+                font-size: 1.3em;
+            }
+
+            .help-content h3 {
+                font-size: 1.1em;
+            }
+
+            .controls {
+                grid-template-columns: 1fr;
+            }
+
+            #diagram-container {
+                height: 400px;
+            }
+        }
+
+        /* Landscape optimization - very compact vertically */
+        @media (min-width: 769px) and (orientation: landscape) {
+            body {
+                padding: 10px;
+            }
+
+            .container {
+                padding: 12px;
+            }
+
+            h1 {
+                font-size: 1.8em;
+                margin-bottom: 8px;
+            }
+
+            .controls {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 10px;
+                margin-bottom: 10px;
+                padding: 10px;
+            }
+
+            #diagram-container {
+                height: 350px;
+                margin-bottom: 10px;
+            }
+
+            .examples {
+                padding: 10px;
+                margin-top: 10px;
+            }
+
+            .examples h3 {
+                font-size: 1.15em;
+                margin-bottom: 6px;
+            }
+
+            .examples li {
+                padding: 4px 0;
+                font-size: 15px;
+            }
+
+            label {
+                font-size: 15px;
+                margin-bottom: 4px;
+            }
+
+            select {
+                padding: 8px;
+                font-size: 16px;
+            }
+
+            .toggle-btn {
+                padding: 8px;
+                font-size: 15px;
+            }
+
+            .slider-value {
+                font-size: 16px;
+            }
+        }
+
+        /* Extra wide screens - ultra compact */
+        @media (min-width: 1200px) and (orientation: landscape) {
+            h1 {
+                font-size: 1.7em;
+                margin-bottom: 6px;
+            }
+
+            #diagram-container {
+                height: 320px;
+            }
+
+            .container {
+                padding: 10px 15px;
+            }
+        }
+
+        /* Touch-friendly improvements */
+        @media (hover: none) {
+            select, .toggle-btn {
+                padding: 14px;
+                font-size: 18px;
+            }
+
+            input[type="range"]::-webkit-slider-thumb {
+                width: 32px;
+                height: 32px;
+            }
+
+            input[type="range"]::-moz-range-thumb {
+                width: 32px;
+                height: 32px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            <button class="help-btn" id="help-btn" title="Help & Information">?</button>
+            ⚡ Energy Sankey Diagram Generator
+        </h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="input-energy">Input Energy:</label>
+                <select id="input-energy">
+                    <option value="">Select input energy...</option>
+                    <option value="kinetic">Kinetic</option>
+                    <option value="gravitational">Gravitational</option>
+                    <option value="elastic">Elastic</option>
+                    <option value="chemical">Chemical</option>
+                    <option value="nuclear">Nuclear</option>
+                    <option value="thermal">Thermal</option>
+                    <option value="electrical">Electrical</option>
+                    <option value="light">Light</option>
+                    <option value="work">Work</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="output-energy">Output Energy:</label>
+                <select id="output-energy">
+                    <option value="">Select output energy...</option>
+                    <option value="kinetic">Kinetic</option>
+                    <option value="gravitational">Gravitational</option>
+                    <option value="elastic">Elastic</option>
+                    <option value="chemical">Chemical</option>
+                    <option value="nuclear">Nuclear</option>
+                    <option value="thermal">Thermal</option>
+                    <option value="electrical">Electrical</option>
+                    <option value="light">Light</option>
+                    <option value="work">Work</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Display Mode:</label>
+                <div class="toggle-group">
+                    <button class="toggle-btn active" data-mode="percentage">Percentage</button>
+                    <button class="toggle-btn" data-mode="joules">1000 J</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label for="efficiency">Efficiency: <span class="slider-value" id="efficiency-value">85%</span></label>
+                <input type="range" id="efficiency" min="10" max="99" value="85" step="1">
+            </div>
+        </div>
+
+        <div id="diagram-container">
+            <svg id="sankey-svg"></svg>
+            <div class="message" id="message">Select input and output energy types to generate diagram</div>
+        </div>
+
+        <div class="examples" id="examples" style="display: none;">
+            <h3>Examples of this transformation:</h3>
+            <ul id="examples-list"></ul>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div class="help-modal" id="help-modal">
+        <div class="help-content">
+            <button class="help-close" id="help-close">×</button>
+            
+            <h2>📚 Energy Sankey Diagram Generator - Help Guide</h2>
+            
+            <h3>🎯 What is this tool?</h3>
+            <p>This interactive tool visualizes energy transformations using Sankey diagrams. It shows how energy flows from one form to another and where energy is lost during the conversion process.</p>
+            
+            <h3>🔄 Key Concepts</h3>
+            <p><strong>Energy Transformation:</strong> Energy cannot be created or destroyed, only converted from one form to another (e.g., kinetic to electrical).</p>
+            <p><strong>Energy Losses:</strong> Real-world transformations are never 100% efficient. Some energy is always "lost" as:</p>
+            <ul>
+                <li><strong>Heat:</strong> The ultimate energy sink - almost all losses end up as heat</li>
+                <li><strong>Sound:</strong> Vibrations in air that eventually dissipate as heat</li>
+                <li><strong>Vibration:</strong> Mechanical oscillations that convert to heat through friction</li>
+                <li><strong>Light:</strong> Electromagnetic radiation that may be absorbed as heat</li>
+            </ul>
+            <p><strong>Sankey Diagram:</strong> A visualization where the width of flows represents the amount of energy. Wider arrows = more energy.</p>
+            
+            <h3>🎮 How to Use</h3>
+            <p><strong>1. Select Input Energy:</strong> Choose the starting energy form (e.g., Chemical, Kinetic, Electrical)</p>
+            <p><strong>2. Select Output Energy:</strong> Choose the desired output form</p>
+            <p><strong>3. Adjust Efficiency:</strong> Use the slider to change how efficient the conversion is (10-99%)</p>
+            <p><strong>4. Toggle Display Mode:</strong> Switch between percentages (%) or absolute values (1000 J)</p>
+            
+            <h3>✨ Features</h3>
+            <ul>
+                <li><strong>Proportional Visualization:</strong> Box heights and flow widths scale with energy amounts</li>
+                <li><strong>Cascading Losses:</strong> Shows how sound/vibration/light losses eventually become heat</li>
+                <li><strong>Real Examples:</strong> Click any example to learn more about it via ChatGPT</li>
+                <li><strong>High Contrast:</strong> Text colors automatically adjust for readability</li>
+                <li><strong>Touch-Friendly:</strong> Works great on tablets and phones</li>
+            </ul>
+            
+            <h3>💡 Reading the Diagram</h3>
+            <p><strong>Left Side:</strong> Input energy (always 100% or 1000 J)</p>
+            <p><strong>Middle:</strong> Intermediate losses (sound, vibration, light) that cascade to heat</p>
+            <p><strong>Right Side:</strong> Your desired output (top) and final heat losses (bottom)</p>
+            <p><strong>Flow Thickness:</strong> Thicker lines = more energy flowing through that path</p>
+            
+            <h3>❓ "Not Possible or Common"</h3>
+            <p>Some energy transformations don't occur naturally or are extremely rare. The tool will tell you when a selected combination isn't realistic.</p>
+            
+            <h3>🔬 Educational Use</h3>
+            <p>This tool is perfect for:</p>
+            <ul>
+                <li>Understanding energy conservation principles</li>
+                <li>Learning about real-world efficiency</li>
+                <li>Visualizing where energy goes in everyday devices</li>
+                <li>Exploring different energy conversion technologies</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Complete energy transformation data
+        const energyData = {
+            "kinetic": {
+                "gravitational": {
+                    "examples": ["Ball thrown upward", "Water pumped to elevated reservoir", "Elevator lifting passengers", "Ski lift carrying skiers uphill", "Rocket ascending against gravity"],
+                    "typical_efficiency": [60, 90],
+                    "losses": {
+                        "heat": ["Friction in bearings", "Air resistance/drag", "Mechanical friction"],
+                        "sound": ["Motor noise", "Mechanical vibration noise", "Air turbulence"],
+                        "vibration": ["Mechanical imbalance", "Structural resonances"],
+                        "light": []
+                    }
+                },
+                "elastic": {
+                    "examples": ["Hammer compressing a spring", "Car suspension absorbing road bumps", "Bouncing ball deforming on impact", "Air brake compressing gas in cylinder", "Trampoline being pressed down"],
+                    "typical_efficiency": [70, 95],
+                    "losses": {
+                        "heat": ["Material deformation", "Internal friction", "Air resistance"],
+                        "sound": ["Impact noise", "Material compression sound"],
+                        "vibration": ["Oscillations", "Resonance"],
+                        "light": []
+                    }
+                },
+                "thermal": {
+                    "examples": ["Brake pads heating from friction", "Rubbing hands together for warmth", "Meteor heating during atmospheric entry", "Grinding metal producing heat", "Stirring liquid causing temperature rise"],
+                    "typical_efficiency": [95, 100],
+                    "losses": {
+                        "heat": ["Primary conversion (intentional)"],
+                        "sound": ["Friction noise", "Impact sounds"],
+                        "vibration": ["Surface oscillations"],
+                        "light": ["Sparks (if extreme)", "Glowing hot surfaces"]
+                    }
+                },
+                "electrical": {
+                    "examples": ["Wind turbine generator", "Bicycle dynamo", "Hydroelectric turbine", "Hand-crank flashlight", "Regenerative braking in electric vehicles"],
+                    "typical_efficiency": [70, 95],
+                    "losses": {
+                        "heat": ["Friction in bearings", "Air resistance/drag", "Electrical resistance in copper windings", "Eddy currents", "Hysteresis losses"],
+                        "sound": ["Blade whooshing", "Gear meshing noise", "Electromagnetic humming", "Bearing noise"],
+                        "vibration": ["Mechanical imbalance", "Structural resonances", "Bearing wobble"],
+                        "light": ["Sparking at brushes"]
+                    }
+                },
+                "work": {
+                    "examples": ["Hammer driving a nail", "Moving vehicle pushing objects", "Wind pushing a sailboat", "Turbine shaft turning machinery", "Flowing water turning waterwheel"],
+                    "typical_efficiency": [80, 98],
+                    "losses": {
+                        "heat": ["Friction", "Deformation losses"],
+                        "sound": ["Impact noise", "Mechanical noise"],
+                        "vibration": ["Oscillations", "Structural vibration"],
+                        "light": []
+                    }
+                }
+            },
+            "gravitational": {
+                "kinetic": {
+                    "examples": ["Waterfall flowing down", "Dropped object accelerating downward", "Roller coaster descending", "Avalanche sliding down mountain", "Pendulum swinging down"],
+                    "typical_efficiency": [95, 99],
+                    "losses": {
+                        "heat": ["Air resistance"],
+                        "sound": ["Air movement noise", "Impact sounds"],
+                        "vibration": ["Structural oscillations"],
+                        "light": []
+                    }
+                },
+                "electrical": {
+                    "examples": ["Hydroelectric dam turbine", "Pumped storage power plant (discharge)", "Water wheel generator", "Gravity battery system"],
+                    "typical_efficiency": [85, 95],
+                    "losses": {
+                        "heat": ["Water turbulence", "Friction in bearings", "Electrical resistance", "Eddy currents"],
+                        "sound": ["Water flow noise", "Turbine noise", "Generator humming"],
+                        "vibration": ["Turbine imbalance", "Water pressure fluctuations"],
+                        "light": []
+                    }
+                },
+                "work": {
+                    "examples": ["Pile driver using raised weight", "Grandfather clock weight mechanism", "Counterweight lifting elevator car", "Hydraulic press using water column pressure"],
+                    "typical_efficiency": [85, 95],
+                    "losses": {
+                        "heat": ["Friction", "Fluid resistance"],
+                        "sound": ["Impact noise", "Mechanical sounds"],
+                        "vibration": ["Oscillations"],
+                        "light": []
+                    }
+                }
+            },
+            "elastic": {
+                "kinetic": {
+                    "examples": ["Released spring accelerating object", "Bow shooting arrow", "Catapult launching projectile", "Compressed air powering pneumatic tool", "Rubber band propelling paper airplane"],
+                    "typical_efficiency": [75, 95],
+                    "losses": {
+                        "heat": ["Material hysteresis", "Internal friction", "Air resistance"],
+                        "sound": ["Spring release sound", "Air release noise"],
+                        "vibration": ["Spring oscillations", "Structural vibration"],
+                        "light": []
+                    }
+                },
+                "gravitational": {
+                    "examples": ["Spring-loaded launcher shooting ball upward", "Pogo stick bouncing user up", "Ejection seat launching pilot", "Slingshot sending stone into air"],
+                    "typical_efficiency": [70, 90],
+                    "losses": {
+                        "heat": ["Material hysteresis", "Air resistance", "Friction"],
+                        "sound": ["Launch sound", "Air displacement"],
+                        "vibration": ["Spring oscillations"],
+                        "light": []
+                    }
+                },
+                "thermal": {
+                    "examples": ["Compressing gas in bicycle pump (heats up)", "Diesel engine compression stroke", "Rubber ball heating on repeated bouncing", "Elastic band warming when stretched rapidly"],
+                    "typical_efficiency": [30, 70],
+                    "losses": {
+                        "heat": ["Primary conversion plus losses"],
+                        "sound": ["Compression sounds"],
+                        "vibration": ["Material oscillations"],
+                        "light": []
+                    }
+                },
+                "electrical": {
+                    "examples": ["Piezoelectric lighter spark", "Quartz crystal oscillator", "Piezoelectric sensor", "Force-sensitive resistor"],
+                    "typical_efficiency": [50, 80],
+                    "losses": {
+                        "heat": ["Material losses", "Electrical resistance"],
+                        "sound": ["Click sounds", "Vibration"],
+                        "vibration": ["Crystal oscillations"],
+                        "light": ["Spark (in piezo lighters)"]
+                    }
+                },
+                "work": {
+                    "examples": ["Clockwork mechanism", "Wind-up toy motor", "Mechanical watch spring", "Spring-loaded door closer", "Compressed air tools doing work"],
+                    "typical_efficiency": [75, 92],
+                    "losses": {
+                        "heat": ["Friction in gears", "Material hysteresis"],
+                        "sound": ["Gear meshing", "Spring release"],
+                        "vibration": ["Mechanical oscillations"],
+                        "light": []
+                    }
+                }
+            },
+            "chemical": {
+                "kinetic": {
+                    "examples": ["Rocket engine exhaust", "Internal combustion engine piston", "Gunpowder propelling bullet", "Jet engine thrust", "Firework launching into sky"],
+                    "typical_efficiency": [25, 50],
+                    "losses": {
+                        "heat": ["Combustion heat lost", "Exhaust heat", "Friction"],
+                        "sound": ["Explosion/combustion noise", "Exhaust noise"],
+                        "vibration": ["Engine vibrations", "Combustion pressure waves"],
+                        "light": ["Combustion flame", "Exhaust glow"]
+                    }
+                },
+                "thermal": {
+                    "examples": ["Burning wood in fireplace", "Gasoline combustion in engine", "Natural gas heating home", "Metabolism producing body heat", "Campfire flames"],
+                    "typical_efficiency": [60, 95],
+                    "losses": {
+                        "heat": ["Heat loss to surroundings"],
+                        "sound": ["Combustion crackling"],
+                        "vibration": ["Combustion fluctuations"],
+                        "light": ["Flame light", "Glowing embers"]
+                    }
+                },
+                "electrical": {
+                    "examples": ["Alkaline battery powering device", "Lithium-ion battery in phone", "Hydrogen fuel cell", "Lead-acid car battery", "Zinc-carbon battery"],
+                    "typical_efficiency": [40, 90],
+                    "losses": {
+                        "heat": ["Internal resistance", "Chemical reaction heat", "Overpotential losses"],
+                        "sound": [],
+                        "vibration": [],
+                        "light": []
+                    }
+                },
+                "light": {
+                    "examples": ["Candle flame", "Glow stick (chemiluminescence)", "Firefly bioluminescence", "Combustion flame", "Bioluminescent plankton"],
+                    "typical_efficiency": [1, 90],
+                    "losses": {
+                        "heat": ["Combustion heat", "Non-radiative transitions"],
+                        "sound": ["Combustion noise (if applicable)"],
+                        "vibration": [],
+                        "light": []
+                    }
+                },
+                "work": {
+                    "examples": ["Muscle contraction lifting weight", "Explosive demolition moving rubble", "Rocket propulsion pushing spacecraft", "Internal combustion directly driving piston"],
+                    "typical_efficiency": [20, 45],
+                    "losses": {
+                        "heat": ["Metabolic heat", "Combustion heat", "Friction"],
+                        "sound": ["Muscle sounds", "Explosion noise"],
+                        "vibration": ["Muscle tremor", "Explosion shock waves"],
+                        "light": ["Explosion flash"]
+                    }
+                }
+            },
+            "nuclear": {
+                "kinetic": {
+                    "examples": ["Nuclear bomb blast wave", "Fusion reactor plasma movement", "Alpha particle emission"],
+                    "typical_efficiency": [1, 30],
+                    "losses": {
+                        "heat": ["Massive thermal energy release"],
+                        "sound": ["Shock wave", "Sonic boom"],
+                        "vibration": ["Ground shock"],
+                        "light": ["Nuclear flash", "Intense radiation"]
+                    }
+                },
+                "chemical": {
+                    "examples": ["Radiation sterilization breaking bonds", "Radiolysis of water", "Radiation therapy affecting tissue"],
+                    "typical_efficiency": [5, 30],
+                    "losses": {
+                        "heat": ["Radiation absorption", "Secondary processes"],
+                        "sound": [],
+                        "vibration": [],
+                        "light": ["Secondary radiation"]
+                    }
+                },
+                "thermal": {
+                    "examples": ["Nuclear reactor core heating", "Radioisotope thermoelectric generator (RTG)", "Atomic bomb heat wave", "Fusion reaction heat", "Radioactive decay heating"],
+                    "typical_efficiency": [30, 95],
+                    "losses": {
+                        "heat": ["Heat loss to surroundings"],
+                        "sound": [],
+                        "vibration": [],
+                        "light": ["Cherenkov radiation", "Gamma rays"]
+                    }
+                },
+                "electrical": {
+                    "examples": ["Nuclear power plant steam turbine", "RTG (radioisotope thermoelectric)", "Beta voltaic battery"],
+                    "typical_efficiency": [5, 35],
+                    "losses": {
+                        "heat": ["Thermal losses", "Turbine inefficiency", "Condenser losses"],
+                        "sound": ["Turbine noise", "Cooling systems"],
+                        "vibration": ["Turbine vibrations"],
+                        "light": ["Cherenkov glow"]
+                    }
+                },
+                "light": {
+                    "examples": ["Nuclear explosion flash", "Cherenkov radiation in reactor pool", "Gamma ray emission", "Fusion plasma glow"],
+                    "typical_efficiency": [1, 50],
+                    "losses": {
+                        "heat": ["Thermal energy"],
+                        "sound": ["Explosion (if applicable)"],
+                        "vibration": [],
+                        "light": []
+                    }
+                }
+            },
+            "thermal": {
+                "kinetic": {
+                    "examples": ["Steam engine piston", "Stirling engine", "Gas turbine", "Hot air expanding in balloon", "Geothermal steam turbine"],
+                    "typical_efficiency": [15, 40],
+                    "losses": {
+                        "heat": ["Exhaust heat", "Conduction losses", "Radiation losses", "Carnot limit"],
+                        "sound": ["Steam hiss", "Engine noise", "Turbine noise"],
+                        "vibration": ["Engine vibrations", "Thermal expansion"],
+                        "light": []
+                    }
+                },
+                "gravitational": {
+                    "examples": ["Hot air balloon rising", "Convection currents lifting air", "Thermal updrafts lifting gliders"],
+                    "typical_efficiency": [5, 20],
+                    "losses": {
+                        "heat": ["Heat loss to surroundings", "Mixing losses"],
+                        "sound": ["Air movement"],
+                        "vibration": [],
+                        "light": []
+                    }
+                },
+                "elastic": {
+                    "examples": ["Bimetallic strip bending", "Thermal expansion of bridge joints", "Mercury thermometer expansion"],
+                    "typical_efficiency": [10, 50],
+                    "losses": {
+                        "heat": ["Heat dissipation"],
+                        "sound": [],
+                        "vibration": ["Thermal stress"],
+                        "light": []
+                    }
+                },
+                "chemical": {
+                    "examples": ["Endothermic reaction (heat input)", "Cracking petroleum at high temperature", "Thermal decomposition", "High-temperature synthesis"],
+                    "typical_efficiency": [30, 80],
+                    "losses": {
+                        "heat": ["Heat loss to surroundings", "Reaction inefficiency"],
+                        "sound": [],
+                        "vibration": [],
+                        "light": []
+                    }
+                },
+                "nuclear": {
+                    "examples": ["Fusion reactor (extreme heat needed)"],
+                    "typical_efficiency": [1, 30],
+                    "losses": {
+                        "heat": ["Plasma containment losses", "Radiation losses"],
+                        "sound": [],
+                        "vibration": [],
+                        "light": ["Plasma radiation", "Bremsstrahlung"]
+                    }
+                },
+                "electrical": {
+                    "examples": ["Thermocouple", "Seebeck effect generator", "Thermoelectric cooler (reverse mode)", "RTG (radioisotope thermoelectric)"],
+                    "typical_efficiency": [5, 15],
+                    "losses": {
+                        "heat": ["Thermal conduction losses", "Joule heating"],
+                        "sound": [],
+                        "vibration": [],
+                        "light": []
+                    }
+                },
+                "light": {
+                    "examples": ["Incandescent light bulb filament", "Red-hot metal glowing", "Blackbody radiation", "Heated objects emitting infrared", "Lava glow"],
+                    "typical_efficiency": [1, 20],
+                    "losses": {
+                        "heat": ["Non-radiative losses"],
+                        "sound": [],
+                        "vibration": [],
+                        "light": []
+                    }
+                },
+                "work": {
+                    "examples": ["Car engine heat-to-mechanical", "Steam locomotive", "Heat engine cycle", "Rankine cycle turbine"],
+                    "typical_efficiency": [15, 45],
+                    "losses": {
+                        "heat": ["Exhaust heat", "Friction", "Carnot efficiency limit"],
+                        "sound": ["Engine noise", "Exhaust noise"],
+                        "vibration": ["Engine vibrations"],
+                        "light": []
+                    }
+                }
+            },
+            "electrical": {
+                "kinetic": {
+                    "examples": ["Electric motor in fan", "Electric car motor", "Electric drill", "Linear actuator", "Magnetic levitation train"],
+                    "typical_efficiency": [75, 95],
+                    "losses": {
+                        "heat": ["Copper losses (I²R)", "Iron losses", "Friction in bearings"],
+                        "sound": ["Motor hum", "Cooling fan", "Bearing noise"],
+                        "vibration": ["Rotor imbalance", "Electromagnetic forces"],
+                        "light": []
+                    }
+                },
+                "gravitational": {
+                    "examples": ["Electric water pump to tower", "Electric elevator", "Electric forklift raising load", "Ski lift motor"],
+                    "typical_efficiency": [70, 90],
+                    "losses": {
+                        "heat": ["Motor losses", "Friction", "Electrical resistance"],
+                        "sound": ["Motor noise", "Mechanical sounds"],
+                        "vibration": ["Motor vibrations"],
+                        "light": []
+                    }
+                },
+                "elastic": {
+                    "examples": ["Electromagnetic solenoid compressing spring", "Electric actuator charging spring mechanism", "Electromagnetic valve compressing gas"],
+                    "typical_efficiency": [60, 85],
+                    "losses": {
+                        "heat": ["Coil resistance", "Eddy currents", "Mechanical friction"],
+                        "sound": ["Solenoid click", "Actuator noise"],
+                        "vibration": ["Magnetic forces", "Spring oscillations"],
+                        "light": []
+                    }
+                },
+                "chemical": {
+                    "examples": ["Electrolysis splitting water", "Charging lithium-ion battery", "Electroplating metal", "Aluminum smelting", "Chlorine production"],
+                    "typical_efficiency": [50, 90],
+                    "losses": {
+                        "heat": ["Overpotential losses", "Resistance heating", "Side reactions"],
+                        "sound": ["Bubbling (electrolysis)", "Electrochemical processes"],
+                        "vibration": [],
+                        "light": []
+                    }
+                },
+                "nuclear": {
+                    "examples": ["Particle accelerator (cyclotron, LHC)"],
+                    "typical_efficiency": [1, 10],
+                    "losses": {
+                        "heat": ["Magnet cooling", "RF cavity losses", "Beam collisions"],
+                        "sound": [],
+                        "vibration": ["Magnetic forces"],
+                        "light": ["Synchrotron radiation"]
+                    }
+                },
+                "thermal": {
+                    "examples": ["Electric space heater", "Toaster coils", "Electric stove element", "Hair dryer", "Resistance wire heating"],
+                    "typical_efficiency": [95, 100],
+                    "losses": {
+                        "heat": ["Desired conversion (minimal losses)"],
+                        "sound": ["Fan noise (if present)"],
+                        "vibration": [],
+                        "light": ["Glowing heating elements"]
+                    }
+                },
+                "light": {
+                    "examples": ["LED bulb", "Incandescent bulb", "Fluorescent tube", "Laser diode", "Display screen"],
+                    "typical_efficiency": [5, 90],
+                    "losses": {
+                        "heat": ["Non-radiative recombination", "Resistance losses", "Phosphor losses"],
+                        "sound": ["Ballast hum (fluorescent)"],
+                        "vibration": [],
+                        "light": []
+                    }
+                },
+                "work": {
+                    "examples": ["Electric motor turning machinery", "Electromagnetic actuator", "Electric impact wrench", "Linear motor"],
+                    "typical_efficiency": [75, 92],
+                    "losses": {
+                        "heat": ["Motor losses", "Friction"],
+                        "sound": ["Motor noise", "Tool sounds"],
+                        "vibration": ["Motor vibrations"],
+                        "light": []
+                    }
+                }
+            },
+            "light": {
+                "kinetic": {
+                    "examples": ["Solar sail spacecraft propulsion", "Optical tweezers moving particles", "Radiation pressure on dust"],
+                    "typical_efficiency": [0.001, 1],
+                    "losses": {
+                        "heat": ["Absorption", "Non-momentum transfer"],
+                        "sound": [],
+                        "vibration": [],
+                        "light": ["Scattered light", "Reflected light"]
+                    }
+                },
+                "chemical": {
+                    "examples": ["Photosynthesis in plants", "Photography film exposure", "Photocatalysis", "Vitamin D synthesis in skin", "Fading of dyes/pigments"],
+                    "typical_efficiency": [3, 30],
+                    "losses": {
+                        "heat": ["Non-productive absorption", "Thermal relaxation"],
+                        "sound": [],
+                        "vibration": [],
+                        "light": ["Fluorescence", "Reflection"]
+                    }
+                },
+                "nuclear": {
+                    "examples": ["Photodisintegration (high-energy gamma rays)"],
+                    "typical_efficiency": [0.1, 10],
+                    "losses": {
+                        "heat": ["Nuclear excitation", "Secondary processes"],
+                        "sound": [],
+                        "vibration": [],
+                        "light": ["Secondary radiation"]
+                    }
+                },
+                "thermal": {
+                    "examples": ["Solar water heater", "Asphalt heating in sunlight", "Microwave heating food", "Infrared heating lamp", "Sunlight warming skin"],
+                    "typical_efficiency": [40, 90],
+                    "losses": {
+                        "heat": ["Reflection losses", "Convection losses"],
+                        "sound": [],
+                        "vibration": [],
+                        "light": ["Reflected light", "Re-radiated light"]
+                    }
+                },
+                "electrical": {
+                    "examples": ["Solar photovoltaic panel", "Photodiode", "Photoresistor/LDR", "Camera sensor", "Solar calculator"],
+                    "typical_efficiency": [10, 45],
+                    "losses": {
+                        "heat": ["Thermalization", "Recombination", "Reflection"],
+                        "sound": [],
+                        "vibration": [],
+                        "light": ["Reflection", "Transmission"]
+                    }
+                }
+            },
+            "work": {
+                "kinetic": {
+                    "examples": ["Pushing cart to accelerate it", "Throwing ball", "Pedaling bicycle", "Rowing boat", "Shovel moving dirt"],
+                    "typical_efficiency": [80, 98],
+                    "losses": {
+                        "heat": ["Friction", "Air resistance"],
+                        "sound": ["Movement sounds", "Impact noises"],
+                        "vibration": ["Tool vibrations"],
+                        "light": []
+                    }
+                },
+                "gravitational": {
+                    "examples": ["Crane lifting load", "Person climbing stairs", "Forklift raising pallet", "Jack lifting car", "Pulley hoisting bucket"],
+                    "typical_efficiency": [70, 95],
+                    "losses": {
+                        "heat": ["Friction", "Muscle inefficiency"],
+                        "sound": ["Mechanical sounds", "Breathing (human)"],
+                        "vibration": ["Mechanical oscillations"],
+                        "light": []
+                    }
+                },
+                "elastic": {
+                    "examples": ["Winding watch spring", "Pumping bicycle tire", "Compressing car suspension", "Drawing bowstring", "Stretching resistance band"],
+                    "typical_efficiency": [75, 95],
+                    "losses": {
+                        "heat": ["Friction", "Material hysteresis"],
+                        "sound": ["Compression sounds", "Spring winding"],
+                        "vibration": ["Material oscillations"],
+                        "light": []
+                    }
+                },
+                "thermal": {
+                    "examples": ["Friction from drilling", "Sawing wood heating blade", "Mechanical stirring heating fluid", "Compressing gas adiabatically"],
+                    "typical_efficiency": [90, 100],
+                    "losses": {
+                        "heat": ["Desired conversion"],
+                        "sound": ["Tool sounds", "Process noise"],
+                        "vibration": ["Tool vibrations"],
+                        "light": ["Sparks (if extreme)"]
+                    }
+                },
+                "electrical": {
+                    "examples": ["Hand-crank generator/flashlight", "Bicycle dynamo pedaling", "Manual generator"],
+                    "typical_efficiency": [50, 80],
+                    "losses": {
+                        "heat": ["Friction", "Electrical resistance", "Generator losses"],
+                        "sound": ["Crank noise", "Generator hum"],
+                        "vibration": ["Mechanical vibrations"],
+                        "light": []
+                    }
+                }
+            }
+        };
+
+        // Color scheme - high contrast vibrant colors
+        const colors = {
+            "kinetic": "#2563eb",        // Bright blue
+            "gravitational": "#7c3aed",  // Bright purple
+            "elastic": "#f59e0b",        // Bright orange/yellow
+            "chemical": "#dc2626",       // Bright red
+            "nuclear": "#059669",        // Bright green
+            "thermal": "#ea580c",        // Bright orange
+            "electrical": "#0891b2",     // Bright cyan
+            "light": "#eab308",          // Bright yellow
+            "work": "#1e40af",           // Deep blue
+            "heat": "#b91c1c",           // Deep red
+            "sound": "#9333ea",          // Bright purple
+            "vibration": "#f97316",      // Bright orange
+            "lightloss": "#facc15"       // Bright yellow
+        };
+
+        // State
+        let currentMode = 'percentage';
+        let currentEfficiency = 85;
+
+        // DOM elements
+        const inputSelect = document.getElementById('input-energy');
+        const outputSelect = document.getElementById('output-energy');
+        const efficiencySlider = document.getElementById('efficiency');
+        const efficiencyValue = document.getElementById('efficiency-value');
+        const svg = document.getElementById('sankey-svg');
+        const message = document.getElementById('message');
+        const examplesDiv = document.getElementById('examples');
+        const examplesList = document.getElementById('examples-list');
+        const toggleBtns = document.querySelectorAll('.toggle-btn');
+
+        // Event listeners
+        inputSelect.addEventListener('change', updateDiagram);
+        outputSelect.addEventListener('change', updateDiagram);
+        efficiencySlider.addEventListener('input', function() {
+            currentEfficiency = parseInt(this.value);
+            efficiencyValue.textContent = currentEfficiency + '%';
+            updateDiagram();
+        });
+
+        toggleBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                toggleBtns.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                currentMode = this.dataset.mode;
+                updateDiagram();
+            });
+        });
+
+        function updateDiagram() {
+            const input = inputSelect.value;
+            const output = outputSelect.value;
+
+            if (!input || !output) {
+                svg.innerHTML = '';
+                message.style.display = 'block';
+                message.className = 'message';
+                message.textContent = 'Select input and output energy types to generate diagram';
+                examplesDiv.style.display = 'none';
+                return;
+            }
+
+            if (input === output) {
+                svg.innerHTML = '';
+                message.style.display = 'block';
+                message.className = 'message not-possible';
+                message.textContent = '⚠️ Input and output energy cannot be the same';
+                examplesDiv.style.display = 'none';
+                return;
+            }
+
+            // Check if transformation exists
+            const transformData = energyData[input]?.[output];
+            if (!transformData) {
+                svg.innerHTML = '';
+                message.style.display = 'block';
+                message.className = 'message not-possible';
+                message.textContent = '⚠️ This transformation is not really possible or common';
+                examplesDiv.style.display = 'none';
+                return;
+            }
+
+            message.style.display = 'none';
+            drawSankeyDiagram(input, output, transformData);
+            displayExamples(transformData.examples);
+        }
+
+        function drawSankeyDiagram(input, output, data) {
+            const container = document.getElementById('diagram-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            
+            svg.innerHTML = '';
+            svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+            const efficiency = currentEfficiency / 100;
+            const totalInput = currentMode === 'joules' ? 1000 : 100;
+            const outputEnergy = totalInput * efficiency;
+            const totalLoss = totalInput - outputEnergy;
+
+            // Calculate loss distribution - MUST conserve energy!
+            const losses = data.losses;
+            const heatSources = losses.heat.length;
+            const soundSources = losses.sound.length;
+            const vibrationSources = losses.vibration.length;
+            const lightSources = losses.light.length;
+            
+            const totalSources = heatSources + soundSources + vibrationSources + lightSources;
+            
+            let directHeat = 0;
+            let soundLoss = 0;
+            let vibrationLoss = 0;
+            let lightLoss = 0;
+
+            if (totalSources > 0) {
+                // Distribute losses proportionally - ensures conservation
+                const totalWeight = heatSources * 0.7 + soundSources * 0.15 + vibrationSources * 0.15 + lightSources * 0.05;
+                
+                if (totalWeight > 0) {
+                    directHeat = (heatSources * 0.7 / totalWeight) * totalLoss;
+                    soundLoss = (soundSources * 0.15 / totalWeight) * totalLoss;
+                    vibrationLoss = (vibrationSources * 0.15 / totalWeight) * totalLoss;
+                    lightLoss = (lightSources * 0.05 / totalWeight) * totalLoss;
+                } else {
+                    directHeat = totalLoss;
+                }
+            } else {
+                directHeat = totalLoss;
+            }
+
+            // Final heat equals total loss (all intermediate losses cascade to heat)
+            // This ensures: outputEnergy + totalLoss = totalInput (always 100% or 1000J)
+            const finalHeat = totalLoss;
+
+            // Layout parameters
+            const nodeWidth = 120;
+            const minNodeHeight = 50; // Minimum height for text readability
+            const maxNodeHeight = 150; // Maximum height to keep reasonable
+            const leftX = 100;
+            const rightX = width - 100 - nodeWidth;
+            const midX = (leftX + rightX) / 2;
+
+            // Calculate proportional heights
+            function calculateNodeHeight(value) {
+                const proportion = value / totalInput;
+                const calculatedHeight = proportion * 250; // Scale factor for good visual proportions
+                return Math.max(minNodeHeight, Math.min(maxNodeHeight, calculatedHeight));
+            }
+
+            // Calculate all node heights first
+            const inputHeight = calculateNodeHeight(totalInput);
+            const outputHeight = calculateNodeHeight(outputEnergy);
+            const soundHeight = soundLoss > 0 ? calculateNodeHeight(soundLoss) : 0;
+            const vibrationHeight = vibrationLoss > 0 ? calculateNodeHeight(vibrationLoss) : 0;
+            const lightHeight = lightLoss > 0 ? calculateNodeHeight(lightLoss) : 0;
+            const heatHeight = calculateNodeHeight(finalHeat);
+
+            // Calculate vertical positions - center everything
+            const centerY = height / 2;
+            
+            // Position intermediate nodes (sound, vibration, light) in middle column
+            let midColumnNodes = [];
+            if (soundLoss > 0) midColumnNodes.push({ height: soundHeight, type: 'sound' });
+            if (vibrationLoss > 0) midColumnNodes.push({ height: vibrationHeight, type: 'vibration' });
+            if (lightLoss > 0) midColumnNodes.push({ height: lightHeight, type: 'light' });
+            
+            const midColumnTotalHeight = midColumnNodes.reduce((sum, n) => sum + n.height, 0) + 
+                                         (midColumnNodes.length - 1) * 20; // 20px gap between
+            let currentMidY = centerY - midColumnTotalHeight / 2;
+
+            // Position right column nodes (output and heat)
+            const rightColumnGap = 30;
+            const rightColumnTotalHeight = outputHeight + heatHeight + rightColumnGap;
+            let currentRightY = centerY - rightColumnTotalHeight / 2;
+
+            // Node positions with proportional heights
+            const nodes = {
+                input: { 
+                    x: leftX, 
+                    y: centerY - inputHeight / 2, 
+                    width: nodeWidth, 
+                    height: inputHeight, 
+                    value: totalInput, 
+                    label: capitalizeFirst(input) 
+                },
+                output: { 
+                    x: rightX, 
+                    y: currentRightY, 
+                    width: nodeWidth, 
+                    height: outputHeight, 
+                    value: outputEnergy, 
+                    label: capitalizeFirst(output) 
+                },
+                sound: soundLoss > 0 ? { 
+                    x: midX, 
+                    y: currentMidY, 
+                    width: nodeWidth, 
+                    height: soundHeight, 
+                    value: soundLoss, 
+                    label: 'Sound' 
+                } : null,
+                vibration: vibrationLoss > 0 ? { 
+                    x: midX, 
+                    y: currentMidY + (soundLoss > 0 ? soundHeight + 20 : 0), 
+                    width: nodeWidth, 
+                    height: vibrationHeight, 
+                    value: vibrationLoss, 
+                    label: 'Vibration' 
+                } : null,
+                light: lightLoss > 0 ? { 
+                    x: midX, 
+                    y: currentMidY + (soundLoss > 0 ? soundHeight + 20 : 0) + 
+                                     (vibrationLoss > 0 ? vibrationHeight + 20 : 0), 
+                    width: nodeWidth, 
+                    height: lightHeight, 
+                    value: lightLoss, 
+                    label: 'Light Loss' 
+                } : null,
+                heat: { 
+                    x: rightX, 
+                    y: currentRightY + outputHeight + rightColumnGap, 
+                    width: nodeWidth, 
+                    height: heatHeight, 
+                    value: finalHeat, 
+                    label: 'Heat' 
+                }
+            };
+
+            // Draw flows (links)
+            const links = [];
+
+            // Input to output
+            links.push({
+                source: nodes.input,
+                target: nodes.output,
+                value: outputEnergy,
+                color: colors[output]
+            });
+
+            // Input to intermediate losses
+            if (nodes.sound) {
+                links.push({
+                    source: nodes.input,
+                    target: nodes.sound,
+                    value: soundLoss,
+                    color: colors.sound
+                });
+            }
+            if (nodes.vibration) {
+                links.push({
+                    source: nodes.input,
+                    target: nodes.vibration,
+                    value: vibrationLoss,
+                    color: colors.vibration
+                });
+            }
+            if (nodes.light) {
+                links.push({
+                    source: nodes.input,
+                    target: nodes.light,
+                    value: lightLoss,
+                    color: colors.lightloss
+                });
+            }
+
+            // Input to direct heat
+            if (directHeat > 0) {
+                links.push({
+                    source: nodes.input,
+                    target: nodes.heat,
+                    value: directHeat,
+                    color: colors.heat
+                });
+            }
+
+            // Intermediate losses to heat
+            if (nodes.sound) {
+                links.push({
+                    source: nodes.sound,
+                    target: nodes.heat,
+                    value: soundLoss,
+                    color: colors.heat
+                });
+            }
+            if (nodes.vibration) {
+                links.push({
+                    source: nodes.vibration,
+                    target: nodes.heat,
+                    value: vibrationLoss,
+                    color: colors.heat
+                });
+            }
+            if (nodes.light) {
+                links.push({
+                    source: nodes.light,
+                    target: nodes.heat,
+                    value: lightLoss,
+                    color: colors.heat
+                });
+            }
+
+            // Draw links
+            links.forEach(link => {
+                drawFlow(link.source, link.target, link.value, totalInput, link.color);
+            });
+
+            // Draw nodes
+            Object.entries(nodes).forEach(([key, node]) => {
+                if (node) {
+                    const color = key === 'input' ? colors[input] :
+                                 key === 'output' ? colors[output] :
+                                 key === 'heat' ? colors.heat :
+                                 key === 'sound' ? colors.sound :
+                                 key === 'vibration' ? colors.vibration :
+                                 colors.lightloss;
+                    drawNode(node, color);
+                }
+            });
+        }
+
+        function drawFlow(source, target, value, totalInput, color) {
+            // Calculate thickness proportional to the value, with better scaling
+            const proportion = value / totalInput;
+            const thickness = Math.max(proportion * 180, 5); // Scale for visual clarity, min 5px
+            
+            const sourceY = source.y + source.height / 2;
+            const targetY = target.y + target.height / 2;
+            
+            const sourceX = source.x + source.width;
+            const targetX = target.x;
+            
+            const midX = (sourceX + targetX) / 2;
+            
+            const path = `
+                M ${sourceX} ${sourceY}
+                C ${midX} ${sourceY},
+                  ${midX} ${targetY},
+                  ${targetX} ${targetY}
+            `;
+            
+            const flowPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            flowPath.setAttribute('d', path);
+            flowPath.setAttribute('stroke', color);
+            flowPath.setAttribute('stroke-width', thickness);
+            flowPath.setAttribute('fill', 'none');
+            flowPath.setAttribute('opacity', '0.8');
+            flowPath.setAttribute('stroke-linecap', 'round');
+            svg.appendChild(flowPath);
+        }
+
+        function drawNode(node, color) {
+            // Get contrasting text color
+            const textColors = getContrastColor(color);
+            
+            // Draw rectangle
+            const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            rect.setAttribute('x', node.x);
+            rect.setAttribute('y', node.y);
+            rect.setAttribute('width', node.width);
+            rect.setAttribute('height', node.height);
+            rect.setAttribute('fill', color);
+            rect.setAttribute('rx', '8');
+            rect.setAttribute('stroke', '#0c1e47');
+            rect.setAttribute('stroke-width', '2');
+            svg.appendChild(rect);
+
+            // Calculate vertical center
+            const centerY = node.y + node.height / 2;
+            
+            // Adjust text spacing based on node height
+            const textSpacing = node.height < 60 ? 8 : 12;
+
+            // Draw label - positioned above center
+            const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            label.setAttribute('x', node.x + node.width / 2);
+            label.setAttribute('y', centerY - textSpacing / 2);
+            label.setAttribute('text-anchor', 'middle');
+            label.setAttribute('dominant-baseline', 'middle');
+            label.setAttribute('class', 'flow-label');
+            label.setAttribute('fill', textColors.fill);
+            label.setAttribute('stroke', textColors.stroke);
+            label.setAttribute('stroke-width', textColors.strokeWidth);
+            label.setAttribute('paint-order', 'stroke');
+            label.textContent = node.label;
+            svg.appendChild(label);
+
+            // Draw value - positioned below center
+            const valueText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            valueText.setAttribute('x', node.x + node.width / 2);
+            valueText.setAttribute('y', centerY + textSpacing + 4);
+            valueText.setAttribute('text-anchor', 'middle');
+            valueText.setAttribute('dominant-baseline', 'middle');
+            valueText.setAttribute('class', 'flow-value');
+            valueText.setAttribute('fill', textColors.fill);
+            valueText.setAttribute('stroke', textColors.stroke);
+            valueText.setAttribute('stroke-width', textColors.strokeWidth);
+            valueText.setAttribute('paint-order', 'stroke');
+            const displayValue = currentMode === 'joules' ? 
+                node.value.toFixed(1) + ' J' : 
+                node.value.toFixed(1) + '%';
+            valueText.textContent = displayValue;
+            svg.appendChild(valueText);
+        }
+
+        function displayExamples(examples) {
+            examplesList.innerHTML = '';
+            examples.forEach(example => {
+                const li = document.createElement('li');
+                
+                // Create the search query for ChatGPT
+                const searchQuery = `Please explain "${example}" clearly and simply in terms of energy transformations and losses.`;
+                const encodedQuery = encodeURIComponent(searchQuery);
+                const chatGPTLink = `https://chatgpt.com/?q=${encodedQuery}`;
+                
+                // Create link element
+                const link = document.createElement('a');
+                link.href = chatGPTLink;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                link.textContent = example;
+                link.style.color = '#1e3a8a';
+                link.style.textDecoration = 'none';
+                link.style.borderBottom = '1px dashed #f59e0b';
+                link.style.transition = 'all 0.2s';
+                
+                // Add hover effect
+                link.addEventListener('mouseenter', function() {
+                    this.style.color = '#f59e0b';
+                    this.style.borderBottom = '2px solid #f59e0b';
+                });
+                link.addEventListener('mouseleave', function() {
+                    this.style.color = '#1e3a8a';
+                    this.style.borderBottom = '1px dashed #f59e0b';
+                });
+                
+                li.appendChild(link);
+                examplesList.appendChild(li);
+            });
+            examplesDiv.style.display = 'block';
+        }
+
+        function capitalizeFirst(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        // Calculate contrasting text color based on background
+        function getContrastColor(hexColor) {
+            // Convert hex to RGB
+            const r = parseInt(hexColor.slice(1, 3), 16);
+            const g = parseInt(hexColor.slice(3, 5), 16);
+            const b = parseInt(hexColor.slice(5, 7), 16);
+            
+            // Calculate luminance
+            const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            
+            // Return high contrast color
+            if (luminance > 0.6) {
+                // Light background - use dark blue
+                return { fill: '#0c1e47', stroke: '#fffbeb', strokeWidth: '0.8' };
+            } else {
+                // Dark background - use bright yellow
+                return { fill: '#fffbeb', stroke: '#0c1e47', strokeWidth: '0.8' };
+            }
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (inputSelect.value && outputSelect.value) {
+                updateDiagram();
+            }
+        });
+
+        // Help modal functionality
+        const helpBtn = document.getElementById('help-btn');
+        const helpModal = document.getElementById('help-modal');
+        const helpClose = document.getElementById('help-close');
+
+        helpBtn.addEventListener('click', () => {
+            helpModal.classList.add('active');
+        });
+
+        helpClose.addEventListener('click', () => {
+            helpModal.classList.remove('active');
+        });
+
+        helpModal.addEventListener('click', (e) => {
+            if (e.target === helpModal) {
+                helpModal.classList.remove('active');
+            }
+        });
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && helpModal.classList.contains('active')) {
+                helpModal.classList.remove('active');
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris Game</title>
+    <style>
+        /* Styling for the game container */
+        #game-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+        }
+        /* Styling for the game board */
+        #game-board {
+            border: 2px solid #333;
+            background-color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <!-- The main container for the game -->
+    <div id="game-container">
+        <!-- The canvas element where the game will be drawn -->
+        <canvas id="game-board" width="300" height="600"></canvas>
+    </div>
+
+    <script>
+        // Get the canvas element from the HTML
+        const canvas = document.getElementById('game-board');
+        // Get the 2D rendering context for the canvas
+        const ctx = canvas.getContext('2d');
+
+        // Define constants for the game
+        const ROWS = 20;                // Number of rows in the game board
+        const COLS = 10;                // Number of columns in the game board
+        const BLOCK_SIZE = 30;          // Size of each block in pixels
+        const COLORS = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#00FFFF', '#FF00FF', '#FFA500'];  // Array of colors for the pieces
+
+        // Define the shapes of the Tetris pieces
+        const SHAPES = [
+            [[1, 1, 1, 1]],                 // I shape
+            [[1, 1], [1, 1]],               // O shape
+            [[1, 1, 1], [0, 1, 0]],         // T shape
+            [[1, 1, 1], [1, 0, 0]],         // L shape
+            [[1, 1, 1], [0, 0, 1]],         // J shape
+            [[1, 1, 0], [0, 1, 1]],         // S shape
+            [[0, 1, 1], [1, 1, 0]]          // Z shape
+        ];
+
+        // Initialize the game board as a 2D array filled with zeros
+        let board = Array.from({length: ROWS}, () => Array(COLS).fill(0));
+
+        // Initialize variables for the current piece
+        let currentPiece = null;  // The current falling piece
+        let currentX = 0;         // The current X position of the piece
+        let currentY = 0;         // The current Y position of the piece
+
+        // Variables to control the falling speed
+        let dropCounter = 0;           // Counter to track time since last drop
+        const dropInterval = 1000;     // Drop every 1000ms (1 second)
+
+        // Function to create a new piece
+        function newPiece() {
+            // Randomly select a shape and color for the new piece
+            const shapeIndex = Math.floor(Math.random() * SHAPES.length);
+            const colorIndex = Math.floor(Math.random() * COLORS.length);
+            currentPiece = {
+                shape: SHAPES[shapeIndex],
+                color: COLORS[colorIndex]
+            };
+            // Set the initial position of the new piece
+            currentX = Math.floor(COLS / 2) - Math.floor(currentPiece.shape[0].length / 2);
+            currentY = 0;
+
+            // Check if the new piece collides immediately (game over condition)
+            if (collision()) {
+                // Game over
+                alert('Game Over!');
+                // Reset the board
+                board = Array.from({length: ROWS}, () => Array(COLS).fill(0));
+            }
+        }
+
+        // Function to check for collisions
+        function collision() {
+            for (let y = 0; y < currentPiece.shape.length; y++) {
+                for (let x = 0; x < currentPiece.shape[y].length; x++) {
+                    if (currentPiece.shape[y][x] && 
+                        (board[y + currentY] === undefined ||
+                         board[y + currentY][x + currentX] === undefined ||
+                         board[y + currentY][x + currentX] !== 0)) {
+                        return true;  // Collision detected
+                    }
+                }
+            }
+            return false;  // No collision
+        }
+
+        // Function to merge the current piece with the board
+        function merge() {
+            for (let y = 0; y < currentPiece.shape.length; y++) {
+                for (let x = 0; x < currentPiece.shape[y].length; x++) {
+                    if (currentPiece.shape[y][x]) {
+                        board[y + currentY][x + currentX] = currentPiece.color;
+                    }
+                }
+            }
+        }
+
+        // Function to rotate the current piece
+        function rotate() {
+            // Create a new rotated shape
+            const rotated = currentPiece.shape[0].map((_, index) =>
+                currentPiece.shape.map(row => row[index]).reverse()
+            );
+            const previousShape = currentPiece.shape;
+            currentPiece.shape = rotated;
+            // If the rotation causes a collision, revert to the previous shape
+            if (collision()) {
+                currentPiece.shape = previousShape;
+            }
+        }
+
+        // Function to move the current piece
+        function move(dx, dy) {
+            currentX += dx;  // Move horizontally
+            currentY += dy;  // Move vertically
+            if (collision()) {
+                currentX -= dx;  // Undo horizontal move if there's a collision
+                currentY -= dy;  // Undo vertical move if there's a collision
+                if (dy > 0) {    // If we were moving down and collided
+                    merge();     // Merge the piece with the board
+                    clearLines();  // Check and clear any completed lines
+                    newPiece();  // Create a new piece
+                }
+            }
+        }
+
+        // Function to clear completed lines
+        function clearLines() {
+            for (let y = ROWS - 1; y >= 0; y--) {
+                if (board[y].every(cell => cell !== 0)) {
+                    // Remove the completed line
+                    board.splice(y, 1);
+                    // Add a new empty line at the top
+                    board.unshift(Array(COLS).fill(0));
+                }
+            }
+        }
+
+        // Function to draw a single block
+        function drawBlock(x, y, color) {
+            ctx.fillStyle = color;  // Set the fill color
+            ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);  // Draw a filled rectangle
+            ctx.strokeStyle = '#000';  // Set the stroke color to black
+            ctx.strokeRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);  // Draw the outline of the rectangle
+        }
+
+        // Function to draw the game board
+        function draw() {
+            // Clear the entire canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw the board
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    if (board[y][x]) {
+                        drawBlock(x, y, board[y][x]);
+                    }
+                }
+            }
+
+            // Draw the current piece
+            if (currentPiece) {
+                for (let y = 0; y < currentPiece.shape.length; y++) {
+                    for (let x = 0; x < currentPiece.shape[y].length; x++) {
+                        if (currentPiece.shape[y][x]) {
+                            drawBlock(currentX + x, currentY + y, currentPiece.color);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Game loop
+        function gameLoop(time = 0) {
+            // Increase the drop counter by the time passed since the last frame
+            dropCounter += time - (lastTime || 0);
+            lastTime = time;
+
+            // If enough time has passed, move the piece down
+            if (dropCounter > dropInterval) {
+                move(0, 1);  // Move the piece down
+                dropCounter = 0;  // Reset the drop counter
+            }
+
+            draw();  // Draw the current game state
+            requestAnimationFrame(gameLoop);  // Request the next animation frame
+        }
+
+        // Event listeners for keyboard controls
+        document.addEventListener('keydown', event => {
+            switch (event.key) {
+                case 'ArrowLeft':
+                    move(-1, 0);  // Move left
+                    break;
+                case 'ArrowRight':
+                    move(1, 0);   // Move right
+                    break;
+                case 'ArrowDown':
+                    move(0, 1);   // Move down
+                    break;
+                case 'ArrowUp':
+                    rotate();     // Rotate
+                    break;
+            }
+        });
+
+        // Variable to store the last time the game loop was called
+        let lastTime = 0;
+        // Start the game
+        newPiece();  // Create the first piece
+        gameLoop();  // Start the game loop
+    </script>
+</body>
+</html>

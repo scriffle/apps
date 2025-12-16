@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lens Ray Tracing</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <style>
+        body { display: flex; flex-direction: column; align-items: center; font-family: Arial, sans-serif; }
+        #controls { margin-bottom: 10px; }
+        select { margin: 0 5px; }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <select id="objectEmoji">
+            <option value="🕯️">🕯️ Candle</option>
+            <option value="🍎">🍎 Apple</option>
+            <option value="🌳">🌳 Tree</option>
+            <option value="🏠">🏠 House</option>
+            <option value="🚗">🚗 Car</option>
+            <option value="🐶">🐶 Dog</option>
+            <option value="🐱">🐱 Cat</option>
+            <option value="🦜">🦜 Parrot</option>
+            <option value="🌻">🌻 Sunflower</option>
+            <option value="⚽">⚽ Soccer Ball</option>
+        </select>
+        <select id="lensType">
+            <option value="convex">Convex Lens</option>
+            <option value="concave">Concave Lens</option>
+        </select>
+    </div>
+    <div id="canvas-container"></div>
+
+    <script>
+        let objectPosition;
+        let lensPosition;
+        let focalLength;
+        let objectEmoji = "🕯️";
+        let objectHeight = 50;  // Height of the object
+        let draggingObject = false;
+        let draggingFocalPoint = false;
+        let feedbackMessage = "";
+        let feedbackTimer = 0;
+        let currentLens;
+
+        class Lens {
+            constructor(position, focalLength) {
+                this.position = position;
+                this.focalLength = focalLength;
+            }
+
+            draw() {
+                // To be implemented in subclasses
+            }
+
+            calculateImage(objectPosition, objectHeight) {
+                // To be implemented in subclasses
+            }
+
+            drawRays(objectPosition, objectHeight, image) {
+                // To be implemented in subclasses
+            }
+        }
+
+        class ConvexLens extends Lens {
+            draw() {
+                stroke(0);
+                line(this.position.x, 0, this.position.x, height);
+                fill(200, 200, 255, 100);
+                let curvature = map(abs(this.focalLength), 50, 200, 80, 20);
+                arc(this.position.x, height/2, curvature, height, HALF_PI, PI+HALF_PI);
+                arc(this.position.x, height/2, curvature, height, -HALF_PI, HALF_PI);
+            }
+
+            calculateImage(objectPosition, objectHeight) {
+                let objectDistance = this.position.x - objectPosition.x;
+                let imageDistance = 1 / (1/this.focalLength - 1/objectDistance);
+                let magnification = imageDistance / objectDistance;
+                let imageHeight = objectHeight * abs(magnification);
+                let imageX = this.position.x + imageDistance;
+                let objectVerticalDisplacement = objectPosition.y - this.position.y;
+                let imageVerticalDisplacement = objectVerticalDisplacement * magnification;
+                let imageY = this.position.y - imageVerticalDisplacement;
+
+                return {
+                    x: imageX,
+                    y: imageY,
+                    height: imageHeight,
+                    magnification: magnification,
+                    isVirtual: objectDistance < this.focalLength
+                };
+            }
+
+            drawRays(objectPosition, objectHeight, image) {
+                stroke(255, 0, 0, 150);
+                let topOfObject = createVector(objectPosition.x, objectPosition.y - objectHeight / 2);
+                let bottomOfObject = createVector(objectPosition.x, objectPosition.y + objectHeight / 2);
+                let topOfImage = createVector(image.x, image.y - image.height / 2);
+                let bottomOfImage = createVector(image.x, image.y + image.height / 2);
+
+                // Ray parallel to principal axis
+                line(topOfObject.x, topOfObject.y, this.position.x, topOfObject.y);
+                line(this.position.x, topOfObject.y, image.x, image.y);
+
+                // Ray through center
+                line(topOfObject.x, topOfObject.y, image.x, image.y);
+
+                // Ray through focal point
+                let focalPoint = createVector(this.position.x - this.focalLength, this.position.y);
+                line(topOfObject.x, topOfObject.y, focalPoint.x, focalPoint.y);
+                line(focalPoint.x, focalPoint.y, image.x, image.y);
+
+                // Rays for bottom of object
+                line(bottomOfObject.x, bottomOfObject.y, this.position.x, bottomOfObject.y);
+                line(this.position.x, bottomOfObject.y, bottomOfImage.x, bottomOfImage.y);
+                line(bottomOfObject.x, bottomOfObject.y, bottomOfImage.x, bottomOfImage.y);
+            }
+        }
+
+        class ConcaveLens extends Lens {
+            draw() {
+                stroke(0);
+                line(this.position.x, 0, this.position.x, height);
+                fill(200, 200, 255, 100);
+                let curvature = map(abs(this.focalLength), 50, 200, 80, 20);
+                arc(this.position.x - curvature/2, height/2, curvature, height, -HALF_PI, HALF_PI);
+                arc(this.position.x + curvature/2, height/2, curvature, height, HALF_PI, PI+HALF_PI);
+            }
+
+            calculateImage(objectPosition, objectHeight) {
+                let objectDistance = this.position.x - objectPosition.x;
+                let imageDistance = 1 / (1/(-this.focalLength) + 1/objectDistance);
+                let magnification = -imageDistance / objectDistance;
+                let imageHeight = objectHeight * abs(magnification);
+                let imageX = this.position.x + imageDistance;
+                let objectVerticalDisplacement = objectPosition.y - this.position.y;
+                let imageVerticalDisplacement = objectVerticalDisplacement * magnification;
+                let imageY = this.position.y + imageVerticalDisplacement;
+
+                return {
+                    x: imageX,
+                    y: imageY,
+                    height: imageHeight,
+                    magnification: magnification,
+                    isVirtual: true
+                };
+            }
+
+            drawRays(objectPosition, objectHeight, image) {
+                stroke(255, 0, 0, 150);
+                let topOfObject = createVector(objectPosition.x, objectPosition.y - objectHeight / 2);
+                let bottomOfObject = createVector(objectPosition.x, objectPosition.y + objectHeight / 2);
+                let topOfImage = createVector(image.x, image.y - image.height / 2);
+                let bottomOfImage = createVector(image.x, image.y + image.height / 2);
+
+                // Ray parallel to principal axis
+                line(topOfObject.x, topOfObject.y, this.position.x, topOfObject.y);
+                let ray1EndX = width;
+                let ray1EndY = topOfObject.y + (ray1EndX - this.position.x) * 
+                               (topOfObject.y - this.position.y) / (this.position.x - topOfObject.x);
+                line(this.position.x, topOfObject.y, ray1EndX, ray1EndY);
+
+                // Ray through center
+                line(topOfObject.x, topOfObject.y, width, topOfObject.y);
+
+                // Ray towards focal point
+                let focalPoint = createVector(this.position.x + this.focalLength, this.position.y);
+                line(topOfObject.x, topOfObject.y, this.position.x, focalPoint.y);
+                let ray3EndX = width;
+                let ray3EndY = this.position.y + (ray3EndX - this.position.x) * 
+                               (this.position.y - focalPoint.y) / (this.position.x - focalPoint.x);
+                line(this.position.x, focalPoint.y, ray3EndX, ray3EndY);
+
+                // Draw dashed lines to show virtual image formation
+                drawDashedLine(this.position.x, topOfObject.y, topOfImage.x, topOfImage.y);
+                drawDashedLine(this.position.x, this.position.y, topOfImage.x, topOfImage.y);
+                drawDashedLine(this.position.x, focalPoint.y, topOfImage.x, topOfImage.y);
+
+                // Rays for bottom of object
+                line(bottomOfObject.x, bottomOfObject.y, this.position.x, bottomOfObject.y);
+                let ray4EndX = width;
+                let ray4EndY = bottomOfObject.y + (ray4EndX - this.position.x) * 
+                               (bottomOfObject.y - this.position.y) / (this.position.x - bottomOfObject.x);
+                line(this.position.x, bottomOfObject.y, ray4EndX, ray4EndY);
+                line(bottomOfObject.x, bottomOfObject.y, width, bottomOfObject.y);
+                drawDashedLine(this.position.x, bottomOfObject.y, bottomOfImage.x, bottomOfImage.y);
+            }
+        }
+
+        function drawDashedLine(x1, y1, x2, y2) {
+            let dashLength = 5;
+            let gapLength = 5;
+            let dx = x2 - x1;
+            let dy = y2 - y1;
+            let distance = Math.sqrt(dx * dx + dy * dy);
+            let dashCount = Math.floor(distance / (dashLength + gapLength));
+            let dashX = dx / dashCount;
+            let dashY = dy / dashCount;
+
+            push();
+            stroke(255, 0, 0, 150);
+            setLineDash([dashLength, gapLength]);
+            line(x1, y1, x2, y2);
+            pop();
+        }
+
+        function setLineDash(list) {
+            drawingContext.setLineDash(list);
+        }
+
+        function setup() {
+            const canvas = createCanvas(800, 400);
+            canvas.parent('canvas-container');
+            objectPosition = createVector(width * 0.25, height / 2);
+            lensPosition = createVector(width / 2, height / 2);
+            focalLength = 100;
+            currentLens = new ConvexLens(lensPosition, focalLength);
+
+            const objectEmojiSelect = document.getElementById('objectEmoji');
+            objectEmojiSelect.addEventListener('change', (event) => {
+                objectEmoji = event.target.value;
+            });
+
+            const lensTypeSelect = document.getElementById('lensType');
+            lensTypeSelect.addEventListener('change', (event) => {
+                if (event.target.value === 'convex') {
+                    currentLens = new ConvexLens(lensPosition, focalLength);
+                } else {
+                    currentLens = new ConcaveLens(lensPosition, focalLength);
+                }
+            });
+        }
+
+        function draw() {
+            background(240);
+            drawPrincipalAxis();
+            currentLens.draw();
+            drawFocalPoints();
+            drawObject();
+            let image = currentLens.calculateImage(objectPosition, objectHeight);
+            drawImage(image);
+            currentLens.drawRays(objectPosition, objectHeight, image);
+            drawObserver();
+            displayStateDescription();
+            displayFeedback();
+        }
+
+        function drawPrincipalAxis() {
+            stroke(200);  // Light grey color
+            line(0, height/2, width, height/2);
+        }
+
+        function drawFocalPoints() {
+            fill(255, 0, 0);
+            noStroke();
+            ellipse(lensPosition.x - focalLength, lensPosition.y, 10, 10);
+            ellipse(lensPosition.x + focalLength, lensPosition.y, 10, 10);
+            
+            textAlign(CENTER, BOTTOM);
+            textSize(14);
+            fill(255, 0, 0);
+            text("f", lensPosition.x - focalLength, lensPosition.y - 10);
+            text("f", lensPosition.x + focalLength, lensPosition.y - 10);
+        }
+
+        function drawObject() {
+            textSize(objectHeight);
+            textAlign(CENTER, CENTER);
+            text(objectEmoji, objectPosition.x, objectPosition.y);
+        }
+
+        function drawImage(image) {
+            push();
+            textSize(image.height);
+            textAlign(CENTER, CENTER);
+            if (image.isVirtual) {
+                push();
+                fill(255, 128);
+                noStroke();
+                rectMode(CENTER);
+                rect(image.x, image.y, image.height, image.height);
+                
+                fill(0, 128);
+                text(objectEmoji, image.x, image.y);
+                pop();
+            } else {
+                translate(image.x, image.y);
+                rotate(PI);
+                text(objectEmoji, 0, 0);
+            }
+            pop();
+        }
+
+        function drawObserver() {
+            textSize(objectHeight * 2);
+            textAlign(CENTER, CENTER);
+            text("👁️", width - 30, height/2);
+        }
+
+        function displayStateDescription() {
+            let image = currentLens.calculateImage(objectPosition, objectHeight);
+            let lensType = currentLens instanceof ConvexLens ? "Convex" : "Concave";
+            let objectState = lensType === "Convex" && lensPosition.x - objectPosition.x > focalLength ? "Outside focal length" : "Inside focal length";
+            let imageOrientation = image.isVirtual ? "Upright" : "Inverted";
+            let imageSize = abs(image.magnification) > 1 ? "Enlarged" : "Diminished";
+            let imageType = image.isVirtual ? "Virtual" : "Real";
+
+            fill(80);
+            textSize(14);
+            textStyle(NORMAL);
+            textAlign(CENTER, TOP);
+            text(`Lens: ${lensType}, Object: ${objectState}`, width/4, 10);
+            text(`Image: ${imageOrientation}, ${imageSize}, ${imageType}`, 3*width/4, 10);
+        }
+
+        function displayFeedback() {
+            if (feedbackTimer > 0) {
+                let alpha = map(feedbackTimer, 0, 5000, 0, 255);
+                fill(0, alpha);
+                textSize(20);
+                textAlign(CENTER, CENTER);
+                text(feedbackMessage, width/2, height/4);
+                feedbackTimer -= deltaTime;
+            }
+        }
+
+        function mousePressed() {
+            if (dist(mouseX, mouseY, objectPosition.x, objectPosition.y) < objectHeight/2) {
+                draggingObject = true;
+            } else if (dist(mouseX, mouseY, lensPosition.x + focalLength, lensPosition.y) < 10 ||
+                       dist(mouseX, mouseY, lensPosition.x - focalLength, lensPosition.y) < 10) {
+                draggingFocalPoint = true;
+            } else {
+                let image = currentLens.calculateImage(objectPosition, objectHeight);
+                if (dist(mouseX, mouseY, image.x, image.y) < image.height/2) {
+                    feedbackMessage = "This is the image, move the object instead.";
+                    feedbackTimer = 5000;
+                }
+            }
+        }
+
+        function mouseDragged() {
+            if (draggingObject && mouseX < lensPosition.x) {
+                objectPosition.x = mouseX;
+                objectPosition.y = mouseY;
+            } else if (draggingFocalPoint) {
+                let newFocalLength = abs(mouseX - lensPosition.x);
+                focalLength = constrain(newFocalLength, 50, 200);
+                currentLens.focalLength = focalLength;
+            }
+        }
+
+        function mouseReleased() {
+            draggingObject = false;
+            draggingFocalPoint = false;
+        }
+    </script>
+</body>
+</html>

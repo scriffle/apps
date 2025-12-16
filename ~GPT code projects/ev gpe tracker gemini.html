@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Electric Car GPE Estimator</title>
+    <!-- Tailwind CSS for modern, responsive styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; /* Dark background */
+            color: #e2e8f0; /* Light text color */
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8 flex flex-col items-center justify-center min-h-screen">
+
+    <div class="bg-gray-800 p-6 sm:p-8 rounded-xl shadow-2xl max-w-lg w-full">
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-center text-indigo-400 mb-2">
+            GPE Estimator
+        </h1>
+        <p class="text-center text-sm sm:text-base text-gray-400 mb-6">
+            Estimates gravitational potential energy gained or lost.
+        </p>
+
+        <!-- Mass input section -->
+        <div class="mb-6">
+            <label for="carMassInput" class="block text-sm font-medium mb-2 text-gray-300">
+                Car Mass (kg)
+            </label>
+            <input type="number" id="carMassInput" value="2000"
+                class="w-full bg-gray-700 text-gray-200 border-gray-600 rounded-lg py-2 px-4 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-colors"
+                step="50" min="100">
+        </div>
+
+        <!-- Display section -->
+        <div class="space-y-4 mb-6 text-center">
+            <div class="bg-gray-700 p-4 rounded-lg">
+                <p class="text-sm font-medium text-gray-400">Total GPE Change</p>
+                <p id="kwhDisplay" class="text-2xl sm:text-3xl font-bold text-green-400 mt-1">
+                    0.000 kWh
+                </p>
+            </div>
+
+            <div class="flex justify-between items-center space-x-2">
+                <div class="bg-gray-700 p-4 rounded-lg flex-1">
+                    <p class="text-sm font-medium text-gray-400">Altitude</p>
+                    <p id="altitudeDisplay" class="text-xl font-bold text-blue-400 mt-1">
+                        0 m
+                    </p>
+                </div>
+                <div class="bg-gray-700 p-4 rounded-lg flex-1">
+                    <p class="text-sm font-medium text-gray-400">Distance</p>
+                    <p id="distanceDisplay" class="text-xl font-bold text-yellow-400 mt-1">
+                        0 m
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Control buttons -->
+        <div class="flex justify-center space-x-4 mb-6">
+            <button id="zeroButton"
+                class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-300 transform hover:scale-105">
+                Zero
+            </button>
+        </div>
+
+        <!-- Log of GPE changes -->
+        <div class="bg-gray-700 p-4 rounded-lg mt-4 max-h-40 overflow-y-auto">
+            <p class="text-sm font-medium text-gray-400 mb-2">Recent GPE Changes</p>
+            <ul id="gpeLog" class="list-none text-left text-gray-300 text-sm space-y-1">
+                <!-- Log entries will be added here by JavaScript -->
+            </ul>
+        </div>
+
+        <!-- Message box -->
+        <div id="messageBox" class="text-center text-sm font-medium text-gray-300 mt-4 h-6">
+            Ready to start.
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const carMassInput = document.getElementById('carMassInput');
+        const kwhDisplay = document.getElementById('kwhDisplay');
+        const altitudeDisplay = document.getElementById('altitudeDisplay');
+        const distanceDisplay = document.getElementById('distanceDisplay');
+        const zeroButton = document.getElementById('zeroButton');
+        const messageBox = document.getElementById('messageBox');
+        const gpeLog = document.getElementById('gpeLog');
+
+        // --- Constants and Variables ---
+        const g = 9.81; // Acceleration due to gravity in m/s^2
+        const JOULES_TO_KWH = 3.6e6; // Conversion factor: 1 kWh = 3.6 * 10^6 Joules
+        const EFFICIENCY = 0.75; // 75% round-trip energy efficiency
+        const HISTORY_SIZE = 7; // Number of readings to average for smoothing
+
+        let carMass = parseFloat(carMassInput.value);
+        let totalJoules = 0;
+        let totalDistance = 0;
+        let altitudeHistory = []; // Array to store the last N altitude readings
+        let watcherId = null; // ID for the geolocation watch function
+        let lastKnownPosition = null; // For distance calculation only
+
+        // --- Functions ---
+
+        /**
+         * Haversine formula to calculate the distance between two lat/lon coordinates.
+         * @param {Object} pos1 - The first position object with lat and lon.
+         * @param {Object} pos2 - The second position object with lat and lon.
+         * @returns {number} The distance in meters.
+         */
+        function calculateDistance(pos1, pos2) {
+            const R = 6371e3; // metres
+            const φ1 = pos1.latitude * Math.PI / 180; // φ, λ in radians
+            const φ2 = pos2.latitude * Math.PI / 180;
+            const Δφ = (pos2.latitude - pos1.latitude) * Math.PI / 180;
+            const Δλ = (pos2.longitude - pos1.longitude) * Math.PI / 180;
+
+            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+            return R * c; // in metres
+        }
+
+        /**
+         * Updates the display with the current values.
+         */
+        function updateDisplay() {
+            const kwh = totalJoules / JOULES_TO_KWH;
+            kwhDisplay.textContent = `${kwh.toFixed(3)} kWh`;
+            altitudeDisplay.textContent = `${(altitudeHistory.length > 0 ? altitudeHistory[altitudeHistory.length - 1] : 0).toFixed(0)} m`;
+            distanceDisplay.textContent = `${totalDistance.toFixed(0)} m`;
+        }
+        
+        /**
+         * Adds a new entry to the GPE log.
+         * @param {number} kwhChange - The change in GPE in kWh.
+         */
+        function addLogEntry(kwhChange) {
+            const li = document.createElement('li');
+            const sign = kwhChange > 0 ? '+' : '';
+            const color = kwhChange > 0 ? 'text-green-400' : 'text-red-400';
+            li.className = `${color} font-mono`;
+            li.textContent = `${sign}${kwhChange.toFixed(3)} kWh`;
+            gpeLog.prepend(li);
+            // Keep the log to a reasonable length, e.g., 10 entries
+            if (gpeLog.children.length > 10) {
+                gpeLog.lastChild.remove();
+            }
+        }
+
+        /**
+         * Main geolocation callback function.
+         * @param {Object} position - The geolocation position object.
+         */
+        function handlePositionUpdate(position) {
+            const currentPosition = position.coords;
+
+            // Check if we have a valid altitude reading
+            if (currentPosition.altitude === null || typeof currentPosition.altitude === 'undefined') {
+                messageBox.textContent = "Waiting for a valid altitude reading...";
+                return;
+            }
+
+            // Push the current altitude to the history array
+            altitudeHistory.push(currentPosition.altitude);
+
+            // If the history array is full, remove the oldest reading
+            if (altitudeHistory.length > HISTORY_SIZE) {
+                altitudeHistory.shift();
+            }
+
+            // Calculate GPE change only after enough readings are collected
+            if (altitudeHistory.length === HISTORY_SIZE) {
+                // The altitude change is the difference between the newest and oldest reading in the history
+                const deltaAltitude = altitudeHistory[HISTORY_SIZE - 1] - altitudeHistory[0];
+
+                // Calculate GPE change in Joules
+                let deltaGPE = carMass * g * deltaAltitude;
+
+                // Apply energy efficiency
+                if (deltaGPE > 0) { // Gaining energy (going downhill)
+                    deltaGPE *= EFFICIENCY;
+                } else { // Losing energy (going uphill)
+                    deltaGPE /= EFFICIENCY;
+                }
+
+                // Accumulate total GPE
+                totalJoules += deltaGPE;
+
+                // Add to log
+                addLogEntry(deltaGPE / JOULES_TO_KWH);
+            }
+
+            // Calculate total distance using the Haversine formula
+            if (lastKnownPosition) {
+                totalDistance += calculateDistance(lastKnownPosition.coords, currentPosition);
+            } else {
+                messageBox.textContent = "Tracking started...";
+            }
+
+            // Update the last known position for the next distance calculation
+            lastKnownPosition = position;
+            updateDisplay();
+        }
+
+        /**
+         * Handles geolocation errors.
+         * @param {Object} error - The geolocation error object.
+         */
+        function handlePositionError(error) {
+            switch (error.code) {
+                case error.PERMISSION_DENIED:
+                    messageBox.textContent = "Permission to access location was denied.";
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    messageBox.textContent = "Location information is unavailable.";
+                    break;
+                case error.TIMEOUT:
+                    messageBox.textContent = "The request to get user location timed out.";
+                    break;
+                default:
+                    messageBox.textContent = "An unknown error occurred.";
+            }
+        }
+
+        /**
+         * Resets all values for a new trip.
+         */
+        function zeroTrip() {
+            totalJoules = 0;
+            totalDistance = 0;
+            altitudeHistory = []; // Clear the altitude history
+            lastKnownPosition = null;
+            gpeLog.innerHTML = ''; // Clear the log
+            updateDisplay();
+            messageBox.textContent = "Trip data has been zeroed.";
+        }
+
+        /**
+         * Starts monitoring the user's position.
+         */
+        function startMonitoring() {
+            if ("geolocation" in navigator) {
+                messageBox.textContent = "Requesting location permission...";
+                // Use watchPosition to get continuous updates every second
+                const options = {
+                    enableHighAccuracy: true,
+                    timeout: 5000,
+                    maximumAge: 0
+                };
+                watcherId = navigator.geolocation.watchPosition(
+                    handlePositionUpdate,
+                    handlePositionError,
+                    options
+                );
+            } else {
+                messageBox.textContent = "Geolocation is not supported by your browser.";
+            }
+        }
+
+        // --- Event Listeners and Initial Setup ---
+
+        // Listen for changes in the mass input
+        carMassInput.addEventListener('input', (e) => {
+            carMass = parseFloat(e.target.value);
+            if (isNaN(carMass) || carMass <= 0) {
+                messageBox.textContent = "Please enter a valid mass.";
+            } else {
+                messageBox.textContent = "Mass updated.";
+            }
+        });
+
+        // Listen for the zero button click
+        zeroButton.addEventListener('click', zeroTrip);
+
+        // Start monitoring as soon as the page loads
+        window.addEventListener('load', startMonitoring);
+    </script>
+
+</body>
+</html>

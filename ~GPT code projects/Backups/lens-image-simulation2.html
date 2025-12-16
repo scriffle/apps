@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convex Lens Simulation with GIF Support</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 90vh;
+            background-color: #f0f0f0;
+            flex-direction: column;
+        }
+
+        #container {
+            position: relative;
+            width: 80%;
+            height: 90%;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            background-color: #f9f9f9;
+        }
+
+        #imageCanvas {
+            display: block;
+            width: 100%;
+            height: 75%;
+            background-color: lightgray;
+        }
+
+        #diagramCanvas {
+            display: block;
+            width: 100%;
+            height: 25%;
+            background-color: #f9f9f9;
+            cursor: pointer;
+        }
+
+        #lens {
+            position: absolute;
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            border: 2px solid #000;
+            background-color: rgba(255, 255, 255, 0.3);
+            display: block;
+        }
+
+        #uploadImage {
+            display: block;
+        }
+
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        #controls input[type="range"] {
+            width: 110%; /* Increase slider width by 10% */
+        }
+
+        #snapButton, #resetButton, #explainButton {
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+
+        #resetButton {
+            background-color: #28a745;
+        }
+
+        #infoDisplay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 14px;
+            font-weight: bold;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 5px;
+            border-radius: 4px;
+            z-index: 10;
+        }
+
+        #virtualImageMessage, #eyeDistanceMessage, #scaleDiagramMessage {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            font-weight: bold;
+            color: red;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 5px;
+            border-radius: 4px;
+            display: none;
+            z-index: 10;
+        }
+
+        #modal {
+            display: none;
+            position: fixed;
+            z-index: 20;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        #modalContent {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            width: 60%;
+            text-align: center;
+            border-radius: 10px;
+        }
+
+        #modalContent button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        /* Fade-out animation for messages */
+        @keyframes fadeOut {
+            0% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/gifler/dist/gifler.min.js"></script>
+</head>
+<body>
+    <div id="container">
+        <canvas id="imageCanvas"></canvas>
+        <canvas id="diagramCanvas"></canvas>
+        <div id="lens"></div>
+        <div id="infoDisplay"></div>
+        <div id="virtualImageMessage">Can't place eye at virtual image</div>
+        <div id="eyeDistanceMessage">Eye distance of more than 50 cm is unrealistic. Image will be unfocused.</div>
+        <div id="scaleDiagramMessage"></div>
+    </div>
+    <div id="controls">
+        <input type="file" id="uploadImage" accept="image/*">
+        <label for="focalLength">Focal Length (cm): <span id="focalLengthValue">5</span></label>
+        <input type="range" id="focalLength" min="1" max="30" step="0.1" value="5">
+
+        <label for="objectDistance">Object Distance (cm): <span id="objectDistanceValue">10</span></label>
+        <input type="range" id="objectDistance" min="1" max="50" step="0.1" value="10">
+        
+        <label for="eyeDistance">Eye Distance (cm): <span id="eyeDistanceValue">10</span></label>
+        <input type="range" id="eyeDistance" min="1" max="50" step="0.1" value="10">
+
+        <label for="imageScale">Picture Scale: <span id="imageScaleValue">0.10</span></label>
+        <input type="range" id="imageScale" min="0.01" max="0.5" step="0.01" value="0.1">
+
+        <button id="snapButton">Snap Eye to Image</button>
+        <button id="resetButton">Reset</button>
+        <button id="explainButton">Explain</button>
+    </div>
+
+    <!-- Modal for explanation -->
+    <div id="modal">
+        <div id="modalContent">
+            <h2>Convex Lens Simulation</h2>
+            <p>Welcome to the Convex Lens Simulation!</p>
+            <p>In this simulation, you can explore the behavior of a convex lens using Gaussian lens rules. Here's how it works:</p>
+            <ul style="text-align: left;">
+                <li><strong>Lens Dragging:</strong> Click and drag the lens over the image to see the magnified or inverted view based on the lens's focal length.</li>
+                <li><strong>Adjusting Parameters:</strong> Use the sliders to adjust the object distance, eye distance, focal length, and the picture scale.</li>
+                <li><strong>Snap Eye to Image:</strong> Press the "Snap Eye to Image" button to focus the eye on the image. If the image is farther than 50 cm, it will be blurry.</li>
+                <li><strong>Scale Diagram:</strong> The bottom diagram shows the relative position of the picture, image, lens, and eye, and allows dragging key points.</li>
+            </ul>
+            <button id="closeModal">Close</button>
+        </div>
+    </div>
+
+    <script>
+        // Select elements
+        const imageCanvas = document.getElementById('imageCanvas');
+        const ctx = imageCanvas.getContext('2d');
+        const lens = document.getElementById('lens');
+        const uploadImage = document.getElementById('uploadImage');
+        const container = document.getElementById('container');
+        const focalLengthSlider = document.getElementById('focalLength');
+        const focalLengthLabel = document.getElementById('focalLengthValue');
+        const objectDistanceSlider = document.getElementById('objectDistance');
+        const objectDistanceLabel = document.getElementById('objectDistanceValue');
+        const eyeDistanceSlider = document.getElementById('eyeDistance');
+        const eyeDistanceLabel = document.getElementById('eyeDistanceValue');
+        const imageScaleSlider = document.getElementById('imageScale');
+        const imageScaleLabel = document.getElementById('imageScaleValue');
+        const snapButton = document.getElementById('snapButton');
+        const resetButton = document.getElementById('resetButton');
+        const explainButton = document.getElementById('explainButton');
+        const closeModal = document.getElementById('closeModal');
+        const diagramCanvas = document.getElementById('diagramCanvas');
+        const diagramCtx = diagramCanvas.getContext('2d');
+        const infoDisplay = document.getElementById('infoDisplay');
+        const virtualImageMessage = document.getElementById('virtualImageMessage');
+        const eyeDistanceMessage = document.getElementById('eyeDistanceMessage');
+        const scaleDiagramMessage = document.getElementById('scaleDiagramMessage');
+        const modal = document.getElementById('modal');
+
+        let gifPlaying = false;
+        let image = new Image();
+        let imageLoaded = false;
+        let gifInstance = null;
+
+        // Image scale (adjustable)
+        let imgScale = parseFloat(imageScaleSlider.value);
+
+        // Store the lens' relative position (percentage-based)
+        let lensRelativeX = 0.5; // Start at the center horizontally
+        let lensRelativeY = 0.1; // Start at the top center
+
+        // Variables to track dragging in the scale diagram
+        let draggingElement = null;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let isDragging = false;
+
+        // Show the modal when the "Explain" button is clicked
+        explainButton.addEventListener('click', () => {
+            modal.style.display = 'block';
+        });
+
+        // Close modal when close button is clicked
+        closeModal.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+
+        // Detect if the file is a GIF
+        function isGif(file) {
+            return file.type === 'image/gif';
+        }
+
+        // Handle image upload
+        uploadImage.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    if (isGif(file)) {
+                        // Stop previous GIF instance if there is one
+                        if (gifInstance) {
+                            gifInstance.stop();
+                        }
+                        // Load GIF and play it
+                        gifInstance = gifler(event.target.result).get(function (aGif) {
+                            gifPlaying = true;
+                            gifInstance = aGif;
+                            gifInstance.play();
+                            aGif.animateInCanvas(imageCanvas);
+                        });
+                    } else {
+                        gifPlaying = false;
+                        image.src = event.target.result;
+                        localStorage.setItem('lastUploadedImage', event.target.result); // Store the image in localStorage
+                        image.onload = () => {
+                            imageLoaded = true;
+                            resizeCanvas();
+                        };
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Handle resizing and re-drawing
+        function resizeCanvas() {
+            const containerRect = container.getBoundingClientRect();
+            imageCanvas.width = containerRect.width;
+            imageCanvas.height = containerRect.height * 0.75;
+
+            if (!gifPlaying && imageLoaded) {
+                drawImage();
+            }
+        }
+
+        // Draw static images (JPG, PNG)
+        function drawImage() {
+            ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
+            const scaledWidth = image.width * imgScale;
+            const scaledHeight = image.height * imgScale;
+            const imageX = (imageCanvas.width - scaledWidth) / 2;
+            const imageY = (imageCanvas.height - scaledHeight) / 2;
+            ctx.drawImage(image, imageX, imageY, scaledWidth, scaledHeight);
+        }
+
+        // Initial resize and redraw
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Rest of the code (Gaussian lens laws, scale diagram logic, lens dragging, etc.)
+        function applyLensEffect(centerX, centerY) {
+            if (!gifPlaying && imageLoaded) {
+                drawImage();
+            }
+
+            const focalLength = parseFloat(focalLengthSlider.value);
+            focalLengthLabel.textContent = `${focalLength}`;
+
+            const objectDistance = parseFloat(objectDistanceSlider.value);
+            objectDistanceLabel.textContent = `${objectDistance}`;
+
+            const eyeDistance = parseFloat(eyeDistanceSlider.value);
+            eyeDistanceLabel.textContent = `${eyeDistance}`;
+
+            const imageDistance = (objectDistance * focalLength) / (objectDistance - focalLength);
+
+            let magnificationType = objectDistance > focalLength ? "Real" : "Virtual";
+            let imageOrientation = magnificationType === "Real" ? "Inverted" : "Upright";
+
+            let magnification = Math.abs(imageDistance / objectDistance);
+            if (magnificationType === "Real") magnification = -magnification;
+
+            const focusRatio = Math.min(imageDistance / eyeDistance, eyeDistance / imageDistance) * 100;
+            const blurFactor = Math.abs(1 - focusRatio / 100) * 20;
+
+            let infoText = `
+                Magnification: ${Math.abs(magnification).toFixed(2)}<br>
+                Image Type: ${magnificationType}<br>
+                Image Orientation: ${imageOrientation}<br>`;
+            
+            if (magnificationType === "Real") {
+                infoText += `Focus: ${focusRatio.toFixed(0)}%`;
+            }
+
+            infoDisplay.innerHTML = infoText;
+
+            const regionX = (centerX - imageX) / scaledWidth * image.width;
+            const regionY = (centerY - imageY) / scaledHeight * image.height;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, lens.offsetWidth / 2, 0, Math.PI * 2);
+            ctx.clip();
+
+            ctx.translate(centerX, centerY);
+            if (magnification < 0) {
+                ctx.scale(-1, -1);
+            }
+
+            ctx.filter = `blur(${blurFactor}px)`;
+
+            ctx.drawImage(
+                image,
+                regionX - (lens.offsetWidth / 2) / Math.abs(magnification),
+                regionY - (lens.offsetHeight / 2) / Math.abs(magnification),
+                lens.offsetWidth / Math.abs(magnification),
+                lens.offsetHeight / Math.abs(magnification),
+                -lens.offsetWidth / 2,
+                -lens.offsetHeight / 2,
+                lens.offsetWidth,
+                lens.offsetHeight
+            );
+            ctx.restore();
+
+            drawScaleDiagram();
+        }
+
+        // Draw the scale diagram (same as before)
+        function drawScaleDiagram() {
+            const focalLength = parseFloat(focalLengthSlider.value);
+            const objectDistance = parseFloat(objectDistanceSlider.value);
+            const eyeDistance = parseFloat(eyeDistanceSlider.value);
+            const imageDistance = (objectDistance * focalLength) / (objectDistance - focalLength);
+            const magnification = Math.abs(imageDistance / objectDistance);
+
+            diagramCtx.clearRect(0, 0, diagramCanvas.width, diagramCanvas.height);
+
+            const maxDistance = Math.max(objectDistance, imageDistance, eyeDistance);
+            const scaleFactor = (diagramCanvas.width * 0.9) / (objectDistance + eyeDistance + focalLength * 2);
+
+            const centerX = diagramCanvas.width / 2;
+            const diagramHeight = diagramCanvas.height / 2;
+
+            const staggerYPositions = {
+                focus: diagramHeight - 20,
+                picture: diagramHeight + 30,
+                image: diagramHeight + 50,
+                eye: diagramHeight + 70
+            };
+
+            if (imageLoaded) {
+                const objectWidth = 30;
+                const objectHeight = (objectWidth / image.width) * image.height;
+                diagramCtx.drawImage(image, centerX - objectDistance * scaleFactor - objectWidth / 2, diagramHeight - objectHeight / 2, objectWidth, objectHeight);
+                diagramCtx.fillText(`Picture ${objectDistance.toFixed(1)} cm`, centerX - objectDistance * scaleFactor, staggerYPositions.picture);
+            }
+
+            diagramCtx.beginPath();
+            diagramCtx.arc(centerX, diagramHeight, 15, 0, Math.PI * 2);
+            diagramCtx.stroke();
+            diagramCtx.textAlign = "center";
+            diagramCtx.fillText('Convex Lens', centerX, diagramHeight - 35);
+
+            diagramCtx.fillStyle = 'black';
+            diagramCtx.font = "italic 16px sans-serif";
+            diagramCtx.beginPath();
+            diagramCtx.arc(centerX - focalLength * scaleFactor, diagramHeight, 5, 0, Math.PI * 2);
+            diagramCtx.fill();
+            diagramCtx.fillText('f', centerX - focalLength * scaleFactor, staggerYPositions.focus);
+            diagramCtx.fillText(`${focalLength.toFixed(1)} cm`, centerX - focalLength * scaleFactor + 30, staggerYPositions.focus);
+
+            diagramCtx.beginPath();
+            diagramCtx.arc(centerX + focalLength * scaleFactor, diagramHeight, 5, 0, Math.PI * 2);
+            diagramCtx.fill();
+            diagramCtx.fillText('f', centerX + focalLength * scaleFactor, staggerYPositions.focus);
+            diagramCtx.fillText(`${focalLength.toFixed(1)} cm`, centerX + focalLength * scaleFactor + 30, staggerYPositions.focus);
+
+            if (imageLoaded) {
+                const imageWidth = 30 * (1 + (magnification - 1) * 0.75);
+                const imageHeight = (imageWidth / image.width) * image.height;
+                diagramCtx.save();
+                diagramCtx.globalAlpha = 0.5;
+                diagramCtx.drawImage(image, centerX + imageDistance * scaleFactor - imageWidth / 2, diagramHeight - imageHeight / 2, imageWidth, imageHeight);
+                diagramCtx.restore();
+                diagramCtx.fillText(`Image ${imageDistance.toFixed(1)} cm`, centerX + imageDistance * scaleFactor, staggerYPositions.image);
+            }
+
+            const eyeX = centerX + eyeDistance * scaleFactor;
+            diagramCtx.textAlign = 'center';
+            diagramCtx.fillText('👀', eyeX, diagramHeight + 10);
+            diagramCtx.fillText(`Eye ${eyeDistance.toFixed(1)} cm`, eyeX, staggerYPositions.eye);
+        }
+
+        snapButton.addEventListener('click', snapEyeToImage);
+        resetButton.addEventListener('click', resetSimulation);
+        objectDistanceSlider.addEventListener('input', updateOnSliderChange);
+        eyeDistanceSlider.addEventListener('input', updateOnSliderChange);
+        focalLengthSlider.addEventListener('input', updateOnSliderChange);
+        imageScaleSlider.addEventListener('input', updateOnSliderChange);
+
+        function updateOnSliderChange() {
+            imgScale = parseFloat(imageScaleSlider.value);
+            imageScaleLabel.textContent = `${imgScale.toFixed(2)}`;
+
+            if (imageLoaded) {
+                applyLensEffect(parseFloat(lens.style.left) + lens.offsetWidth / 2, parseFloat(lens.style.top) + lens.offsetHeight / 2);
+                drawScaleDiagram();
+            }
+        }
+
+        function snapEyeToImage() {
+            const focalLength = parseFloat(focalLengthSlider.value);
+            const objectDistance = parseFloat(objectDistanceSlider.value);
+
+            if (objectDistance > focalLength) {
+                const imageDistance = (objectDistance * focalLength) / (objectDistance - focalLength);
+                if (imageDistance > 50) {
+                    eyeDistanceMessage.style.display = "block";
+                    eyeDistanceMessage.style.animation = 'fadeOut 6s forwards';
+                } else {
+                    eyeDistanceSlider.value = imageDistance;
+                    eyeDistanceLabel.textContent = `${imageDistance.toFixed(2)}`;
+                    virtualImageMessage.style.display = "none";
+                }
+                updateOnSliderChange();
+            } else {
+                virtualImageMessage.style.display = "block";
+                virtualImageMessage.style.animation = 'fadeOut 6s forwards';
+            }
+        }
+
+        function resetSimulation() {
+            focalLengthSlider.value = 5;
+            objectDistanceSlider.value = 10;
+            eyeDistanceSlider.value = 10;
+            imageScaleSlider.value = 0.1;
+            lensRelativeX = 0.5;
+            lensRelativeY = 0.1;
+            updateOnSliderChange();
+            resizeCanvas();
+        }
+
+    </script>
+</body>
+</html>
