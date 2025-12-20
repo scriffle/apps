@@ -415,6 +415,16 @@
             filter: brightness(1.1);
         }
         
+        /* Part/Focus selector needs more width for focus descriptions */
+        #topicNumWrapper select {
+            min-width: 160px;
+        }
+        
+        /* Topic selector needs more width when showing strand */
+        #topicWrapper select {
+            min-width: 200px;
+        }
+        
         /* Main Content */
         .main-content {
             flex: 1;
@@ -1529,7 +1539,7 @@
                     <select id="topicSelect"></select>
                 </div>
                 <div class="nav-selector" id="topicNumWrapper">
-                    <label for="topicNumSelect">#</label>
+                    <label for="topicNumSelect">Part</label>
                     <select id="topicNumSelect"></select>
                 </div>
                 <span class="nav-divider"></span>
@@ -2662,7 +2672,10 @@
         filtered.forEach(topic => {
             const option = document.createElement('option');
             option.value = topic.id;
-            option.textContent = topic.title;
+            // Include strand if available for context: "Strand: Topic Title"
+            option.textContent = topic.strand 
+                ? `${topic.strand}: ${topic.title}`
+                : topic.title;
             option.selected = topic.id === state.topicId;
             elements.topicSelect.appendChild(option);
         });
@@ -2677,25 +2690,42 @@
     function populateTopicNumbers() {
         elements.topicNumSelect.innerHTML = '';
         
-        // Find current topic in manifest to get topic count
-        let topicCount = 5; // Default
+        // Find current topic in manifest
+        let parts = [];
         if (loadedManifest && state.topicId) {
             const currentTopic = loadedManifest.topics.find(t => t.id === state.topicId);
-            if (currentTopic && currentTopic.topicCount) {
-                topicCount = currentTopic.topicCount;
+            if (currentTopic) {
+                // Use new parts array if available, otherwise fall back to topicCount
+                if (currentTopic.parts && currentTopic.parts.length > 0) {
+                    parts = currentTopic.parts;
+                } else if (currentTopic.topicCount) {
+                    // Backward compatibility: generate parts from topicCount
+                    for (let i = 1; i <= currentTopic.topicCount; i++) {
+                        parts.push({ num: i, focusShort: `Part ${i}` });
+                    }
+                }
             }
         }
         
-        for (let i = 1; i <= topicCount; i++) {
-            const option = document.createElement('option');
-            option.value = i;
-            option.textContent = i;
-            option.selected = i === state.topicNum;
-            elements.topicNumSelect.appendChild(option);
+        // Default if no parts found
+        if (parts.length === 0) {
+            parts = [{ num: 1, focusShort: 'Part 1' }];
         }
         
+        // Populate dropdown with focus descriptions
+        parts.forEach(part => {
+            const option = document.createElement('option');
+            option.value = part.num;
+            // Display format: "1: Focus Short" or just "Part 1" if no focus
+            option.textContent = part.focusShort 
+                ? `${part.num}: ${part.focusShort}`
+                : `Part ${part.num}`;
+            option.selected = part.num === state.topicNum;
+            elements.topicNumSelect.appendChild(option);
+        });
+        
         // Reset to 1 if current selection exceeds available
-        if (state.topicNum > topicCount) {
+        if (state.topicNum > parts.length) {
             state.topicNum = 1;
             elements.topicNumSelect.value = 1;
         }
@@ -2706,7 +2736,7 @@
         state.topicNum = 1;
         availableTopics = [];
         elements.topicSelect.innerHTML = '<option value="" disabled selected>— Select —</option>';
-        elements.topicNumSelect.innerHTML = '<option value="1" selected>1</option>';
+        elements.topicNumSelect.innerHTML = '<option value="1" selected>1: Select topic first</option>';
     }
     
     // ========== SHARED ==========
