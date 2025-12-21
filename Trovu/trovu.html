@@ -1709,6 +1709,123 @@
     }
     
     // ============================================
+    // DEBUG PANEL (EARLY INIT)
+    // ============================================
+    let debugVisible = true;
+    let debugInitialized = false;
+    
+    function initDebugPanel() {
+        if (debugInitialized) return;
+        debugInitialized = true;
+        
+        const debugPanel = document.createElement('div');
+        debugPanel.id = 'debugPanel';
+        debugPanel.innerHTML = `
+            <style>
+                #debugPanel {
+                    position: fixed;
+                    bottom: 10px;
+                    right: 10px;
+                    width: 420px;
+                    max-height: 350px;
+                    background: #1a1a2e;
+                    color: #0f0;
+                    font-family: monospace;
+                    font-size: 11px;
+                    border: 2px solid #4fc3f7;
+                    border-radius: 8px;
+                    z-index: 99999;
+                    overflow: hidden;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+                }
+                #debugPanel .debug-header {
+                    background: #4fc3f7;
+                    color: #1a1a2e;
+                    padding: 5px 10px;
+                    font-weight: bold;
+                    display: flex;
+                    justify-content: space-between;
+                    cursor: pointer;
+                }
+                #debugPanel .debug-content {
+                    padding: 10px;
+                    max-height: 300px;
+                    overflow-y: auto;
+                }
+                #debugPanel .debug-line {
+                    margin: 2px 0;
+                    padding: 2px 4px;
+                    border-left: 2px solid #333;
+                }
+                #debugPanel .debug-line.error { color: #f44; border-color: #f44; }
+                #debugPanel .debug-line.success { color: #4f4; border-color: #4f4; }
+                #debugPanel .debug-line.warn { color: #fa0; border-color: #fa0; }
+                #debugPanel .debug-line.info { color: #4fc3f7; border-color: #4fc3f7; }
+                #debugPanel .debug-state {
+                    background: #0d1b2a;
+                    padding: 8px;
+                    margin-top: 8px;
+                    border-radius: 4px;
+                    white-space: pre-wrap;
+                    font-size: 10px;
+                }
+            </style>
+            <div class="debug-header" onclick="window.toggleDebugContent()">
+                <span>🔍 Debug Panel</span>
+                <span id="debugToggle">▼</span>
+            </div>
+            <div class="debug-content" id="debugContent">
+                <div id="debugLog"></div>
+                <div class="debug-state" id="debugState"></div>
+            </div>
+        `;
+        document.body.appendChild(debugPanel);
+    }
+    
+    window.toggleDebugContent = function() {
+        debugVisible = !debugVisible;
+        const content = document.getElementById('debugContent');
+        const toggle = document.getElementById('debugToggle');
+        if (content) content.style.display = debugVisible ? 'block' : 'none';
+        if (toggle) toggle.textContent = debugVisible ? '▼' : '▲';
+    };
+    
+    function debugLog(msg, type = 'info') {
+        console.log(`[DEBUG ${type.toUpperCase()}]`, msg);
+        
+        // Initialize panel if needed
+        if (!debugInitialized && document.body) {
+            initDebugPanel();
+        }
+        
+        const logEl = document.getElementById('debugLog');
+        if (logEl) {
+            const line = document.createElement('div');
+            line.className = `debug-line ${type}`;
+            line.textContent = `${new Date().toLocaleTimeString()} | ${msg}`;
+            logEl.appendChild(line);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+    }
+    
+    function updateDebugState() {
+        const stateEl = document.getElementById('debugState');
+        if (stateEl && typeof state !== 'undefined' && typeof loadedManifest !== 'undefined') {
+            stateEl.textContent = `STATE:
+  mode: ${state.mode}
+  area: ${state.area}
+  level: ${state.level}
+  topicId: ${state.topicId}
+  topicNum: ${state.topicNum}
+  readingLevel: ${state.readingLevel}
+  
+MANIFEST: ${loadedManifest ? `Loaded (${loadedManifest.topics?.length || 0} topics)` : 'NOT LOADED'}
+TOPICS: ${typeof availableTopics !== 'undefined' ? availableTopics.length : 0} available
+CONTENT: ${typeof loadedContent !== 'undefined' && loadedContent ? 'Loaded' : 'NOT LOADED'}`;
+        }
+    }
+    
+    // ============================================
     // CURRICULUM DATA STRUCTURE
     // ============================================
     const curriculumData = {
@@ -2272,10 +2389,17 @@
     // ============================================
     // INITIALIZATION
     // ============================================
-    function init() {
+    async function init() {
+        debugLog('=== INIT STARTING ===', 'info');
         loadState();
-        populateSelectors();
-        loadContent();
+        debugLog(`State loaded. Mode: ${state.mode}, Area: ${state.area}, Level: ${state.level}`, 'info');
+        
+        await populateSelectors();
+        debugLog(`Selectors populated. TopicId: ${state.topicId}`, 'info');
+        
+        await loadContent();
+        debugLog('Content loaded', 'success');
+        
         setupEventListeners();
         applyTheme();
         
@@ -2285,6 +2409,9 @@
         } else {
             setTimeout(resizeAllSelects, 100);
         }
+        
+        updateDebugState();
+        debugLog('=== INIT COMPLETE ===', 'success');
     }
     
     function loadState() {
@@ -2312,10 +2439,12 @@
     // ============================================
     // SELECTOR POPULATION
     // ============================================
-    function populateSelectors() {
+    async function populateSelectors() {
+        debugLog('populateSelectors called', 'info');
         populateModeSelect();
         populateReadingLevelSelect();
-        configureForMode();
+        await configureForMode();
+        debugLog('populateSelectors complete', 'success');
     }
     
     function populateModeSelect() {
@@ -2329,18 +2458,20 @@
         });
     }
     
-    function configureForMode() {
+    async function configureForMode() {
+        debugLog(`configureForMode called, mode: ${state.mode}`, 'info');
         switch (state.mode) {
             case 'f10':
-                configureF10Mode();
+                await configureF10Mode();
                 break;
             case 'vce':
-                configureVCEMode();
+                await configureVCEMode();
                 break;
             case 'university':
-                configureUniversityMode();
+                await configureUniversityMode();
                 break;
         }
+        debugLog(`configureForMode complete`, 'success');
     }
     
     // ========== F-10 MODE ==========
@@ -2578,22 +2709,24 @@
     // ========== MANIFEST-BASED TOPIC POPULATION ==========
     async function fetchAndPopulateTopics() {
         const manifestPath = buildManifestPath();
-        console.log('Fetching manifest:', manifestPath);
+        debugLog(`Fetching manifest: ${manifestPath}`, 'info');
         
         try {
             const response = await fetch(manifestPath);
+            debugLog(`Fetch response: ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
             if (!response.ok) {
-                throw new Error(`Manifest not found: ${manifestPath}`);
+                throw new Error(`Manifest not found: ${manifestPath} (${response.status})`);
             }
             loadedManifest = await response.json();
-            console.log('Loaded manifest:', loadedManifest.learningArea, '- Topics:', loadedManifest.topics?.length);
+            debugLog(`Manifest loaded: ${loadedManifest.learningArea} - ${loadedManifest.topics?.length || 0} topics`, 'success');
         } catch (error) {
-            console.warn('Manifest not available, using empty topic list:', error.message);
+            debugLog(`Manifest error: ${error.message}`, 'error');
             loadedManifest = null;
         }
         
         filterAndPopulateTopics();
         populateTopicNumbers();
+        updateDebugState();
     }
     
     function buildManifestPath() {
@@ -2616,10 +2749,12 @@
     }
     
     function filterAndPopulateTopics() {
+        debugLog(`filterAndPopulateTopics called. Mode: ${state.mode}, Level: ${state.level}`, 'info');
         elements.topicSelect.innerHTML = '';
         availableTopics = [];
         
         if (!loadedManifest || !loadedManifest.topics) {
+            debugLog('No manifest or no topics in manifest!', 'error');
             // No manifest - show placeholder option
             const option = document.createElement('option');
             option.value = '';
@@ -2631,12 +2766,19 @@
             return;
         }
         
+        debugLog(`Manifest has ${loadedManifest.topics.length} topics`, 'info');
+        
         // Filter topics based on current selection
         let filtered = loadedManifest.topics;
         
         if (state.mode === 'f10') {
             // Filter by level
-            filtered = filtered.filter(t => t.levels && t.levels.includes(state.level));
+            debugLog(`Filtering by level: "${state.level}"`, 'info');
+            filtered = filtered.filter(t => {
+                const hasLevel = t.levels && t.levels.includes(state.level);
+                debugLog(`  Topic "${t.id}" levels: ${JSON.stringify(t.levels)} - match: ${hasLevel}`, hasLevel ? 'success' : 'warn');
+                return hasLevel;
+            });
             // Optionally filter by strand if discipline selected
             if (state.strand) {
                 const strandFiltered = filtered.filter(t => t.strand === state.strand);
@@ -2656,6 +2798,7 @@
         }
         
         availableTopics = filtered;
+        debugLog(`After filtering: ${filtered.length} topics available`, filtered.length > 0 ? 'success' : 'error');
         
         if (filtered.length === 0) {
             const option = document.createElement('option');
@@ -2684,6 +2827,7 @@
         if (!filtered.find(t => t.id === state.topicId)) {
             state.topicId = filtered[0].id;
             elements.topicSelect.value = state.topicId;
+            debugLog(`Selected first topic: ${state.topicId}`, 'success');
         }
     }
     
@@ -2755,9 +2899,11 @@
     // CONTENT LOADING & RENDERING
     // ============================================
     async function loadContent() {
+        debugLog(`loadContent called. topicId: ${state.topicId}`, 'info');
+        
         // Check if we have a valid topic selected
         if (!state.topicId) {
-            console.log('No topic selected yet');
+            debugLog('No topicId set - showing no topic selected state', 'warn');
             loadedContent = null;
             renderNoTopicSelected();
             updateProgressBar();
@@ -2768,20 +2914,21 @@
         
         try {
             const filePath = buildFilePath();
-            console.log('Fetching:', filePath);
+            debugLog(`Loading content from: ${filePath}`, 'info');
             
             if (!filePath) {
                 throw new Error('Could not build file path');
             }
             
             const response = await fetch(filePath);
+            debugLog(`Content fetch response: ${response.status}`, response.ok ? 'success' : 'error');
             if (!response.ok) {
-                throw new Error(`File not found: ${filePath}`);
+                throw new Error(`File not found: ${filePath} (${response.status})`);
             }
             loadedContent = await response.json();
-            console.log('Loaded live content:', loadedContent.metadata?.topicTitle);
+            debugLog(`Content loaded: ${loadedContent.metadata?.topicTitle}`, 'success');
         } catch (error) {
-            console.warn('Falling back to placeholder:', error.message);
+            debugLog(`Content load error: ${error.message}`, 'error');
             loadedContent = generatePlaceholderJSON(state);
         }
         
@@ -2790,6 +2937,7 @@
         updateHeader();
         updateProgressBar();
         saveState();
+        updateDebugState();
     }
     
     function renderNoTopicSelected() {
