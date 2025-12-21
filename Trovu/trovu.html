@@ -415,16 +415,6 @@
             filter: brightness(1.1);
         }
         
-        /* Part/Focus selector needs more width for focus descriptions */
-        #topicNumWrapper select {
-            min-width: 160px;
-        }
-        
-        /* Topic selector needs more width when showing strand */
-        #topicWrapper select {
-            min-width: 220px;
-        }
-        
         /* Main Content */
         .main-content {
             flex: 1;
@@ -1539,7 +1529,7 @@
                     <select id="topicSelect"></select>
                 </div>
                 <div class="nav-selector" id="topicNumWrapper">
-                    <label for="topicNumSelect">Part</label>
+                    <label for="topicNumSelect">#</label>
                     <select id="topicNumSelect"></select>
                 </div>
                 <span class="nav-divider"></span>
@@ -1706,123 +1696,6 @@
     
     function resizeAllSelects() {
         document.querySelectorAll('.nav-selector select').forEach(resizeSelectToContent);
-    }
-    
-    // ============================================
-    // DEBUG PANEL (EARLY INIT)
-    // ============================================
-    let debugVisible = true;
-    let debugInitialized = false;
-    
-    function initDebugPanel() {
-        if (debugInitialized) return;
-        debugInitialized = true;
-        
-        const debugPanel = document.createElement('div');
-        debugPanel.id = 'debugPanel';
-        debugPanel.innerHTML = `
-            <style>
-                #debugPanel {
-                    position: fixed;
-                    bottom: 10px;
-                    right: 10px;
-                    width: 420px;
-                    max-height: 350px;
-                    background: #1a1a2e;
-                    color: #0f0;
-                    font-family: monospace;
-                    font-size: 11px;
-                    border: 2px solid #4fc3f7;
-                    border-radius: 8px;
-                    z-index: 99999;
-                    overflow: hidden;
-                    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-                }
-                #debugPanel .debug-header {
-                    background: #4fc3f7;
-                    color: #1a1a2e;
-                    padding: 5px 10px;
-                    font-weight: bold;
-                    display: flex;
-                    justify-content: space-between;
-                    cursor: pointer;
-                }
-                #debugPanel .debug-content {
-                    padding: 10px;
-                    max-height: 300px;
-                    overflow-y: auto;
-                }
-                #debugPanel .debug-line {
-                    margin: 2px 0;
-                    padding: 2px 4px;
-                    border-left: 2px solid #333;
-                }
-                #debugPanel .debug-line.error { color: #f44; border-color: #f44; }
-                #debugPanel .debug-line.success { color: #4f4; border-color: #4f4; }
-                #debugPanel .debug-line.warn { color: #fa0; border-color: #fa0; }
-                #debugPanel .debug-line.info { color: #4fc3f7; border-color: #4fc3f7; }
-                #debugPanel .debug-state {
-                    background: #0d1b2a;
-                    padding: 8px;
-                    margin-top: 8px;
-                    border-radius: 4px;
-                    white-space: pre-wrap;
-                    font-size: 10px;
-                }
-            </style>
-            <div class="debug-header" onclick="window.toggleDebugContent()">
-                <span>🔍 Debug Panel</span>
-                <span id="debugToggle">▼</span>
-            </div>
-            <div class="debug-content" id="debugContent">
-                <div id="debugLog"></div>
-                <div class="debug-state" id="debugState"></div>
-            </div>
-        `;
-        document.body.appendChild(debugPanel);
-    }
-    
-    window.toggleDebugContent = function() {
-        debugVisible = !debugVisible;
-        const content = document.getElementById('debugContent');
-        const toggle = document.getElementById('debugToggle');
-        if (content) content.style.display = debugVisible ? 'block' : 'none';
-        if (toggle) toggle.textContent = debugVisible ? '▼' : '▲';
-    };
-    
-    function debugLog(msg, type = 'info') {
-        console.log(`[DEBUG ${type.toUpperCase()}]`, msg);
-        
-        // Initialize panel if needed
-        if (!debugInitialized && document.body) {
-            initDebugPanel();
-        }
-        
-        const logEl = document.getElementById('debugLog');
-        if (logEl) {
-            const line = document.createElement('div');
-            line.className = `debug-line ${type}`;
-            line.textContent = `${new Date().toLocaleTimeString()} | ${msg}`;
-            logEl.appendChild(line);
-            logEl.scrollTop = logEl.scrollHeight;
-        }
-    }
-    
-    function updateDebugState() {
-        const stateEl = document.getElementById('debugState');
-        if (stateEl && typeof state !== 'undefined' && typeof loadedManifest !== 'undefined') {
-            stateEl.textContent = `STATE:
-  mode: ${state.mode}
-  area: ${state.area}
-  level: ${state.level}
-  topicId: ${state.topicId}
-  topicNum: ${state.topicNum}
-  readingLevel: ${state.readingLevel}
-  
-MANIFEST: ${loadedManifest ? `Loaded (${loadedManifest.topics?.length || 0} topics)` : 'NOT LOADED'}
-TOPICS: ${typeof availableTopics !== 'undefined' ? availableTopics.length : 0} available
-CONTENT: ${typeof loadedContent !== 'undefined' && loadedContent ? 'Loaded' : 'NOT LOADED'}`;
-        }
     }
     
     // ============================================
@@ -2389,17 +2262,10 @@ CONTENT: ${typeof loadedContent !== 'undefined' && loadedContent ? 'Loaded' : 'N
     // ============================================
     // INITIALIZATION
     // ============================================
-    async function init() {
-        debugLog('=== INIT STARTING ===', 'info');
+    function init() {
         loadState();
-        debugLog(`State loaded. Mode: ${state.mode}, Area: ${state.area}, Level: ${state.level}`, 'info');
-        
-        await populateSelectors();
-        debugLog(`Selectors populated. TopicId: ${state.topicId}`, 'info');
-        
-        await loadContent();
-        debugLog('Content loaded', 'success');
-        
+        populateSelectors();
+        loadContent();
         setupEventListeners();
         applyTheme();
         
@@ -2409,9 +2275,6 @@ CONTENT: ${typeof loadedContent !== 'undefined' && loadedContent ? 'Loaded' : 'N
         } else {
             setTimeout(resizeAllSelects, 100);
         }
-        
-        updateDebugState();
-        debugLog('=== INIT COMPLETE ===', 'success');
     }
     
     function loadState() {
@@ -2439,12 +2302,10 @@ CONTENT: ${typeof loadedContent !== 'undefined' && loadedContent ? 'Loaded' : 'N
     // ============================================
     // SELECTOR POPULATION
     // ============================================
-    async function populateSelectors() {
-        debugLog('populateSelectors called', 'info');
+    function populateSelectors() {
         populateModeSelect();
         populateReadingLevelSelect();
-        await configureForMode();
-        debugLog('populateSelectors complete', 'success');
+        configureForMode();
     }
     
     function populateModeSelect() {
@@ -2458,20 +2319,18 @@ CONTENT: ${typeof loadedContent !== 'undefined' && loadedContent ? 'Loaded' : 'N
         });
     }
     
-    async function configureForMode() {
-        debugLog(`configureForMode called, mode: ${state.mode}`, 'info');
+    function configureForMode() {
         switch (state.mode) {
             case 'f10':
-                await configureF10Mode();
+                configureF10Mode();
                 break;
             case 'vce':
-                await configureVCEMode();
+                configureVCEMode();
                 break;
             case 'university':
-                await configureUniversityMode();
+                configureUniversityMode();
                 break;
         }
-        debugLog(`configureForMode complete`, 'success');
     }
     
     // ========== F-10 MODE ==========
@@ -2709,24 +2568,22 @@ CONTENT: ${typeof loadedContent !== 'undefined' && loadedContent ? 'Loaded' : 'N
     // ========== MANIFEST-BASED TOPIC POPULATION ==========
     async function fetchAndPopulateTopics() {
         const manifestPath = buildManifestPath();
-        debugLog(`Fetching manifest: ${manifestPath}`, 'info');
+        console.log('Fetching manifest:', manifestPath);
         
         try {
             const response = await fetch(manifestPath);
-            debugLog(`Fetch response: ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
             if (!response.ok) {
-                throw new Error(`Manifest not found: ${manifestPath} (${response.status})`);
+                throw new Error(`Manifest not found: ${manifestPath}`);
             }
             loadedManifest = await response.json();
-            debugLog(`Manifest loaded: ${loadedManifest.learningArea} - ${loadedManifest.topics?.length || 0} topics`, 'success');
+            console.log('Loaded manifest:', loadedManifest.learningArea, '- Topics:', loadedManifest.topics?.length);
         } catch (error) {
-            debugLog(`Manifest error: ${error.message}`, 'error');
+            console.warn('Manifest not available, using empty topic list:', error.message);
             loadedManifest = null;
         }
         
         filterAndPopulateTopics();
         populateTopicNumbers();
-        updateDebugState();
     }
     
     function buildManifestPath() {
@@ -2736,25 +2593,23 @@ CONTENT: ${typeof loadedContent !== 'undefined' && loadedContent ? 'Loaded' : 'N
                     .replace(/health and physical education/i, 'hpe')
                     .replace(/ and /g, '-')
                     .replace(/ /g, '-');
-                return `./data/${area}/manifest.json`;
+                return `/data/${area}/manifest.json`;
             case 'vce':
                 const domain = state.vceDomain.toLowerCase().replace(/ and /g, '-').replace(/ /g, '-');
-                return `./data/${domain}/manifest.json`;
+                return `/data/${domain}/manifest.json`;
             case 'university':
                 const faculty = state.uniFaculty.toLowerCase().replace(/ and /g, '-').replace(/ /g, '-');
-                return `./data/${faculty}/manifest.json`;
+                return `/data/${faculty}/manifest.json`;
             default:
                 return null;
         }
     }
     
     function filterAndPopulateTopics() {
-        debugLog(`filterAndPopulateTopics called. Mode: ${state.mode}, Level: ${state.level}`, 'info');
         elements.topicSelect.innerHTML = '';
         availableTopics = [];
         
         if (!loadedManifest || !loadedManifest.topics) {
-            debugLog('No manifest or no topics in manifest!', 'error');
             // No manifest - show placeholder option
             const option = document.createElement('option');
             option.value = '';
@@ -2766,19 +2621,12 @@ CONTENT: ${typeof loadedContent !== 'undefined' && loadedContent ? 'Loaded' : 'N
             return;
         }
         
-        debugLog(`Manifest has ${loadedManifest.topics.length} topics`, 'info');
-        
         // Filter topics based on current selection
         let filtered = loadedManifest.topics;
         
         if (state.mode === 'f10') {
             // Filter by level
-            debugLog(`Filtering by level: "${state.level}"`, 'info');
-            filtered = filtered.filter(t => {
-                const hasLevel = t.levels && t.levels.includes(state.level);
-                debugLog(`  Topic "${t.id}" levels: ${JSON.stringify(t.levels)} - match: ${hasLevel}`, hasLevel ? 'success' : 'warn');
-                return hasLevel;
-            });
+            filtered = filtered.filter(t => t.levels && t.levels.includes(state.level));
             // Optionally filter by strand if discipline selected
             if (state.strand) {
                 const strandFiltered = filtered.filter(t => t.strand === state.strand);
@@ -2798,7 +2646,6 @@ CONTENT: ${typeof loadedContent !== 'undefined' && loadedContent ? 'Loaded' : 'N
         }
         
         availableTopics = filtered;
-        debugLog(`After filtering: ${filtered.length} topics available`, filtered.length > 0 ? 'success' : 'error');
         
         if (filtered.length === 0) {
             const option = document.createElement('option');
@@ -2815,10 +2662,7 @@ CONTENT: ${typeof loadedContent !== 'undefined' && loadedContent ? 'Loaded' : 'N
         filtered.forEach(topic => {
             const option = document.createElement('option');
             option.value = topic.id;
-            // Include strand if available for context
-            option.textContent = topic.strand 
-                ? `${topic.strand}: ${topic.title}`
-                : topic.title;
+            option.textContent = topic.title;
             option.selected = topic.id === state.topicId;
             elements.topicSelect.appendChild(option);
         });
@@ -2827,49 +2671,31 @@ CONTENT: ${typeof loadedContent !== 'undefined' && loadedContent ? 'Loaded' : 'N
         if (!filtered.find(t => t.id === state.topicId)) {
             state.topicId = filtered[0].id;
             elements.topicSelect.value = state.topicId;
-            debugLog(`Selected first topic: ${state.topicId}`, 'success');
         }
     }
     
     function populateTopicNumbers() {
         elements.topicNumSelect.innerHTML = '';
         
-        // Find current topic in manifest
-        let parts = [];
+        // Find current topic in manifest to get topic count
+        let topicCount = 5; // Default
         if (loadedManifest && state.topicId) {
             const currentTopic = loadedManifest.topics.find(t => t.id === state.topicId);
-            if (currentTopic) {
-                // Use new parts array if available, otherwise fall back to topicCount
-                if (currentTopic.parts && currentTopic.parts.length > 0) {
-                    parts = currentTopic.parts;
-                } else if (currentTopic.topicCount) {
-                    // Backward compatibility: generate parts from topicCount
-                    for (let i = 1; i <= currentTopic.topicCount; i++) {
-                        parts.push({ num: i, focusShort: `Part ${i}` });
-                    }
-                }
+            if (currentTopic && currentTopic.topicCount) {
+                topicCount = currentTopic.topicCount;
             }
         }
         
-        // Default if no parts found
-        if (parts.length === 0) {
-            parts = [{ num: 1, focusShort: 'Part 1' }];
+        for (let i = 1; i <= topicCount; i++) {
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = i;
+            option.selected = i === state.topicNum;
+            elements.topicNumSelect.appendChild(option);
         }
         
-        // Populate dropdown with focus descriptions
-        parts.forEach(part => {
-            const option = document.createElement('option');
-            option.value = part.num;
-            // Display format: "1: Focus Short" or just "Part 1" if no focus
-            option.textContent = part.focusShort 
-                ? `${part.num}: ${part.focusShort}`
-                : `Part ${part.num}`;
-            option.selected = part.num === state.topicNum;
-            elements.topicNumSelect.appendChild(option);
-        });
-        
         // Reset to 1 if current selection exceeds available
-        if (state.topicNum > parts.length) {
+        if (state.topicNum > topicCount) {
             state.topicNum = 1;
             elements.topicNumSelect.value = 1;
         }
@@ -2879,8 +2705,8 @@ CONTENT: ${typeof loadedContent !== 'undefined' && loadedContent ? 'Loaded' : 'N
         state.topicId = null;
         state.topicNum = 1;
         availableTopics = [];
-        elements.topicSelect.innerHTML = '<option value="" disabled selected>— Select Topic —</option>';
-        elements.topicNumSelect.innerHTML = '<option value="1" selected>1: Select topic first</option>';
+        elements.topicSelect.innerHTML = '<option value="" disabled selected>— Select —</option>';
+        elements.topicNumSelect.innerHTML = '<option value="1" selected>1</option>';
     }
     
     // ========== SHARED ==========
@@ -2899,11 +2725,9 @@ CONTENT: ${typeof loadedContent !== 'undefined' && loadedContent ? 'Loaded' : 'N
     // CONTENT LOADING & RENDERING
     // ============================================
     async function loadContent() {
-        debugLog(`loadContent called. topicId: ${state.topicId}`, 'info');
-        
         // Check if we have a valid topic selected
         if (!state.topicId) {
-            debugLog('No topicId set - showing no topic selected state', 'warn');
+            console.log('No topic selected yet');
             loadedContent = null;
             renderNoTopicSelected();
             updateProgressBar();
@@ -2914,21 +2738,20 @@ CONTENT: ${typeof loadedContent !== 'undefined' && loadedContent ? 'Loaded' : 'N
         
         try {
             const filePath = buildFilePath();
-            debugLog(`Loading content from: ${filePath}`, 'info');
+            console.log('Fetching:', filePath);
             
             if (!filePath) {
                 throw new Error('Could not build file path');
             }
             
             const response = await fetch(filePath);
-            debugLog(`Content fetch response: ${response.status}`, response.ok ? 'success' : 'error');
             if (!response.ok) {
-                throw new Error(`File not found: ${filePath} (${response.status})`);
+                throw new Error(`File not found: ${filePath}`);
             }
             loadedContent = await response.json();
-            debugLog(`Content loaded: ${loadedContent.metadata?.topicTitle}`, 'success');
+            console.log('Loaded live content:', loadedContent.metadata?.topicTitle);
         } catch (error) {
-            debugLog(`Content load error: ${error.message}`, 'error');
+            console.warn('Falling back to placeholder:', error.message);
             loadedContent = generatePlaceholderJSON(state);
         }
         
@@ -2937,7 +2760,6 @@ CONTENT: ${typeof loadedContent !== 'undefined' && loadedContent ? 'Loaded' : 'N
         updateHeader();
         updateProgressBar();
         saveState();
-        updateDebugState();
     }
     
     function renderNoTopicSelected() {
@@ -2986,14 +2808,14 @@ CONTENT: ${typeof loadedContent !== 'undefined' && loadedContent ? 'Loaded' : 'N
         
         const level = state.level.toLowerCase();
         const filename = `${area}_${state.topicId}_${level}_topic-${state.topicNum}.json`;
-        return `./data/${area}/${filename}`;
+        return `/data/${area}/${filename}`;
     }
     
     function buildVCEFilePath() {
         const domain = state.vceDomain.toLowerCase().replace(/ and /g, '-').replace(/ /g, '-');
         const study = state.vceStudy.toLowerCase().replace(/ and /g, '-').replace(/ /g, '-');
         const filename = `${study}_${state.topicId}_unit-${state.vceUnit}_topic-${state.topicNum}.json`;
-        return `./data/${domain}/${filename}`;
+        return `/data/${domain}/${filename}`;
     }
     
     function buildUniversityFilePath() {
@@ -3001,7 +2823,7 @@ CONTENT: ${typeof loadedContent !== 'undefined' && loadedContent ? 'Loaded' : 'N
         const course = state.uniCourse.toLowerCase().replace(/ and /g, '-').replace(/ /g, '-');
         const level = state.uniLevel.toLowerCase();
         const filename = `${course}_${state.topicId}_${level}_sem-${state.uniSemester}-week-${state.uniWeek}_topic-${state.topicNum}.json`;
-        return `./data/${faculty}/${filename}`;
+        return `/data/${faculty}/${filename}`;
     }
     
     function showLoadingSpinner() {
