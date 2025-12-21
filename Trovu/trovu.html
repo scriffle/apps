@@ -1431,6 +1431,144 @@
             color: var(--text-muted);
         }
         
+        /* Submission Modal */
+        .submission-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 1rem;
+        }
+        
+        .submission-modal {
+            background: var(--bg-card);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-lg);
+            max-width: 600px;
+            width: 100%;
+            max-height: 80vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .submission-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-light);
+        }
+        
+        .submission-modal-header h3 {
+            font-family: var(--font-display);
+            font-size: 1.25rem;
+            margin: 0;
+        }
+        
+        .close-submission-modal {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: var(--text-tertiary);
+            cursor: pointer;
+            padding: 0.25rem;
+            line-height: 1;
+        }
+        
+        .close-submission-modal:hover {
+            color: var(--text-primary);
+        }
+        
+        .submission-modal-body {
+            padding: 1.5rem;
+            overflow-y: auto;
+            flex: 1;
+        }
+        
+        .submission-modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--border-light);
+        }
+        
+        .btn-primary, .btn-secondary {
+            padding: 0.6rem 1.25rem;
+            border-radius: var(--radius-md);
+            font-family: var(--font-body);
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+        
+        .btn-primary {
+            background: var(--accent-primary);
+            color: white;
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            background: var(--accent-primary-hover);
+        }
+        
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-medium);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--bg-secondary);
+        }
+        
+        /* Submit Button - Floating Action */
+        .submit-fab {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: linear-gradient(135deg, var(--accent-secondary) 0%, #3d7a6a 100%);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 1rem 1.5rem;
+            font-family: var(--font-body);
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(45, 90, 74, 0.4);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all var(--transition-normal);
+            z-index: 50;
+        }
+        
+        .submit-fab:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(45, 90, 74, 0.5);
+        }
+        
+        .submit-fab svg {
+            width: 20px;
+            height: 20px;
+        }
+        
+        @media (max-width: 640px) {
+            .submit-fab {
+                bottom: 1rem;
+                right: 1rem;
+                padding: 0.875rem 1.25rem;
+                font-size: 0.875rem;
+            }
+        }
+        
         /* Skip link for accessibility */
         .skip-link {
             position: absolute;
@@ -1669,6 +1807,15 @@
             </div>
         </div>
     </div>
+    
+    <!-- Submit Button (Floating Action) -->
+    <button class="submit-fab" id="submitBtn" title="Submit responses to teacher">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+        <span>Submit to Teacher</span>
+    </button>
     
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
@@ -2760,6 +2907,9 @@
         updateHeader();
         updateProgressBar();
         saveState();
+        
+        // Restore any saved responses for this topic
+        setTimeout(restoreResponses, 100);
     }
     
     function renderNoTopicSelected() {
@@ -3098,9 +3248,20 @@
             </ul>
             
             <h4 style="font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); margin-bottom: 0.75rem;">Think About</h4>
-            <ul class="goal-list" style="margin-bottom: 1.5rem;">
-                ${questions.map(q => `<li>${q}</li>`).join('')}
-            </ul>
+            <div class="think-about-questions" style="margin-bottom: 1.5rem;">
+                ${questions.map((q, i) => `
+                    <div class="think-about-item" style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); border-left: 3px solid var(--accent-tertiary);">
+                        <p style="margin-bottom: 0.75rem; font-weight: 500; color: var(--text-primary);">${q}</p>
+                        <textarea 
+                            class="response-field" 
+                            data-section="caseStudy" 
+                            data-question-index="${i}"
+                            placeholder="Write your thoughts here..." 
+                            style="width: 100%; min-height: 80px; padding: 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: 0.95rem; resize: vertical; background: var(--bg-card);"
+                        ></textarea>
+                    </div>
+                `).join('')}
+            </div>
             
             ${modelAnalysis ? `
                 <div style="background: var(--bg-tertiary); border-radius: var(--radius-lg); padding: 1rem; margin-bottom: 1.5rem;">
@@ -3155,20 +3316,20 @@
             
             ${availableTabs.map((tab, i) => `
                 <div class="question-content ${i === 0 ? 'active' : ''}" data-level="${tab.id}">
-                    ${getItems(tab).map(item => renderBloomsQuestionItem(item)).join('')}
+                    ${getItems(tab).map((item, qIdx) => renderBloomsQuestionItem(item, tab.id, qIdx)).join('')}
                 </div>
             `).join('')}
         `;
     }
     
-    function renderBloomsQuestionItem(item) {
+    function renderBloomsQuestionItem(item, bloomLevel = 'unknown', questionIndex = 0) {
         // Support both new schema (stem, options) and placeholder (question, choices)
         const question = item.stem || item.question;
         const options = item.options || item.choices || [];
         
         if (item.type === 'multipleChoice') {
             return `
-                <div class="question-card">
+                <div class="question-card" data-question-id="${bloomLevel}-${questionIndex}">
                     <div class="question-stem">${question}</div>
                     ${item.difficulty ? `<span class="difficulty-badge" style="font-size: 0.75rem; padding: 0.2rem 0.5rem; background: var(--bg-tertiary); border-radius: var(--radius-sm); color: var(--text-tertiary); margin-bottom: 0.75rem; display: inline-block;">${item.difficulty}</span>` : ''}
                     <div class="options-list">
@@ -3179,6 +3340,18 @@
                             </div>
                         `).join('')}
                     </div>
+                    <div class="justification-section" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-light);">
+                        <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">Explain your choice:</label>
+                        <textarea 
+                            class="response-field" 
+                            data-section="assessmentBlooms" 
+                            data-bloom-level="${bloomLevel}"
+                            data-question-index="${questionIndex}"
+                            data-question-type="multipleChoice"
+                            placeholder="Why did you choose this answer? Explain your reasoning..." 
+                            style="width: 100%; min-height: 80px; padding: 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: 0.95rem; resize: vertical; background: var(--bg-card);"
+                        ></textarea>
+                    </div>
                 </div>
             `;
         } else if (item.type === 'shortAnswer') {
@@ -3186,10 +3359,18 @@
             const criteria = item.successCriteria || item.thingsToInclude || [];
             
             return `
-                <div class="question-card">
+                <div class="question-card" data-question-id="${bloomLevel}-${questionIndex}">
                     <div class="question-stem">${question}</div>
                     ${item.difficulty ? `<span class="difficulty-badge" style="font-size: 0.75rem; padding: 0.2rem 0.5rem; background: var(--bg-tertiary); border-radius: var(--radius-sm); color: var(--text-tertiary); margin-bottom: 0.75rem; display: inline-block;">${item.difficulty}</span>` : ''}
-                    <textarea placeholder="Write your answer here..." style="width: 100%; min-height: 100px; padding: 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: 0.95rem; resize: vertical; background: var(--bg-card);"></textarea>
+                    <textarea 
+                        class="response-field" 
+                        data-section="assessmentBlooms" 
+                        data-bloom-level="${bloomLevel}"
+                        data-question-index="${questionIndex}"
+                        data-question-type="shortAnswer"
+                        placeholder="Write your answer here..." 
+                        style="width: 100%; min-height: 100px; padding: 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: 0.95rem; resize: vertical; background: var(--bg-card);"
+                    ></textarea>
                     <details style="margin-top: 0.75rem;">
                         <summary style="cursor: pointer; color: var(--accent-primary); font-weight: 500;">What a Great Answer Looks Like</summary>
                         <div style="margin-top: 0.5rem; padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--radius-md);">
@@ -3201,10 +3382,18 @@
             `;
         } else if (item.type === 'extendedResponse') {
             return `
-                <div class="question-card">
+                <div class="question-card" data-question-id="${bloomLevel}-${questionIndex}">
                     <div class="question-stem">${question}</div>
                     ${item.difficulty ? `<span class="difficulty-badge" style="font-size: 0.75rem; padding: 0.2rem 0.5rem; background: var(--bg-tertiary); border-radius: var(--radius-sm); color: var(--text-tertiary); margin-bottom: 0.75rem; display: inline-block;">${item.difficulty}</span>` : ''}
-                    <textarea placeholder="Write your extended response here..." style="width: 100%; min-height: 150px; padding: 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: 0.95rem; resize: vertical; background: var(--bg-card);"></textarea>
+                    <textarea 
+                        class="response-field" 
+                        data-section="assessmentBlooms" 
+                        data-bloom-level="${bloomLevel}"
+                        data-question-index="${questionIndex}"
+                        data-question-type="extendedResponse"
+                        placeholder="Write your extended response here..." 
+                        style="width: 100%; min-height: 150px; padding: 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: 0.95rem; resize: vertical; background: var(--bg-card);"
+                    ></textarea>
                     ${item.rubric ? `
                         <details style="margin-top: 0.75rem;">
                             <summary style="cursor: pointer; color: var(--accent-primary); font-weight: 500;">Marking Guide</summary>
@@ -3260,14 +3449,14 @@
                 const item = getItem(tab);
                 return `
                     <div class="question-content ${i === 0 ? 'active' : ''}" data-level="${tab.id}">
-                        ${renderSOLOItem(item)}
+                        ${renderSOLOItem(item, tab.id, i)}
                     </div>
                 `;
             }).join('')}
         `;
     }
     
-    function renderSOLOItem(item) {
+    function renderSOLOItem(item, soloLevel = 'unknown', questionIndex = 0) {
         // Support both new schema (stem, rubric) and placeholder (task, exampleAnswer)
         const task = item.stem || item.task;
         const example = item.exampleAnswer || item.modelResponse;
@@ -3285,10 +3474,17 @@
         }
         
         return `
-            <div class="question-card">
+            <div class="question-card" data-question-id="${soloLevel}-${questionIndex}">
                 <div class="question-stem">${task}</div>
                 ${item.difficulty ? `<span class="difficulty-badge" style="font-size: 0.75rem; padding: 0.2rem 0.5rem; background: var(--bg-tertiary); border-radius: var(--radius-sm); color: var(--text-tertiary); margin-bottom: 0.75rem; display: inline-block;">${item.difficulty}</span>` : ''}
-                <textarea placeholder="Write your response here..." style="width: 100%; min-height: 120px; padding: 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: 0.95rem; resize: vertical; background: var(--bg-card);"></textarea>
+                <textarea 
+                    class="response-field" 
+                    data-section="assessmentSOLO" 
+                    data-solo-level="${soloLevel}"
+                    data-question-index="${questionIndex}"
+                    placeholder="Write your response here..." 
+                    style="width: 100%; min-height: 120px; padding: 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: 0.95rem; resize: vertical; background: var(--bg-card);"
+                ></textarea>
                 ${exampleHtml ? `
                     <details style="margin-top: 0.75rem;">
                         <summary style="cursor: pointer; color: var(--accent-primary); font-weight: 500;">Example Answer</summary>
@@ -3328,9 +3524,20 @@
         
         return `
             <h4 style="font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); margin-bottom: 0.75rem;">Questions to Think About</h4>
-            <ul class="goal-list" style="margin-bottom: 1.5rem;">
-                ${questionList.map(q => `<li>${q}</li>`).join('')}
-            </ul>
+            <div class="reflection-questions" style="margin-bottom: 1.5rem;">
+                ${questionList.map((q, i) => `
+                    <div class="reflection-item" style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); border-left: 3px solid var(--accent-secondary);">
+                        <p style="margin-bottom: 0.75rem; font-weight: 500; color: var(--text-primary);">${q}</p>
+                        <textarea 
+                            class="response-field" 
+                            data-section="studentReflection" 
+                            data-question-index="${i}"
+                            placeholder="Write your reflection here..." 
+                            style="width: 100%; min-height: 80px; padding: 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: 0.95rem; resize: vertical; background: var(--bg-card);"
+                        ></textarea>
+                    </div>
+                `).join('')}
+            </div>
             
             <h4 style="font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); margin-bottom: 0.75rem;">Rate Yourself</h4>
             <p style="font-size: 0.875rem; color: var(--text-tertiary); margin-bottom: 0.75rem;">How confident do you feel? 1 = Not yet, 2 = Sometimes, 3 = Usually, 4 = Always</p>
@@ -3352,10 +3559,16 @@
             </div>
             
             <h4 style="font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); margin: 1.5rem 0 0.75rem;">Connecting to My Life</h4>
-            ${lifeSteps.map(step => `
+            ${lifeSteps.map((step, i) => `
                 <div style="margin-bottom: 1rem;">
                     <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary);">${step}</label>
-                    <input type="text" placeholder="Type here..." style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); background: var(--bg-card);">
+                    <textarea 
+                        class="response-field" 
+                        data-section="connectionToLife" 
+                        data-question-index="${i}"
+                        placeholder="Type your response here..." 
+                        style="width: 100%; min-height: 60px; padding: 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); background: var(--bg-card); resize: vertical;"
+                    ></textarea>
                 </div>
             `).join('')}
         `;
@@ -3385,6 +3598,12 @@
         elements.mapBtn.addEventListener('click', openMap);
         elements.closeMap.addEventListener('click', closeMap);
         elements.mapBackdrop.addEventListener('click', closeMap);
+        
+        // Submit button
+        const submitBtn = document.getElementById('submitBtn');
+        if (submitBtn) {
+            submitBtn.addEventListener('click', submitResponses);
+        }
         
         document.addEventListener('keydown', handleKeyboard);
         
@@ -4051,8 +4270,302 @@
     }
     
     // ============================================
+    // RESPONSE COLLECTION & SUBMISSION
+    // ============================================
+    
+    // Store all student responses
+    let studentResponses = {};
+    
+    // Load saved responses from localStorage
+    function loadSavedResponses() {
+        try {
+            const saved = localStorage.getItem('trovu_student_responses');
+            if (saved) {
+                studentResponses = JSON.parse(saved);
+            }
+        } catch (e) {
+            console.warn('Could not load saved responses:', e);
+        }
+    }
+    
+    // Save responses to localStorage
+    function saveResponses() {
+        try {
+            localStorage.setItem('trovu_student_responses', JSON.stringify(studentResponses));
+        } catch (e) {
+            console.warn('Could not save responses:', e);
+        }
+    }
+    
+    // Generate a unique key for the current topic
+    function getTopicKey() {
+        return `${state.mode}-${state.topicId}-${state.topicNum}`;
+    }
+    
+    // Collect all responses from the current page
+    function collectResponses() {
+        const topicKey = getTopicKey();
+        if (!studentResponses[topicKey]) {
+            studentResponses[topicKey] = {
+                metadata: {
+                    mode: state.mode,
+                    topicId: state.topicId,
+                    topicNum: state.topicNum,
+                    topicTitle: loadedContent?.metadata?.topicTitle || 'Unknown',
+                    collectedAt: new Date().toISOString()
+                },
+                responses: {}
+            };
+        }
+        
+        // Collect all textarea responses
+        document.querySelectorAll('.response-field').forEach(textarea => {
+            const section = textarea.dataset.section;
+            const value = textarea.value.trim();
+            
+            if (value) {
+                const key = buildResponseKey(textarea);
+                studentResponses[topicKey].responses[key] = {
+                    section: section,
+                    value: value,
+                    timestamp: new Date().toISOString(),
+                    questionStem: getQuestionStem(textarea)
+                };
+            }
+        });
+        
+        // Collect multiple choice selections
+        document.querySelectorAll('.option-item.selected').forEach(option => {
+            const card = option.closest('.question-card');
+            if (card) {
+                const questionId = card.dataset.questionId;
+                const selectedId = option.dataset.id;
+                const isCorrect = option.dataset.correct === 'true';
+                
+                studentResponses[topicKey].responses[`mc-${questionId}`] = {
+                    section: 'assessmentBlooms',
+                    type: 'multipleChoice',
+                    selectedOption: selectedId,
+                    isCorrect: isCorrect,
+                    timestamp: new Date().toISOString(),
+                    questionStem: card.querySelector('.question-stem')?.textContent || ''
+                };
+            }
+        });
+        
+        // Collect rating selections
+        document.querySelectorAll('.rating-btn.selected').forEach(btn => {
+            const row = btn.closest('.rating-row');
+            if (row) {
+                const statement = row.querySelector('.rating-statement')?.textContent || '';
+                const rating = btn.dataset.rating;
+                const key = `rating-${statement.substring(0, 30).replace(/\s+/g, '-')}`;
+                
+                studentResponses[topicKey].responses[key] = {
+                    section: 'selfAssessment',
+                    statement: statement,
+                    rating: parseInt(rating),
+                    timestamp: new Date().toISOString()
+                };
+            }
+        });
+        
+        studentResponses[topicKey].metadata.lastUpdated = new Date().toISOString();
+        saveResponses();
+        
+        return studentResponses[topicKey];
+    }
+    
+    function buildResponseKey(textarea) {
+        const section = textarea.dataset.section || 'unknown';
+        const bloomLevel = textarea.dataset.bloomLevel || '';
+        const soloLevel = textarea.dataset.soloLevel || '';
+        const questionIndex = textarea.dataset.questionIndex || '0';
+        const questionType = textarea.dataset.questionType || '';
+        
+        let key = section;
+        if (bloomLevel) key += `-${bloomLevel}`;
+        if (soloLevel) key += `-${soloLevel}`;
+        if (questionType) key += `-${questionType}`;
+        key += `-q${questionIndex}`;
+        
+        return key;
+    }
+    
+    function getQuestionStem(textarea) {
+        // Try to find the question stem near this textarea
+        const card = textarea.closest('.question-card');
+        if (card) {
+            const stem = card.querySelector('.question-stem');
+            if (stem) return stem.textContent;
+        }
+        
+        const item = textarea.closest('.think-about-item, .reflection-item');
+        if (item) {
+            const p = item.querySelector('p');
+            if (p) return p.textContent;
+        }
+        
+        const parent = textarea.closest('div');
+        if (parent) {
+            const label = parent.querySelector('label');
+            if (label) return label.textContent;
+        }
+        
+        return '';
+    }
+    
+    // Prepare submission data for teaching staff
+    function prepareSubmission() {
+        collectResponses();
+        
+        const topicKey = getTopicKey();
+        const topicData = studentResponses[topicKey];
+        
+        if (!topicData || Object.keys(topicData.responses).length === 0) {
+            showToast('No responses to submit yet', 'warning');
+            return null;
+        }
+        
+        // Format for submission
+        const submission = {
+            student: {
+                // In a real app, this would come from authentication
+                id: 'student-' + Date.now(),
+                submittedAt: new Date().toISOString()
+            },
+            topic: topicData.metadata,
+            responses: Object.entries(topicData.responses).map(([key, data]) => ({
+                id: key,
+                ...data
+            })),
+            summary: {
+                totalResponses: Object.keys(topicData.responses).length,
+                sections: [...new Set(Object.values(topicData.responses).map(r => r.section))]
+            }
+        };
+        
+        return submission;
+    }
+    
+    // Submit responses (placeholder - would connect to real backend)
+    function submitResponses() {
+        const submission = prepareSubmission();
+        
+        if (!submission) return;
+        
+        // For now, just log to console and show success
+        console.log('📤 Submission prepared for teaching staff:', submission);
+        console.log('📋 Formatted JSON:', JSON.stringify(submission, null, 2));
+        
+        // In a real implementation, this would POST to an API
+        // fetch('/api/submit', { method: 'POST', body: JSON.stringify(submission) })
+        
+        showToast(`✓ ${submission.summary.totalResponses} responses ready for submission`, 'success');
+        
+        // Show a modal with the submission summary
+        showSubmissionModal(submission);
+    }
+    
+    function showSubmissionModal(submission) {
+        // Create modal
+        const modal = document.createElement('div');
+        modal.className = 'submission-modal-overlay';
+        modal.innerHTML = `
+            <div class="submission-modal">
+                <div class="submission-modal-header">
+                    <h3>📝 Responses Ready for Submission</h3>
+                    <button class="close-submission-modal">&times;</button>
+                </div>
+                <div class="submission-modal-body">
+                    <p style="margin-bottom: 1rem;"><strong>Topic:</strong> ${submission.topic.topicTitle}</p>
+                    <p style="margin-bottom: 1rem;"><strong>Total Responses:</strong> ${submission.summary.totalResponses}</p>
+                    <p style="margin-bottom: 1rem;"><strong>Sections Covered:</strong> ${submission.summary.sections.join(', ')}</p>
+                    
+                    <details style="margin-top: 1rem;">
+                        <summary style="cursor: pointer; color: var(--accent-primary); font-weight: 500;">View All Responses</summary>
+                        <div style="margin-top: 0.75rem; max-height: 300px; overflow-y: auto; padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 0.8rem;">
+                            <pre style="white-space: pre-wrap; word-break: break-word;">${JSON.stringify(submission.responses, null, 2)}</pre>
+                        </div>
+                    </details>
+                </div>
+                <div class="submission-modal-footer">
+                    <button class="btn-secondary close-submission-modal">Close</button>
+                    <button class="btn-primary" onclick="copySubmissionToClipboard()">Copy JSON</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Store for clipboard copy
+        window._lastSubmission = submission;
+        
+        // Add event listeners
+        modal.querySelectorAll('.close-submission-modal').forEach(btn => {
+            btn.addEventListener('click', () => modal.remove());
+        });
+        
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.remove();
+        });
+    }
+    
+    window.copySubmissionToClipboard = function() {
+        if (window._lastSubmission) {
+            navigator.clipboard.writeText(JSON.stringify(window._lastSubmission, null, 2))
+                .then(() => showToast('Copied to clipboard!', 'success'))
+                .catch(() => showToast('Could not copy', 'error'));
+        }
+    };
+    
+    // Auto-save responses as user types
+    function setupAutoSave() {
+        document.addEventListener('input', (e) => {
+            if (e.target.classList.contains('response-field')) {
+                // Debounce save
+                clearTimeout(window._autoSaveTimeout);
+                window._autoSaveTimeout = setTimeout(() => {
+                    collectResponses();
+                }, 1000);
+            }
+        });
+    }
+    
+    // Load saved responses into fields when content loads
+    function restoreResponses() {
+        const topicKey = getTopicKey();
+        const saved = studentResponses[topicKey];
+        
+        if (!saved || !saved.responses) return;
+        
+        // Restore textarea values
+        document.querySelectorAll('.response-field').forEach(textarea => {
+            const key = buildResponseKey(textarea);
+            if (saved.responses[key]) {
+                textarea.value = saved.responses[key].value;
+            }
+        });
+        
+        // Restore rating selections
+        Object.entries(saved.responses).forEach(([key, data]) => {
+            if (key.startsWith('rating-') && data.rating) {
+                document.querySelectorAll('.rating-row').forEach(row => {
+                    const statement = row.querySelector('.rating-statement')?.textContent || '';
+                    if (key.includes(statement.substring(0, 30).replace(/\s+/g, '-'))) {
+                        const btn = row.querySelector(`.rating-btn[data-rating="${data.rating}"]`);
+                        if (btn) btn.classList.add('selected');
+                    }
+                });
+            }
+        });
+    }
+    
+    // ============================================
     // INITIALIZE
     // ============================================
+    loadSavedResponses();
+    setupAutoSave();
     init();
     </script>
 </body>
