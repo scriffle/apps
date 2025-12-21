@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trovu Debug Loader</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            padding: 2rem;
+            line-height: 1.6;
+        }
+        h1 { color: #4fc3f7; margin-bottom: 1rem; }
+        h2 { color: #81c784; margin: 1.5rem 0 0.5rem; font-size: 1.2rem; }
+        .container { max-width: 900px; margin: 0 auto; }
+        .card {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            border-left: 4px solid #666;
+        }
+        .card.success { border-left-color: #4caf50; }
+        .card.error { border-left-color: #f44336; }
+        .card.warning { border-left-color: #ff9800; }
+        .card.loading { border-left-color: #2196f3; }
+        .status {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+        .status.success { background: #4caf50; }
+        .status.error { background: #f44336; }
+        .status.warning { background: #ff9800; }
+        .status.loading { background: #2196f3; }
+        .path { 
+            font-family: monospace; 
+            background: #0d1b2a; 
+            padding: 0.2rem 0.5rem; 
+            border-radius: 4px;
+            word-break: break-all;
+        }
+        .details {
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background: #0d1b2a;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow: auto;
+        }
+        .summary {
+            background: #0f3460;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-top: 0.5rem;
+        }
+        .summary-item {
+            text-align: center;
+            padding: 0.5rem;
+            background: #16213e;
+            border-radius: 4px;
+        }
+        .summary-item .count {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        .summary-item.success .count { color: #4caf50; }
+        .summary-item.error .count { color: #f44336; }
+        .summary-item.warning .count { color: #ff9800; }
+        button {
+            background: #4fc3f7;
+            color: #1a1a2e;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 0.5rem 0.5rem 0.5rem 0;
+        }
+        button:hover { background: #81d4fa; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        .test-input {
+            display: flex;
+            gap: 0.5rem;
+            margin: 1rem 0;
+            flex-wrap: wrap;
+        }
+        .test-input input {
+            flex: 1;
+            min-width: 300px;
+            padding: 0.75rem;
+            border-radius: 6px;
+            border: 1px solid #444;
+            background: #0d1b2a;
+            color: #eee;
+            font-family: monospace;
+        }
+        #log {
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Trovu Debug Loader</h1>
+        <p>This tool checks if the manifest and content JSON files are accessible from the server.</p>
+        
+        <div class="summary" id="summary" style="display:none;">
+            <strong>Test Summary</strong>
+            <div class="summary-grid">
+                <div class="summary-item success">
+                    <div class="count" id="successCount">0</div>
+                    <div>Loaded</div>
+                </div>
+                <div class="summary-item error">
+                    <div class="count" id="errorCount">0</div>
+                    <div>Failed</div>
+                </div>
+                <div class="summary-item warning">
+                    <div class="count" id="warningCount">0</div>
+                    <div>Warnings</div>
+                </div>
+            </div>
+        </div>
+
+        <h2>Quick Tests</h2>
+        <button onclick="runAllTests()">▶ Run All Tests</button>
+        <button onclick="testManifest()">Test Manifest Only</button>
+        <button onclick="clearLog()">Clear Log</button>
+        
+        <h2>Custom Path Test</h2>
+        <div class="test-input">
+            <input type="text" id="customPath" placeholder="/data/hpe/manifest.json" value="/data/hpe/manifest.json">
+            <button onclick="testCustomPath()">Test Path</button>
+        </div>
+
+        <h2>Results</h2>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        const log = document.getElementById('log');
+        let successCount = 0;
+        let errorCount = 0;
+        let warningCount = 0;
+
+        // Files to test
+        const testFiles = [
+            { path: '/data/hpe/manifest.json', type: 'manifest', required: true },
+            { path: '/data/hpe/hpe_identity-development_7-8_topic-1.json', type: 'content', required: false },
+            { path: '/data/hpe/hpe_identity-development_7-8_topic-2.json', type: 'content', required: false },
+            { path: '/data/hpe/hpe_identity-development_7-8_topic-3.json', type: 'content', required: false },
+        ];
+
+        function clearLog() {
+            log.innerHTML = '';
+            successCount = 0;
+            errorCount = 0;
+            warningCount = 0;
+            document.getElementById('summary').style.display = 'none';
+        }
+
+        function updateSummary() {
+            document.getElementById('summary').style.display = 'block';
+            document.getElementById('successCount').textContent = successCount;
+            document.getElementById('errorCount').textContent = errorCount;
+            document.getElementById('warningCount').textContent = warningCount;
+        }
+
+        function addLogEntry(status, path, message, details = null) {
+            const card = document.createElement('div');
+            card.className = `card ${status}`;
+            
+            let html = `
+                <span class="status ${status}">${status.toUpperCase()}</span>
+                <span class="path">${path}</span>
+                <div style="margin-top: 0.5rem;">${message}</div>
+            `;
+            
+            if (details) {
+                html += `<div class="details">${escapeHtml(details)}</div>`;
+            }
+            
+            card.innerHTML = html;
+            log.appendChild(card);
+
+            if (status === 'success') successCount++;
+            else if (status === 'error') errorCount++;
+            else if (status === 'warning') warningCount++;
+            
+            updateSummary();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = typeof text === 'string' ? text : JSON.stringify(text, null, 2);
+            return div.innerHTML;
+        }
+
+        async function testFile(path, type = 'unknown', required = false) {
+            const card = document.createElement('div');
+            card.className = 'card loading';
+            card.innerHTML = `
+                <span class="status loading">LOADING</span>
+                <span class="path">${path}</span>
+                <div style="margin-top: 0.5rem;">Fetching...</div>
+            `;
+            log.appendChild(card);
+
+            try {
+                const startTime = performance.now();
+                const response = await fetch(path, { cache: 'no-store' });
+                const endTime = performance.now();
+                const duration = (endTime - startTime).toFixed(0);
+
+                if (!response.ok) {
+                    card.className = required ? 'card error' : 'card warning';
+                    card.innerHTML = `
+                        <span class="status ${required ? 'error' : 'warning'}">${response.status}</span>
+                        <span class="path">${path}</span>
+                        <div style="margin-top: 0.5rem;">
+                            HTTP ${response.status}: ${response.statusText}
+                            ${required ? '<br><strong>⚠️ This file is REQUIRED for topics to load!</strong>' : ''}
+                        </div>
+                    `;
+                    if (required) errorCount++; else warningCount++;
+                    updateSummary();
+                    return null;
+                }
+
+                const text = await response.text();
+                let data;
+                let parseError = null;
+                
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    parseError = e.message;
+                }
+
+                if (parseError) {
+                    card.className = 'card error';
+                    card.innerHTML = `
+                        <span class="status error">PARSE ERROR</span>
+                        <span class="path">${path}</span>
+                        <div style="margin-top: 0.5rem;">
+                            File loaded but JSON is invalid: ${parseError}
+                        </div>
+                        <div class="details">${escapeHtml(text.substring(0, 500))}${text.length > 500 ? '...' : ''}</div>
+                    `;
+                    errorCount++;
+                    updateSummary();
+                    return null;
+                }
+
+                // Success - show details based on type
+                let details = '';
+                if (type === 'manifest') {
+                    details = `Learning Area: ${data.learningArea || 'N/A'}
+Version: ${data.version || 'N/A'}
+Topics: ${data.topics?.length || 0}
+
+Topics found:
+${data.topics?.map(t => `  • ${t.id} (${t.title}) - ${t.parts?.length || t.topicCount || '?'} parts`).join('\n') || 'None'}`;
+                } else if (type === 'content') {
+                    details = `Topic: ${data.metadata?.topicTitle || 'N/A'}
+Part: ${data.metadata?.partNumber || '?'} of ${data.metadata?.totalParts || '?'}
+Focus: ${data.metadata?.focusArea || 'N/A'}
+Literacy Levels: ${Object.keys(data.literacyLevels || {}).join(', ') || 'None'}`;
+                } else {
+                    details = JSON.stringify(data, null, 2).substring(0, 1000);
+                }
+
+                card.className = 'card success';
+                card.innerHTML = `
+                    <span class="status success">OK</span>
+                    <span class="path">${path}</span>
+                    <div style="margin-top: 0.5rem;">
+                        ✓ Loaded successfully (${text.length.toLocaleString()} bytes, ${duration}ms)
+                    </div>
+                    <div class="details">${escapeHtml(details)}</div>
+                `;
+                successCount++;
+                updateSummary();
+                return data;
+
+            } catch (error) {
+                card.className = 'card error';
+                card.innerHTML = `
+                    <span class="status error">NETWORK ERROR</span>
+                    <span class="path">${path}</span>
+                    <div style="margin-top: 0.5rem;">
+                        Failed to fetch: ${error.message}
+                        <br><br>
+                        <strong>Possible causes:</strong>
+                        <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+                            <li>File doesn't exist at this path</li>
+                            <li>CORS issue (if loading from different domain)</li>
+                            <li>Server not running</li>
+                            <li>Network issue</li>
+                        </ul>
+                    </div>
+                `;
+                errorCount++;
+                updateSummary();
+                return null;
+            }
+        }
+
+        async function testManifest() {
+            clearLog();
+            addLogEntry('loading', '/data/hpe/manifest.json', 'Starting manifest test...');
+            log.innerHTML = '';
+            await testFile('/data/hpe/manifest.json', 'manifest', true);
+        }
+
+        async function runAllTests() {
+            clearLog();
+            
+            addLogEntry('loading', 'All Files', 'Starting comprehensive test...');
+            log.innerHTML = '';
+
+            // Test base paths first
+            addLogEntry('warning', window.location.href, `Current page URL: ${window.location.href}`);
+            
+            for (const file of testFiles) {
+                await testFile(file.path, file.type, file.required);
+            }
+
+            // Summary
+            const summaryCard = document.createElement('div');
+            summaryCard.className = errorCount > 0 ? 'card error' : 'card success';
+            summaryCard.innerHTML = `
+                <span class="status ${errorCount > 0 ? 'error' : 'success'}">COMPLETE</span>
+                <div style="margin-top: 0.5rem;">
+                    <strong>Test Complete:</strong> ${successCount} loaded, ${errorCount} failed, ${warningCount} warnings
+                    ${errorCount > 0 ? '<br><br>⚠️ <strong>Fix the failed files above to resolve the "No topics yet" error.</strong>' : ''}
+                </div>
+            `;
+            log.appendChild(summaryCard);
+        }
+
+        async function testCustomPath() {
+            const path = document.getElementById('customPath').value.trim();
+            if (!path) {
+                alert('Please enter a path to test');
+                return;
+            }
+            await testFile(path, 'unknown', false);
+        }
+
+        // Auto-run on load
+        window.onload = () => {
+            addLogEntry('warning', 'Ready', 'Click "Run All Tests" to check file loading, or test individual paths.');
+        };
+    </script>
+</body>
+</html>
