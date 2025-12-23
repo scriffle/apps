@@ -1908,6 +1908,59 @@
             50% { opacity: 0.5; }
         }
         
+        /* Textarea with TTS read-back */
+        .textarea-with-tts {
+            position: relative;
+        }
+        
+        .textarea-with-tts textarea {
+            padding-right: 2.5rem; /* Make room for the TTS button */
+        }
+        
+        .textarea-tts-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            padding: 0;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-light);
+            border-radius: 4px;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .textarea-with-tts.has-content .textarea-tts-btn {
+            opacity: 0.6;
+            pointer-events: auto;
+        }
+        
+        .textarea-tts-btn:hover {
+            opacity: 1;
+            color: var(--accent-primary);
+            border-color: var(--accent-primary);
+            background: var(--bg-card);
+        }
+        
+        .textarea-tts-btn.playing {
+            opacity: 1;
+            color: var(--accent-primary);
+            border-color: var(--accent-primary);
+            animation: tts-pulse 1s ease-in-out infinite;
+        }
+        
+        .textarea-tts-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+        
         /* Text with inline TTS */
         .tts-text {
             display: flex;
@@ -2150,9 +2203,9 @@
             margin-bottom: 0.15rem;
         }
         
-        /* Correct answer indicator */
+        /* Correct answer indicator - hidden until student selects an option */
         .correct-indicator {
-            display: inline-flex;
+            display: none; /* Hidden by default */
             align-items: center;
             gap: 0.2rem;
             padding: 0.1rem 0.35rem;
@@ -2162,6 +2215,11 @@
             font-weight: 600;
             color: var(--success);
             margin-left: 0.4rem;
+        }
+        
+        /* Show correct-indicator only when options-list has a selected option */
+        .options-list.has-selection .correct-indicator {
+            display: inline-flex;
         }
         
         .correct-indicator svg {
@@ -3824,6 +3882,38 @@
         return `<button class="tts-inline-btn" onclick="event.stopPropagation(); TTS.speakText('${escaped}', this);" title="Read aloud" aria-label="Read this text aloud"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg></button>`;
     }
     
+    // Helper function to wrap textarea with TTS read-back button
+    function wrapTextareaWithTTS(textareaHtml) {
+        return `
+            <div class="textarea-with-tts">
+                ${textareaHtml}
+                <button class="textarea-tts-btn" onclick="event.stopPropagation(); readTextareaContent(this);" title="Read your response aloud" aria-label="Read your response aloud">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    </svg>
+                </button>
+            </div>
+        `;
+    }
+    
+    // Function to read textarea content aloud
+    function readTextareaContent(button) {
+        const wrapper = button.closest('.textarea-with-tts');
+        const textarea = wrapper.querySelector('textarea');
+        const text = textarea.value.trim();
+        
+        if (!text) {
+            showToast('Write something first to hear it read aloud', 'info');
+            return;
+        }
+        
+        TTS.speakText(text, button);
+    }
+    
+    // Make readTextareaContent available globally
+    window.readTextareaContent = readTextareaContent;
+    
     // Helper to strip HTML tags for TTS
     function stripHtml(html) {
         const tmp = document.createElement('div');
@@ -4008,13 +4098,13 @@
                 ${questions.map((q, i) => `
                     <div class="think-about-item" style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); border-left: 3px solid var(--accent-tertiary);">
                         <p style="margin-bottom: 0.75rem; font-weight: 500; color: var(--text-primary);">${ttsBtn(q)}${q}</p>
-                        <textarea 
+                        ${wrapTextareaWithTTS(`<textarea 
                             class="response-field" 
                             data-section="caseStudy" 
                             data-question-index="${i}"
                             placeholder="Write your thoughts here..." 
                             style="width: 100%; min-height: 80px; padding: 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: 0.95rem; resize: vertical; background: var(--bg-card);"
-                        ></textarea>
+                        ></textarea>`)}
                     </div>
                 `).join('')}
             </div>
@@ -4129,7 +4219,7 @@
                     </div>
                     <div class="justification-section" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-light);">
                         <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">${ttsBtn("Explain your choice")}Explain your choice:</label>
-                        <textarea 
+                        ${wrapTextareaWithTTS(`<textarea 
                             class="response-field" 
                             data-section="assessmentBlooms" 
                             data-bloom-level="${bloomLevel}"
@@ -4137,7 +4227,7 @@
                             data-question-type="multipleChoice"
                             placeholder="Why did you choose this answer? Explain your reasoning..." 
                             style="width: 100%; min-height: 80px; padding: 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: 0.95rem; resize: vertical; background: var(--bg-card);"
-                        ></textarea>
+                        ></textarea>`)}
                     </div>
                 </div>
             `;
@@ -4152,7 +4242,7 @@
                         ${elaborationTag}
                     </div>
                     ${item.difficulty ? `<span class="difficulty-badge" style="font-size: 0.75rem; padding: 0.2rem 0.5rem; background: var(--bg-tertiary); border-radius: var(--radius-sm); color: var(--text-tertiary); margin-bottom: 0.75rem; display: inline-block;">${item.difficulty}</span>` : ''}
-                    <textarea 
+                    ${wrapTextareaWithTTS(`<textarea 
                         class="response-field" 
                         data-section="assessmentBlooms" 
                         data-bloom-level="${bloomLevel}"
@@ -4160,7 +4250,7 @@
                         data-question-type="shortAnswer"
                         placeholder="Write your answer here..." 
                         style="width: 100%; min-height: 100px; padding: 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: 0.95rem; resize: vertical; background: var(--bg-card);"
-                    ></textarea>
+                    ></textarea>`)}
                     <details style="margin-top: 0.75rem;">
                         <summary style="cursor: pointer; color: var(--accent-primary); font-weight: 500;">${ttsBtn("What a Great Answer Looks Like")}What a Great Answer Looks Like</summary>
                         <div style="margin-top: 0.5rem; padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--radius-md);">
@@ -4178,7 +4268,7 @@
                         ${elaborationTag}
                     </div>
                     ${item.difficulty ? `<span class="difficulty-badge" style="font-size: 0.75rem; padding: 0.2rem 0.5rem; background: var(--bg-tertiary); border-radius: var(--radius-sm); color: var(--text-tertiary); margin-bottom: 0.75rem; display: inline-block;">${item.difficulty}</span>` : ''}
-                    <textarea 
+                    ${wrapTextareaWithTTS(`<textarea 
                         class="response-field" 
                         data-section="assessmentBlooms" 
                         data-bloom-level="${bloomLevel}"
@@ -4186,7 +4276,7 @@
                         data-question-type="extendedResponse"
                         placeholder="Write your extended response here..." 
                         style="width: 100%; min-height: 150px; padding: 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: 0.95rem; resize: vertical; background: var(--bg-card);"
-                    ></textarea>
+                    ></textarea>`)}
                     ${item.rubric ? `
                         <details style="margin-top: 0.75rem;">
                             <summary style="cursor: pointer; color: var(--accent-primary); font-weight: 500;">${ttsBtn("Marking Guide")}Marking Guide</summary>
@@ -4299,14 +4389,14 @@
                     ${elaborationTag}
                 </div>
                 ${item.difficulty ? `<span class="difficulty-badge" style="font-size: 0.75rem; padding: 0.2rem 0.5rem; background: var(--bg-tertiary); border-radius: var(--radius-sm); color: var(--text-tertiary); margin-bottom: 0.75rem; display: inline-block;">${item.difficulty}</span>` : ''}
-                <textarea 
+                ${wrapTextareaWithTTS(`<textarea 
                     class="response-field" 
                     data-section="assessmentSOLO" 
                     data-solo-level="${soloLevel}"
                     data-question-index="${questionIndex}"
                     placeholder="Write your response here..." 
                     style="width: 100%; min-height: 120px; padding: 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: 0.95rem; resize: vertical; background: var(--bg-card);"
-                ></textarea>
+                ></textarea>`)}
                 ${modelAnswerHtml}
                 ${exampleHtml ? `
                     <details style="margin-top: 0.75rem;">
@@ -4343,13 +4433,13 @@
                 ${questionList.map((q, i) => `
                     <div class="reflection-item" style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); border-left: 3px solid var(--accent-secondary);">
                         <p style="margin-bottom: 0.75rem; font-weight: 500; color: var(--text-primary);">${ttsBtn(q)}${q}</p>
-                        <textarea 
+                        ${wrapTextareaWithTTS(`<textarea 
                             class="response-field" 
                             data-section="studentReflection" 
                             data-question-index="${i}"
                             placeholder="Write your reflection here..." 
                             style="width: 100%; min-height: 80px; padding: 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: 0.95rem; resize: vertical; background: var(--bg-card);"
-                        ></textarea>
+                        ></textarea>`)}
                     </div>
                 `).join('')}
             </div>
@@ -4377,13 +4467,13 @@
             ${lifeSteps.map((step, i) => `
                 <div style="margin-bottom: 1rem;">
                     <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary);">${ttsBtn(step)}${step}</label>
-                    <textarea 
+                    ${wrapTextareaWithTTS(`<textarea 
                         class="response-field" 
                         data-section="connectionToLife" 
                         data-question-index="${i}"
                         placeholder="Type your response here..." 
                         style="width: 100%; min-height: 60px; padding: 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); background: var(--bg-card); resize: vertical;"
-                    ></textarea>
+                    ></textarea>`)}
                 </div>
             `).join('')}
         `;
@@ -4427,6 +4517,18 @@
         }
         
         document.addEventListener('keydown', handleKeyboard);
+        
+        // Handle textarea input for TTS button visibility
+        document.addEventListener('input', (e) => {
+            if (e.target.matches('.textarea-with-tts textarea')) {
+                const wrapper = e.target.closest('.textarea-with-tts');
+                if (e.target.value.trim()) {
+                    wrapper.classList.add('has-content');
+                } else {
+                    wrapper.classList.remove('has-content');
+                }
+            }
+        });
         
         window.addEventListener('beforeunload', saveState);
         document.addEventListener('visibilitychange', () => {
@@ -4646,6 +4748,9 @@
         const container = option.closest('.options-list');
         container.querySelectorAll('.option-item').forEach(o => o.classList.remove('selected'));
         option.classList.add('selected');
+        
+        // Add has-selection class to show correct indicators
+        container.classList.add('has-selection');
         
         const isCorrect = option.dataset.correct === 'true';
         const feedback = option.dataset.feedback;
