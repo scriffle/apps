@@ -722,14 +722,14 @@
         }
         
         .country-path {
-            fill: #1a2030;
-            stroke: #2a3a50;
+            fill: #3a4a60;
+            stroke: #5a6a80;
             stroke-width: 0.5;
             transition: fill 0.2s ease;
         }
         
         .country-path:hover {
-            fill: #2a3a50;
+            fill: #4a5a70;
         }
         
         .graticule {
@@ -923,11 +923,11 @@
 
     <!-- Tab Navigation -->
     <nav class="tab-nav">
-        <button class="tab-btn active" data-view="arrows" onclick="switchView('arrows')">
+        <button class="tab-btn" data-view="arrows" onclick="switchView('arrows')">
             <span class="icon">🎯</span>
             <span>ARROWS</span>
         </button>
-        <button class="tab-btn" data-view="flat" onclick="switchView('flat')">
+        <button class="tab-btn active" data-view="flat" onclick="switchView('flat')">
             <span class="icon">🗺️</span>
             <span>FLAT MAP</span>
         </button>
@@ -938,12 +938,12 @@
     </nav>
     
     <!-- Arrow View -->
-    <div class="view-container active" id="arrows-view">
+    <div class="view-container" id="arrows-view">
         <canvas id="arrow-canvas"></canvas>
     </div>
     
     <!-- Flat Map View -->
-    <div class="view-container" id="flat-view">
+    <div class="view-container active" id="flat-view">
         <div id="flat-map-container"></div>
     </div>
     
@@ -1059,7 +1059,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
     <script>
         // ==================== GLOBAL STATE ====================
-        let currentView = 'arrows';
+        let currentView = 'flat';
         
         // User location (default Melbourne)
         let userLat = -37.8136;
@@ -1388,17 +1388,18 @@
             
             flatMapPath = d3.geoPath().projection(flatMapProjection);
             
-            // Graticule
+            // Create layers in correct z-order (bottom to top):
+            // 1. Graticule (grid lines) - bottom
             const graticule = d3.geoGraticule();
             flatMapSvg.append('path')
                 .datum(graticule())
                 .attr('class', 'graticule')
                 .attr('d', flatMapPath);
             
-            // Load world data
-            loadWorldData();
+            // 2. Countries group (will be populated async)
+            flatMapSvg.append('g').attr('class', 'countries');
             
-            // Trajectory paths group (behind markers)
+            // 3. Trajectory paths (on top of countries)
             const trajectories = flatMapSvg.append('g').attr('class', 'trajectories');
             trajectories.append('path')
                 .attr('class', 'trajectory-path trajectory-horizontal')
@@ -1413,7 +1414,7 @@
             trajectories.append('circle').attr('class', 'trajectory-point').attr('id', 'traj-v-up').attr('r', 4);
             trajectories.append('circle').attr('class', 'trajectory-point').attr('id', 'traj-v-down').attr('r', 4);
             
-            // Markers group
+            // 4. Markers group (on top of everything)
             const markers = flatMapSvg.append('g').attr('class', 'markers');
             
             // User position marker
@@ -1438,6 +1439,9 @@
                 .style('stroke', 'var(--accent-red)')
                 .style('stroke-width', 2)
                 .style('opacity', 0.5);
+            
+            // Load world data (async - populates countries group)
+            loadWorldData();
         }
         
         async function loadWorldData() {
@@ -1446,7 +1450,8 @@
                 const world = await response.json();
                 worldData = topojson.feature(world, world.objects.countries);
                 
-                flatMapSvg.insert('g', '.markers')
+                // Add country paths to the pre-created countries group
+                flatMapSvg.select('.countries')
                     .selectAll('path')
                     .data(worldData.features)
                     .enter()
@@ -1475,7 +1480,7 @@
             
             // Re-render all paths
             flatMapSvg.selectAll('.country-path').attr('d', flatMapPath);
-            flatMapSvg.selectAll('.graticule').attr('d', flatMapPath);
+            flatMapSvg.select('.graticule').attr('d', flatMapPath);
             
             // Update gradient positions
             const gradH = flatMapSvg.select('#trajectory-gradient-h');
