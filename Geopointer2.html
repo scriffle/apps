@@ -524,6 +524,17 @@
             background-clip: text;
         }
         
+        .explainer-question {
+            font-size: 18px;
+            margin: 0 0 20px 0;
+            line-height: 1.4;
+        }
+        
+        .explainer-question span {
+            color: var(--accent-green);
+            font-weight: 600;
+        }
+        
         .explainer-tagline {
             color: var(--text-muted);
             font-size: 14px;
@@ -610,6 +621,65 @@
         
         .explainer-checkbox input {
             accent-color: var(--accent-green);
+        }
+        
+        /* Landscape explainer */
+        @media (orientation: landscape) and (max-height: 500px) {
+            .explainer-card {
+                padding: 16px 24px;
+                max-width: 500px;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+            
+            .explainer-icon {
+                grid-column: 1 / -1;
+                margin-bottom: 0;
+                font-size: 28px;
+            }
+            
+            .explainer-card h1 {
+                grid-column: 1 / -1;
+                font-size: 18px;
+                margin-bottom: 0;
+            }
+            
+            .explainer-question {
+                grid-column: 1 / -1;
+                font-size: 14px;
+                margin-bottom: 8px;
+            }
+            
+            .explainer-steps {
+                margin: 0;
+            }
+            
+            .step {
+                padding: 6px 0;
+                font-size: 12px;
+            }
+            
+            .step-icon {
+                font-size: 16px;
+                width: 24px;
+            }
+            
+            .explainer-hint {
+                margin: 0;
+                font-size: 10px;
+                padding: 8px 10px;
+            }
+            
+            .explainer-btn {
+                grid-column: 1 / -1;
+                padding: 10px 30px;
+                margin: 8px 0 4px;
+            }
+            
+            .explainer-checkbox {
+                grid-column: 1 / -1;
+            }
         }
         
         /* Exit Point Display */
@@ -725,6 +795,96 @@
                 transform: translateX(-50%) translateY(0);
             }
         }
+        
+        /* Landscape mode adjustments */
+        @media (orientation: landscape) and (max-height: 500px) {
+            .tab-nav {
+                height: 44px;
+            }
+            
+            .tab-btn {
+                font-size: 10px;
+            }
+            
+            .tab-btn .icon {
+                font-size: 16px;
+            }
+            
+            .view-container {
+                top: 44px;
+            }
+            
+            #info-panel {
+                top: 52px;
+                padding: 4px 8px;
+                font-size: 10px;
+            }
+            
+            #target-panel {
+                top: 52px;
+                left: auto;
+                right: 8px;
+                padding: 8px 12px;
+            }
+            
+            .target-name {
+                font-size: 14px;
+            }
+            
+            #exit-point {
+                display: none;
+            }
+            
+            #accuracy-ring {
+                width: 60px;
+                height: 60px;
+                bottom: 70px;
+            }
+            
+            #accuracy-value {
+                font-size: 16px;
+            }
+            
+            #accuracy-label {
+                font-size: 7px;
+            }
+            
+            #direction-hint {
+                bottom: 70px;
+                font-size: 11px;
+                padding: 6px 10px;
+            }
+            
+            #sim-controls {
+                bottom: 70px;
+                padding: 8px 12px;
+                min-width: 150px;
+            }
+            
+            .sim-row {
+                margin: 4px 0;
+            }
+            
+            #country-selector {
+                padding: 10px;
+            }
+            
+            .country-grid {
+                grid-template-columns: repeat(6, 1fr);
+                gap: 4px;
+            }
+            
+            .country-btn {
+                padding: 6px 4px;
+                font-size: 11px;
+            }
+            
+            #toggle-selector {
+                width: 44px;
+                height: 44px;
+                bottom: 10px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -733,7 +893,7 @@
         <div class="explainer-card">
             <div class="explainer-icon">🌏📱🎯</div>
             <h1>Point Through Earth</h1>
-            <p class="explainer-tagline">Because "down" goes somewhere interesting.</p>
+            <p class="explainer-question">Can you point to <span id="random-country">China</span>, like right now?</p>
             
             <div class="explainer-steps">
                 <div class="step">
@@ -752,7 +912,7 @@
             
             <p class="explainer-hint">Pro tip: Your antipode (exact opposite point) is probably in the ocean. Most of Earth is water!</p>
             
-            <button class="explainer-btn" onclick="dismissExplainer()">Let's Dig</button>
+            <button class="explainer-btn" onclick="dismissExplainer()">Let's Point</button>
             
             <label class="explainer-checkbox">
                 <input type="checkbox" id="dont-show-again" checked>
@@ -1142,16 +1302,21 @@
         
         function resizeArrowRenderer() {
             const container = document.getElementById('arrows-view');
-            arrowCamera.aspect = container.clientWidth / container.clientHeight;
+            if (!container || !arrowCamera || !arrowRenderer) return;
+            
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            if (width <= 0 || height <= 0) return;
+            
+            arrowCamera.aspect = width / height;
             arrowCamera.updateProjectionMatrix();
-            arrowRenderer.setSize(container.clientWidth, container.clientHeight);
+            arrowRenderer.setSize(width, height);
         }
         
         function updateArrowView() {
             if (!phoneArrow || !targetArrow) return;
             
             const target = calculateThroughEarth(userLat, userLon, targetLat, targetLon);
-            const phoneBearing = (360 - deviceAlpha) % 360;
             const cameraElevation = deviceBeta - 90;
             
             // Target arrow direction
@@ -1165,8 +1330,8 @@
             targetArrow.lookAt(tDir);
             targetArrow.rotateX(Math.PI / 2);
             
-            // Phone arrow direction - use corrected bearing
-            const pAz = toRad(phoneBearing);
+            // Phone arrow direction - use deviceAlpha directly
+            const pAz = toRad(deviceAlpha);
             const pEl = toRad(cameraElevation);
             const pDir = new THREE.Vector3(
                 Math.cos(pEl) * Math.sin(pAz),
@@ -1177,7 +1342,7 @@
             phoneArrow.rotateX(Math.PI / 2);
             
             // Color phone arrow by accuracy
-            const accuracy = calculateAccuracy(target.azimuth, target.elevation, phoneBearing, cameraElevation);
+            const accuracy = calculateAccuracy(target.azimuth, target.elevation, deviceAlpha, cameraElevation);
             const hue = accuracy * 1.2 / 360;
             phoneArrow.material.color.setHSL(hue, 1, 0.5);
             phoneArrow.material.emissive.setHSL(hue, 1, 0.25);
@@ -1295,17 +1460,31 @@
         
         function resizeFlatMap() {
             const container = document.getElementById('flat-map-container');
+            if (!container || !flatMapSvg) return;
+            
             const width = container.clientWidth;
             const height = container.clientHeight;
             
-            if (flatMapSvg) {
-                flatMapSvg.attr('viewBox', `0 0 ${width} ${height}`);
-                flatMapProjection
-                    .scale(width / 6.5)
-                    .translate([width / 2, height / 2]);
-                flatMapPath = d3.geoPath().projection(flatMapProjection);
-                
-                flatMapSvg.selectAll('path').attr('d', flatMapPath);
+            if (width <= 0 || height <= 0) return;
+            
+            flatMapSvg.attr('viewBox', `0 0 ${width} ${height}`);
+            flatMapProjection
+                .scale(Math.min(width, height * 2) / 6.5)
+                .translate([width / 2, height / 2]);
+            flatMapPath = d3.geoPath().projection(flatMapProjection);
+            
+            // Re-render all paths
+            flatMapSvg.selectAll('.country-path').attr('d', flatMapPath);
+            flatMapSvg.selectAll('.graticule').attr('d', flatMapPath);
+            
+            // Update gradient positions
+            const gradH = flatMapSvg.select('#trajectory-gradient-h');
+            const gradV = flatMapSvg.select('#trajectory-gradient-v');
+            if (gradH.node()) {
+                gradH.attr('x1', 0).attr('y1', height/2).attr('x2', width).attr('y2', height/2);
+            }
+            if (gradV.node()) {
+                gradV.attr('x1', width/2).attr('y1', 0).attr('x2', width/2).attr('y2', height);
             }
         }
         
@@ -1587,9 +1766,15 @@
         
         function resizeGlobeRenderer() {
             const container = document.getElementById('globe-view');
-            globeCamera.aspect = container.clientWidth / container.clientHeight;
+            if (!container || !globeCamera || !globeRenderer) return;
+            
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            if (width <= 0 || height <= 0) return;
+            
+            globeCamera.aspect = width / height;
             globeCamera.updateProjectionMatrix();
-            globeRenderer.setSize(container.clientWidth, container.clientHeight);
+            globeRenderer.setSize(width, height);
         }
         
         function latLonToGlobePos(lat, lon, radius = 1.02) {
@@ -1732,12 +1917,10 @@
         }
         
         function updateUI() {
-            // Convert alpha (counterclockwise) to bearing (clockwise from North)
-            const phoneBearing = (360 - deviceAlpha) % 360;
             const cameraElevation = deviceBeta - 90;
             
             // Calculate exit point
-            const exit = calculateExitPoint(userLat, userLon, phoneBearing, cameraElevation);
+            const exit = calculateExitPoint(userLat, userLon, deviceAlpha, cameraElevation);
             if (exit) {
                 exitLat = exit.lat;
                 exitLon = exit.lon;
@@ -1751,7 +1934,7 @@
             
             // Calculate target direction and accuracy
             const target = calculateThroughEarth(userLat, userLon, targetLat, targetLon);
-            const accuracy = calculateAccuracy(target.azimuth, target.elevation, phoneBearing, cameraElevation);
+            const accuracy = calculateAccuracy(target.azimuth, target.elevation, deviceAlpha, cameraElevation);
             
             // Update target info
             document.getElementById('target-name').textContent = targetName;
@@ -1784,7 +1967,7 @@
                 if (accuracy > 90) {
                     hint = '✅ Perfect alignment!';
                 } else {
-                    let azDiff = ((target.azimuth - phoneBearing + 540) % 360) - 180;
+                    let azDiff = ((target.azimuth - deviceAlpha + 540) % 360) - 180;
                     if (Math.abs(azDiff) > 10) {
                         hint += azDiff > 0 ? '↻ Turn RIGHT ' : '↺ Turn LEFT ';
                     }
@@ -1796,13 +1979,43 @@
             document.getElementById('direction-hint').innerHTML = hint;
             
             // Store for predictive curves
-            window.currentPhoneBearing = phoneBearing;
+            window.currentPhoneBearing = deviceAlpha;
             window.currentElevation = cameraElevation;
         }
         
         // ==================== FIRST RUN EXPLAINER ====================
+        const countryList = [
+            { name: 'China', lat: 35.86, lon: 104.20 },
+            { name: 'India', lat: 20.59, lon: 78.96 },
+            { name: 'USA', lat: 37.09, lon: -95.71 },
+            { name: 'Indonesia', lat: -0.79, lon: 113.92 },
+            { name: 'Brazil', lat: -14.24, lon: -51.93 },
+            { name: 'Nigeria', lat: 9.08, lon: 8.68 },
+            { name: 'Russia', lat: 61.52, lon: 105.32 },
+            { name: 'Japan', lat: 36.20, lon: 138.25 },
+            { name: 'Mexico', lat: 23.63, lon: -102.55 },
+            { name: 'Egypt', lat: 26.82, lon: 30.80 },
+            { name: 'Germany', lat: 51.17, lon: 10.45 },
+            { name: 'France', lat: 46.23, lon: 2.21 },
+            { name: 'UK', lat: 55.38, lon: -3.44 },
+            { name: 'Italy', lat: 41.87, lon: 12.57 },
+            { name: 'South Africa', lat: -30.56, lon: 22.94 },
+            { name: 'South Korea', lat: 35.91, lon: 127.77 },
+            { name: 'Spain', lat: 40.46, lon: -3.75 },
+            { name: 'Argentina', lat: -38.42, lon: -63.62 },
+            { name: 'Kenya', lat: -0.02, lon: 37.91 },
+            { name: 'Thailand', lat: 15.87, lon: 100.99 }
+        ];
+        
+        let challengeCountry = null;
+        
         function checkFirstRun() {
             const hideExplainer = localStorage.getItem('hideExplainer');
+            
+            // Pick random country for the challenge
+            challengeCountry = countryList[Math.floor(Math.random() * countryList.length)];
+            document.getElementById('random-country').textContent = challengeCountry.name;
+            
             if (hideExplainer === 'true') {
                 document.getElementById('explainer-overlay').classList.add('hidden');
             }
@@ -1814,6 +2027,11 @@
                 localStorage.setItem('hideExplainer', 'true');
             }
             document.getElementById('explainer-overlay').classList.add('hidden');
+            
+            // Set the challenge country as the target
+            if (challengeCountry) {
+                setTarget(challengeCountry.name, challengeCountry.lat, challengeCountry.lon);
+            }
             
             // Trigger sensor permission request after dismissing
             requestOrientation();
@@ -2026,11 +2244,32 @@
             
             animate();
             
-            window.addEventListener('resize', () => {
+            // Handle resize and orientation change
+            function handleResize() {
                 resizeArrowRenderer();
                 resizeGlobeRenderer();
                 resizeFlatMap();
+            }
+            
+            // Debounced resize handler
+            let resizeTimeout;
+            function debouncedResize() {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(handleResize, 100);
+            }
+            
+            window.addEventListener('resize', debouncedResize);
+            window.addEventListener('orientationchange', () => {
+                // Orientation change needs a slight delay for dimensions to update
+                setTimeout(handleResize, 150);
             });
+            
+            // Modern screen orientation API
+            if (screen.orientation) {
+                screen.orientation.addEventListener('change', () => {
+                    setTimeout(handleResize, 150);
+                });
+            }
         });
         
         // iOS permission on first tap (after explainer)
