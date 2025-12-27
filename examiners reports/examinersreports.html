@@ -439,6 +439,81 @@
             }
         }
 
+        /* Question Hint */
+        .question-hint {
+            font-size: 0.8rem;
+            color: var(--accent);
+            padding: 0.4rem 0.6rem;
+            background: rgba(233, 69, 96, 0.1);
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 1.5s ease-in-out;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .question-hint.visible {
+            opacity: 1;
+        }
+
+        .question-hint.expanded {
+            background: rgba(255, 152, 0, 0.15);
+            border-left: 3px solid var(--warning);
+            cursor: default;
+        }
+
+        .question-hint.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            color: var(--neutral);
+            background: rgba(96, 125, 139, 0.1);
+        }
+
+        .question-hint .hint-icon {
+            font-size: 0.9rem;
+        }
+
+        .question-hint .hint-label {
+            font-weight: 500;
+        }
+
+        .question-hint .hint-text {
+            display: none;
+            font-weight: normal;
+            color: var(--warning);
+            font-style: italic;
+        }
+
+        .question-hint.expanded .hint-text {
+            display: inline;
+        }
+
+        .question-hint.expanded .hint-label {
+            display: none;
+        }
+
+        .question-hint.expanded .hint-icon {
+            display: none;
+        }
+
+        @keyframes hintPulse {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(233, 69, 96, 0.4);
+            }
+            50% {
+                transform: scale(1.02);
+                box-shadow: 0 0 8px 2px rgba(233, 69, 96, 0.3);
+            }
+        }
+
+        .question-hint.pulsing {
+            animation: hintPulse 1.5s ease-in-out infinite;
+        }
+
         .answer-buttons {
             display: flex;
             gap: 0.75rem;
@@ -1223,6 +1298,7 @@
             currentQuestionCategory: 0,
             currentQuestionIndex: 0,
             responses: {},
+            hintsUsed: {},  // Tracks which concepts have used hints: { conceptId: true }
             lastSaved: null
         };
 
@@ -1622,6 +1698,7 @@
                         currentQuestionCategory: 0,
                         currentQuestionIndex: 0,
                         responses: {},
+                        hintsUsed: {},
                         lastSaved: null,
                         ...parsed 
                     };
@@ -1647,6 +1724,7 @@
                 currentQuestionCategory: 0,
                 currentQuestionIndex: 0,
                 responses: {},
+                hintsUsed: {},
                 lastSaved: null
             };
         }
@@ -1868,6 +1946,53 @@
 
             const responseKey = getResponseKey(currentQ.conceptId, currentQ.questionIndex);
             const response = subjectState.responses[responseKey];
+            
+            // Hint logic - use question.hint field
+            const hint = currentQ.question.hint || '';
+            const hasHint = hint.trim() !== '';
+            
+            // Check if hint was used for this concept (on any question in the pair)
+            const hintUsedForConcept = subjectState.hintsUsed[currentQ.conceptId] === true;
+            // Check if hint was revealed specifically for THIS question
+            const hintRevealedForThis = subjectState.hintsUsed[`${currentQ.conceptId}-${currentQ.questionIndex}`] === true;
+            // Hint is disabled if it was used on another question in the pair (but not this one)
+            const hintDisabled = hintUsedForConcept && !hintRevealedForThis;
+            
+            // Build hint HTML
+            let hintHtml = '';
+            if (hasHint && !response) {
+                if (hintRevealedForThis) {
+                    // Already revealed for this question - show expanded immediately
+                    hintHtml = `
+                        <div class="question-hint visible expanded" id="questionHint">
+                            <span class="hint-icon">💡</span>
+                            <span class="hint-label">Hint</span>
+                            <span class="hint-text">${hint}</span>
+                        </div>
+                    `;
+                } else if (hintDisabled) {
+                    // Used on other question in pair - show disabled
+                    hintHtml = `
+                        <div class="question-hint visible disabled" id="questionHint">
+                            <span class="hint-icon">💡</span>
+                            <span class="hint-label">Hint (used)</span>
+                            <span class="hint-text">${hint}</span>
+                        </div>
+                    `;
+                } else {
+                    // Available - show normal trigger
+                    hintHtml = `
+                        <div class="question-hint" id="questionHint" 
+                             data-concept-id="${currentQ.conceptId}"
+                             data-question-index="${currentQ.questionIndex}"
+                             onclick="handleHintClick()">
+                            <span class="hint-icon">💡</span>
+                            <span class="hint-label">Hint</span>
+                            <span class="hint-text">${hint}</span>
+                        </div>
+                    `;
+                }
+            }
 
             const html = `
                 <div class="question-card active">
@@ -1877,6 +2002,7 @@
                             ${response ? (response.correct ? 'Correct' : 'Incorrect') : 'Unanswered'}
                         </span>
                     </div>
+                    ${hintHtml}
                     <div class="question-concept">${currentQ.conceptTitle}</div>
                     <div class="question-text">${currentQ.question.text}</div>
                     <div class="answer-buttons">
@@ -1900,7 +2026,70 @@
             `;
 
             document.getElementById('questionContainer').innerHTML = html;
+            
+            // Start hint fade-in timer if hint exists, not answered, not already revealed, and not disabled
+            if (hasHint && !response && !hintRevealedForThis && !hintDisabled) {
+                startHintTimer();
+            }
         }
+
+        // Hint timing state
+        let hintFadeTimer = null;
+        let hintExpandTimer = null;
+        let hintClicked = false;
+
+        function startHintTimer() {
+            // Clear any existing timers
+            clearHintTimers();
+            hintClicked = false;
+            
+            // Fade in hint after 5 seconds
+            hintFadeTimer = setTimeout(() => {
+                const hintEl = document.getElementById('questionHint');
+                if (hintEl) {
+                    hintEl.classList.add('visible');
+                }
+            }, 5000);
+        }
+
+        function clearHintTimers() {
+            if (hintFadeTimer) {
+                clearTimeout(hintFadeTimer);
+                hintFadeTimer = null;
+            }
+            if (hintExpandTimer) {
+                clearTimeout(hintExpandTimer);
+                hintExpandTimer = null;
+            }
+        }
+
+        function handleHintClick() {
+            const hintEl = document.getElementById('questionHint');
+            if (!hintEl || hintClicked || hintEl.classList.contains('disabled')) return;
+            
+            hintClicked = true;
+            
+            // Start pulsing
+            hintEl.classList.add('pulsing');
+            
+            // Get concept and question info from data attributes
+            const conceptId = hintEl.dataset.conceptId;
+            const questionIndex = parseInt(hintEl.dataset.questionIndex);
+            
+            // Expand after 5 seconds
+            hintExpandTimer = setTimeout(() => {
+                hintEl.classList.remove('pulsing');
+                hintEl.classList.add('expanded');
+                
+                // Mark hint as used for this concept and this specific question
+                subjectState.hintsUsed[conceptId] = true;
+                subjectState.hintsUsed[`${conceptId}-${questionIndex}`] = true;
+                saveSubjectState();
+            }, 5000);
+        }
+
+        // Make handleHintClick available globally
+        window.handleHintClick = handleHintClick;
 
         function answerQuestion(answer) {
             const questions = getCategoryQuestions();
