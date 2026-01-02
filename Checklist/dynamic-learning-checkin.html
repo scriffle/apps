@@ -4492,6 +4492,11 @@ function submitQuizAnswer() {
     const isCorrect = selectedOption.isCorrect;
     const state = getQuizState(currentQuiz.itemId, currentQuiz.toLevel);
     
+    // Capture values NOW before any closeQuiz() call nullifies currentQuiz
+    const capturedItemId = currentQuiz.itemId;
+    const capturedToLevel = currentQuiz.toLevel;
+    const capturedFromLevel = currentQuiz.fromLevel;
+    
     // Mark question as used
     if (!state.usedQuestions.includes(currentQuiz.questionIndex)) {
         state.usedQuestions.push(currentQuiz.questionIndex);
@@ -4513,7 +4518,7 @@ function submitQuizAnswer() {
     resultEl.classList.add('visible', isCorrect ? 'correct' : 'incorrect');
     
     document.getElementById('quiz-result-icon').textContent = isCorrect ? '✓' : '✗';
-    document.getElementById('quiz-result-text').textContent = isCorrect ? 'Correct' : 'Incorrect';
+    document.getElementById('quiz-result-text').textContent = isCorrect ? 'Correct!' : 'Not quite';
     document.getElementById('quiz-result-explanation').textContent = selectedOption.explanation;
     
     if (isCorrect) {
@@ -4531,29 +4536,31 @@ function submitQuizAnswer() {
         // Check if they've earned the level
         if (state.correctStreak >= state.requiredCorrect) {
             // Success! Apply the level change
-            document.getElementById('quiz-submit-btn').textContent = 'Continue';
+            document.getElementById('quiz-submit-btn').textContent = '🎉 Level Up!';
             document.getElementById('quiz-submit-btn').disabled = false;
             document.getElementById('quiz-submit-btn').onclick = () => {
-                closeQuiz();
-                applyLevelChange(currentQuiz.itemId, currentQuiz.toLevel);
-                // Reset state for this transition
+                // Reset state for this transition BEFORE closing
                 state.usedQuestions = [];
                 state.wrongCount = 0;
                 state.correctStreak = 0;
                 state.requiredCorrect = 1;
                 saveQuizState();
+                closeQuiz();
+                // Use captured values (currentQuiz is now null)
+                applyLevelChange(capturedItemId, capturedToLevel);
             };
             document.getElementById('quiz-cancel-btn').style.display = 'none';
         } else {
-            // Need more correct answers
-            document.getElementById('quiz-submit-btn').textContent = 'Next Question';
+            // Need more correct answers - show how many left
+            const remaining = state.requiredCorrect - state.correctStreak;
+            document.getElementById('quiz-submit-btn').textContent = `Next Question (${remaining} more needed)`;
             document.getElementById('quiz-submit-btn').disabled = false;
             document.getElementById('quiz-submit-btn').onclick = () => {
                 saveQuizState();
                 closeQuiz();
-                // Show next question
+                // Show next question using captured values
                 setTimeout(() => {
-                    if (!showQuiz(currentQuiz.itemId, currentQuiz.fromLevel, currentQuiz.toLevel)) {
+                    if (!showQuiz(capturedItemId, capturedFromLevel, capturedToLevel)) {
                         showToast('No more questions available', 'error');
                     }
                 }, 100);
@@ -4570,9 +4577,9 @@ function submitQuizAnswer() {
             state.requiredCorrect = 1; // Reset for after lockout
             
             document.getElementById('quiz-result-explanation').textContent = 
-                selectedOption.explanation + '\n\nThis level is now locked for 5 minutes. Take some time to review this concept.';
+                selectedOption.explanation + '\n\n⏱️ This level is now locked for 5 minutes. Take some time to review this concept before trying again.';
             
-            document.getElementById('quiz-submit-btn').textContent = 'Close';
+            document.getElementById('quiz-submit-btn').textContent = 'Got it';
             document.getElementById('quiz-submit-btn').disabled = false;
             document.getElementById('quiz-submit-btn').onclick = () => {
                 saveQuizState();
@@ -4581,10 +4588,15 @@ function submitQuizAnswer() {
             };
             document.getElementById('quiz-cancel-btn').style.display = 'none';
         } else {
-            // Increase required correct answers
+            // Not locked yet - show feedback and let them dismiss
+            // Increase required correct answers for next attempt
             state.requiredCorrect = state.wrongCount + 1;
             
-            document.getElementById('quiz-submit-btn').textContent = 'Try Again';
+            const nextRequired = state.requiredCorrect;
+            document.getElementById('quiz-result-explanation').textContent = 
+                selectedOption.explanation + `\n\n💡 Next time you'll need ${nextRequired} correct answer${nextRequired > 1 ? 's in a row' : ''} to advance.`;
+            
+            document.getElementById('quiz-submit-btn').textContent = 'Got it';
             document.getElementById('quiz-submit-btn').disabled = false;
             document.getElementById('quiz-submit-btn').onclick = () => {
                 saveQuizState();
