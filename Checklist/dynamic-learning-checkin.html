@@ -4242,11 +4242,13 @@ function showQuiz(itemId, fromLevel, toLevel) {
         btn.addEventListener('click', () => selectQuizOption(parseInt(btn.dataset.index)));
     });
     
-    // Reset result section
+    // Reset result section and button state
     document.getElementById('quiz-result').classList.remove('visible', 'correct', 'incorrect');
     document.getElementById('quiz-submit-btn').disabled = true;
     document.getElementById('quiz-submit-btn').textContent = 'Check Answer';
+    document.getElementById('quiz-submit-btn').onclick = submitQuizAnswer;
     document.getElementById('quiz-cancel-btn').textContent = 'Cancel';
+    document.getElementById('quiz-cancel-btn').style.display = '';
     
     // Show streak info if required > 1
     const streakInfo = document.getElementById('quiz-streak-info');
@@ -4335,9 +4337,12 @@ function submitQuizAnswer() {
             // Success! Apply the level change
             document.getElementById('quiz-submit-btn').textContent = 'Continue';
             document.getElementById('quiz-submit-btn').disabled = false;
+            // Capture values before closeQuiz nullifies currentQuiz
+            const successItemId = currentQuiz.itemId;
+            const successToLevel = currentQuiz.toLevel;
             document.getElementById('quiz-submit-btn').onclick = () => {
                 closeQuiz();
-                applyLevelChange(currentQuiz.itemId, currentQuiz.toLevel);
+                applyLevelChange(successItemId, successToLevel);
                 // Reset state for this transition
                 state.usedQuestions = [];
                 state.wrongCount = 0;
@@ -4350,12 +4355,16 @@ function submitQuizAnswer() {
             // Need more correct answers
             document.getElementById('quiz-submit-btn').textContent = 'Next Question';
             document.getElementById('quiz-submit-btn').disabled = false;
+            // Capture values before closeQuiz nullifies currentQuiz
+            const nextItemId = currentQuiz.itemId;
+            const nextFromLevel = currentQuiz.fromLevel;
+            const nextToLevel = currentQuiz.toLevel;
             document.getElementById('quiz-submit-btn').onclick = () => {
                 saveQuizState();
                 closeQuiz();
                 // Show next question
                 setTimeout(() => {
-                    if (!showQuiz(currentQuiz.itemId, currentQuiz.fromLevel, currentQuiz.toLevel)) {
+                    if (!showQuiz(nextItemId, nextFromLevel, nextToLevel)) {
                         showToast('No more questions available', 'error');
                     }
                 }, 100);
@@ -6729,7 +6738,9 @@ function init() {
     // Quiz overlay
     document.getElementById('quiz-close-btn').addEventListener('click', closeQuiz);
     document.getElementById('quiz-cancel-btn').addEventListener('click', closeQuiz);
-    document.getElementById('quiz-submit-btn').addEventListener('click', submitQuizAnswer);
+    // Note: quiz-submit-btn uses onclick (set in showQuiz/submitQuizAnswer), not addEventListener
+    // to avoid double-firing when both onclick and listener exist
+    document.getElementById('quiz-submit-btn').onclick = submitQuizAnswer;
     document.getElementById('quiz-overlay').addEventListener('click', (e) => {
         if (e.target === e.currentTarget && !currentQuiz?.answered) closeQuiz();
     });
