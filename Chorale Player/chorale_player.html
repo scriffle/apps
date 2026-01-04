@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Kern Score Player</title>
+  <title>Bach Chorale Player</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♫</text></svg>">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     
@@ -311,6 +312,36 @@
     
     .library-fallback {
       margin-top: var(--space-4);
+    }
+    
+    /* Score image display */
+    .score-image-container {
+      display: none;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: var(--space-2);
+      overflow-x: auto;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .score-image-container.visible {
+      display: block;
+    }
+    .score-image {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      margin: 0 auto;
+    }
+    /* Invert SVG in dark mode for better visibility */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .score-image {
+        filter: invert(0.88) hue-rotate(180deg);
+      }
+    }
+    [data-theme="dark"] .score-image {
+      filter: invert(0.88) hue-rotate(180deg);
     }
     
     /* Loading spinner */
@@ -1184,6 +1215,10 @@
     
     <div class="kern-display" id="kernDisplay"></div>
     
+    <div class="score-image-container" id="scoreImageContainer">
+      <img id="scoreImage" class="score-image" alt="Score notation" />
+    </div>
+    
     <div class="metadata-panel" id="metadataPanel">
       <button class="metadata-toggle" id="metadataToggle" aria-expanded="false">
         <span class="metadata-toggle-icon">▶</span>
@@ -1374,7 +1409,7 @@
     // ============================================
     // LIBRARY MANAGEMENT
     // ============================================
-    const TOTAL_CHORALES = 371;
+    const TOTAL_CHORALES = 370;
     const KERN_PATH = './kern/chor';
     
     async function loadLibrary() {
@@ -1391,18 +1426,31 @@
       
       for (let i = 1; i <= TOTAL_CHORALES; i++) {
         const num = String(i).padStart(3, '0');
-        const url = `${KERN_PATH}${num}.krn`;
+        const krnUrl = `${KERN_PATH}${num}.krn`;
+        const svgUrl = `${KERN_PATH}${num}.svg`;
         
         promises.push(
-          fetch(url)
+          // Fetch kern file (required)
+          fetch(krnUrl)
             .then(response => {
               if (!response.ok) throw new Error(`HTTP ${response.status}`);
               return response.text();
             })
-            .then(text => {
+            .then(async text => {
               const metadata = extractMetadataQuick(text, i);
               metadata.rawText = text;
               metadata.status = 'available';
+              
+              // Try to fetch SVG (optional, fail quietly)
+              try {
+                const svgResponse = await fetch(svgUrl);
+                if (svgResponse.ok) {
+                  metadata.svgUrl = svgUrl;
+                }
+              } catch (e) {
+                // SVG not available, that's fine
+              }
+              
               return metadata;
             })
             .catch(err => {
@@ -1415,7 +1463,8 @@
                 meter: '',
                 status: 'unavailable',
                 error: err.message,
-                rawText: null
+                rawText: null,
+                svgUrl: null
               };
             })
             .finally(() => {
@@ -1606,8 +1655,21 @@
       // Load the chorale
       loadScoreFromText(chorale.rawText, `chor${String(number).padStart(3, '0')}.krn`);
       
+      // Display SVG if available
+      displayScoreImage(chorale.svgUrl);
+      
       // Switch to player tab
       switchTab('player');
+    }
+    
+    function displayScoreImage(svgUrl) {
+      if (svgUrl && elements.scoreImageContainer && elements.scoreImage) {
+        elements.scoreImage.src = svgUrl;
+        elements.scoreImageContainer.classList.add('visible');
+      } else if (elements.scoreImageContainer) {
+        elements.scoreImageContainer.classList.remove('visible');
+        if (elements.scoreImage) elements.scoreImage.src = '';
+      }
     }
     
     function switchTab(tabName) {
@@ -3536,7 +3598,10 @@
       libraryBody: document.getElementById('libraryBody'),
       libraryStats: document.getElementById('libraryStats'),
       libraryFallback: document.getElementById('libraryFallback'),
-      loadStatus: document.getElementById('loadStatus')
+      loadStatus: document.getElementById('loadStatus'),
+      // Score image
+      scoreImageContainer: document.getElementById('scoreImageContainer'),
+      scoreImage: document.getElementById('scoreImage')
     };
     
     function toast(message, type = 'info') {
@@ -3887,6 +3952,11 @@
         // Populate and show metadata panel
         populateMetadata(score.metadata, score);
         elements.metadataPanel.classList.add('visible');
+        
+        // Hide score image (will be shown by selectChorale if SVG available)
+        if (elements.scoreImageContainer) {
+          elements.scoreImageContainer.classList.remove('visible');
+        }
         
         // Reset kern display for new file
         elements.kernDisplay.dataset.built = '';
