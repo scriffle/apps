@@ -810,6 +810,12 @@
         // Question Rendering
         // ========================================
 
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
         let hintTimer = null;
 
         function renderCurrentQuestion() {
@@ -837,11 +843,11 @@
             let hintHtml = '';
             if (hasHint && !response) {
                 if (hintRevealedForThis) {
-                    hintHtml = `<div class="q-hint show expanded">💡 ${hint}</div>`;
+                    hintHtml = `<div class="q-hint show expanded">💡 ${escapeHtml(hint)}</div>`;
                 } else if (hintDisabled) {
                     hintHtml = `<div class="q-hint show disabled">💡 Hint already used for this concept</div>`;
                 } else {
-                    hintHtml = `<div class="q-hint" id="qHint" data-concept-id="${currentQ.conceptId}" data-question-index="${currentQ.questionIndex}">💡 Click for a hint...</div>`;
+                    hintHtml = `<div class="q-hint" id="qHint" data-concept-id="${escapeHtml(currentQ.conceptId)}" data-question-index="${currentQ.questionIndex}">💡 Click for a hint...</div>`;
                 }
             }
 
@@ -851,8 +857,8 @@
                         ${response ? (response.correct ? '✓ Correct' : '✗ Incorrect') : '○ Unanswered'}
                     </span>
                     ${hintHtml}
-                    ${response ? `<div class="q-concept">${currentQ.conceptTitle}</div>` : ''}
-                    <div class="q-text">${currentQ.question.text}</div>
+                    ${response ? `<div class="q-concept">${escapeHtml(currentQ.conceptTitle)}</div>` : ''}
+                    <div class="q-text">${escapeHtml(currentQ.question.text)}</div>
                     <div class="answer-btns">
                         <button class="answer-btn ${response && response.answer === true ? (response.correct ? 'correct' : 'incorrect') : ''}"
                                 data-answer="true" ${response ? 'disabled' : ''}>TRUE</button>
@@ -862,8 +868,8 @@
                     ${response ? `
                         <div class="feedback ${response.correct ? 'correct' : 'incorrect'}">
                             <strong>${response.correct ? '✓ Correct!' : '✗ Incorrect'}</strong>
-                            ${currentQ.question.explanation}
-                            ${currentQ.question.studyTip ? `<div class="tip">💡 Study Tip: ${currentQ.question.studyTip}</div>` : ''}
+                            ${escapeHtml(currentQ.question.explanation)}
+                            ${currentQ.question.studyTip ? `<div class="tip">💡 Study Tip: ${escapeHtml(currentQ.question.studyTip)}</div>` : ''}
                         </div>
                     ` : ''}
                 </div>
@@ -911,7 +917,9 @@
                 hintEl.classList.add('expanded');
                 const questions = getCategoryQuestions();
                 const currentQ = questions[subjectState.currentQuestionIndex];
-                hintEl.textContent = '💡 ' + currentQ.conceptTitle;
+                if (currentQ) {
+                    hintEl.textContent = '💡 ' + currentQ.conceptTitle;
+                }
                 hintEl.style.opacity = '1';
 
                 subjectState.hintsUsed[conceptId] = true;
@@ -949,6 +957,12 @@
         }
 
         function navigateQuestion(direction) {
+            // Clear any pending hint timer
+            if (hintTimer) {
+                clearTimeout(hintTimer);
+                hintTimer = null;
+            }
+
             const questions = getCategoryQuestions();
             subjectState.currentQuestionIndex += direction;
 
@@ -965,6 +979,12 @@
 
         function goToEarliestUnanswered() {
             if (!subjectData) return;
+
+            // Clear any pending hint timer
+            if (hintTimer) {
+                clearTimeout(hintTimer);
+                hintTimer = null;
+            }
 
             for (let catIndex = 0; catIndex < subjectData.categories.length; catIndex++) {
                 const categoryQuestions = randomisedQuestions[catIndex] || [];
@@ -989,6 +1009,17 @@
         }
 
         function selectCategory(catIndex) {
+            // Clear any pending hint timer
+            if (hintTimer) {
+                clearTimeout(hintTimer);
+                hintTimer = null;
+            }
+
+            // Validate catIndex
+            if (!subjectData || catIndex < 0 || catIndex >= subjectData.categories.length) {
+                return;
+            }
+
             subjectState.currentQuestionCategory = catIndex;
             subjectState.currentQuestionIndex = 0;
             renderCurrentQuestion();
@@ -1215,6 +1246,9 @@
                 }
 
                 const state = getCurrentState();
+                if (!state) {
+                    throw new Error('No examination system selected');
+                }
                 document.title = `${state.name} ${subjectData.subject} - Examiner's Advice`;
                 $('#appTitle').textContent = `${state.name} ${subjectData.subject}`;
 
@@ -1281,7 +1315,7 @@
             text += `Student: ${globalState.studentName || 'Not provided'}\n`;
             text += `Examination System: ${state.fullName}\n`;
             text += `Date: ${new Date().toLocaleString()}\n\n`;
-            text += `Overall Progress: ${answered}/${total} (${Math.round((answered / total) * 100)}%)\n`;
+            text += `Overall Progress: ${answered}/${total} (${total > 0 ? Math.round((answered / total) * 100) : 0}%)\n`;
             text += `Accuracy: ${accuracy}%\n\n`;
             text += `Category Breakdown:\n${'-'.repeat(30)}\n`;
 
