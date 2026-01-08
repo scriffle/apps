@@ -837,6 +837,8 @@
       gap: 6px;
       margin-bottom: 12px;
       flex-wrap: wrap;
+      max-width: 100%;
+      padding: 0 8px;
     }
 
     .progress-dot {
@@ -844,6 +846,17 @@
       height: 8px;
       border-radius: 50%;
       background: var(--border);
+      flex-shrink: 0;
+    }
+
+    /* Scale down dots when there are many players (via JS class) */
+    .progress-dots.compact .progress-dot {
+      width: 6px;
+      height: 6px;
+    }
+    
+    .progress-dots.compact {
+      gap: 4px;
     }
 
     .progress-dot.active {
@@ -1160,7 +1173,7 @@
         <h1><span class="logo-fake">Fake</span> <span class="logo-learning">My Learning</span></h1>
         <p class="tagline">Can you spot who's faking it?</p>
       </div>
-      <p class="text-center mb-3">An educational party game where learners know the term and fakers must bluff their way through!</p>
+      <p class="text-center mb-3">An educational party game where learners know the term and fakers must bluff their way through.</p>
       <div class="spacer"></div>
       <div id="home-list-status"></div>
       <div class="spacer-md"></div>
@@ -1264,7 +1277,7 @@
             </div>
             <div id="role-faker-container" style="display: none;">
               <p class="mb-2">You <strong>do NOT</strong> know the term.</p>
-              <p>Listen carefully and try to blend in!</p>
+              <p>Listen carefully and try to blend in.</p>
             </div>
           </div>
         </div>
@@ -1375,7 +1388,7 @@
       
       <div class="card mb-2">
         <h3 class="mb-1">Overview</h3>
-        <p>Fake My Learning is an educational game where most players know a term and its definition. One or more players are Fakers who don't know the term and must bluff!</p>
+        <p>Fake My Learning is an educational game where most players know a term and its definition. One or more players are Fakers who don't know the term and must bluff.</p>
       </div>
       
       <div class="card mb-2">
@@ -1390,7 +1403,7 @@
 
       <div class="card mb-2">
         <h3 class="mb-1">Give Clues</h3>
-        <p>Take turns saying ONE word related to the term. Fakers must bluff!</p>
+        <p>Take turns saying ONE word related to the term. Fakers must bluff.</p>
       </div>
 
       <div class="card mb-2">
@@ -1399,7 +1412,7 @@
         <p><strong class="text-danger">Fakers win</strong> by staying hidden</p>
       </div>
       
-      <button class="btn btn-primary" onclick="hideModal('how-to-play-modal')" style="margin-top: 20px;">Got It!</button>
+      <button class="btn btn-primary" onclick="hideModal('how-to-play-modal')" style="margin-top: 20px;">Got It</button>
     </div>
   </div>
 
@@ -1514,42 +1527,64 @@
       updateHomeScreen();
     }
 
-    let holdRevealState = { hasRevealed: false, isHolding: false };
+    let holdRevealState = { hasRevealed: false, isHolding: false, endProcessed: false };
+    let holdAbortController = null;
+    let isTransitioning = false;  // Prevent double-tap on navigation buttons
     
     function setupHoldToReveal() {
+      // Clean up any existing listeners first
+      cleanupHoldToReveal();
+      
       const wrapper = document.getElementById('hold-reveal-wrapper');
+      holdAbortController = new AbortController();
+      const signal = holdAbortController.signal;
       
       const startHold = (e) => {
         e.preventDefault();
         wrapper.classList.add('holding');
         holdRevealState.isHolding = true;
         holdRevealState.hasRevealed = true;
+        holdRevealState.endProcessed = false; // Reset for new hold
       };
       
       const endHold = (e) => {
+        // Prevent double-firing from touchend + mouseup
+        if (holdRevealState.endProcessed || !holdRevealState.isHolding) {
+          return;
+        }
+        holdRevealState.endProcessed = true;
+        holdRevealState.isHolding = false;
+        
         wrapper.classList.remove('holding');
-        if (holdRevealState.isHolding && holdRevealState.hasRevealed) {
+        if (holdRevealState.hasRevealed) {
           document.getElementById('next-player-container').classList.add('visible');
         }
-        holdRevealState.isHolding = false;
       };
       
-      wrapper.addEventListener('touchstart', startHold, { passive: false });
-      wrapper.addEventListener('touchend', endHold);
-      wrapper.addEventListener('touchcancel', endHold);
+      wrapper.addEventListener('touchstart', startHold, { passive: false, signal });
+      wrapper.addEventListener('touchend', endHold, { signal });
+      wrapper.addEventListener('touchcancel', endHold, { signal });
       
-      wrapper.addEventListener('mousedown', startHold);
-      wrapper.addEventListener('mouseup', endHold);
-      wrapper.addEventListener('mouseleave', endHold);
+      wrapper.addEventListener('mousedown', startHold, { signal });
+      wrapper.addEventListener('mouseup', endHold, { signal });
+      wrapper.addEventListener('mouseleave', endHold, { signal });
       
-      document.addEventListener('mouseup', endHold);
+      document.addEventListener('mouseup', endHold, { signal });
       
-      wrapper.addEventListener('contextmenu', (e) => e.preventDefault());
+      wrapper.addEventListener('contextmenu', (e) => e.preventDefault(), { signal });
+    }
+    
+    function cleanupHoldToReveal() {
+      if (holdAbortController) {
+        holdAbortController.abort();
+        holdAbortController = null;
+      }
     }
     
     function resetHoldToReveal() {
       holdRevealState.hasRevealed = false;
       holdRevealState.isHolding = false;
+      holdRevealState.endProcessed = false;
       document.getElementById('hold-reveal-wrapper').classList.remove('holding');
       document.getElementById('next-player-container').classList.remove('visible');
     }
@@ -1589,12 +1624,18 @@
       hideCancelConfirm('pass');
       hideCancelConfirm('role');
       
+      // Reset all game state
       gameState.players = [];
       gameState.secretWord = null;
       gameState.secretDefinition = null;
       gameState.allTerms = [];
       gameState.currentPlayerIndex = 0;
       gameState.chosenFakers = [];
+      gameState.gameMode = "NORMAL";
+      
+      // Reset UI state
+      isTransitioning = false;
+      resetHoldToReveal();
       
       showScreen('setup');
     }
@@ -1805,25 +1846,27 @@
       if (lists.length === 0) {
         container.innerHTML = `
           <div class="no-lists">
-            <p>No word lists yet!</p>
+            <p>No word lists yet.</p>
             <p style="margin-top: 10px;">Create your first list in the "Create New" tab.</p>
           </div>
         `;
         return;
       }
 
-      container.innerHTML = lists.map(list => `
-        <div class="word-list-item ${list.id === selectedId ? 'selected' : ''}" onclick="selectWordList('${list.id}')">
+      container.innerHTML = lists.map(list => {
+        const safeId = sanitizeId(list.id);
+        return `
+        <div class="word-list-item ${list.id === selectedId ? 'selected' : ''}" onclick="selectWordList('${safeId}')">
           <div class="list-info">
             <div class="list-name">${escapeHtml(list.name)}</div>
             <div class="list-count">${list.words.length} terms</div>
           </div>
           <div class="list-actions">
-            <button class="edit-btn" onclick="event.stopPropagation(); editWordList('${list.id}')">Edit</button>
-            <button class="delete-btn" onclick="event.stopPropagation(); deleteWordList('${list.id}')">Delete</button>
+            <button class="edit-btn" onclick="event.stopPropagation(); editWordList('${safeId}')">Edit</button>
+            <button class="delete-btn" onclick="event.stopPropagation(); deleteWordList('${safeId}')">Delete</button>
           </div>
         </div>
-      `).join('');
+      `}).join('');
     }
 
     function switchTab(tabId) {
@@ -1904,9 +1947,14 @@
     }
 
     function getMaxFakers(playerCount) {
-      if (playerCount >= 13) return 3;
-      if (playerCount >= 9) return 2;
-      return 1;
+      // Base limits by player count
+      let max;
+      if (playerCount >= 13) max = 3;
+      else if (playerCount >= 9) max = 2;
+      else max = 1;
+      
+      // Ensure at least 2 learners (cap fakers at playerCount - 2)
+      return Math.min(max, Math.max(1, playerCount - 2));
     }
 
     function updateFakerOptions(playerCount) {
@@ -1988,6 +2036,12 @@
         return;
       }
 
+      // Validate word list has at least one valid word
+      if (!selectedList.words || selectedList.words.length === 0) {
+        alert('Selected word list is empty. Please add terms to the list first.');
+        return;
+      }
+
       const textarea = document.getElementById('players-textarea');
       const names = parsePlayerNames(textarea.value);
 
@@ -2001,8 +2055,10 @@
         return;
       }
 
-      if (new Set(names).size !== names.length) {
-        alert('Player names must be unique');
+      // Check for duplicate names (case-insensitive)
+      const lowerNames = names.map(n => n.toLowerCase());
+      if (new Set(lowerNames).size !== names.length) {
+        alert('Player names must be unique (names are case-insensitive)');
         return;
       }
 
@@ -2035,14 +2091,37 @@
           p.definition = null;
         });
       } else if (gameState.gameMode === "ALL_DIFFERENT") {
-        gameState.secretWord = "VARIOUS";
-        gameState.secretDefinition = "Everyone had different terms!";
-        gameState.allTerms = shuffledWords.slice(0, playerCount);
-        gameState.players.forEach((p, i) => {
-          p.role = 'learner';
-          p.term = gameState.allTerms[i].term;
-          p.definition = gameState.allTerms[i].definition;
-        });
+        // Defensive check: ensure we have enough words for all players
+        if (shuffledWords.length < playerCount) {
+          // Fall back to NORMAL mode if not enough words
+          gameState.gameMode = "NORMAL";
+          const wordEntry = shuffledWords[0];
+          gameState.secretWord = wordEntry.term;
+          gameState.secretDefinition = wordEntry.definition;
+          gameState.allTerms = [wordEntry];
+          const fakerCount = Math.min(gameState.settings.fakerCount, Math.max(1, gameState.players.length - 2));
+          const fakerIndices = shuffleArray([...Array(gameState.players.length).keys()]).slice(0, fakerCount);
+          gameState.players.forEach((p, i) => {
+            if (fakerIndices.includes(i)) {
+              p.role = 'faker';
+              p.term = null;
+              p.definition = null;
+            } else {
+              p.role = 'learner';
+              p.term = wordEntry.term;
+              p.definition = wordEntry.definition;
+            }
+          });
+        } else {
+          gameState.secretWord = "VARIOUS";
+          gameState.secretDefinition = "Everyone had different terms!";
+          gameState.allTerms = shuffledWords.slice(0, playerCount);
+          gameState.players.forEach((p, i) => {
+            p.role = 'learner';
+            p.term = gameState.allTerms[i].term;
+            p.definition = gameState.allTerms[i].definition;
+          });
+        }
       } else if (gameState.gameMode === "NO_FAKER") {
         const wordEntry = shuffledWords[0];
         gameState.secretWord = wordEntry.term;
@@ -2059,7 +2138,8 @@
         gameState.secretDefinition = wordEntry.definition;
         gameState.allTerms = [wordEntry];
         
-        const fakerCount = Math.min(gameState.settings.fakerCount, gameState.players.length - 1);
+        // Ensure at least 2 learners by capping fakers at players - 2
+        const fakerCount = Math.min(gameState.settings.fakerCount, Math.max(1, gameState.players.length - 2));
         const fakerIndices = shuffleArray([...Array(gameState.players.length).keys()]).slice(0, fakerCount);
         
         gameState.players.forEach((p, i) => {
@@ -2083,6 +2163,14 @@
 
     function renderProgressDots(containerId) {
       const container = document.getElementById(containerId);
+      
+      // Add compact class for 12+ players to fit on small screens
+      if (gameState.players.length >= 12) {
+        container.classList.add('compact');
+      } else {
+        container.classList.remove('compact');
+      }
+      
       container.innerHTML = gameState.players.map((p, i) => {
         let cls = 'progress-dot';
         if (i < gameState.currentPlayerIndex) cls += ' done';
@@ -2100,6 +2188,10 @@
     }
 
     function showRoleScreen() {
+      // Prevent double-tap on Ready button
+      if (isTransitioning) return;
+      isTransitioning = true;
+      
       const player = gameState.players[gameState.currentPlayerIndex];
       
       resetHoldToReveal();
@@ -2129,9 +2221,16 @@
       renderProgressDots('progress-dots-role');
       hideCancelConfirm('role');
       showScreen('role');
+      
+      // Release lock after screen transition animation (300ms)
+      setTimeout(() => { isTransitioning = false; }, 350);
     }
 
     function nextPlayer() {
+      // Prevent double-tap from advancing twice
+      if (isTransitioning) return;
+      isTransitioning = true;
+      
       gameState.players[gameState.currentPlayerIndex].hasViewed = true;
       gameState.currentPlayerIndex++;
       
@@ -2141,6 +2240,9 @@
       } else {
         showPassDevice();
       }
+      
+      // Release lock after screen transition animation (300ms)
+      setTimeout(() => { isTransitioning = false; }, 350);
     }
 
     function showConfirmation() {
@@ -2243,12 +2345,12 @@
       
       if (gameState.gameMode === "ALL_FAKERS") {
         winnerIcon.textContent = "🌀";
-        winnerText.textContent = "Everyone was a Faker!";
+        winnerText.textContent = "Everyone was a Faker.";
         winnerText.className = "winner-text text-warning";
         fakersSection.style.display = "none";
       } else if (gameState.gameMode === "NO_FAKER") {
         winnerIcon.textContent = "😱";
-        winnerText.textContent = "There was no Faker!";
+        winnerText.textContent = "There was no Faker.";
         winnerText.className = "winner-text text-warning";
         fakersSection.style.display = "none";
       } else if (gameState.gameMode === "ALL_DIFFERENT") {
@@ -2259,7 +2361,7 @@
       } else if (correctGuesses > 0) {
         winnerIcon.textContent = "🎉";
         if (correctGuesses === totalFakers) {
-          winnerText.textContent = "Learners Win!";
+          winnerText.textContent = "Learners Win";
         } else {
           winnerText.textContent = `Found ${correctGuesses} of ${totalFakers}`;
         }
@@ -2276,7 +2378,7 @@
         }
       } else {
         winnerIcon.textContent = "😈";
-        winnerText.textContent = totalFakers > 1 ? "Fakers Win!" : "Faker Wins!";
+        winnerText.textContent = totalFakers > 1 ? "Fakers Win" : "Faker Wins";
         winnerText.className = "winner-text text-danger";
         
         fakersSection.style.display = "block";
@@ -2356,6 +2458,11 @@
         [arr[i], arr[j]] = [arr[j], arr[i]];
       }
       return arr;
+    }
+
+    function sanitizeId(id) {
+      // Ensure ID is a safe string (numeric only)
+      return String(id).replace(/[^0-9]/g, '');
     }
 
     function escapeHtml(str) {
