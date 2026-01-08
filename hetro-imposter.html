@@ -372,6 +372,43 @@
       background: rgba(239, 68, 68, 0.3);
     }
 
+    /* Resume game banner */
+    .resume-banner {
+      display: none;
+      background: var(--twist-bg);
+      border: 2px solid var(--twist-glow);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .resume-banner.show {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .resume-banner h3 {
+      color: var(--twist-glow);
+      margin-bottom: 8px;
+      font-size: 1.2rem;
+    }
+
+    .resume-banner p {
+      margin-bottom: 12px;
+      font-size: 0.9rem;
+    }
+
+    .resume-banner-btns {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+    }
+
+    .resume-banner-btns .btn {
+      flex: 0 1 auto;
+    }
+
     /* Role reveal container */
     .role-container {
       flex: 1;
@@ -993,6 +1030,17 @@
     <!-- Screen: Home -->
     <div id="screen-home" class="screen active">
       <div class="spacer"></div>
+      
+      <!-- Resume Game Banner -->
+      <div id="resume-banner" class="resume-banner">
+        <h3>⏸️ Game In Progress</h3>
+        <p id="resume-info">You have an unfinished game.</p>
+        <div class="resume-banner-btns">
+          <button class="btn btn-sm btn-secondary" onclick="discardSavedGame()">Discard</button>
+          <button class="btn btn-sm btn-primary" onclick="resumeGame()">Resume</button>
+        </div>
+      </div>
+      
       <div class="logo-container">
         <h1><span class="logo-hetro">Hetro</span> <span class="logo-imposter">Imposter</span></h1>
         <p class="tagline">Words with a twist</p>
@@ -1047,7 +1095,7 @@
           placeholder="Enter one name per line:&#10;Alice&#10;Bob&#10;Charlie&#10;Diana"
           oninput="updatePlayerCount()"
         ></textarea>
-        <p class="form-hint">Enter each player's name on a new line. The order determines who reveals first and the discussion order. Minimum 3 players required.</p>
+        <p class="form-hint" id="player-hint">One name per line. Names must be unique. Max 20 characters each.</p>
       </div>
 
       <div class="form-section">
@@ -1241,6 +1289,16 @@
 
   <script>
     'use strict';
+
+    // ==================== CONSTANTS ====================
+    const STORAGE_KEYS = {
+      GAME_STATE: 'hetro-imposter-game-state',
+      WORD_ORDER: 'hetro-imposter-word-order',
+      SETTINGS: 'hetro-imposter-settings',
+      PLAYER_NAMES: 'hetro-imposter-player-names'
+    };
+
+    const RESUMABLE_PHASES = ['pass', 'role', 'discussion', 'confirm'];
 
     // ==================== HETERONYM DATABASE ====================
     const HETERONYMS = [
@@ -1447,19 +1505,93 @@
       secretWord: null,
       allWords: [],
       currentPlayerIndex: 0,
-      phase: "setup",
-      chosenImposters: [], // Array for multiple selections
-      winner: null
+      phase: "home",
+      chosenImposters: [],
+      winner: null,
+      savedAt: null
     };
 
     let debugMode = "RANDOM";
     let debugSequence = "";
     let otherCategoryClicks = 0;
 
+    // ==================== STORAGE FUNCTIONS ====================
+    function saveGameState() {
+      try {
+        gameState.savedAt = Date.now();
+        localStorage.setItem(STORAGE_KEYS.GAME_STATE, JSON.stringify(gameState));
+      } catch (e) {
+        console.warn('Could not save game state:', e);
+      }
+    }
+
+    function loadGameState() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEYS.GAME_STATE);
+        if (saved) {
+          return JSON.parse(saved);
+        }
+      } catch (e) {
+        console.warn('Could not load game state:', e);
+      }
+      return null;
+    }
+
+    function clearGameState() {
+      try {
+        localStorage.removeItem(STORAGE_KEYS.GAME_STATE);
+      } catch (e) {
+        console.warn('Could not clear game state:', e);
+      }
+    }
+
+    function saveSettings() {
+      try {
+        localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(gameState.settings));
+      } catch (e) {
+        console.warn('Could not save settings:', e);
+      }
+    }
+
+    function loadSettings() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+        if (saved) {
+          return JSON.parse(saved);
+        }
+      } catch (e) {
+        console.warn('Could not load settings:', e);
+      }
+      return null;
+    }
+
+    function savePlayerNames(names) {
+      try {
+        localStorage.setItem(STORAGE_KEYS.PLAYER_NAMES, JSON.stringify(names));
+      } catch (e) {
+        console.warn('Could not save player names:', e);
+      }
+    }
+
+    function loadPlayerNames() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEYS.PLAYER_NAMES);
+        if (saved) {
+          return JSON.parse(saved);
+        }
+      } catch (e) {
+        console.warn('Could not load player names:', e);
+      }
+      return null;
+    }
+
     // ==================== WORD ORDER MANAGEMENT ====================
+    // Pending word order - not committed until game completes
+    let pendingWordOrder = null;
+
     function getWordOrder() {
       try {
-        const saved = localStorage.getItem('hetro-imposter-word-order');
+        const saved = localStorage.getItem(STORAGE_KEYS.WORD_ORDER);
         if (saved) {
           return JSON.parse(saved);
         }
@@ -1471,7 +1603,7 @@
 
     function saveWordOrder(order) {
       try {
-        localStorage.setItem('hetro-imposter-word-order', JSON.stringify(order));
+        localStorage.setItem(STORAGE_KEYS.WORD_ORDER, JSON.stringify(order));
       } catch (e) {
         console.warn('Could not save word order:', e);
       }
@@ -1480,7 +1612,6 @@
     function initWordOrder() {
       let order = getWordOrder();
       if (!order || !order.indices || order.indices.length !== HETERONYMS.length) {
-        // First run or word list changed - create new shuffled order
         order = {
           indices: shuffleArray([...Array(HETERONYMS.length).keys()]),
           currentIndex: 0
@@ -1490,33 +1621,226 @@
       return order;
     }
 
+    /**
+     * Get next word WITHOUT committing to storage.
+     * Words are only "used" when commitWordOrder() is called.
+     * This prevents cancelled games from consuming words.
+     */
     function getNextWord() {
-      let order = initWordOrder();
-      
-      // Get the word at current position
-      const wordIndex = order.indices[order.currentIndex];
-      const word = HETERONYMS[wordIndex];
-      
-      // Advance to next position
-      order.currentIndex++;
-      
-      // If we've used all words, reshuffle and start over
-      if (order.currentIndex >= order.indices.length) {
-        order.indices = shuffleArray([...Array(HETERONYMS.length).keys()]);
-        order.currentIndex = 0;
+      // Validate HETERONYMS array
+      if (!HETERONYMS || !Array.isArray(HETERONYMS) || HETERONYMS.length === 0) {
+        throw new Error('Word database is empty or invalid');
+      }
+
+      // Initialize pending state from saved order if not already set
+      if (!pendingWordOrder) {
+        const saved = initWordOrder();
+        // Deep copy to avoid mutating saved state
+        pendingWordOrder = {
+          indices: [...saved.indices],
+          currentIndex: saved.currentIndex
+        };
       }
       
-      saveWordOrder(order);
+      const wordIndex = pendingWordOrder.indices[pendingWordOrder.currentIndex];
+      const word = HETERONYMS[wordIndex];
+      
+      // Validate word structure
+      if (!word || !word.word || !Array.isArray(word.meanings) || word.meanings.length < 2) {
+        throw new Error(`Invalid word at index ${wordIndex}`);
+      }
+      
+      // Advance pending index
+      pendingWordOrder.currentIndex++;
+      if (pendingWordOrder.currentIndex >= pendingWordOrder.indices.length) {
+        // Reshuffle for next cycle
+        pendingWordOrder.indices = shuffleArray([...Array(HETERONYMS.length).keys()]);
+        pendingWordOrder.currentIndex = 0;
+      }
+      
       return word;
+    }
+
+    /**
+     * Commit pending word order to storage.
+     * Call this when a game completes successfully.
+     */
+    function commitWordOrder() {
+      if (pendingWordOrder) {
+        saveWordOrder(pendingWordOrder);
+        pendingWordOrder = null;
+      }
+    }
+
+    /**
+     * Discard pending word order without saving.
+     * Call this when a game is cancelled.
+     */
+    function rollbackWordOrder() {
+      pendingWordOrder = null;
     }
 
     // ==================== INITIALIZATION ====================
     function init() {
-      loadState();
+      // Validate word database at startup
+      if (!validateWordDatabase()) {
+        document.body.innerHTML = `
+          <div style="padding: 40px; text-align: center; color: #ef4444;">
+            <h1>Error</h1>
+            <p>Word database failed validation. The app cannot start.</p>
+            <p>Please refresh the page or contact support.</p>
+          </div>
+        `;
+        return;
+      }
+      
       setupDebugListener();
       setupHoldToReveal();
+      
+      // Load saved settings
+      const savedSettings = loadSettings();
+      if (savedSettings) {
+        gameState.settings = { ...gameState.settings, ...savedSettings };
+      }
+      
+      // Load saved player names into textarea
+      const savedNames = loadPlayerNames();
+      if (savedNames && savedNames.length > 0) {
+        document.getElementById('players-textarea').value = savedNames.join('\n');
+      }
+      
       renderCategoryPills();
       updatePlayerCount();
+      
+      // Check for resumable game
+      checkForResumableGame();
+    }
+
+    /**
+     * Validate the HETERONYMS database at startup
+     * Returns true if valid, false otherwise
+     */
+    function validateWordDatabase() {
+      try {
+        if (!HETERONYMS || !Array.isArray(HETERONYMS)) {
+          console.error('HETERONYMS is not an array');
+          return false;
+        }
+        
+        if (HETERONYMS.length === 0) {
+          console.error('HETERONYMS array is empty');
+          return false;
+        }
+        
+        // Validate a sample of words (first, middle, last)
+        const sampleIndices = [0, Math.floor(HETERONYMS.length / 2), HETERONYMS.length - 1];
+        for (const idx of sampleIndices) {
+          const word = HETERONYMS[idx];
+          if (!word || typeof word.word !== 'string' || !Array.isArray(word.meanings) || word.meanings.length < 2) {
+            console.error(`Invalid word at index ${idx}:`, word);
+            return false;
+          }
+        }
+        
+        console.log(`Word database validated: ${HETERONYMS.length} words`);
+        return true;
+        
+      } catch (e) {
+        console.error('Error validating word database:', e);
+        return false;
+      }
+    }
+
+    function checkForResumableGame() {
+      const savedGame = loadGameState();
+      const banner = document.getElementById('resume-banner');
+      const info = document.getElementById('resume-info');
+      
+      if (savedGame && RESUMABLE_PHASES.includes(savedGame.phase) && savedGame.players && savedGame.players.length > 0) {
+        // Calculate how old the save is
+        const ageMinutes = savedGame.savedAt ? Math.floor((Date.now() - savedGame.savedAt) / 60000) : 0;
+        let ageText = '';
+        if (ageMinutes < 1) {
+          ageText = 'just now';
+        } else if (ageMinutes < 60) {
+          ageText = `${ageMinutes} minute${ageMinutes !== 1 ? 's' : ''} ago`;
+        } else {
+          const ageHours = Math.floor(ageMinutes / 60);
+          ageText = `${ageHours} hour${ageHours !== 1 ? 's' : ''} ago`;
+        }
+        
+        const playerNames = savedGame.players.map(p => p.name).slice(0, 3).join(', ');
+        const moreCount = savedGame.players.length > 3 ? ` +${savedGame.players.length - 3} more` : '';
+        
+        info.textContent = `${savedGame.players.length} players (${playerNames}${moreCount}) • Saved ${ageText}`;
+        banner.classList.add('show');
+      } else {
+        banner.classList.remove('show');
+        clearGameState();
+      }
+    }
+
+    function resumeGame() {
+      const savedGame = loadGameState();
+      if (!savedGame) {
+        checkForResumableGame();
+        return;
+      }
+      
+      // Restore game state
+      gameState = savedGame;
+      
+      // Hide resume banner
+      document.getElementById('resume-banner').classList.remove('show');
+      
+      // Navigate to appropriate screen and restore UI state
+      switch (gameState.phase) {
+        case 'pass':
+          showPassDevice();
+          break;
+        case 'role':
+          showPassDevice(); // Go back to pass screen for safety
+          break;
+        case 'discussion':
+          document.getElementById('starting-player').textContent = gameState.players[0].name;
+          showScreen('discussion');
+          break;
+        case 'confirm':
+          restoreConfirmScreen();
+          break;
+        default:
+          showScreen('home');
+      }
+    }
+
+    function restoreConfirmScreen() {
+      const imposterCount = gameState.settings.imposterCount;
+      
+      const instruction = document.getElementById('confirm-instruction');
+      if (imposterCount === 1) {
+        instruction.textContent = 'Select who the group decided is the imposter:';
+      } else {
+        instruction.textContent = `Select the ${imposterCount} players the group decided are imposters:`;
+      }
+      
+      const container = document.getElementById('confirm-options');
+      container.innerHTML = gameState.players.map(p => {
+        const isSelected = gameState.chosenImposters.includes(p.id);
+        return `
+          <div class="confirm-option ${isSelected ? 'selected' : ''}" data-player-id="${p.id}" onclick="toggleConfirmation(${p.id})">
+            <span class="player-name">${escapeHtml(p.name)}</span>
+          </div>
+        `;
+      }).join('');
+      
+      updateSelectionCounter();
+      showScreen('confirm');
+    }
+
+    function discardSavedGame() {
+      clearGameState();
+      rollbackWordOrder();
+      document.getElementById('resume-banner').classList.remove('show');
     }
 
     function setupDebugListener() {
@@ -1546,7 +1870,6 @@
       
       const endHold = (e) => {
         wrapper.classList.remove('holding');
-        // Show next player button after reveal (only trigger once)
         if (holdRevealState.isHolding && holdRevealState.hasRevealed) {
           document.getElementById('next-player-container').classList.add('visible');
         }
@@ -1591,37 +1914,20 @@
       hideCancelConfirm('pass');
       hideCancelConfirm('role');
       
+      // Rollback word order so cancelled games don't consume words
+      rollbackWordOrder();
+      
+      clearGameState();
+      
       gameState.players = [];
       gameState.secretWord = null;
       gameState.allWords = [];
       gameState.currentPlayerIndex = 0;
       gameState.chosenImposters = [];
       gameState.winner = null;
+      gameState.phase = 'setup';
       
       showScreen('setup');
-    }
-
-    // ==================== STATE MANAGEMENT ====================
-    function saveState() {
-      try {
-        localStorage.setItem('hetro-imposter-state', JSON.stringify(gameState));
-      } catch (e) {
-        console.warn('Could not save state:', e);
-      }
-    }
-
-    function loadState() {
-      try {
-        const saved = localStorage.getItem('hetro-imposter-state');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed.settings) {
-            gameState.settings = parsed.settings;
-          }
-        }
-      } catch (e) {
-        console.warn('Could not load state:', e);
-      }
     }
 
     // ==================== SCREEN NAVIGATION ====================
@@ -1629,7 +1935,11 @@
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
       document.getElementById(`screen-${screenId}`).classList.add('active');
       gameState.phase = screenId;
-      saveState();
+      
+      // Save state for resumable phases
+      if (RESUMABLE_PHASES.includes(screenId)) {
+        saveGameState();
+      }
     }
 
     // ==================== SETUP SCREEN ====================
@@ -1652,13 +1962,11 @@
       }
       container.innerHTML = html;
       
-      // Adjust selected count if it exceeds max
       if (gameState.settings.imposterCount > maxImposters) {
         gameState.settings.imposterCount = maxImposters;
-        updateImposterOptions(playerCount); // Re-render with corrected selection
+        updateImposterOptions(playerCount);
       }
       
-      // Update hint
       if (maxImposters === 1) {
         hint.textContent = '9+ players unlocks 2 imposters, 13+ unlocks 3.';
       } else if (maxImposters === 2) {
@@ -1670,36 +1978,117 @@
 
     function updatePlayerCount() {
       const textarea = document.getElementById('players-textarea');
-      const names = parsePlayerNames(textarea.value);
+      const parseResult = parsePlayerNames(textarea.value);
+      const names = parseResult.names;
       const count = names.length;
+      const hasDuplicates = parseResult.hasDuplicates;
+      const duplicateNames = parseResult.duplicateNames;
       
       const badge = document.getElementById('player-count-badge');
+      const hint = document.getElementById('player-hint');
+      const startBtn = document.getElementById('btn-start');
+      
       badge.textContent = `${count} player${count !== 1 ? 's' : ''}`;
       
-      const startBtn = document.getElementById('btn-start');
-      startBtn.disabled = count < 3;
+      // Determine if we can start
+      const canStart = count >= 3 && !hasDuplicates;
+      startBtn.disabled = !canStart;
       
-      if (count < 3 && count > 0) {
+      // Update badge color and hint text
+      if (hasDuplicates) {
         badge.style.background = 'var(--imposter-glow)';
+        hint.textContent = `Duplicate names: ${duplicateNames.join(', ')}. Each player needs a unique name.`;
+        hint.style.color = 'var(--imposter-glow)';
+      } else if (count < 3 && count > 0) {
+        badge.style.background = 'var(--imposter-glow)';
+        hint.textContent = `Need ${3 - count} more player${3 - count !== 1 ? 's' : ''} to start.`;
+        hint.style.color = 'var(--text-muted)';
       } else if (count >= 3) {
         badge.style.background = 'var(--civilian-glow)';
+        hint.textContent = 'Ready to play! Names are unique.';
+        hint.style.color = 'var(--civilian-glow)';
       } else {
         badge.style.background = 'var(--accent)';
+        hint.textContent = 'One name per line. Names must be unique. Max 20 characters each.';
+        hint.style.color = 'var(--text-muted)';
       }
       
       updateImposterOptions(count);
+      
+      // Save player names
+      if (names.length > 0) {
+        savePlayerNames(names);
+      }
     }
 
+    /**
+     * Parse and sanitize player names from textarea input.
+     * - Trims whitespace from each name
+     * - Collapses multiple spaces to single space
+     * - Removes commas
+     * - Truncates to max 20 characters
+     * - Removes blank lines
+     * - Limits to 20 players max
+     * - Detects duplicates (case-insensitive)
+     * 
+     * @param {string} text - Raw textarea content
+     * @returns {Object} { names: string[], hasDuplicates: boolean, duplicateNames: string[] }
+     */
     function parsePlayerNames(text) {
-      return text
+      const MAX_NAME_LENGTH = 20;
+      const MAX_PLAYERS = 20;
+      
+      const names = text
         .split('\n')
-        .map(name => name.trim())
+        .map(name => {
+          // Trim whitespace
+          let cleaned = name.trim();
+          // Collapse multiple spaces to single space
+          cleaned = cleaned.replace(/\s+/g, ' ');
+          // Remove commas
+          cleaned = cleaned.replace(/,/g, '');
+          // Truncate to max length
+          if (cleaned.length > MAX_NAME_LENGTH) {
+            cleaned = cleaned.substring(0, MAX_NAME_LENGTH).trim();
+          }
+          return cleaned;
+        })
         .filter(name => name.length > 0)
-        .slice(0, 20);
+        .slice(0, MAX_PLAYERS);
+      
+      // Check for duplicates (case-insensitive)
+      const lowerNames = names.map(n => n.toLowerCase());
+      const seen = new Set();
+      const duplicates = new Set();
+      
+      for (const name of lowerNames) {
+        if (seen.has(name)) {
+          duplicates.add(name);
+        }
+        seen.add(name);
+      }
+      
+      // Get the original-case versions of duplicate names
+      const duplicateNames = names.filter(n => duplicates.has(n.toLowerCase()));
+      // Dedupe the duplicate list itself
+      const uniqueDuplicateNames = [...new Set(duplicateNames)];
+      
+      return {
+        names: names,
+        hasDuplicates: duplicates.size > 0,
+        duplicateNames: uniqueDuplicateNames
+      };
+    }
+
+    /**
+     * Get just the names array (convenience wrapper for places that don't need duplicate info)
+     */
+    function getPlayerNames(text) {
+      return parsePlayerNames(text).names;
     }
 
     function selectImposters(count) {
-      const playerCount = parsePlayerNames(document.getElementById('players-textarea').value).length;
+      const playerCount = parsePlayerNames(document.getElementById('players-textarea').value).names.length;
       const maxImposters = getMaxImposters(playerCount);
       
       if (count > maxImposters) return;
@@ -1708,11 +2097,11 @@
       document.querySelectorAll('[data-imposters]').forEach(btn => {
         btn.classList.toggle('selected', parseInt(btn.dataset.imposters) === count);
       });
-      saveState();
+      saveSettings();
     }
 
     function renderCategoryPills() {
-      otherCategoryClicks = 0; // Reset click counter
+      otherCategoryClicks = 0;
       const container = document.getElementById('category-pills');
       container.innerHTML = CATEGORIES.map(cat => {
         const isDisabled = cat === 'other';
@@ -1727,7 +2116,6 @@
         `;
       }).join('');
       
-      // Ensure heteronyms is selected by default
       if (gameState.settings.category === 'all' || gameState.settings.category === 'other') {
         gameState.settings.category = 'heteronyms';
         renderCategoryPills();
@@ -1750,92 +2138,114 @@
       document.querySelectorAll('.category-pill').forEach(pill => {
         pill.classList.toggle('selected', pill.dataset.category === category);
       });
-      saveState();
+      saveSettings();
     }
 
     // ==================== GAME LOGIC ====================
     function startGame() {
-      const textarea = document.getElementById('players-textarea');
-      const names = parsePlayerNames(textarea.value);
-      
-      if (names.length < 3) return;
-      
-      gameState.players = names.map((name, i) => ({
-        id: i,
-        name: name,
-        role: null,
-        word: null,
-        hasViewed: false
-      }));
-      
-      gameState.gameMode = selectGameMode();
-      
-      // Get next word from shuffled order
-      const selectedWord = getNextWord();
-      
-      switch (gameState.gameMode) {
-        case "ALL_IMPOSTERS":
-          gameState.secretWord = selectedWord;
-          gameState.allWords = [gameState.secretWord];
-          gameState.players.forEach(p => {
-            p.role = "imposter";
-            p.word = null;
-            p.meaning = null;
-          });
-          break;
-          
-        case "ALL_DIFFERENT":
-          // For ALL_DIFFERENT mode, we need multiple different words
-          gameState.allWords = [selectedWord];
-          for (let i = 1; i < gameState.players.length; i++) {
-            gameState.allWords.push(getNextWord());
-          }
-          gameState.secretWord = gameState.allWords[0];
-          gameState.players.forEach((p, i) => {
-            p.role = "civilian";
-            p.word = gameState.allWords[i];
-            p.meaning = gameState.allWords[i].meanings[Math.random() < 0.5 ? 0 : 1];
-          });
-          break;
-          
-        case "NO_IMPOSTER":
-          gameState.secretWord = selectedWord;
-          gameState.allWords = [gameState.secretWord];
-          gameState.players.forEach(p => {
-            p.role = "civilian";
-            p.word = gameState.secretWord;
-            p.meaning = gameState.secretWord.meanings[Math.random() < 0.5 ? 0 : 1];
-          });
-          break;
-          
-        default:
-          gameState.secretWord = selectedWord;
-          gameState.allWords = [gameState.secretWord];
-          
-          const imposterIndices = shuffleArray(
-            [...Array(gameState.players.length).keys()]
-          ).slice(0, gameState.settings.imposterCount);
-          
-          gameState.players.forEach((p, i) => {
-            if (imposterIndices.includes(i)) {
+      try {
+        const textarea = document.getElementById('players-textarea');
+        const parseResult = parsePlayerNames(textarea.value);
+        const names = parseResult.names;
+        
+        // Validate before starting
+        if (names.length < 3) return;
+        if (parseResult.hasDuplicates) return; // Shouldn't happen if button is disabled, but safety check
+        
+        // Save player names for next time
+        savePlayerNames(names);
+        
+        // Reset pending word order for fresh game
+        rollbackWordOrder();
+        
+        gameState.players = names.map((name, i) => ({
+          id: i,
+          name: name,
+          role: null,
+          word: null,
+          hasViewed: false
+        }));
+        
+        gameState.gameMode = selectGameMode();
+        
+        const selectedWord = getNextWord();
+        
+        switch (gameState.gameMode) {
+          case "ALL_IMPOSTERS":
+            gameState.secretWord = selectedWord;
+            gameState.allWords = [gameState.secretWord];
+            gameState.players.forEach(p => {
               p.role = "imposter";
               p.word = null;
               p.meaning = null;
-            } else {
+            });
+            break;
+            
+          case "ALL_DIFFERENT":
+            gameState.allWords = [selectedWord];
+            for (let i = 1; i < gameState.players.length; i++) {
+              gameState.allWords.push(getNextWord());
+            }
+            gameState.secretWord = gameState.allWords[0];
+            gameState.players.forEach((p, i) => {
+              p.role = "civilian";
+              p.word = gameState.allWords[i];
+              p.meaning = gameState.allWords[i].meanings[Math.random() < 0.5 ? 0 : 1];
+            });
+            break;
+            
+          case "NO_IMPOSTER":
+            gameState.secretWord = selectedWord;
+            gameState.allWords = [gameState.secretWord];
+            gameState.players.forEach(p => {
               p.role = "civilian";
               p.word = gameState.secretWord;
               p.meaning = gameState.secretWord.meanings[Math.random() < 0.5 ? 0 : 1];
-            }
-          });
-          break;
+            });
+            break;
+            
+          default:
+            gameState.secretWord = selectedWord;
+            gameState.allWords = [gameState.secretWord];
+            
+            const imposterIndices = shuffleArray(
+              [...Array(gameState.players.length).keys()]
+            ).slice(0, gameState.settings.imposterCount);
+            
+            gameState.players.forEach((p, i) => {
+              if (imposterIndices.includes(i)) {
+                p.role = "imposter";
+                p.word = null;
+                p.meaning = null;
+              } else {
+                p.role = "civilian";
+                p.word = gameState.secretWord;
+                p.meaning = gameState.secretWord.meanings[Math.random() < 0.5 ? 0 : 1];
+              }
+            });
+            break;
+        }
+        
+        gameState.currentPlayerIndex = 0;
+        gameState.chosenImposters = [];
+        gameState.winner = null;
+        
+        saveGameState();
+        showPassDevice();
+        
+      } catch (error) {
+        console.error('Error starting game:', error);
+        rollbackWordOrder();
+        showError('Failed to start game. Please try again.');
       }
-      
-      gameState.currentPlayerIndex = 0;
-      gameState.chosenImposters = [];
-      gameState.winner = null;
-      
-      saveState();
-      showPassDevice();
+    }
+
+    /**
+     * Display an error message to the user
+     */
+    function showError(message) {
+      // Simple alert for now - could be upgraded to a nicer modal
+      alert(message);
     }
 
     function selectGameMode() {
@@ -1875,7 +2285,6 @@
       document.getElementById('hold-reveal-wrapper').classList.remove('holding');
       document.getElementById('next-player-container').classList.remove('visible');
       
-      // Reset the hasRevealed flag by re-setting up the hold handler
       resetHoldToReveal();
       
       document.getElementById('role-player-label').textContent = player.name;
@@ -1909,13 +2318,14 @@
       gameState.players[gameState.currentPlayerIndex].hasViewed = true;
       gameState.currentPlayerIndex++;
       
+      saveGameState();
+      
       if (gameState.currentPlayerIndex >= gameState.players.length) {
         document.getElementById('starting-player').textContent = gameState.players[0].name;
         showScreen('discussion');
       } else {
         showPassDevice();
       }
-      saveState();
     }
 
     // ==================== CONFIRMATION ====================
@@ -1923,7 +2333,6 @@
       const imposterCount = gameState.settings.imposterCount;
       gameState.chosenImposters = [];
       
-      // Update instruction text
       const instruction = document.getElementById('confirm-instruction');
       if (imposterCount === 1) {
         instruction.textContent = 'Select who the group decided is the imposter:';
@@ -1931,7 +2340,6 @@
         instruction.textContent = `Select the ${imposterCount} players the group decided are imposters:`;
       }
       
-      // Render player options
       const container = document.getElementById('confirm-options');
       container.innerHTML = gameState.players.map(p => `
         <div class="confirm-option" data-player-id="${p.id}" onclick="toggleConfirmation(${p.id})">
@@ -1948,25 +2356,22 @@
       const index = gameState.chosenImposters.indexOf(playerId);
       
       if (index > -1) {
-        // Deselect
         gameState.chosenImposters.splice(index, 1);
       } else {
-        // Select (if not at max)
         if (gameState.chosenImposters.length < imposterCount) {
           gameState.chosenImposters.push(playerId);
         } else if (imposterCount === 1) {
-          // For single selection, replace
           gameState.chosenImposters = [playerId];
         }
       }
       
-      // Update visual selection
       document.querySelectorAll('.confirm-option').forEach(opt => {
         const id = parseInt(opt.dataset.playerId);
         opt.classList.toggle('selected', gameState.chosenImposters.includes(id));
       });
       
       updateSelectionCounter();
+      saveGameState();
     }
 
     function updateSelectionCounter() {
@@ -1988,21 +2393,24 @@
 
     // ==================== RESULTS ====================
     function revealResults() {
+      // Commit word order since game completed successfully
+      commitWordOrder();
+      
+      // Clear saved game since we're completing it
+      clearGameState();
+      
       const chosenPlayers = gameState.chosenImposters.map(id => 
         gameState.players.find(p => p.id === id)
       );
       const actualImposters = gameState.players.filter(p => p.role === "imposter");
       
-      // Count correct guesses
       const correctGuesses = chosenPlayers.filter(p => p.role === "imposter").length;
       const totalImposters = actualImposters.length;
       
-      // Show chosen players
       document.getElementById('result-chosen-names').innerHTML = chosenPlayers.map(p => 
         `<div class="result-name">${escapeHtml(p.name)}</div>`
       ).join('');
       
-      // Show their actual roles
       const resultReveal = document.getElementById('result-reveal');
       const resultRoles = document.getElementById('result-roles');
       
@@ -2014,7 +2422,6 @@
         }
       }).join('');
       
-      // Determine result styling
       if (correctGuesses === chosenPlayers.length && correctGuesses > 0) {
         resultReveal.className = "result-reveal correct";
       } else if (correctGuesses === 0) {
@@ -2023,7 +2430,6 @@
         resultReveal.className = "result-reveal partial";
       }
       
-      // Determine winner and show message
       const winnerIcon = document.getElementById('winner-icon');
       const winnerText = document.getElementById('winner-text');
       const impostersSection = document.getElementById('actual-imposters-section');
@@ -2053,7 +2459,6 @@
         }
         winnerText.className = "winner-text text-success";
         
-        // Show remaining imposters if not all caught
         if (correctGuesses < totalImposters) {
           const remainingImposters = actualImposters.filter(p => !gameState.chosenImposters.includes(p.id));
           impostersSection.style.display = "block";
@@ -2139,11 +2544,12 @@
       gameState.currentPlayerIndex = 0;
       gameState.chosenImposters = [];
       gameState.winner = null;
-      saveState();
       startGame();
     }
 
     function newPlayers() {
+      clearGameState();
+      rollbackWordOrder();
       gameState.players = [];
       document.getElementById('players-textarea').value = '';
       updatePlayerCount();
