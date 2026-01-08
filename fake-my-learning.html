@@ -894,6 +894,49 @@
       margin-top: 4px;
     }
 
+    .resume-banner {
+      background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-elevated) 100%);
+      border: 1px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .resume-content {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .resume-icon {
+      font-size: 1.5rem;
+    }
+
+    .resume-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .resume-text strong {
+      color: var(--text-primary);
+    }
+
+    .resume-info {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    .resume-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .resume-actions .btn {
+      flex: 1;
+    }
+
     .teacher-btn {
       position: fixed;
       bottom: 20px;
@@ -1176,6 +1219,22 @@
       <p class="text-center mb-3">An educational party game where learners know the term and fakers must bluff their way through.</p>
       <div class="spacer"></div>
       <div id="home-list-status"></div>
+      
+      <!-- Resume Banner (hidden by default) -->
+      <div id="resume-banner" class="resume-banner" style="display: none;">
+        <div class="resume-content">
+          <span class="resume-icon">⏸️</span>
+          <div class="resume-text">
+            <strong>Unfinished Game</strong>
+            <span class="resume-info"></span>
+          </div>
+        </div>
+        <div class="resume-actions">
+          <button class="btn btn-sm btn-primary" onclick="resumeGame()">Resume</button>
+          <button class="btn btn-sm btn-ghost" onclick="discardSavedGame()">Discard</button>
+        </div>
+      </div>
+      
       <div class="spacer-md"></div>
       <button class="btn btn-primary btn-lg" onclick="showScreen('setup')" id="new-game-btn" disabled>New Game</button>
       <div class="spacer-md"></div>
@@ -1204,7 +1263,7 @@
           placeholder="Enter one name per line:&#10;Alice&#10;Bob&#10;Charlie&#10;Diana"
           oninput="updatePlayerCount()"
         ></textarea>
-        <p class="form-hint">Enter each player's name on a new line. Minimum 4, maximum 24 players.</p>
+        <p class="form-hint" id="player-hint">Enter each player's name on a new line. Minimum 4, maximum 24 players.</p>
       </div>
 
       <div class="form-section">
@@ -1504,7 +1563,9 @@
     const STORAGE_KEYS = {
       PIN: 'fml_teacher_pin',
       WORD_LISTS: 'fml_word_lists',
-      SELECTED_LIST: 'fml_selected_list'
+      SELECTED_LIST: 'fml_selected_list',
+      GAME_STATE: 'fml_game_state',
+      PLAYER_NAMES: 'fml_player_names'
     };
 
     let gameState = {
@@ -1523,8 +1584,164 @@
     };
 
     function init() {
-      setupHoldToReveal();
-      updateHomeScreen();
+      try {
+        validateWordDatabase();
+        setupHoldToReveal();
+        restorePlayerNames();
+        checkForUnfinishedGame();
+        updateHomeScreen();
+      } catch (error) {
+        console.error('Initialization error:', error);
+        showError('Failed to initialize game. Try refreshing the page.');
+      }
+    }
+
+    // === Game State Persistence ===
+    function saveGameState() {
+      try {
+        const stateToSave = {
+          players: gameState.players,
+          settings: gameState.settings,
+          gameMode: gameState.gameMode,
+          secretWord: gameState.secretWord,
+          secretDefinition: gameState.secretDefinition,
+          allTerms: gameState.allTerms,
+          currentPlayerIndex: gameState.currentPlayerIndex,
+          phase: gameState.phase,
+          chosenFakers: gameState.chosenFakers,
+          savedAt: Date.now()
+        };
+        localStorage.setItem(STORAGE_KEYS.GAME_STATE, JSON.stringify(stateToSave));
+      } catch (error) {
+        console.error('Failed to save game state:', error);
+      }
+    }
+
+    function loadGameState() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEYS.GAME_STATE);
+        return saved ? JSON.parse(saved) : null;
+      } catch (error) {
+        console.error('Failed to load game state:', error);
+        return null;
+      }
+    }
+
+    function clearGameState() {
+      try {
+        localStorage.removeItem(STORAGE_KEYS.GAME_STATE);
+      } catch (error) {
+        console.error('Failed to clear game state:', error);
+      }
+    }
+
+    function checkForUnfinishedGame() {
+      const saved = loadGameState();
+      if (saved && saved.players && saved.players.length > 0) {
+        // Check if game is old (more than 2 hours)
+        const twoHours = 2 * 60 * 60 * 1000;
+        if (Date.now() - saved.savedAt > twoHours) {
+          clearGameState();
+          return;
+        }
+        
+        // Show resume banner
+        const banner = document.getElementById('resume-banner');
+        if (banner) {
+          const playerCount = saved.players.length;
+          const phase = saved.phase || 'unknown';
+          banner.querySelector('.resume-info').textContent = 
+            `${playerCount} players — ${phase} phase`;
+          banner.style.display = 'block';
+        }
+      }
+    }
+
+    function resumeGame() {
+      const saved = loadGameState();
+      if (!saved) return;
+      
+      // Restore game state
+      gameState.players = saved.players;
+      gameState.settings = saved.settings;
+      gameState.gameMode = saved.gameMode;
+      gameState.secretWord = saved.secretWord;
+      gameState.secretDefinition = saved.secretDefinition;
+      gameState.allTerms = saved.allTerms;
+      gameState.currentPlayerIndex = saved.currentPlayerIndex;
+      gameState.chosenFakers = saved.chosenFakers || [];
+      
+      // Hide resume banner
+      const banner = document.getElementById('resume-banner');
+      if (banner) banner.style.display = 'none';
+      
+      // Navigate to appropriate screen
+      const phase = saved.phase || 'pass';
+      if (phase === 'pass' || phase === 'role') {
+        showPassDevice();
+      } else if (phase === 'discussion') {
+        showScreen('discussion');
+      } else if (phase === 'confirm') {
+        showConfirmation();
+      } else {
+        showPassDevice();
+      }
+    }
+
+    function discardSavedGame() {
+      clearGameState();
+      const banner = document.getElementById('resume-banner');
+      if (banner) banner.style.display = 'none';
+    }
+
+    function savePlayerNames() {
+      try {
+        const textarea = document.getElementById('players-textarea');
+        if (textarea && textarea.value.trim()) {
+          localStorage.setItem(STORAGE_KEYS.PLAYER_NAMES, textarea.value);
+        }
+      } catch (error) {
+        console.error('Failed to save player names:', error);
+      }
+    }
+
+    function restorePlayerNames() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEYS.PLAYER_NAMES);
+        if (saved) {
+          const textarea = document.getElementById('players-textarea');
+          if (textarea) {
+            textarea.value = saved;
+            updatePlayerCount();
+          }
+        }
+      } catch (error) {
+        console.error('Failed to restore player names:', error);
+      }
+    }
+
+    // === Validation ===
+    function validateWordDatabase() {
+      try {
+        const lists = getWordLists();
+        // Filter out any corrupted lists
+        const validLists = lists.filter(list => 
+          list && list.id && list.name && Array.isArray(list.words)
+        );
+        if (validLists.length !== lists.length) {
+          saveWordLists(validLists);
+          console.warn('Cleaned up corrupted word lists');
+        }
+      } catch (error) {
+        console.error('Word database validation failed:', error);
+        // Reset to empty if completely corrupted
+        localStorage.removeItem(STORAGE_KEYS.WORD_LISTS);
+      }
+    }
+
+    function showError(message) {
+      // Use alert for now, could be enhanced with a nicer modal
+      alert(message);
     }
 
     let holdRevealState = { hasRevealed: false, isHolding: false, endProcessed: false };
@@ -1598,6 +1815,13 @@
         updateSetupScreen();
       } else if (screenId === 'home') {
         updateHomeScreen();
+        checkForUnfinishedGame();
+      }
+      
+      // Save game state during active play phases
+      const playPhases = ['pass', 'role', 'discussion', 'confirm'];
+      if (playPhases.includes(screenId)) {
+        saveGameState();
       }
     }
 
@@ -1636,6 +1860,9 @@
       // Reset UI state
       isTransitioning = false;
       resetHoldToReveal();
+      
+      // Clear saved game (don't commit word - game was cancelled)
+      clearGameState();
       
       showScreen('setup');
     }
@@ -1941,9 +2168,36 @@
     function parsePlayerNames(text) {
       return text
         .split('\n')
-        .map(name => name.trim())
+        .map(name => {
+          return name
+            .trim()
+            .replace(/,/g, '')           // Strip commas
+            .replace(/\s+/g, ' ')         // Collapse whitespace
+            .substring(0, 20);            // Truncate to 20 chars
+        })
         .filter(name => name.length > 0)
         .slice(0, 24);
+    }
+
+    function getValidationStatus(names) {
+      if (names.length === 0) {
+        return { valid: false, message: 'Enter player names (one per line)', status: 'empty' };
+      }
+      if (names.length < 4) {
+        return { valid: false, message: `Need ${4 - names.length} more player${4 - names.length !== 1 ? 's' : ''}`, status: 'error' };
+      }
+      if (names.length > 24) {
+        return { valid: false, message: 'Maximum 24 players', status: 'error' };
+      }
+      
+      // Check for duplicates (case-insensitive)
+      const lowerNames = names.map(n => n.toLowerCase());
+      const duplicates = lowerNames.filter((name, i) => lowerNames.indexOf(name) !== i);
+      if (duplicates.length > 0) {
+        return { valid: false, message: `Duplicate: "${duplicates[0]}"`, status: 'error' };
+      }
+      
+      return { valid: true, message: `${names.length} players — Ready!`, status: 'ready' };
     }
 
     function getMaxFakers(playerCount) {
@@ -1985,22 +2239,38 @@
     }
 
     function updatePlayerCount() {
-      const count = getPlayerCount();
+      const textarea = document.getElementById('players-textarea');
+      const names = parsePlayerNames(textarea.value);
+      const validation = getValidationStatus(names);
+      const count = names.length;
       
       const badge = document.getElementById('player-count-badge');
-      badge.textContent = `${count} player${count !== 1 ? 's' : ''}`;
-      
+      const hint = document.getElementById('player-hint');
       const startBtn = document.getElementById('btn-start');
       const selectedList = getSelectedList();
-      startBtn.disabled = count < 4 || !selectedList;
       
-      if (count < 4 && count > 0) {
-        badge.style.background = 'var(--faker-glow)';
-      } else if (count >= 4) {
+      // Update badge text and color based on validation status
+      badge.textContent = validation.message;
+      
+      if (validation.status === 'ready') {
         badge.style.background = 'var(--learner-glow)';
+      } else if (validation.status === 'error') {
+        badge.style.background = 'var(--faker-glow)';
       } else {
         badge.style.background = 'var(--accent)';
       }
+      
+      // Update hint with helpful info
+      if (validation.status === 'ready') {
+        hint.textContent = 'Names are truncated to 20 characters. Ready to play!';
+      } else if (validation.status === 'error' && validation.message.includes('Duplicate')) {
+        hint.textContent = 'Each player needs a unique name.';
+      } else {
+        hint.textContent = 'Enter each player\'s name on a new line. Minimum 4, maximum 24 players.';
+      }
+      
+      // Enable/disable start button
+      startBtn.disabled = !validation.valid || !selectedList;
       
       updateFakerOptions(count);
       updateSetupScreen();
@@ -2030,44 +2300,38 @@
     }
 
     function startGame() {
-      const selectedList = getSelectedList();
-      if (!selectedList) {
-        alert('Please select a word list first');
-        return;
-      }
+      try {
+        const selectedList = getSelectedList();
+        if (!selectedList) {
+          alert('Please select a word list first');
+          return;
+        }
 
-      // Validate word list has at least one valid word
-      if (!selectedList.words || selectedList.words.length === 0) {
-        alert('Selected word list is empty. Please add terms to the list first.');
-        return;
-      }
+        // Validate word list has at least one valid word
+        if (!selectedList.words || selectedList.words.length === 0) {
+          alert('Selected word list is empty. Please add terms to the list first.');
+          return;
+        }
 
-      const textarea = document.getElementById('players-textarea');
-      const names = parsePlayerNames(textarea.value);
+        const textarea = document.getElementById('players-textarea');
+        const names = parsePlayerNames(textarea.value);
+        
+        // Use centralized validation
+        const validation = getValidationStatus(names);
+        if (!validation.valid) {
+          alert(validation.message);
+          return;
+        }
 
-      if (names.length < 4) {
-        alert('Please enter at least 4 player names');
-        return;
-      }
+        // Save player names for next session
+        savePlayerNames();
 
-      if (names.length > 24) {
-        alert('Maximum 24 players allowed');
-        return;
-      }
-
-      // Check for duplicate names (case-insensitive)
-      const lowerNames = names.map(n => n.toLowerCase());
-      if (new Set(lowerNames).size !== names.length) {
-        alert('Player names must be unique (names are case-insensitive)');
-        return;
-      }
-
-      gameState.players = names.map((name, i) => ({
-        id: i,
-        name: name,
-        role: null,
-        term: null,
-        definition: null,
+        gameState.players = names.map((name, i) => ({
+          id: i,
+          name: name,
+          role: null,
+          term: null,
+          definition: null,
         hasViewed: false
       }));
 
@@ -2159,6 +2423,11 @@
       gameState.chosenFakers = [];
       
       showPassDevice();
+      
+      } catch (error) {
+        console.error('Failed to start game:', error);
+        showError('Something went wrong starting the game. Please try again.');
+      }
     }
 
     function renderProgressDots(containerId) {
@@ -2391,6 +2660,9 @@
     }
 
     function showSummary() {
+      // Game completed - clear saved state
+      clearGameState();
+      
       document.getElementById('summary-word').textContent = gameState.secretWord;
       document.getElementById('summary-definition').textContent = gameState.secretDefinition;
       
@@ -2447,6 +2719,10 @@
     function newPlayers() {
       gameState.players = [];
       document.getElementById('players-textarea').value = '';
+      // Clear saved player names so fresh start
+      try {
+        localStorage.removeItem(STORAGE_KEYS.PLAYER_NAMES);
+      } catch (e) {}
       updatePlayerCount();
       showScreen('setup');
     }
