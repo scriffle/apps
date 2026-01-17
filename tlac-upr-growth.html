@@ -195,6 +195,11 @@ body{font-family:var(--font-body);font-size:var(--text-base);line-height:var(--l
 .stat-row:last-child{border-bottom:none}
 .stat-label{color:var(--color-text-secondary);font-size:var(--text-xs)}
 .stat-value{font-weight:600;font-size:var(--text-xs);color:var(--color-text)}
+.stat-warning{color:var(--color-warning)}
+.stat-warning-critical{color:var(--color-error)}
+.warning-banner{padding:var(--space-3);border-radius:var(--radius-sm);margin-bottom:var(--space-3);font-size:var(--text-sm);font-weight:500}
+.warning-banner.warning-critical{background:var(--color-error-bg);color:var(--color-error);border:1px solid var(--color-error)}
+.warning-banner.warning-backup{background:var(--color-warning-bg);color:#8b6914;border:1px solid var(--color-warning)}
 .progress-bar{height:6px;background:var(--color-bg-warm);border-radius:3px;overflow:hidden;margin-top:var(--space-2)}
 .progress-fill{height:100%;background:linear-gradient(90deg,var(--color-secondary) 0%,var(--color-success) 100%);border-radius:3px;transition:width var(--transition-slow)}
 .progress-fill.upr-fill{background:linear-gradient(90deg,var(--color-upr-primary) 0%,var(--color-upr-accent) 100%)}
@@ -207,6 +212,7 @@ body{font-family:var(--font-body);font-size:var(--text-base);line-height:var(--l
 @keyframes slideIn{from{opacity:0;transform:translateX(100%)}to{opacity:1;transform:translateX(0)}}
 .toast-success{border-left:3px solid var(--color-success)}
 .toast-error{border-left:3px solid var(--color-error)}
+.toast-warning{border-left:3px solid var(--color-warning)}
 .toast-info{border-left:3px solid var(--color-info)}
 .toast-message{flex:1;font-size:var(--text-xs)}
 .toast-close{background:0 0;border:none;color:var(--color-text-muted);cursor:pointer;padding:var(--space-1);font-size:var(--text-sm)}
@@ -237,6 +243,17 @@ body{font-family:var(--font-body);font-size:var(--text-base);line-height:var(--l
 .shortcuts-title{font-family:var(--font-display);font-size:var(--text-base);font-weight:600;margin-bottom:var(--space-3)}
 .shortcut-row{display:flex;justify-content:space-between;align-items:center;padding:var(--space-1) 0;border-bottom:1px solid var(--color-border-light);font-size:var(--text-xs)}
 .shortcut-key{background:var(--color-bg-warm);padding:2px var(--space-2);border-radius:var(--radius-sm);font-family:monospace;font-size:var(--text-xs)}
+.email-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2500;align-items:center;justify-content:center}
+.email-modal-overlay.active{display:flex}
+.email-modal-content{background:var(--color-bg-card);border-radius:var(--radius-lg);max-width:400px;width:94%;max-height:90vh;overflow:hidden;box-shadow:var(--shadow-lg)}
+.email-modal-header{display:flex;justify-content:space-between;align-items:center;padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-border)}
+.email-modal-header h3{font-family:var(--font-display);font-size:var(--text-lg);font-weight:600;margin:0}
+.email-modal-close{background:none;border:none;font-size:var(--text-xl);color:var(--color-text-muted);cursor:pointer;padding:var(--space-1);line-height:1;border-radius:var(--radius-sm)}
+.email-modal-close:hover{color:var(--color-text);background:var(--color-bg-hover)}
+.email-modal-body{padding:var(--space-4)}
+.email-options{display:flex;flex-direction:column;gap:var(--space-2)}
+.email-option-btn{display:flex;align-items:center;gap:var(--space-3);text-align:left;padding:var(--space-3)}
+.email-option-btn small{font-size:var(--text-xs)}
 .welcome-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:3000;align-items:center;justify-content:center}
 .welcome-overlay.active{display:flex}
 .welcome-panel{background:var(--color-bg-card);border-radius:var(--radius-lg);max-width:600px;width:94%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--shadow-lg)}
@@ -349,7 +366,7 @@ body{font-family:var(--font-body);font-size:var(--text-base);line-height:var(--l
                             <div><h4 style="margin-bottom:var(--space-2);font-weight:600">Clear All Data</h4><p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--space-3)">Start fresh (cannot be undone)</p><button class="btn btn-secondary" id="clear-data-btn" style="color:var(--color-error)">🗑️ Clear All Data</button></div>
                         </div>
                     </div>
-                    <div class="card"><div class="card-header"><h2 class="card-title">Data Summary</h2></div><div id="data-summary"></div></div>
+                    <div class="card"><div class="card-header"><h2 class="card-title">Data Summary</h2></div><div id="data-warning-banner" style="display:none"></div><div id="data-summary"></div></div>
                 </div>
             </div>
             <!-- UPR Panel -->
@@ -418,6 +435,7 @@ body{font-family:var(--font-body);font-size:var(--text-base);line-height:var(--l
                     <div class="stats-grid">
                         <div class="stat-card upr-stat-card">
                             <h3 class="stat-card-title">Data Summary</h3>
+                            <div id="upr-data-warning-banner" style="display:none"></div>
                             <div id="upr-data-summary"></div>
                         </div>
                         <div class="stat-card upr-stat-card">
@@ -758,14 +776,18 @@ const STATUS_OPTIONS = [
 ];
 
 const STORAGE_KEY = 'tlacGrowthData';
+const DATA_VERSION = 2; // Increment when schema changes
 const MAX_UNDO_HISTORY = 100;
 const MAX_WEEK_FOCUS = 3;
 const TOTAL_TECHNIQUES = Object.values(TLAC_DATA).flat().length;
 const TOTAL_UPR_PRACTICES = 59;
 const WEEK_DURATION_DAYS = 7;
+const STORAGE_WARNING_THRESHOLD = 0.8; // Warn at 80% of quota
+const BACKUP_REMINDER_DAYS = 14; // Remind to backup every 2 weeks
 
 // App State
 let appState = {
+    version: DATA_VERSION,
     profile: { name: '', yearsTeaching: '', schoolName: '', subjectArea: '', currentClasses: '', professionalGoals: '' },
     techniques: {},
     uprPractices: {},
@@ -775,35 +797,358 @@ let appState = {
     uprGlobalNotes: [],
     theme: 'light',
     fontSize: 16,
-    lastSaved: null
+    lastSaved: null,
+    lastExported: null
 };
 
 let undoStack = [];
 let redoStack = [];
 
 // ========== STORAGE ==========
+
+// Deep merge utility - preserves nested structures
+function deepMerge(target, source) {
+    const result = { ...target };
+    for (const key of Object.keys(source)) {
+        if (source[key] === null || source[key] === undefined) {
+            continue; // Don't overwrite with null/undefined
+        }
+        if (Array.isArray(source[key])) {
+            result[key] = [...source[key]]; // Arrays are replaced, not merged
+        } else if (typeof source[key] === 'object' && typeof target[key] === 'object' && !Array.isArray(target[key])) {
+            result[key] = deepMerge(target[key], source[key]);
+        } else {
+            result[key] = source[key];
+        }
+    }
+    return result;
+}
+
+// Validate imported/loaded data structure
+function validateDataStructure(data) {
+    const errors = [];
+    
+    // Check required top-level fields exist
+    const requiredFields = ['profile', 'techniques', 'uprPractices', 'weekFocus', 'uprWeekFocus', 'globalNotes', 'uprGlobalNotes'];
+    for (const field of requiredFields) {
+        if (data[field] === undefined) {
+            errors.push(`Missing required field: ${field}`);
+        }
+    }
+    
+    // Validate profile structure
+    if (data.profile && typeof data.profile !== 'object') {
+        errors.push('Profile must be an object');
+    }
+    
+    // Validate techniques structure
+    if (data.techniques) {
+        if (typeof data.techniques !== 'object') {
+            errors.push('Techniques must be an object');
+        } else {
+            for (const [id, tech] of Object.entries(data.techniques)) {
+                if (tech && typeof tech === 'object') {
+                    if (tech.notes && !Array.isArray(tech.notes)) {
+                        errors.push(`Technique ${id} notes must be an array`);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Validate UPR practices structure
+    if (data.uprPractices) {
+        if (typeof data.uprPractices !== 'object') {
+            errors.push('UPR Practices must be an object');
+        } else {
+            for (const [id, practice] of Object.entries(data.uprPractices)) {
+                if (practice && typeof practice === 'object') {
+                    if (practice.notes && !Array.isArray(practice.notes)) {
+                        errors.push(`Practice ${id} notes must be an array`);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Validate weekFocus structure
+    if (data.weekFocus) {
+        if (typeof data.weekFocus !== 'object') {
+            errors.push('Week focus must be an object');
+        } else {
+            if (data.weekFocus.techniques && !Array.isArray(data.weekFocus.techniques)) {
+                errors.push('Week focus techniques must be an array');
+            }
+            if (data.weekFocus.history && !Array.isArray(data.weekFocus.history)) {
+                errors.push('Week focus history must be an array');
+            }
+        }
+    }
+    
+    // Validate uprWeekFocus structure
+    if (data.uprWeekFocus) {
+        if (typeof data.uprWeekFocus !== 'object') {
+            errors.push('UPR week focus must be an object');
+        } else {
+            if (data.uprWeekFocus.practices && !Array.isArray(data.uprWeekFocus.practices)) {
+                errors.push('UPR week focus practices must be an array');
+            }
+            if (data.uprWeekFocus.history && !Array.isArray(data.uprWeekFocus.history)) {
+                errors.push('UPR week focus history must be an array');
+            }
+        }
+    }
+    
+    // Validate global notes
+    if (data.globalNotes && !Array.isArray(data.globalNotes)) {
+        errors.push('Global notes must be an array');
+    }
+    if (data.uprGlobalNotes && !Array.isArray(data.uprGlobalNotes)) {
+        errors.push('UPR global notes must be an array');
+    }
+    
+    return { valid: errors.length === 0, errors };
+}
+
+// Migrate data from older versions
+function migrateData(data) {
+    const originalVersion = data.version || 1;
+    let migrated = { ...data };
+    
+    // Migration from version 1 (no version field) to version 2
+    if (!data.version || data.version < 2) {
+        // Add version field
+        migrated.version = 2;
+        
+        // Add lastExported field if missing
+        if (migrated.lastExported === undefined) {
+            migrated.lastExported = null;
+        }
+        
+        // Ensure all techniques have proper structure
+        if (migrated.techniques) {
+            for (const id of Object.keys(migrated.techniques)) {
+                if (!migrated.techniques[id].notes) {
+                    migrated.techniques[id].notes = [];
+                }
+                if (!migrated.techniques[id].status) {
+                    migrated.techniques[id].status = 'not-yet';
+                }
+            }
+        }
+        
+        // Ensure all UPR practices have proper structure
+        if (migrated.uprPractices) {
+            for (const id of Object.keys(migrated.uprPractices)) {
+                if (!migrated.uprPractices[id].notes) {
+                    migrated.uprPractices[id].notes = [];
+                }
+                if (!migrated.uprPractices[id].status) {
+                    migrated.uprPractices[id].status = 'not-yet';
+                }
+            }
+        }
+        
+        // Ensure weekFocus has all required properties
+        if (migrated.weekFocus) {
+            migrated.weekFocus = {
+                techniques: migrated.weekFocus.techniques || [],
+                startDate: migrated.weekFocus.startDate || null,
+                notes: migrated.weekFocus.notes || {},
+                plans: migrated.weekFocus.plans || {},
+                history: migrated.weekFocus.history || []
+            };
+        }
+        
+        // Ensure uprWeekFocus has all required properties
+        if (migrated.uprWeekFocus) {
+            migrated.uprWeekFocus = {
+                practices: migrated.uprWeekFocus.practices || [],
+                startDate: migrated.uprWeekFocus.startDate || null,
+                notes: migrated.uprWeekFocus.notes || {},
+                plans: migrated.uprWeekFocus.plans || {},
+                history: migrated.uprWeekFocus.history || []
+            };
+        }
+        
+        console.log(`Migrated data from version ${originalVersion} to version 2`);
+    }
+    
+    // Future migrations would go here:
+    // if (migrated.version < 3) { ... migrated.version = 3; }
+    
+    return migrated;
+}
+
+// Check storage quota and return status
+function checkStorageQuota() {
+    try {
+        const dataSize = JSON.stringify(appState).length;
+        
+        // Estimate available localStorage (typically 5-10MB, we'll assume 5MB conservatively)
+        let totalSpace = 5 * 1024 * 1024; // 5MB default
+        let usedSpace = 0;
+        
+        // Calculate total localStorage usage
+        for (let key in localStorage) {
+            if (localStorage.hasOwnProperty(key)) {
+                usedSpace += localStorage.getItem(key).length * 2; // UTF-16 = 2 bytes per char
+            }
+        }
+        
+        const percentUsed = usedSpace / totalSpace;
+        const ourDataSize = dataSize * 2; // UTF-16
+        const ourPercent = ourDataSize / totalSpace;
+        
+        return {
+            dataSize: dataSize,
+            dataSizeKB: (dataSize / 1024).toFixed(1),
+            usedSpace: usedSpace,
+            usedSpaceMB: (usedSpace / (1024 * 1024)).toFixed(2),
+            totalSpaceMB: (totalSpace / (1024 * 1024)).toFixed(0),
+            percentUsed: percentUsed,
+            isWarning: percentUsed >= STORAGE_WARNING_THRESHOLD,
+            isCritical: percentUsed >= 0.95
+        };
+    } catch (e) {
+        return { error: true, message: e.message };
+    }
+}
+
+// Check if backup reminder should be shown
+function shouldShowBackupReminder() {
+    if (!appState.lastExported) {
+        // If never exported and has some data, suggest backup
+        const hasData = Object.keys(appState.techniques).some(id => 
+            appState.techniques[id].status !== 'not-yet' || 
+            (appState.techniques[id].notes && appState.techniques[id].notes.length > 0)
+        ) || appState.globalNotes.length > 0;
+        return hasData;
+    }
+    
+    const daysSinceExport = (new Date() - new Date(appState.lastExported)) / (1000 * 60 * 60 * 24);
+    return daysSinceExport >= BACKUP_REMINDER_DAYS;
+}
+
+// Get backup status info
+function getBackupStatus() {
+    if (!appState.lastExported) {
+        return { needsBackup: shouldShowBackupReminder(), message: 'Never backed up', daysSince: null };
+    }
+    
+    const daysSince = Math.floor((new Date() - new Date(appState.lastExported)) / (1000 * 60 * 60 * 24));
+    const needsBackup = daysSince >= BACKUP_REMINDER_DAYS;
+    
+    let message;
+    if (daysSince === 0) {
+        message = 'Backed up today';
+    } else if (daysSince === 1) {
+        message = 'Backed up yesterday';
+    } else {
+        message = `Backed up ${daysSince} days ago`;
+    }
+    
+    return { needsBackup, message, daysSince };
+}
+
 function saveData() {
     appState.lastSaved = new Date().toISOString();
+    appState.version = DATA_VERSION;
+    
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+        const dataStr = JSON.stringify(appState);
+        localStorage.setItem(STORAGE_KEY, dataStr);
         updateSaveStatus();
-    } catch (e) { console.error('Failed to save:', e); }
+        
+        // Check quota after save
+        const quota = checkStorageQuota();
+        if (quota.isCritical) {
+            showToast('⚠️ Storage nearly full! Please export your data as backup.', 'error');
+        } else if (quota.isWarning) {
+            showToast('Storage space getting low. Consider exporting a backup.', 'warning');
+        }
+    } catch (e) {
+        if (e.name === 'QuotaExceededError' || e.code === 22) {
+            showToast('❌ Storage full! Export your data immediately to avoid data loss.', 'error');
+            // Attempt to show export dialog
+            setTimeout(() => {
+                if (confirm('Storage is full. Would you like to export your data now to prevent data loss?')) {
+                    exportData();
+                }
+            }, 100);
+        } else {
+            console.error('Failed to save:', e);
+            showToast('Failed to save data. Please export a backup.', 'error');
+        }
+    }
 }
 
 function loadData() {
+    let loadedSuccessfully = false;
+    let dataCorrupted = false;
+    
     try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
-            const parsed = JSON.parse(saved);
-            appState = { ...appState, ...parsed };
+            let parsed;
+            try {
+                parsed = JSON.parse(saved);
+            } catch (parseError) {
+                console.error('Data corruption detected - JSON parse failed:', parseError);
+                dataCorrupted = true;
+                throw parseError;
+            }
+            
+            // Validate structure
+            const validation = validateDataStructure(parsed);
+            if (!validation.valid) {
+                console.warn('Data validation warnings:', validation.errors);
+                // Continue anyway - we'll try to recover what we can
+            }
+            
+            // Migrate if needed
+            const migrated = migrateData(parsed);
+            
+            // Deep merge with defaults to ensure all fields exist
+            appState = deepMerge(appState, migrated);
+            
             if (appState.theme) applyTheme(appState.theme);
             if (appState.fontSize) applyFontSize(appState.fontSize);
+            
+            loadedSuccessfully = true;
         }
-    } catch (e) { console.error('Failed to load:', e); }
+    } catch (e) {
+        console.error('Failed to load:', e);
+        
+        if (dataCorrupted) {
+            // Offer to export corrupted data for recovery attempt
+            setTimeout(() => {
+                const corrupted = localStorage.getItem(STORAGE_KEY);
+                if (corrupted && confirm('Your saved data appears to be corrupted. Would you like to download the raw data for potential recovery? You will start fresh after this.')) {
+                    const blob = new Blob([corrupted], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `tlac-corrupted-data-${new Date().toISOString().split('T')[0]}.txt`;
+                    link.click();
+                    URL.revokeObjectURL(url);
+                }
+            }, 500);
+        }
+    }
+    
     initTechniques();
     initUprPractices();
     checkWeekReset();
     checkUprWeekReset();
+    
+    // Show backup reminder if needed (after a short delay to not overwhelm on load)
+    setTimeout(() => {
+        if (loadedSuccessfully && shouldShowBackupReminder()) {
+            const backup = getBackupStatus();
+            showToast(`📦 ${backup.message}. Consider exporting a backup.`, 'info');
+        }
+    }, 2000);
 }
 
 function initTechniques() {
@@ -1965,31 +2310,137 @@ function saveUprGlobalNote() {
 function renderDataSummary() {
     const stats = calculateStats();
     const uprStats = calculateUprStats();
+    const quota = checkStorageQuota();
+    const backup = getBackupStatus();
+    
+    // Storage status indicator
+    let storageStatus = '🟢';
+    let storageClass = 'stat-value';
+    if (quota.isCritical) {
+        storageStatus = '🔴';
+        storageClass = 'stat-value stat-warning-critical';
+    } else if (quota.isWarning) {
+        storageStatus = '🟡';
+        storageClass = 'stat-value stat-warning';
+    }
+    
+    // Backup status indicator
+    let backupStatus = '🟢';
+    let backupClass = 'stat-value';
+    if (backup.needsBackup) {
+        backupStatus = backup.daysSince === null ? '🟡' : (backup.daysSince > 30 ? '🔴' : '🟡');
+        backupClass = backup.daysSince > 30 ? 'stat-value stat-warning-critical' : 'stat-value stat-warning';
+    }
+    
     document.getElementById('data-summary').innerHTML = `
         <div class="stat-row"><span class="stat-label">Teacher</span><span class="stat-value">${appState.profile.name || 'Not set'}</span></div>
         <div class="stat-row"><span class="stat-label">TLAC Techniques Tracked</span><span class="stat-value">${Object.keys(appState.techniques).length}/${TOTAL_TECHNIQUES}</span></div>
         <div class="stat-row"><span class="stat-label">UPR Practices Tracked</span><span class="stat-value">${Object.keys(appState.uprPractices).length}/${TOTAL_UPR_PRACTICES || 0}</span></div>
         <div class="stat-row"><span class="stat-label">Total Notes</span><span class="stat-value">${stats.totalNotes + uprStats.totalNotes}</span></div>
-        <div class="stat-row"><span class="stat-label">Data Size</span><span class="stat-value">${(JSON.stringify(appState).length / 1024).toFixed(1)} KB</span></div>
-        <div class="stat-row"><span class="stat-label">Last Saved</span><span class="stat-value">${appState.lastSaved ? new Date(appState.lastSaved).toLocaleString() : 'Never'}</span></div>`;
+        <div class="stat-row"><span class="stat-label">Data Size</span><span class="${storageClass}">${storageStatus} ${quota.dataSizeKB} KB</span></div>
+        <div class="stat-row"><span class="stat-label">Storage Used</span><span class="${storageClass}">${quota.usedSpaceMB} / ~${quota.totalSpaceMB} MB (${(quota.percentUsed * 100).toFixed(0)}%)</span></div>
+        <div class="stat-row"><span class="stat-label">Last Saved</span><span class="stat-value">${appState.lastSaved ? new Date(appState.lastSaved).toLocaleString() : 'Never'}</span></div>
+        <div class="stat-row"><span class="stat-label">Last Backup</span><span class="${backupClass}">${backupStatus} ${backup.message}</span></div>
+        <div class="stat-row"><span class="stat-label">Data Version</span><span class="stat-value">v${appState.version || 1}</span></div>`;
+    
+    // Show warning banner if needed
+    const warningContainer = document.getElementById('data-warning-banner');
+    if (warningContainer) {
+        if (quota.isCritical) {
+            warningContainer.innerHTML = `<div class="warning-banner warning-critical">⚠️ Storage is nearly full! Export your data now to prevent data loss.</div>`;
+            warningContainer.style.display = 'block';
+        } else if (backup.needsBackup && backup.daysSince > 30) {
+            warningContainer.innerHTML = `<div class="warning-banner warning-backup">📦 You haven't backed up in over a month. Consider exporting your data.</div>`;
+            warningContainer.style.display = 'block';
+        } else {
+            warningContainer.style.display = 'none';
+        }
+    }
 }
 
 function renderUprDataSummary() {
     const stats = calculateStats();
     const uprStats = calculateUprStats();
+    const quota = checkStorageQuota();
+    const backup = getBackupStatus();
+    
+    // Storage status indicator
+    let storageStatus = '🟢';
+    let storageClass = 'stat-value';
+    if (quota.isCritical) {
+        storageStatus = '🔴';
+        storageClass = 'stat-value stat-warning-critical';
+    } else if (quota.isWarning) {
+        storageStatus = '🟡';
+        storageClass = 'stat-value stat-warning';
+    }
+    
+    // Backup status indicator
+    let backupStatus = '🟢';
+    let backupClass = 'stat-value';
+    if (backup.needsBackup) {
+        backupStatus = backup.daysSince === null ? '🟡' : (backup.daysSince > 30 ? '🔴' : '🟡');
+        backupClass = backup.daysSince > 30 ? 'stat-value stat-warning-critical' : 'stat-value stat-warning';
+    }
+    
     document.getElementById('upr-data-summary').innerHTML = `
         <div class="stat-row"><span class="stat-label">Teacher</span><span class="stat-value">${appState.profile.name || 'Not set'}</span></div>
         <div class="stat-row"><span class="stat-label">TLAC Techniques Tracked</span><span class="stat-value">${Object.keys(appState.techniques).length}/${TOTAL_TECHNIQUES}</span></div>
         <div class="stat-row"><span class="stat-label">UPR Practices Tracked</span><span class="stat-value">${Object.keys(appState.uprPractices).length}/${TOTAL_UPR_PRACTICES || 0}</span></div>
         <div class="stat-row"><span class="stat-label">Total Notes</span><span class="stat-value">${stats.totalNotes + uprStats.totalNotes}</span></div>
-        <div class="stat-row"><span class="stat-label">Data Size</span><span class="stat-value">${(JSON.stringify(appState).length / 1024).toFixed(1)} KB</span></div>
-        <div class="stat-row"><span class="stat-label">Last Saved</span><span class="stat-value">${appState.lastSaved ? new Date(appState.lastSaved).toLocaleString() : 'Never'}</span></div>`;
+        <div class="stat-row"><span class="stat-label">Data Size</span><span class="${storageClass}">${storageStatus} ${quota.dataSizeKB} KB</span></div>
+        <div class="stat-row"><span class="stat-label">Storage Used</span><span class="${storageClass}">${quota.usedSpaceMB} / ~${quota.totalSpaceMB} MB (${(quota.percentUsed * 100).toFixed(0)}%)</span></div>
+        <div class="stat-row"><span class="stat-label">Last Saved</span><span class="stat-value">${appState.lastSaved ? new Date(appState.lastSaved).toLocaleString() : 'Never'}</span></div>
+        <div class="stat-row"><span class="stat-label">Last Backup</span><span class="${backupClass}">${backupStatus} ${backup.message}</span></div>
+        <div class="stat-row"><span class="stat-label">Data Version</span><span class="stat-value">v${appState.version || 1}</span></div>`;
+    
+    // Show warning banner if needed
+    const warningContainer = document.getElementById('upr-data-warning-banner');
+    if (warningContainer) {
+        if (quota.isCritical) {
+            warningContainer.innerHTML = `<div class="warning-banner warning-critical">⚠️ Storage is nearly full! Export your data now to prevent data loss.</div>`;
+            warningContainer.style.display = 'block';
+        } else if (backup.needsBackup && backup.daysSince > 30) {
+            warningContainer.innerHTML = `<div class="warning-banner warning-backup">📦 You haven't backed up in over a month. Consider exporting your data.</div>`;
+            warningContainer.style.display = 'block';
+        } else {
+            warningContainer.style.display = 'none';
+        }
+    }
 }
 
 // ========== EXPORT & IMPORT ==========
+
+// Generate simple checksum for data integrity verification
+function generateChecksum(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(16);
+}
+
 function exportData() {
-    const dataStr = JSON.stringify(appState, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
+    // Create export wrapper with metadata
+    const exportPayload = {
+        _exportMeta: {
+            version: DATA_VERSION,
+            exportedAt: new Date().toISOString(),
+            appName: 'TLAC and UPR Growth',
+            teacherName: appState.profile.name || 'Unknown'
+        },
+        data: appState
+    };
+    
+    // Generate checksum of the data portion
+    const dataStr = JSON.stringify(appState);
+    exportPayload._exportMeta.checksum = generateChecksum(dataStr);
+    exportPayload._exportMeta.dataSize = dataStr.length;
+    
+    const exportStr = JSON.stringify(exportPayload, null, 2);
+    const blob = new Blob([exportStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -1998,29 +2449,213 @@ function exportData() {
     link.download = `tlac-growth-${teacherName}-${date}.json`;
     link.click();
     URL.revokeObjectURL(url);
+    
+    // Update lastExported timestamp
+    appState.lastExported = new Date().toISOString();
+    saveData();
+    
     showToast('Data exported successfully', 'success');
 }
 
 function importData(event) {
     const file = event.target.files[0];
     if (!file) return;
+    
     const reader = new FileReader();
     reader.onload = (e) => {
         try {
-            const imported = JSON.parse(e.target.result);
-            if (confirm('This will replace all current data. Are you sure?')) {
-                pushUndoState();
-                appState = { ...appState, ...imported };
-                saveData();
-                renderAll();
-                showToast('Data imported successfully', 'success');
+            const fileContent = JSON.parse(e.target.result);
+            
+            let importedData;
+            let isNewFormat = false;
+            
+            // Check if this is the new format with _exportMeta wrapper
+            if (fileContent._exportMeta && fileContent.data) {
+                isNewFormat = true;
+                const meta = fileContent._exportMeta;
+                
+                // Verify checksum if present
+                if (meta.checksum) {
+                    const dataStr = JSON.stringify(fileContent.data);
+                    const calculatedChecksum = generateChecksum(dataStr);
+                    if (calculatedChecksum !== meta.checksum) {
+                        if (!confirm('⚠️ Data integrity check failed. The file may be corrupted or modified. Import anyway?')) {
+                            showToast('Import cancelled', 'info');
+                            event.target.value = '';
+                            return;
+                        }
+                    }
+                }
+                
+                // Version compatibility check
+                if (meta.version && meta.version > DATA_VERSION) {
+                    if (!confirm(`This file was created with a newer version of the app (v${meta.version}). Some data may not be compatible. Continue?`)) {
+                        showToast('Import cancelled', 'info');
+                        event.target.value = '';
+                        return;
+                    }
+                }
+                
+                importedData = fileContent.data;
+                
+                // Show import info
+                const exportDate = meta.exportedAt ? new Date(meta.exportedAt).toLocaleDateString() : 'Unknown';
+                console.log(`Importing data exported on ${exportDate} from ${meta.teacherName || 'Unknown teacher'}`);
+            } else {
+                // Old format - direct appState object
+                importedData = fileContent;
+                console.log('Importing legacy format file (pre-v2)');
             }
+            
+            // Validate the data structure
+            const validation = validateDataStructure(importedData);
+            if (!validation.valid) {
+                const errorList = validation.errors.slice(0, 3).join('\n• ');
+                if (!confirm(`⚠️ Some data validation issues detected:\n• ${errorList}\n\nThe import will attempt to recover what it can. Continue?`)) {
+                    showToast('Import cancelled', 'info');
+                    event.target.value = '';
+                    return;
+                }
+            }
+            
+            // Migrate data if needed
+            const migratedData = migrateData(importedData);
+            
+            // Offer merge vs replace option if user has existing data
+            const hasExistingData = Object.keys(appState.techniques).some(id => 
+                appState.techniques[id].status !== 'not-yet' || 
+                (appState.techniques[id].notes && appState.techniques[id].notes.length > 0)
+            ) || appState.globalNotes.length > 0;
+            
+            let mergeMode = 'replace';
+            if (hasExistingData) {
+                const choice = confirm('You have existing data.\n\nClick OK to REPLACE all data with the imported file.\nClick Cancel to MERGE (keep your existing notes, add imported ones).');
+                mergeMode = choice ? 'replace' : 'merge';
+            }
+            
+            pushUndoState();
+            
+            if (mergeMode === 'replace') {
+                // Deep merge with defaults to ensure structure, then overwrite with imported
+                appState = deepMerge(appState, migratedData);
+            } else {
+                // Merge mode - combine notes and keep newer statuses
+                const merged = deepMerge(appState, {});
+                
+                // Merge techniques
+                for (const [id, importedTech] of Object.entries(migratedData.techniques || {})) {
+                    if (!merged.techniques[id]) {
+                        merged.techniques[id] = importedTech;
+                    } else {
+                        // Keep existing status if it's more "advanced" than imported
+                        const statusPriority = { 'often': 5, 'occasionally': 4, 'use-this-week': 3, 'not-successful': 2, 'not-yet': 1, 'dont-use': 0, 'not-suitable': 0 };
+                        const existingPriority = statusPriority[merged.techniques[id].status] || 0;
+                        const importedPriority = statusPriority[importedTech.status] || 0;
+                        
+                        if (importedPriority > existingPriority) {
+                            merged.techniques[id].status = importedTech.status;
+                        }
+                        
+                        // Merge notes, avoiding duplicates by timestamp
+                        const existingTimestamps = new Set((merged.techniques[id].notes || []).map(n => n.timestamp));
+                        for (const note of (importedTech.notes || [])) {
+                            if (!existingTimestamps.has(note.timestamp)) {
+                                merged.techniques[id].notes.push(note);
+                            }
+                        }
+                        // Sort notes by timestamp descending
+                        merged.techniques[id].notes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    }
+                }
+                
+                // Merge UPR practices (same logic)
+                for (const [id, importedPractice] of Object.entries(migratedData.uprPractices || {})) {
+                    if (!merged.uprPractices[id]) {
+                        merged.uprPractices[id] = importedPractice;
+                    } else {
+                        const statusPriority = { 'often': 5, 'occasionally': 4, 'use-this-week': 3, 'not-successful': 2, 'not-yet': 1, 'dont-use': 0, 'not-suitable': 0 };
+                        const existingPriority = statusPriority[merged.uprPractices[id].status] || 0;
+                        const importedPriority = statusPriority[importedPractice.status] || 0;
+                        
+                        if (importedPriority > existingPriority) {
+                            merged.uprPractices[id].status = importedPractice.status;
+                        }
+                        
+                        const existingTimestamps = new Set((merged.uprPractices[id].notes || []).map(n => n.timestamp));
+                        for (const note of (importedPractice.notes || [])) {
+                            if (!existingTimestamps.has(note.timestamp)) {
+                                merged.uprPractices[id].notes.push(note);
+                            }
+                        }
+                        merged.uprPractices[id].notes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    }
+                }
+                
+                // Merge global notes
+                const existingGlobalTimestamps = new Set(merged.globalNotes.map(n => n.timestamp));
+                for (const note of (migratedData.globalNotes || [])) {
+                    if (!existingGlobalTimestamps.has(note.timestamp)) {
+                        merged.globalNotes.push(note);
+                    }
+                }
+                merged.globalNotes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                
+                // Merge UPR global notes
+                const existingUprGlobalTimestamps = new Set(merged.uprGlobalNotes.map(n => n.timestamp));
+                for (const note of (migratedData.uprGlobalNotes || [])) {
+                    if (!existingUprGlobalTimestamps.has(note.timestamp)) {
+                        merged.uprGlobalNotes.push(note);
+                    }
+                }
+                merged.uprGlobalNotes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                
+                // Merge week focus history
+                const existingHistoryDates = new Set(merged.weekFocus.history.map(h => h.startDate));
+                for (const week of (migratedData.weekFocus?.history || [])) {
+                    if (!existingHistoryDates.has(week.startDate)) {
+                        merged.weekFocus.history.push(week);
+                    }
+                }
+                merged.weekFocus.history.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
+                
+                // Merge UPR week focus history
+                const existingUprHistoryDates = new Set(merged.uprWeekFocus.history.map(h => h.startDate));
+                for (const week of (migratedData.uprWeekFocus?.history || [])) {
+                    if (!existingUprHistoryDates.has(week.startDate)) {
+                        merged.uprWeekFocus.history.push(week);
+                    }
+                }
+                merged.uprWeekFocus.history.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
+                
+                // Update profile only if imported has more data
+                if (migratedData.profile) {
+                    for (const [key, value] of Object.entries(migratedData.profile)) {
+                        if (value && (!merged.profile[key] || merged.profile[key] === '')) {
+                            merged.profile[key] = value;
+                        }
+                    }
+                }
+                
+                appState = merged;
+            }
+            
+            saveData();
+            renderAll();
+            showToast(`Data ${mergeMode === 'merge' ? 'merged' : 'imported'} successfully`, 'success');
+            
         } catch (error) {
-            showToast('Invalid file format', 'error');
+            console.error('Import error:', error);
+            showToast('Invalid file format. Please select a valid backup file.', 'error');
         }
+        event.target.value = '';
     };
+    
+    reader.onerror = () => {
+        showToast('Failed to read file', 'error');
+        event.target.value = '';
+    };
+    
     reader.readAsText(file);
-    event.target.value = '';
 }
 
 function clearAllData() {
@@ -2348,113 +2983,328 @@ function printReport() {
 }
 
 function emailReport() {
+    // Show options modal for email type
+    showEmailOptionsModal();
+}
+
+function showEmailOptionsModal() {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('email-options-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'email-options-modal';
+        modal.className = 'email-modal-overlay';
+        modal.innerHTML = `
+            <div class="email-modal-content">
+                <div class="email-modal-header">
+                    <h3>📧 Email Report</h3>
+                    <button class="email-modal-close" aria-label="Close">&times;</button>
+                </div>
+                <div class="email-modal-body">
+                    <p style="margin-bottom:var(--space-3);color:var(--color-text-secondary);font-size:var(--text-sm)">Choose the level of detail for your email report:</p>
+                    <div class="email-options">
+                        <button class="btn btn-primary email-option-btn" data-type="brief">
+                            <span style="font-size:1.2em">📋</span>
+                            <div>
+                                <strong>Brief Summary</strong>
+                                <small style="display:block;font-weight:normal;opacity:0.8">Stats + this week's focus only</small>
+                            </div>
+                        </button>
+                        <button class="btn btn-secondary email-option-btn" data-type="detailed">
+                            <span style="font-size:1.2em">📄</span>
+                            <div>
+                                <strong>Detailed Report</strong>
+                                <small style="display:block;font-weight:normal;opacity:0.8">Includes recent notes & mastered items</small>
+                            </div>
+                        </button>
+                        <button class="btn btn-secondary email-option-btn" data-type="clipboard">
+                            <span style="font-size:1.2em">📎</span>
+                            <div>
+                                <strong>Copy to Clipboard</strong>
+                                <small style="display:block;font-weight:normal;opacity:0.8">For long reports or manual pasting</small>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        // Add event listeners
+        modal.querySelector('.email-modal-close').addEventListener('click', () => closeEmailModal());
+        modal.addEventListener('click', (e) => { if (e.target === modal) closeEmailModal(); });
+        modal.querySelectorAll('.email-option-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const type = btn.dataset.type;
+                closeEmailModal();
+                if (type === 'clipboard') {
+                    copyReportToClipboard('detailed');
+                } else {
+                    sendEmailReport(type);
+                }
+            });
+        });
+    }
+    
+    modal.classList.add('active');
+}
+
+function closeEmailModal() {
+    const modal = document.getElementById('email-options-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function generateEmailBody(type = 'brief') {
     const stats = calculateStats();
     const uprStats = calculateUprStats();
     const now = new Date();
-    const subject = encodeURIComponent(`Professional Growth Report - ${appState.profile.name || 'Teacher'} - ${now.toLocaleDateString()}`);
     
     let body = `PROFESSIONAL GROWTH REPORT
-Generated: ${now.toLocaleDateString()} at ${now.toLocaleTimeString()}
-════════════════════════════════════════
+${type === 'brief' ? 'Weekly Summary' : 'Detailed Report'}
+Generated: ${now.toLocaleDateString()}
+`;
 
-TEACHER PROFILE
-────────────────────────────────────────
-Name: ${appState.profile.name || 'Not specified'}
-School: ${appState.profile.schoolName || 'Not specified'}
-Years Teaching: ${appState.profile.yearsTeaching || 'Not specified'}
-Subject Area: ${appState.profile.subjectArea || 'Not specified'}
-${appState.profile.currentClasses ? `Current Classes: ${appState.profile.currentClasses}` : ''}
-${appState.profile.professionalGoals ? `Professional Goals: ${appState.profile.professionalGoals}` : ''}
+    // Profile section - compact
+    if (appState.profile.name) {
+        body += `\nTeacher: ${appState.profile.name}`;
+        if (appState.profile.schoolName) body += ` | ${appState.profile.schoolName}`;
+        body += '\n';
+    }
 
-TLAC SUMMARY (${TOTAL_TECHNIQUES} techniques)
-────────────────────────────────────────
-• Used Often: ${stats.often}
-• Used Occasionally: ${stats.occasionally}
-• Not Successful Yet: ${stats.notSuccessful}
-• This Week Focus: ${stats.weekFocus}
-• Not Yet Used: ${stats.notYet}
-• Implementation Rate: ${stats.implementationRate}%
+    // Stats summary - compact format
+    body += `
+PROGRESS SNAPSHOT
+-----------------
+TLAC: ${stats.often} mastered, ${stats.occasionally} developing, ${stats.weekFocus} this week (${stats.implementationRate}% implementation)
+UPR: ${uprStats.often} mastered, ${uprStats.occasionally} developing, ${uprStats.weekFocus} this week (${uprStats.implementationRate}% implementation)
+`;
 
-UPR SUMMARY (${TOTAL_UPR_PRACTICES} practices)
-────────────────────────────────────────
-• Used Often: ${uprStats.often}
-• Used Occasionally: ${uprStats.occasionally}
-• Not Successful Yet: ${uprStats.notSuccessful}
-• This Week Focus: ${uprStats.weekFocus}
-• Not Yet Used: ${uprStats.notYet}
-• Implementation Rate: ${uprStats.implementationRate}%
-
-CURRENT WEEK FOCUS
-────────────────────────────────────────`;
-
-    // TLAC Week Focus
+    // Current week focus - always included
+    body += `\nTHIS WEEK'S FOCUS\n-----------------`;
+    
     if (appState.weekFocus.techniques.length > 0) {
-        body += `\n\nTLAC Techniques This Week:`;
+        body += `\nTLAC Techniques:`;
         appState.weekFocus.techniques.forEach(techId => {
             const tech = Object.values(TLAC_DATA).flat().find(t => t.id === parseInt(techId));
             if (tech) {
                 body += `\n• ${tech.name}`;
                 if (appState.weekFocus.plans[techId]) {
-                    body += `\n  Plan: ${appState.weekFocus.plans[techId]}`;
+                    body += ` — Plan: ${appState.weekFocus.plans[techId].substring(0, 100)}${appState.weekFocus.plans[techId].length > 100 ? '...' : ''}`;
                 }
             }
         });
     } else {
-        body += `\n\nNo TLAC techniques selected for this week.`;
+        body += `\nNo TLAC techniques selected.`;
     }
-
-    // UPR Week Focus
+    
     if (appState.uprWeekFocus.practices.length > 0) {
-        body += `\n\nUPR Practices This Week:`;
+        body += `\n\nUPR Practices:`;
         appState.uprWeekFocus.practices.forEach(practiceId => {
             const practice = Object.values(UPR_DATA).flat().find(p => p.id === parseInt(practiceId));
             if (practice) {
                 body += `\n• ${practice.name}`;
                 if (appState.uprWeekFocus.plans[practiceId]) {
-                    body += `\n  Plan: ${appState.uprWeekFocus.plans[practiceId]}`;
+                    body += ` — Plan: ${appState.uprWeekFocus.plans[practiceId].substring(0, 100)}${appState.uprWeekFocus.plans[practiceId].length > 100 ? '...' : ''}`;
                 }
             }
         });
     } else {
-        body += `\n\nNo UPR practices selected for this week.`;
+        body += `\n\nNo UPR practices selected.`;
     }
 
-    // Techniques being used often
-    const oftenTechniques = Object.entries(appState.techniques).filter(([id, data]) => data.status === 'often');
-    if (oftenTechniques.length > 0) {
-        body += `\n\nTLAC TECHNIQUES USED OFTEN
-────────────────────────────────────────`;
-        oftenTechniques.forEach(([id, data]) => {
-            const tech = Object.values(TLAC_DATA).flat().find(t => t.id === parseInt(id));
-            if (tech) body += `\n• ${tech.name}`;
+    // Detailed sections - only if detailed type requested
+    if (type === 'detailed') {
+        // Mastered techniques/practices
+        const oftenTechniques = Object.entries(appState.techniques).filter(([id, data]) => data.status === 'often');
+        const oftenPractices = Object.entries(appState.uprPractices).filter(([id, data]) => data.status === 'often');
+        
+        if (oftenTechniques.length > 0 || oftenPractices.length > 0) {
+            body += `\n\nMASTERED SKILLS\n---------------`;
+            
+            if (oftenTechniques.length > 0) {
+                body += `\nTLAC (${oftenTechniques.length}): `;
+                body += oftenTechniques.map(([id]) => {
+                    const tech = Object.values(TLAC_DATA).flat().find(t => t.id === parseInt(id));
+                    return tech ? tech.name : '';
+                }).filter(Boolean).join(', ');
+            }
+            
+            if (oftenPractices.length > 0) {
+                body += `\nUPR (${oftenPractices.length}): `;
+                body += oftenPractices.map(([id]) => {
+                    const practice = Object.values(UPR_DATA).flat().find(p => p.id === parseInt(id));
+                    return practice ? practice.name : '';
+                }).filter(Boolean).join(', ');
+            }
+        }
+
+        // Recent notes - limit to 5 for email
+        const allNotes = getAllNotes().concat(getAllUprNotes())
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+            .slice(0, 5);
+        
+        if (allNotes.length > 0) {
+            body += `\n\nRECENT REFLECTIONS\n------------------`;
+            allNotes.forEach(note => {
+                const truncatedText = note.text.length > 150 ? note.text.substring(0, 150) + '...' : note.text;
+                body += `\n\n[${new Date(note.timestamp).toLocaleDateString()}] ${note.source}:\n${truncatedText}`;
+            });
+        }
+        
+        // Areas for growth
+        const strugglingTech = Object.entries(appState.techniques).filter(([id, data]) => data.status === 'not-successful');
+        const strugglingPractices = Object.entries(appState.uprPractices).filter(([id, data]) => data.status === 'not-successful');
+        
+        if (strugglingTech.length > 0 || strugglingPractices.length > 0) {
+            body += `\n\nAREAS FOR GROWTH\n----------------`;
+            
+            if (strugglingTech.length > 0) {
+                body += `\nTLAC: `;
+                body += strugglingTech.slice(0, 5).map(([id]) => {
+                    const tech = Object.values(TLAC_DATA).flat().find(t => t.id === parseInt(id));
+                    return tech ? tech.name : '';
+                }).filter(Boolean).join(', ');
+                if (strugglingTech.length > 5) body += ` (+${strugglingTech.length - 5} more)`;
+            }
+            
+            if (strugglingPractices.length > 0) {
+                body += `\nUPR: `;
+                body += strugglingPractices.slice(0, 5).map(([id]) => {
+                    const practice = Object.values(UPR_DATA).flat().find(p => p.id === parseInt(id));
+                    return practice ? practice.name : '';
+                }).filter(Boolean).join(', ');
+                if (strugglingPractices.length > 5) body += ` (+${strugglingPractices.length - 5} more)`;
+            }
+        }
+    }
+
+    // Footer
+    body += `\n\n—\nGenerated by TLAC & UPR Growth Tracker`;
+
+    return body;
+}
+
+function sendEmailReport(type) {
+    const stats = calculateStats();
+    const now = new Date();
+    const subject = `Growth Report - ${appState.profile.name || 'Teacher'} - ${now.toLocaleDateString()}`;
+    const body = generateEmailBody(type);
+    
+    // Check URL length - mailto: URLs have limits (typically 2000-8000 chars depending on browser/client)
+    const encodedBody = encodeURIComponent(body);
+    const encodedSubject = encodeURIComponent(subject);
+    const mailtoUrl = `mailto:?subject=${encodedSubject}&body=${encodedBody}`;
+    
+    const URL_LIMIT = 1800; // Conservative limit to be safe across browsers
+    
+    if (mailtoUrl.length > URL_LIMIT) {
+        // Too long for mailto - offer clipboard alternative
+        showToast('Report too long for email link. Copying to clipboard instead...', 'info');
+        setTimeout(() => copyReportToClipboard(type), 500);
+        return;
+    }
+    
+    // Open mailto link
+    window.location.href = mailtoUrl;
+    showToast('Opening email client...', 'success');
+}
+
+function copyReportToClipboard(type) {
+    const body = generateEmailBody(type);
+    
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(body).then(() => {
+            showCopySuccessModal(body.length);
+        }).catch(err => {
+            console.error('Clipboard write failed:', err);
+            showCopyFallbackModal(body);
         });
+    } else {
+        // Fallback for older browsers
+        showCopyFallbackModal(body);
     }
+}
 
-    const oftenPractices = Object.entries(appState.uprPractices).filter(([id, data]) => data.status === 'often');
-    if (oftenPractices.length > 0) {
-        body += `\n\nUPR PRACTICES USED OFTEN
-────────────────────────────────────────`;
-        oftenPractices.forEach(([id, data]) => {
-            const practice = Object.values(UPR_DATA).flat().find(p => p.id === parseInt(id));
-            if (practice) body += `\n• ${practice.name}`;
+function showCopySuccessModal(charCount) {
+    showToast(`✅ Report copied to clipboard! (${charCount} characters)`, 'success');
+    
+    // Show helpful follow-up modal
+    let modal = document.getElementById('copy-success-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'copy-success-modal';
+        modal.className = 'email-modal-overlay';
+        modal.innerHTML = `
+            <div class="email-modal-content">
+                <div class="email-modal-header">
+                    <h3>✅ Copied to Clipboard!</h3>
+                    <button class="email-modal-close" aria-label="Close">&times;</button>
+                </div>
+                <div class="email-modal-body" style="text-align:center;">
+                    <p style="font-size:var(--text-lg);margin-bottom:var(--space-3)">Your report is ready to paste</p>
+                    <p style="color:var(--color-text-secondary);font-size:var(--text-sm);margin-bottom:var(--space-4)">
+                        Open your email app and paste (Ctrl+V or Cmd+V) into the message body.
+                    </p>
+                    <button class="btn btn-primary" id="copy-success-close-btn">Got it!</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        modal.querySelector('.email-modal-close').addEventListener('click', () => modal.classList.remove('active'));
+        modal.querySelector('#copy-success-close-btn').addEventListener('click', () => modal.classList.remove('active'));
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('active'); });
+    }
+    
+    modal.classList.add('active');
+}
+
+function showCopyFallbackModal(text) {
+    // For browsers without clipboard API, show a textarea to copy from
+    let modal = document.getElementById('copy-fallback-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'copy-fallback-modal';
+        modal.className = 'email-modal-overlay';
+        modal.innerHTML = `
+            <div class="email-modal-content" style="max-width:500px;">
+                <div class="email-modal-header">
+                    <h3>📋 Copy Report</h3>
+                    <button class="email-modal-close" aria-label="Close">&times;</button>
+                </div>
+                <div class="email-modal-body">
+                    <p style="color:var(--color-text-secondary);font-size:var(--text-sm);margin-bottom:var(--space-3)">
+                        Select all text below (Ctrl+A) and copy (Ctrl+C):
+                    </p>
+                    <textarea id="copy-fallback-textarea" readonly style="width:100%;height:200px;font-family:monospace;font-size:var(--text-xs);padding:var(--space-2);border:1px solid var(--color-border);border-radius:var(--radius-sm);resize:vertical;"></textarea>
+                    <div style="margin-top:var(--space-3);display:flex;gap:var(--space-2);">
+                        <button class="btn btn-primary" id="select-all-btn">Select All</button>
+                        <button class="btn btn-secondary" id="copy-fallback-close-btn">Done</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        modal.querySelector('.email-modal-close').addEventListener('click', () => modal.classList.remove('active'));
+        modal.querySelector('#copy-fallback-close-btn').addEventListener('click', () => modal.classList.remove('active'));
+        modal.querySelector('#select-all-btn').addEventListener('click', () => {
+            const textarea = modal.querySelector('#copy-fallback-textarea');
+            textarea.select();
+            textarea.setSelectionRange(0, 99999); // For mobile
         });
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('active'); });
     }
-
-    // Recent Notes
-    const allNotes = getAllNotes().concat(getAllUprNotes()).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 10);
-    if (allNotes.length > 0) {
-        body += `\n\nRECENT NOTES (Last 10)
-────────────────────────────────────────`;
-        allNotes.forEach(note => {
-            body += `\n\n${new Date(note.timestamp).toLocaleDateString()} - ${note.source}:\n${note.text}`;
-        });
-    }
-
-    body += `\n\n════════════════════════════════════════
-Generated by TLAC and UPR Growth
-Professional Development Tracking for Teachers`;
-
-    window.location.href = `mailto:?subject=${subject}&body=${encodeURIComponent(body)}`;
+    
+    modal.querySelector('#copy-fallback-textarea').value = text;
+    modal.classList.add('active');
+    
+    // Auto-select the text
+    setTimeout(() => {
+        const textarea = modal.querySelector('#copy-fallback-textarea');
+        textarea.focus();
+        textarea.select();
+    }, 100);
 }
 
 // ========== TOAST ==========
