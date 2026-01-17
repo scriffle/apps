@@ -3125,8 +3125,9 @@ function initLearningItems() {
     appState.topic.subtopics.forEach(subtopic => {
         if (subtopic.items) {
             subtopic.items.forEach(item => {
-                if (!appState.learningItems[item.id]) {
-                    appState.learningItems[item.id] = {
+                const itemKey = getItemKey(subtopic.id, item.id);
+                if (!appState.learningItems[itemKey]) {
+                    appState.learningItems[itemKey] = {
                         level: 1,
                         history: [],
                         notes: []
@@ -3402,9 +3403,9 @@ async function hasQuestionsForItem(uuid) {
 /**
  * Get questions for a specific level transition
  */
-async function getQuestionsForLevel(itemId, toLevel) {
+async function getQuestionsForLevel(itemKey, toLevel) {
     // Find the item to get its UUID
-    const item = getItemById(itemId);
+    const item = getItemByKey(itemKey);
     if (!item || !item.uuid) {
         return [];
     }
@@ -3688,7 +3689,8 @@ function calculateSubtopicProgress(subtopic) {
     if (!subtopic.items) return 0;
     
     subtopic.items.forEach(item => {
-        const itemData = appState.learningItems[item.id];
+        const itemKey = getItemKey(subtopic.id, item.id);
+        const itemData = appState.learningItems[itemKey];
         if (itemData) {
             totalScore += itemData.level;
             count++;
@@ -3708,10 +3710,13 @@ function getFocusAreas() {
     appState.topic.subtopics.forEach(subtopic => {
         if (!subtopic.items) return;
         subtopic.items.forEach(item => {
-            const itemData = appState.learningItems[item.id];
+            const itemKey = getItemKey(subtopic.id, item.id);
+            const itemData = appState.learningItems[itemKey];
             if (itemData && itemData.level <= 2) {
                 items.push({
                     ...item,
+                    itemKey: itemKey, // Store the composite key
+                    subtopicId: subtopic.id,
                     subtopic: subtopic.name,
                     level: itemData.level
                 });
@@ -3725,6 +3730,46 @@ function getFocusAreas() {
 // ============================================
 // UTILITY FUNCTIONS
 // ============================================
+
+/**
+ * Create a unique key for a learning item (combines subtopic + item IDs)
+ */
+function getItemKey(subtopicId, itemId) {
+    return `${subtopicId}__${itemId}`;
+}
+
+/**
+ * Parse a composite item key back into subtopicId and itemId
+ */
+function parseItemKey(key) {
+    const parts = key.split('__');
+    return {
+        subtopicId: parts[0],
+        itemId: parseInt(parts[1])
+    };
+}
+
+/**
+ * Get an item by its composite key
+ */
+function getItemByKey(itemKey) {
+    if (!appState.topic) return null;
+    const { subtopicId, itemId } = parseItemKey(itemKey);
+    
+    const subtopic = appState.topic.subtopics.find(st => st.id === subtopicId);
+    if (!subtopic || !subtopic.items) return null;
+    
+    return subtopic.items.find(i => i.id === itemId);
+}
+
+/**
+ * Get subtopic by its ID
+ */
+function getSubtopicById(subtopicId) {
+    if (!appState.topic) return null;
+    return appState.topic.subtopics.find(st => st.id === subtopicId);
+}
+
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text || '';
@@ -3865,7 +3910,7 @@ function renderOverview() {
         } else {
             focusContainer.innerHTML = focusAreas.map(item => `
                 <div class="goal-item focus-area-link" style="border-left-color: var(--level-${item.level}); cursor: pointer;" 
-                     data-item-id="${item.id}" 
+                     data-item-key="${item.itemKey}" 
                      title="Click to go to this item">
                     <div class="goal-text">${escapeHtml(item.title)}</div>
                     <div class="goal-meta">${escapeHtml(item.subtopic)} • ${escapeHtml(item.code)} <span style="color: var(--color-primary);">→ Go</span></div>
@@ -3875,8 +3920,8 @@ function renderOverview() {
             // Add click handlers
             focusContainer.querySelectorAll('.focus-area-link').forEach(el => {
                 el.addEventListener('click', () => {
-                    const itemId = parseInt(el.dataset.itemId);
-                    navigateToLearningItem(itemId);
+                    const itemKey = el.dataset.itemKey;
+                    navigateToLearningItem(itemKey);
                 });
             });
         }
@@ -4000,9 +4045,10 @@ function renderSubtopicExplanation(subtopic) {
 }
 
 function renderLearningItem(item, subtopic) {
-    const data = appState.learningItems[item.id] || { level: 1, history: [], notes: [] };
-    const explanationId = `explanation-${item.id}`;
-    const explanationContentId = `explanation-content-${item.id}`;
+    const itemKey = getItemKey(subtopic.id, item.id);
+    const data = appState.learningItems[itemKey] || { level: 1, history: [], notes: [] };
+    const explanationId = `explanation-${subtopic.id}-${item.id}`;
+    const explanationContentId = `explanation-content-${subtopic.id}-${item.id}`;
     
     const hasExplanation = item.what || item.why || item.example;
     
@@ -4013,16 +4059,16 @@ function renderLearningItem(item, subtopic) {
         : '';
     
     // Check-in mode: get "was" level
-    const wasLevel = getWasLevel(item.id);
-    const isReviewed = checkinReviewedItems.has(item.id);
+    const wasLevel = getWasLevel(itemKey);
+    const isReviewed = checkinReviewedItems.has(itemKey);
     
     // Build notch selector
     const notchesHtml = `
-        <div class="level-notches" data-item-id="${item.id}" role="radiogroup" aria-label="Understanding level">
+        <div class="level-notches" data-item-key="${itemKey}" role="radiogroup" aria-label="Understanding level">
             ${[1, 2, 3, 4, 5].map(level => {
                 const isFilled = level <= data.level;
                 const isActive = level === data.level;
-                const isLocked = level > data.level && isLevelLocked(item.id, level);
+                const isLocked = level > data.level && isLevelLocked(itemKey, level);
                 return `<button class="level-notch ${isFilled ? 'filled' : ''} ${isActive ? 'active' : ''} ${isLocked ? 'locked' : ''}" 
                     data-level="${level}" 
                     data-label="${levelNames[level - 1]}"
@@ -4048,7 +4094,7 @@ function renderLearningItem(item, subtopic) {
     }
     
     return `
-        <div class="learning-item-simple ${isReviewed ? 'reviewed' : ''}" data-level="${data.level}" data-item-id="${item.id}" data-uuid="${item.uuid || ''}">
+        <div class="learning-item-simple ${isReviewed ? 'reviewed' : ''}" data-level="${data.level}" data-item-key="${itemKey}" data-uuid="${item.uuid || ''}">
             <div class="learning-item-row">
                 <div class="learning-item-left">
                     <span class="learning-item-title">${escapeHtml(item.title)}</span>
@@ -4086,12 +4132,12 @@ function setupLearningContentListeners() {
         notch.addEventListener('click', (e) => {
             e.stopPropagation();
             const notchContainer = notch.closest('.level-notches');
-            const itemId = parseInt(notchContainer.dataset.itemId);
+            const itemKey = notchContainer.dataset.itemKey;
             const level = parseInt(notch.dataset.level);
             
             // Check if this level is locked
             if (notch.classList.contains('locked')) {
-                const remaining = getLockoutRemainingTime(itemId, level);
+                const remaining = getLockoutRemainingTime(itemKey, level);
                 const mins = Math.floor(remaining / 60);
                 const secs = remaining % 60;
                 showToast(`Locked for ${mins}:${secs.toString().padStart(2, '0')}`, 'error');
@@ -4100,11 +4146,11 @@ function setupLearningContentListeners() {
             
             // Mark as reviewed in check-in mode
             if (checkinModeActive) {
-                markItemReviewed(itemId);
+                markItemReviewed(itemKey);
             }
             
             // Update level (may trigger quiz for upward moves)
-            handleLevelChange(itemId, level);
+            handleLevelChange(itemKey, level);
         });
         
         // Keyboard navigation
@@ -4178,7 +4224,8 @@ function renderHistory() {
     appState.topic.subtopics.forEach(subtopic => {
         if (!subtopic.items) return;
         subtopic.items.forEach(item => {
-            const itemData = appState.learningItems[item.id] || { level: 1 };
+            const itemKey = getItemKey(subtopic.id, item.id);
+            const itemData = appState.learningItems[itemKey] || { level: 1 };
             levelCounts[itemData.level - 1]++;
             totalPoints += itemData.level;
             totalItems++;
@@ -4336,12 +4383,12 @@ function updateBadges() {
 // ============================================
 // QUIZ STATE HELPERS
 // ============================================
-function getQuizStateKey(itemId, toLevel) {
-    return `${appState.currentTopicId || 'default'}-${itemId}-toLevel${toLevel}`;
+function getQuizStateKey(itemKey, toLevel) {
+    return `${appState.currentTopicId || 'default'}-${itemKey}-toLevel${toLevel}`;
 }
 
-function getQuizStateForItem(itemId, toLevel) {
-    const key = getQuizStateKey(itemId, toLevel);
+function getQuizStateForItem(itemKey, toLevel) {
+    const key = getQuizStateKey(itemKey, toLevel);
     if (!quizState[key]) {
         quizState[key] = {
             usedQuestions: [],
@@ -4354,8 +4401,8 @@ function getQuizStateForItem(itemId, toLevel) {
     return quizState[key];
 }
 
-function isLevelLocked(itemId, toLevel) {
-    const state = getQuizStateForItem(itemId, toLevel);
+function isLevelLocked(itemKey, toLevel) {
+    const state = getQuizStateForItem(itemKey, toLevel);
     if (state.lockedUntil) {
         if (Date.now() < state.lockedUntil) {
             return true;
@@ -4372,8 +4419,8 @@ function isLevelLocked(itemId, toLevel) {
     return false;
 }
 
-function getLockoutRemainingTime(itemId, toLevel) {
-    const state = getQuizStateForItem(itemId, toLevel);
+function getLockoutRemainingTime(itemKey, toLevel) {
+    const state = getQuizStateForItem(itemKey, toLevel);
     if (state.lockedUntil && Date.now() < state.lockedUntil) {
         return Math.ceil((state.lockedUntil - Date.now()) / 1000);
     }
@@ -4383,47 +4430,47 @@ function getLockoutRemainingTime(itemId, toLevel) {
 // ============================================
 // LEVEL CHANGE HANDLING
 // ============================================
-async function handleLevelChange(itemId, newLevel) {
-    const currentLevel = appState.learningItems[itemId]?.level || 1;
+async function handleLevelChange(itemKey, newLevel) {
+    const currentLevel = appState.learningItems[itemKey]?.level || 1;
     
     if (newLevel > currentLevel) {
         // Moving UP - check if quiz needed
-        const questions = await getQuestionsForLevel(itemId, newLevel);
+        const questions = await getQuestionsForLevel(itemKey, newLevel);
         
         if (questions.length > 0) {
             // Show quiz
-            showQuiz(itemId, currentLevel, newLevel);
+            showQuiz(itemKey, currentLevel, newLevel);
         } else {
             // No questions available - allow immediate change
-            applyLevelChange(itemId, newLevel);
+            applyLevelChange(itemKey, newLevel);
         }
     } else if (newLevel < currentLevel) {
         // Moving DOWN - allow immediately
-        applyLevelChange(itemId, newLevel);
+        applyLevelChange(itemKey, newLevel);
     }
     // Same level - do nothing
 }
 
-function applyLevelChange(itemId, level) {
-    if (!appState.learningItems[itemId]) {
-        appState.learningItems[itemId] = { level: 1, history: [], notes: [] };
+function applyLevelChange(itemKey, level) {
+    if (!appState.learningItems[itemKey]) {
+        appState.learningItems[itemKey] = { level: 1, history: [], notes: [] };
     }
     
-    const oldLevel = appState.learningItems[itemId].level;
+    const oldLevel = appState.learningItems[itemKey].level;
     
     if (oldLevel !== level) {
         const uiState = captureUIState();
         pushUndoState();
         
-        appState.learningItems[itemId].level = level;
-        appState.learningItems[itemId].history.push({
+        appState.learningItems[itemKey].level = level;
+        appState.learningItems[itemKey].history.push({
             date: new Date().toISOString(),
             level: level,
             previousLevel: oldLevel
         });
         
         // Update visuals immediately
-        const notchContainer = document.querySelector(`.level-notches[data-item-id="${itemId}"]`);
+        const notchContainer = document.querySelector(`.level-notches[data-item-key="${itemKey}"]`);
         if (notchContainer) {
             notchContainer.querySelectorAll('.level-notch').forEach(notch => {
                 const notchLevel = parseInt(notch.dataset.level);
@@ -4435,7 +4482,7 @@ function applyLevelChange(itemId, level) {
         }
         
         // Update item border color
-        const itemEl = document.querySelector(`.learning-item-simple[data-item-id="${itemId}"]`);
+        const itemEl = document.querySelector(`.learning-item-simple[data-item-key="${itemKey}"]`);
         if (itemEl) {
             itemEl.dataset.level = level;
         }
@@ -4450,14 +4497,14 @@ function applyLevelChange(itemId, level) {
 // ============================================
 // QUIZ DISPLAY - MAIN ENTRY
 // ============================================
-async function showQuiz(itemId, fromLevel, toLevel) {
-    const item = getItemById(itemId);
+async function showQuiz(itemKey, fromLevel, toLevel) {
+    const item = getItemByKey(itemKey);
     if (!item) return false;
     
-    const questions = await getQuestionsForLevel(itemId, toLevel);
+    const questions = await getQuestionsForLevel(itemKey, toLevel);
     if (questions.length === 0) return false;
     
-    const state = getQuizStateForItem(itemId, toLevel);
+    const state = getQuizStateForItem(itemKey, toLevel);
     
     // Select a random question
     const questionData = selectRandomQuestion(questions, state);
@@ -4470,7 +4517,7 @@ async function showQuiz(itemId, fromLevel, toLevel) {
     
     // Store current quiz data
     currentQuiz = {
-        itemId,
+        itemKey,
         fromLevel,
         toLevel,
         questionIndex: index,
@@ -4820,7 +4867,7 @@ function submitClozeAnswer() {
 }
 
 function processQuizResult(isCorrect, explanation) {
-    const state = getQuizStateForItem(currentQuiz.itemId, currentQuiz.toLevel);
+    const state = getQuizStateForItem(currentQuiz.itemKey, currentQuiz.toLevel);
     
     // Mark question as used
     if (!state.usedQuestions.includes(currentQuiz.questionIndex)) {
@@ -4855,7 +4902,7 @@ function processQuizResult(isCorrect, explanation) {
             document.getElementById('quiz-submit-btn').disabled = false;
             document.getElementById('quiz-submit-btn').onclick = () => {
                 closeQuiz();
-                applyLevelChange(currentQuiz.itemId, currentQuiz.toLevel);
+                applyLevelChange(currentQuiz.itemKey, currentQuiz.toLevel);
                 // Reset state
                 state.usedQuestions = [];
                 state.wrongCount = 0;
@@ -4873,7 +4920,7 @@ function processQuizResult(isCorrect, explanation) {
                 saveQuizState();
                 closeQuiz();
                 setTimeout(() => {
-                    showQuiz(currentQuiz.itemId, currentQuiz.fromLevel, currentQuiz.toLevel);
+                    showQuiz(currentQuiz.itemKey, currentQuiz.fromLevel, currentQuiz.toLevel);
                 }, 100);
             };
         }
@@ -5036,14 +5083,14 @@ function toggleTheme() {
 // ============================================
 // CHECK-IN MODE
 // ============================================
-function getWasLevel(itemId) {
-    return checkinStartLevels[itemId] || appState.learningItems[itemId]?.level || 1;
+function getWasLevel(itemKey) {
+    return checkinStartLevels[itemKey] || appState.learningItems[itemKey]?.level || 1;
 }
 
-function markItemReviewed(itemId) {
+function markItemReviewed(itemKey) {
     if (!checkinModeActive) return;
     
-    checkinReviewedItems.add(itemId);
+    checkinReviewedItems.add(itemKey);
     
     // Update progress display
     const totalItems = Object.keys(checkinStartLevels).length;
@@ -5056,7 +5103,7 @@ function markItemReviewed(itemId) {
     if (floatingProgress) floatingProgress.textContent = `${reviewedCount}/${totalItems}`;
     
     // Mark item visually
-    const itemEl = document.querySelector(`.learning-item-simple[data-item-id="${itemId}"]`);
+    const itemEl = document.querySelector(`.learning-item-simple[data-item-key="${itemKey}"]`);
     if (itemEl) itemEl.classList.add('reviewed');
 }
 
@@ -5075,8 +5122,9 @@ function startCheckinMode(type) {
     appState.topic.subtopics.forEach(subtopic => {
         if (!subtopic.items) return;
         subtopic.items.forEach(item => {
-            const itemData = appState.learningItems[item.id] || { level: 1 };
-            checkinStartLevels[item.id] = itemData.level;
+            const itemKey = getItemKey(subtopic.id, item.id);
+            const itemData = appState.learningItems[itemKey] || { level: 1 };
+            checkinStartLevels[itemKey] = itemData.level;
         });
     });
     
@@ -5188,37 +5236,35 @@ function switchTab(tabId) {
     });
 }
 
-function navigateToLearningItem(itemId) {
+function navigateToLearningItem(itemKey) {
     // Switch to learning tab
     switchTab('learning');
     
-    // Find the item's subtopic and expand it
+    // Parse the itemKey to get subtopic and item IDs
     if (!appState.topic) return;
     
-    for (const subtopic of appState.topic.subtopics) {
-        const item = subtopic.items?.find(i => i.id === itemId);
-        if (item) {
-            // Expand the subtopic
-            const header = document.getElementById(`subtopic-${subtopic.id}-header`);
-            if (header) {
-                header.setAttribute('aria-expanded', 'true');
-                const content = document.getElementById(`subtopic-${subtopic.id}-content`);
-                if (content) content.classList.add('expanded');
-            }
-            
-            // Scroll to item
-            setTimeout(() => {
-                const itemEl = document.querySelector(`.learning-item-simple[data-item-id="${itemId}"]`);
-                if (itemEl) {
-                    itemEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    itemEl.style.animation = 'none';
-                    itemEl.offsetHeight; // Trigger reflow
-                    itemEl.style.animation = 'highlightItem 1s ease-out';
-                }
-            }, 100);
-            
-            break;
+    const { subtopicId, itemId } = parseItemKey(itemKey);
+    const subtopic = getSubtopicById(subtopicId);
+    
+    if (subtopic) {
+        // Expand the subtopic
+        const header = document.getElementById(`subtopic-${subtopic.id}-header`);
+        if (header) {
+            header.setAttribute('aria-expanded', 'true');
+            const content = document.getElementById(`subtopic-${subtopic.id}-content`);
+            if (content) content.classList.add('expanded');
         }
+        
+        // Scroll to item
+        setTimeout(() => {
+            const itemEl = document.querySelector(`.learning-item-simple[data-item-key="${itemKey}"]`);
+            if (itemEl) {
+                itemEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                itemEl.style.animation = 'none';
+                itemEl.offsetHeight; // Trigger reflow
+                itemEl.style.animation = 'highlightItem 1s ease-out';
+            }
+        }, 100);
     }
 }
 
@@ -5513,12 +5559,12 @@ function getSelectionContext() {
     
     if (!itemEl) return { topic: appState.topic?.name || 'Unknown topic' };
     
-    const itemId = parseInt(itemEl.dataset.itemId);
-    const item = getItemById(itemId);
-    const itemData = appState.learningItems[itemId] || { level: 1 };
+    const itemKey = itemEl.dataset.itemKey;
+    const item = getItemByKey(itemKey);
+    const itemData = appState.learningItems[itemKey] || { level: 1 };
     
     return {
-        itemId,
+        itemKey,
         itemTitle: item?.title || 'Unknown item',
         itemWhat: item?.what || '',
         itemWhy: item?.why || '',
