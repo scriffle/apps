@@ -1217,6 +1217,15 @@
                 </div>
 
                 <div class="utility-section">
+                    <h3>Backup &amp; Restore</h3>
+                    <div class="utility-buttons">
+                        <button class="utility-btn" id="backupBtn">📦 Backup All Data</button>
+                        <button class="utility-btn" id="importBtn">📥 Import Backup</button>
+                        <input type="file" id="importFile" accept=".json" style="display:none">
+                    </div>
+                </div>
+
+                <div class="utility-section">
                     <h3>Examination System</h3>
                     <div class="utility-buttons">
                         <button class="utility-btn" id="changeStateBtn">
@@ -1275,7 +1284,10 @@
             storageKeys: {
                 global: 'examinerAdvice-global',
                 subjectPrefix: 'examinerAdvice-'
-            }
+            },
+            dataVersion: 2,
+            storageWarningThreshold: 0.8,
+            backupReminderDays: 30
         };
 
         // ========================================
@@ -1289,12 +1301,15 @@
 
         // Global state (persisted separately)
         let globalState = {
+            version: CONFIG.dataVersion,
             studentName: '',
-            currentState: null           // e.g., 'VCEAU'
+            currentState: null,           // e.g., 'VCEAU'
+            lastExported: null
         };
 
         // Subject-specific state (persisted per subject)
         let subjectState = {
+            version: CONFIG.dataVersion,
             currentQuestionCategory: 0,
             currentQuestionIndex: 0,
             responses: {},
@@ -1667,6 +1682,75 @@
         // State Management - localStorage
         // ========================================
 
+        // Deep merge utility
+        function deepMerge(target, source) {
+            const result = { ...target };
+            for (const key of Object.keys(source)) {
+                if (source[key] === null || source[key] === undefined) continue;
+                if (Array.isArray(source[key])) {
+                    result[key] = [...source[key]];
+                } else if (typeof source[key] === 'object' && typeof target[key] === 'object' && !Array.isArray(target[key])) {
+                    result[key] = deepMerge(target[key], source[key]);
+                } else {
+                    result[key] = source[key];
+                }
+            }
+            return result;
+        }
+
+        // Migration functions
+        function migrateGlobalState(data) {
+            let migrated = { ...data };
+            if (!data.version || data.version < 2) {
+                migrated.version = CONFIG.dataVersion;
+                if (migrated.lastExported === undefined) migrated.lastExported = null;
+                console.log('Migrated global state to version', CONFIG.dataVersion);
+            }
+            return migrated;
+        }
+
+        function migrateSubjectState(data) {
+            let migrated = { ...data };
+            if (!data.version || data.version < 2) {
+                migrated.version = CONFIG.dataVersion;
+                if (!migrated.responses) migrated.responses = {};
+                if (!migrated.hintsUsed) migrated.hintsUsed = {};
+                console.log('Migrated subject state to version', CONFIG.dataVersion);
+            }
+            return migrated;
+        }
+
+        // Storage quota check
+        function checkStorageQuota() {
+            try {
+                let totalSpace = 5 * 1024 * 1024;
+                let usedSpace = 0;
+                for (let key in localStorage) {
+                    if (localStorage.hasOwnProperty(key)) {
+                        usedSpace += localStorage.getItem(key).length * 2;
+                    }
+                }
+                const percentUsed = usedSpace / totalSpace;
+                return {
+                    usedSpaceKB: (usedSpace / 1024).toFixed(1),
+                    totalSpaceMB: (totalSpace / (1024 * 1024)).toFixed(0),
+                    percentUsed,
+                    isWarning: percentUsed >= CONFIG.storageWarningThreshold,
+                    isCritical: percentUsed >= 0.95
+                };
+            } catch (e) {
+                return { error: true };
+            }
+        }
+
+        function shouldShowBackupReminder() {
+            if (!globalState.lastExported) {
+                return Object.keys(subjectState.responses || {}).length > 0;
+            }
+            const daysSince = (new Date() - new Date(globalState.lastExported)) / (1000 * 60 * 60 * 24);
+            return daysSince >= CONFIG.backupReminderDays;
+        }
+
         function getSubjectStorageKey(subjectId) {
             return CONFIG.storageKeys.subjectPrefix + globalState.currentState + '-' + subjectId;
         }
@@ -1676,7 +1760,8 @@
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
-                    globalState = { ...globalState, ...parsed };
+                    const migrated = migrateGlobalState(parsed);
+                    globalState = deepMerge(globalState, migrated);
                 } catch (e) {
                     console.error('Error loading global state:', e);
                 }
@@ -1684,30 +1769,41 @@
         }
 
         function saveGlobalState() {
-            localStorage.setItem(CONFIG.storageKeys.global, JSON.stringify(globalState));
+            globalState.version = CONFIG.dataVersion;
+            try {
+                localStorage.setItem(CONFIG.storageKeys.global, JSON.stringify(globalState));
+            } catch (e) {
+                if (e.name === 'QuotaExceededError' || e.code === 22) {
+                    alert('Storage full! Please export your data.');
+                    exportBackup();
+                }
+            }
         }
 
         function loadSubjectState(subjectId) {
             const key = getSubjectStorageKey(subjectId);
             const saved = localStorage.getItem(key);
             
+            const defaultState = {
+                version: CONFIG.dataVersion,
+                currentQuestionCategory: 0,
+                currentQuestionIndex: 0,
+                responses: {},
+                hintsUsed: {},
+                lastSaved: null
+            };
+            
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
-                    subjectState = { 
-                        currentQuestionCategory: 0,
-                        currentQuestionIndex: 0,
-                        responses: {},
-                        hintsUsed: {},
-                        lastSaved: null,
-                        ...parsed 
-                    };
+                    const migrated = migrateSubjectState(parsed);
+                    subjectState = deepMerge(defaultState, migrated);
                 } catch (e) {
                     console.error('Error loading subject state:', e);
-                    resetSubjectState();
+                    subjectState = { ...defaultState };
                 }
             } else {
-                resetSubjectState();
+                subjectState = { ...defaultState };
             }
         }
 
@@ -1715,12 +1811,26 @@
             if (!runtimeState.currentSubject) return;
             
             subjectState.lastSaved = new Date().toISOString();
+            subjectState.version = CONFIG.dataVersion;
             const key = getSubjectStorageKey(runtimeState.currentSubject);
-            localStorage.setItem(key, JSON.stringify(subjectState));
+            
+            try {
+                localStorage.setItem(key, JSON.stringify(subjectState));
+                const quota = checkStorageQuota();
+                if (quota.isCritical) {
+                    alert('Storage nearly full! Please export your data.');
+                }
+            } catch (e) {
+                if (e.name === 'QuotaExceededError' || e.code === 22) {
+                    alert('Storage full! Please export your data.');
+                    exportBackup();
+                }
+            }
         }
 
         function resetSubjectState() {
             subjectState = {
+                version: CONFIG.dataVersion,
                 currentQuestionCategory: 0,
                 currentQuestionIndex: 0,
                 responses: {},
@@ -1868,6 +1978,9 @@
 
             document.getElementById('exportBtn').addEventListener('click', exportResults);
             document.getElementById('emailBtn').addEventListener('click', emailResults);
+            document.getElementById('backupBtn').addEventListener('click', exportBackup);
+            document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
+            document.getElementById('importFile').addEventListener('change', importBackup);
             
             document.getElementById('resetBtn').addEventListener('click', () => {
                 if (!runtimeState.currentSubject) {
@@ -2458,13 +2571,138 @@
             document.getElementById('statLastSession').textContent = subjectState.lastSaved ? new Date(subjectState.lastSaved).toLocaleString() : 'Never';
         }
 
+        // Checksum for backup integrity
+        function generateChecksum(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return Math.abs(hash).toString(16);
+        }
+
+        // Get all subject data from localStorage
+        function getAllSubjectData() {
+            const subjects = {};
+            const prefix = CONFIG.storageKeys.subjectPrefix;
+            for (let key in localStorage) {
+                if (key.startsWith(prefix)) {
+                    try {
+                        subjects[key.substring(prefix.length)] = JSON.parse(localStorage.getItem(key));
+                    } catch (e) { }
+                }
+            }
+            return subjects;
+        }
+
+        // Export full backup
+        function exportBackup() {
+            const allSubjects = getAllSubjectData();
+            const subjectCount = Object.keys(allSubjects).length;
+            
+            if (subjectCount === 0 && !globalState.studentName) {
+                showModal('No Data', 'No progress data to export yet.');
+                return;
+            }
+            
+            const backup = {
+                _meta: {
+                    version: CONFIG.dataVersion,
+                    exportedAt: new Date().toISOString(),
+                    appName: 'Examiner\'s Advice',
+                    studentName: globalState.studentName || 'Unknown',
+                    subjectCount
+                },
+                globalState,
+                subjects: allSubjects
+            };
+            
+            backup._meta.checksum = generateChecksum(JSON.stringify({ globalState, subjects: allSubjects }));
+            
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const date = new Date().toISOString().split('T')[0];
+            a.download = `examiner-advice-backup-${globalState.studentName || 'student'}-${date}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            globalState.lastExported = new Date().toISOString();
+            saveGlobalState();
+            
+            showModal('Backup Complete', `Exported ${subjectCount} subject(s) successfully.`);
+        }
+
+        // Import backup
+        function importBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const backup = JSON.parse(e.target.result);
+                    
+                    if (!backup._meta || !backup.subjects) {
+                        showModal('Invalid File', 'This doesn\'t appear to be a valid backup file.');
+                        return;
+                    }
+                    
+                    // Verify checksum
+                    if (backup._meta.checksum) {
+                        const calc = generateChecksum(JSON.stringify({ globalState: backup.globalState, subjects: backup.subjects }));
+                        if (calc !== backup._meta.checksum) {
+                            if (!confirm('Data integrity check failed. Import anyway?')) return;
+                        }
+                    }
+                    
+                    const subjectCount = Object.keys(backup.subjects).length;
+                    if (confirm(`Import ${subjectCount} subject(s)? This will merge with existing data.`)) {
+                        // Import global state
+                        if (backup.globalState && !globalState.studentName && backup.globalState.studentName) {
+                            globalState.studentName = backup.globalState.studentName;
+                            saveGlobalState();
+                            document.getElementById('studentNameInput').value = globalState.studentName;
+                        }
+                        
+                        // Import subjects
+                        const prefix = CONFIG.storageKeys.subjectPrefix;
+                        for (const [subjectKey, subjectData] of Object.entries(backup.subjects)) {
+                            const migrated = migrateSubjectState(subjectData);
+                            localStorage.setItem(prefix + subjectKey, JSON.stringify(migrated));
+                        }
+                        
+                        // Reload current subject if it was imported
+                        if (runtimeState.currentSubject) {
+                            const currentKey = globalState.currentState + '-' + runtimeState.currentSubject;
+                            if (backup.subjects[currentKey]) {
+                                loadSubjectState(runtimeState.currentSubject);
+                                generateRandomisedQuestions();
+                                renderCurrentQuestion();
+                                updateProgress();
+                                updateUtilityStats();
+                            }
+                        }
+                        
+                        showModal('Import Complete', `Imported ${subjectCount} subject(s) successfully.`);
+                    }
+                } catch (error) {
+                    showModal('Import Failed', 'Could not read the backup file.');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
         function exportResults() {
             if (!subjectData) {
                 showModal('No Subject', 'Please select a subject first.');
                 return;
             }
 
-            const results = generateResultsText();
+            const results = generateResultsText('detailed');
             const blob = new Blob([results], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -2481,46 +2719,65 @@
                 return;
             }
 
-            const results = generateResultsText();
+            const results = generateResultsText('detailed');
             const state = getCurrentState();
             const subject = encodeURIComponent(`${state.name} ${subjectData.subject} Progress - ${globalState.studentName || 'Student'}`);
             const body = encodeURIComponent(results);
-            window.location.href = `mailto:?subject=${subject}&body=${body}`;
+            const mailtoUrl = `mailto:?subject=${subject}&body=${body}`;
+            
+            // Check URL length
+            if (mailtoUrl.length > 1800) {
+                // Too long - copy to clipboard
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(results).then(() => {
+                        showModal('Copied to Clipboard', 'The report was too long for an email link. It has been copied to your clipboard - paste it into your email.');
+                    }).catch(() => {
+                        showModal('Report Too Long', 'Please use Export Results to download the report instead.');
+                    });
+                } else {
+                    showModal('Report Too Long', 'Please use Export Results to download the report instead.');
+                }
+                return;
+            }
+            
+            window.location.href = mailtoUrl;
         }
 
-        function generateResultsText() {
+        function generateResultsText(type = 'detailed') {
             const state = getCurrentState();
             const totalQuestions = getTotalQuestionCount();
             const totalAnswered = Object.keys(subjectState.responses).length;
             const correct = Object.values(subjectState.responses).filter(r => r && r.correct).length;
             const accuracy = totalAnswered > 0 ? Math.round((correct / totalAnswered) * 100) : 0;
+            const progress = totalQuestions > 0 ? Math.round((totalAnswered / totalQuestions) * 100) : 0;
 
-            let text = `${state.name} ${subjectData.subject} Examiner's Advice - Progress Report\n`;
-            text += `${'='.repeat(50)}\n\n`;
+            let text = `${state.name} ${subjectData.subject} - Progress Report\n`;
             text += `Student: ${globalState.studentName || 'Not provided'}\n`;
-            text += `Examination System: ${state.fullName}\n`;
-            text += `Date: ${new Date().toLocaleString()}\n\n`;
-            text += `Overall Progress: ${totalAnswered}/${totalQuestions} (${Math.round((totalAnswered / totalQuestions) * 100)}%)\n`;
-            text += `Accuracy: ${accuracy}%\n\n`;
+            text += `Date: ${new Date().toLocaleDateString()}\n\n`;
+            text += `Progress: ${totalAnswered}/${totalQuestions} (${progress}%)\n`;
+            text += `Accuracy: ${accuracy}%\n`;
 
-            text += `Category Breakdown:\n`;
-            text += `${'-'.repeat(30)}\n`;
+            if (type === 'brief') return text + '\n— Examiner\'s Advice';
 
+            text += `\nCategories:\n`;
             subjectData.categories.forEach((category) => {
                 const categoryQuestions = category.concepts.reduce((sum, c) => sum + c.questions.length, 0);
-                let categoryAnswered = 0;
-
+                let categoryAnswered = 0, categoryCorrect = 0;
                 category.concepts.forEach((concept) => {
                     concept.questions.forEach((q, qIndex) => {
                         const key = getResponseKey(concept.id, qIndex);
-                        if (subjectState.responses[key]) categoryAnswered++;
+                        const resp = subjectState.responses[key];
+                        if (resp) {
+                            categoryAnswered++;
+                            if (resp.correct) categoryCorrect++;
+                        }
                     });
                 });
-
-                text += `• ${category.name}: ${categoryAnswered}/${categoryQuestions}\n`;
+                const catAcc = categoryAnswered > 0 ? Math.round((categoryCorrect / categoryAnswered) * 100) : 0;
+                text += `• ${category.name}: ${categoryAnswered}/${categoryQuestions} (${catAcc}%)\n`;
             });
 
-            return text;
+            return text + '\n— Examiner\'s Advice';
         }
 
         function resetProgress() {
