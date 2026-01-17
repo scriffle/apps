@@ -278,6 +278,13 @@
         .stat-item { padding: var(--space-3); background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: var(--radius-sm); }
         .stat-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
         .stat-value { font-size: 1rem; font-weight: 600; color: var(--accent); margin-top: var(--space-1); }
+        .stat-value.warning { color: var(--warning); }
+        .stat-value.error { color: var(--error); }
+
+        .backup-status { padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); font-size: 0.75rem; margin-top: var(--space-2); display: none; }
+        .backup-status.show { display: block; }
+        .backup-status.warning { background: var(--warning-subtle); color: var(--warning); border: 1px solid var(--warning); }
+        .backup-status.error { background: var(--error-subtle); color: var(--error); border: 1px solid var(--error); }
 
         /* Toast */
         .toast-wrap { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 999; }
@@ -292,8 +299,20 @@
         .modal { background: var(--bg-secondary); border-radius: var(--radius-md); padding: var(--space-4); max-width: 360px; width: 100%; box-shadow: var(--shadow-md); transform: scale(0.95); transition: transform 0.2s ease; }
         .modal-bg.show .modal { transform: scale(1); }
         .modal h2 { font-size: 1.1rem; margin-bottom: var(--space-2); }
-        .modal p { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: var(--space-4); line-height: 1.5; }
+        .modal p { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: var(--space-4); line-height: 1.5; white-space: pre-line; }
         .modal-btns { display: flex; gap: var(--space-2); justify-content: flex-end; }
+
+        /* Email Options Modal */
+        .email-modal { max-width: 380px; }
+        .email-options { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-4); }
+        .email-opt-btn { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); background: var(--bg-tertiary); border: 1px solid var(--border-light); border-radius: var(--radius-sm); cursor: pointer; text-align: left; transition: all var(--transition); }
+        .email-opt-btn:hover { border-color: var(--accent); background: var(--accent-subtle); }
+        .email-opt-btn.secondary { background: var(--bg-secondary); }
+        .email-opt-btn.secondary:hover { background: var(--bg-tertiary); }
+        .email-opt-icon { font-size: 1.3rem; width: 28px; text-align: center; }
+        .email-opt-text { flex: 1; }
+        .email-opt-text strong { display: block; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 2px; }
+        .email-opt-text span { font-size: 0.7rem; color: var(--text-muted); }
 
         /* No subject message */
         .no-subject { text-align: center; padding: var(--space-4); color: var(--text-muted); }
@@ -450,6 +469,19 @@
                         </button>
                     </div>
                     <div class="util-section">
+                        <h3>Backup &amp; Restore</h3>
+                        <button class="util-btn" id="backupBtn">
+                            <span class="util-btn-icon">📦</span>
+                            <div class="util-btn-text"><div class="util-btn-title">Backup All Data</div><div class="util-btn-desc">Download all subjects as a restorable backup file</div></div>
+                        </button>
+                        <button class="util-btn" id="importBtn">
+                            <span class="util-btn-icon">📥</span>
+                            <div class="util-btn-text"><div class="util-btn-title">Import Backup</div><div class="util-btn-desc">Restore progress from a backup file</div></div>
+                        </button>
+                        <input type="file" id="importFile" accept=".json" style="display:none">
+                        <div class="backup-status" id="backupStatus"></div>
+                    </div>
+                    <div class="util-section">
                         <h3>Examination System</h3>
                         <button class="util-btn" id="changeStateBtn">
                             <span class="util-btn-icon">🔄</span>
@@ -463,6 +495,8 @@
                             <div class="stat-item"><div class="stat-label">Accuracy Rate</div><div class="stat-value" id="statAccuracy">0%</div></div>
                             <div class="stat-item"><div class="stat-label">Current Subject</div><div class="stat-value" id="statSubject">-</div></div>
                             <div class="stat-item"><div class="stat-label">Last Saved</div><div class="stat-value" id="statSaved">-</div></div>
+                            <div class="stat-item"><div class="stat-label">Storage Used</div><div class="stat-value" id="statStorage">-</div></div>
+                            <div class="stat-item"><div class="stat-label">Last Backup</div><div class="stat-value" id="statBackup">-</div></div>
                         </div>
                     </div>
                 </div>
@@ -495,7 +529,10 @@
             storageKeys: {
                 global: 'examinerAdvice-global',
                 subjectPrefix: 'examinerAdvice-'
-            }
+            },
+            dataVersion: 2,
+            storageWarningThreshold: 0.8,
+            backupReminderDays: 30
         };
 
         // ========================================
@@ -508,12 +545,15 @@
         let randomisedQuestions = {};
 
         let globalState = {
+            version: CONFIG.dataVersion,
             studentName: '',
             currentState: null,
-            theme: null // null = system, 'light' or 'dark' for manual
+            theme: null, // null = system, 'light' or 'dark' for manual
+            lastExported: null
         };
 
         let subjectState = {
+            version: CONFIG.dataVersion,
             currentQuestionCategory: 0,
             currentQuestionIndex: 0,
             responses: {},
@@ -1184,11 +1224,139 @@
             $('#statAccuracy').textContent = `${accuracy}%`;
             $('#statSubject').textContent = subjectData ? subjectData.subject : '-';
             $('#statSaved').textContent = subjectState.lastSaved ? new Date(subjectState.lastSaved).toLocaleString() : '-';
+            
+            // Storage info
+            const quota = checkStorageQuota();
+            const storageEl = $('#statStorage');
+            if (storageEl) {
+                storageEl.textContent = `${quota.usedSpaceKB} KB`;
+                storageEl.className = 'stat-value' + (quota.isCritical ? ' error' : quota.isWarning ? ' warning' : '');
+            }
+            
+            // Backup info
+            const backupEl = $('#statBackup');
+            if (backupEl) {
+                if (globalState.lastExported) {
+                    const daysSince = Math.floor((new Date() - new Date(globalState.lastExported)) / (1000 * 60 * 60 * 24));
+                    if (daysSince === 0) {
+                        backupEl.textContent = 'Today';
+                        backupEl.className = 'stat-value';
+                    } else if (daysSince === 1) {
+                        backupEl.textContent = 'Yesterday';
+                        backupEl.className = 'stat-value';
+                    } else {
+                        backupEl.textContent = `${daysSince} days ago`;
+                        backupEl.className = 'stat-value' + (daysSince > 30 ? ' warning' : '');
+                    }
+                } else {
+                    backupEl.textContent = 'Never';
+                    backupEl.className = 'stat-value warning';
+                }
+            }
+            
+            // Backup status banner
+            const statusEl = $('#backupStatus');
+            if (statusEl) {
+                if (quota.isCritical) {
+                    statusEl.textContent = '⚠️ Storage nearly full! Export a backup now.';
+                    statusEl.className = 'backup-status show error';
+                } else if (shouldShowBackupReminder()) {
+                    statusEl.textContent = '📦 Consider backing up your data regularly.';
+                    statusEl.className = 'backup-status show warning';
+                } else {
+                    statusEl.className = 'backup-status';
+                }
+            }
         }
 
         // ========================================
         // Persistence
         // ========================================
+
+        // Deep merge utility - preserves nested structures
+        function deepMerge(target, source) {
+            const result = { ...target };
+            for (const key of Object.keys(source)) {
+                if (source[key] === null || source[key] === undefined) {
+                    continue;
+                }
+                if (Array.isArray(source[key])) {
+                    result[key] = [...source[key]];
+                } else if (typeof source[key] === 'object' && typeof target[key] === 'object' && !Array.isArray(target[key])) {
+                    result[key] = deepMerge(target[key], source[key]);
+                } else {
+                    result[key] = source[key];
+                }
+            }
+            return result;
+        }
+
+        // Migrate data from older versions
+        function migrateGlobalState(data) {
+            let migrated = { ...data };
+            
+            if (!data.version || data.version < 2) {
+                migrated.version = CONFIG.dataVersion;
+                if (migrated.lastExported === undefined) {
+                    migrated.lastExported = null;
+                }
+                console.log('Migrated global state to version', CONFIG.dataVersion);
+            }
+            
+            return migrated;
+        }
+
+        function migrateSubjectState(data) {
+            let migrated = { ...data };
+            
+            if (!data.version || data.version < 2) {
+                migrated.version = CONFIG.dataVersion;
+                // Ensure all required fields exist
+                if (!migrated.responses) migrated.responses = {};
+                if (!migrated.hintsUsed) migrated.hintsUsed = {};
+                console.log('Migrated subject state to version', CONFIG.dataVersion);
+            }
+            
+            return migrated;
+        }
+
+        // Check storage quota
+        function checkStorageQuota() {
+            try {
+                let totalSpace = 5 * 1024 * 1024; // 5MB conservative estimate
+                let usedSpace = 0;
+                
+                for (let key in localStorage) {
+                    if (localStorage.hasOwnProperty(key)) {
+                        usedSpace += localStorage.getItem(key).length * 2;
+                    }
+                }
+                
+                const percentUsed = usedSpace / totalSpace;
+                
+                return {
+                    usedSpaceKB: (usedSpace / 1024).toFixed(1),
+                    totalSpaceMB: (totalSpace / (1024 * 1024)).toFixed(0),
+                    percentUsed: percentUsed,
+                    isWarning: percentUsed >= CONFIG.storageWarningThreshold,
+                    isCritical: percentUsed >= 0.95
+                };
+            } catch (e) {
+                return { error: true, message: e.message };
+            }
+        }
+
+        // Check if backup reminder should be shown
+        function shouldShowBackupReminder() {
+            if (!globalState.lastExported) {
+                // If never exported and has some data
+                const hasData = Object.keys(subjectState.responses || {}).length > 0;
+                return hasData;
+            }
+            
+            const daysSinceExport = (new Date() - new Date(globalState.lastExported)) / (1000 * 60 * 60 * 24);
+            return daysSinceExport >= CONFIG.backupReminderDays;
+        }
 
         function getSubjectStorageKey(subjectId) {
             return CONFIG.storageKeys.subjectPrefix + globalState.currentState + '-' + subjectId;
@@ -1198,35 +1366,129 @@
             const saved = localStorage.getItem(CONFIG.storageKeys.global);
             if (saved) {
                 try {
-                    globalState = { ...globalState, ...JSON.parse(saved) };
-                } catch (e) { console.error('Error loading global state:', e); }
+                    let parsed;
+                    try {
+                        parsed = JSON.parse(saved);
+                    } catch (parseError) {
+                        console.error('Global state corrupted:', parseError);
+                        // Offer to download corrupted data
+                        setTimeout(() => {
+                            if (confirm('Your settings appear to be corrupted. Start fresh? (Your subject progress is stored separately and may be intact)')) {
+                                localStorage.removeItem(CONFIG.storageKeys.global);
+                            }
+                        }, 500);
+                        return;
+                    }
+                    
+                    const migrated = migrateGlobalState(parsed);
+                    globalState = deepMerge(globalState, migrated);
+                } catch (e) { 
+                    console.error('Error loading global state:', e); 
+                }
             }
         }
 
         function saveGlobalState() {
-            localStorage.setItem(CONFIG.storageKeys.global, JSON.stringify(globalState));
+            globalState.version = CONFIG.dataVersion;
+            try {
+                localStorage.setItem(CONFIG.storageKeys.global, JSON.stringify(globalState));
+            } catch (e) {
+                if (e.name === 'QuotaExceededError' || e.code === 22) {
+                    toast('Storage full! Please export your data.');
+                    setTimeout(() => {
+                        if (confirm('Storage is full. Export your data now?')) {
+                            exportBackup();
+                        }
+                    }, 100);
+                } else {
+                    console.error('Failed to save global state:', e);
+                }
+            }
         }
 
         function loadSubjectState(subjectId) {
             const key = getSubjectStorageKey(subjectId);
             const saved = localStorage.getItem(key);
+            
+            const defaultState = {
+                version: CONFIG.dataVersion,
+                currentQuestionCategory: 0,
+                currentQuestionIndex: 0,
+                responses: {},
+                hintsUsed: {},
+                lastSaved: null
+            };
+            
             if (saved) {
                 try {
-                    subjectState = { currentQuestionCategory: 0, currentQuestionIndex: 0, responses: {}, hintsUsed: {}, lastSaved: null, ...JSON.parse(saved) };
-                } catch (e) { resetSubjectState(); }
+                    let parsed;
+                    try {
+                        parsed = JSON.parse(saved);
+                    } catch (parseError) {
+                        console.error('Subject state corrupted:', parseError);
+                        setTimeout(() => {
+                            modal('Data Issue', 
+                                'Your progress for this subject appears corrupted. Starting fresh. Other subjects are unaffected.',
+                                null);
+                        }, 500);
+                        subjectState = { ...defaultState };
+                        return;
+                    }
+                    
+                    const migrated = migrateSubjectState(parsed);
+                    subjectState = deepMerge(defaultState, migrated);
+                } catch (e) { 
+                    console.error('Error loading subject state:', e);
+                    subjectState = { ...defaultState };
+                }
             } else {
-                resetSubjectState();
+                subjectState = { ...defaultState };
             }
         }
 
         function saveSubjectState() {
             if (!runtimeState.currentSubject) return;
+            
             subjectState.lastSaved = new Date().toISOString();
-            localStorage.setItem(getSubjectStorageKey(runtimeState.currentSubject), JSON.stringify(subjectState));
+            subjectState.version = CONFIG.dataVersion;
+            
+            try {
+                localStorage.setItem(getSubjectStorageKey(runtimeState.currentSubject), JSON.stringify(subjectState));
+                
+                // Check quota after save
+                const quota = checkStorageQuota();
+                if (quota.isCritical) {
+                    toast('⚠️ Storage nearly full! Export your data.');
+                } else if (quota.isWarning) {
+                    // Only warn occasionally, not every save
+                    if (Math.random() < 0.1) {
+                        toast('Storage getting low. Consider exporting.');
+                    }
+                }
+            } catch (e) {
+                if (e.name === 'QuotaExceededError' || e.code === 22) {
+                    toast('Storage full! Please export your data.');
+                    setTimeout(() => {
+                        if (confirm('Storage is full. Export your data now?')) {
+                            exportBackup();
+                        }
+                    }, 100);
+                } else {
+                    console.error('Failed to save subject state:', e);
+                    toast('Failed to save. Please export a backup.');
+                }
+            }
         }
 
         function resetSubjectState() {
-            subjectState = { currentQuestionCategory: 0, currentQuestionIndex: 0, responses: {}, hintsUsed: {}, lastSaved: null };
+            subjectState = { 
+                version: CONFIG.dataVersion,
+                currentQuestionCategory: 0, 
+                currentQuestionIndex: 0, 
+                responses: {}, 
+                hintsUsed: {}, 
+                lastSaved: null 
+            };
         }
 
         // ========================================
@@ -1280,6 +1542,223 @@
         // Export Functions
         // ========================================
 
+        // Generate checksum for data integrity
+        function generateChecksum(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return Math.abs(hash).toString(16);
+        }
+
+        // Get all subject data from localStorage
+        function getAllSubjectData() {
+            const subjects = {};
+            const prefix = CONFIG.storageKeys.subjectPrefix;
+            
+            for (let key in localStorage) {
+                if (key.startsWith(prefix)) {
+                    try {
+                        const data = JSON.parse(localStorage.getItem(key));
+                        // Extract subject identifier from key
+                        const subjectKey = key.substring(prefix.length);
+                        subjects[subjectKey] = data;
+                    } catch (e) {
+                        console.error('Error reading subject data:', key, e);
+                    }
+                }
+            }
+            
+            return subjects;
+        }
+
+        // Export full backup (JSON) - all subjects
+        function exportBackup() {
+            const allSubjects = getAllSubjectData();
+            const subjectCount = Object.keys(allSubjects).length;
+            
+            if (subjectCount === 0 && !globalState.studentName) {
+                modal('No Data', 'No progress data to export yet.', null);
+                return;
+            }
+            
+            const backup = {
+                _meta: {
+                    version: CONFIG.dataVersion,
+                    exportedAt: new Date().toISOString(),
+                    appName: 'Examiner\'s Advice',
+                    studentName: globalState.studentName || 'Unknown',
+                    subjectCount: subjectCount
+                },
+                globalState: globalState,
+                subjects: allSubjects
+            };
+            
+            // Add checksum
+            const dataStr = JSON.stringify({ globalState, subjects: allSubjects });
+            backup._meta.checksum = generateChecksum(dataStr);
+            
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const date = new Date().toISOString().split('T')[0];
+            a.download = `examiner-advice-backup-${globalState.studentName || 'student'}-${date}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            // Update last exported timestamp
+            globalState.lastExported = new Date().toISOString();
+            saveGlobalState();
+            
+            toast(`Backup exported! (${subjectCount} subjects)`);
+        }
+
+        // Import backup from JSON file
+        function importBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const backup = JSON.parse(e.target.result);
+                    
+                    // Validate structure
+                    if (!backup._meta || !backup.subjects) {
+                        // Maybe it's an old format or invalid
+                        modal('Invalid File', 'This doesn\'t appear to be a valid backup file.', null);
+                        return;
+                    }
+                    
+                    // Verify checksum if present
+                    if (backup._meta.checksum) {
+                        const dataStr = JSON.stringify({ 
+                            globalState: backup.globalState, 
+                            subjects: backup.subjects 
+                        });
+                        const calculatedChecksum = generateChecksum(dataStr);
+                        if (calculatedChecksum !== backup._meta.checksum) {
+                            if (!confirm('⚠️ Data integrity check failed. The file may be corrupted. Import anyway?')) {
+                                return;
+                            }
+                        }
+                    }
+                    
+                    // Version check
+                    if (backup._meta.version && backup._meta.version > CONFIG.dataVersion) {
+                        if (!confirm(`This backup is from a newer version (v${backup._meta.version}). Some data may not work correctly. Continue?`)) {
+                            return;
+                        }
+                    }
+                    
+                    const subjectCount = Object.keys(backup.subjects).length;
+                    const exportDate = backup._meta.exportedAt 
+                        ? new Date(backup._meta.exportedAt).toLocaleDateString() 
+                        : 'Unknown';
+                    
+                    modal(
+                        'Import Backup',
+                        `This backup contains ${subjectCount} subject(s) from ${exportDate}.\n\nThis will merge with your existing data. Subjects in the backup will overwrite matching local subjects.`,
+                        () => {
+                            performImport(backup);
+                        }
+                    );
+                    
+                } catch (error) {
+                    console.error('Import error:', error);
+                    modal('Import Failed', 'Could not read the backup file. Make sure it\'s a valid JSON backup.', null);
+                }
+            };
+            
+            reader.onerror = () => {
+                modal('Read Error', 'Failed to read the file.', null);
+            };
+            
+            reader.readAsText(file);
+            event.target.value = ''; // Reset file input
+        }
+
+        function performImport(backup) {
+            try {
+                // Import global state (merge, don't overwrite everything)
+                if (backup.globalState) {
+                    // Keep current state/theme preferences, but merge student name if empty
+                    if (!globalState.studentName && backup.globalState.studentName) {
+                        globalState.studentName = backup.globalState.studentName;
+                    }
+                    saveGlobalState();
+                    $('#studentName').value = globalState.studentName || '';
+                }
+                
+                // Import all subjects
+                const prefix = CONFIG.storageKeys.subjectPrefix;
+                let importedCount = 0;
+                
+                for (const [subjectKey, subjectData] of Object.entries(backup.subjects)) {
+                    const key = prefix + subjectKey;
+                    const migrated = migrateSubjectState(subjectData);
+                    localStorage.setItem(key, JSON.stringify(migrated));
+                    importedCount++;
+                }
+                
+                // Reload current subject if it was imported
+                if (runtimeState.currentSubject) {
+                    const currentKey = globalState.currentState + '-' + runtimeState.currentSubject;
+                    if (backup.subjects[currentKey]) {
+                        loadSubjectState(runtimeState.currentSubject);
+                        generateRandomisedQuestions();
+                        renderCurrentQuestion();
+                        updateProgress();
+                        updateUI();
+                    }
+                }
+                
+                toast(`Imported ${importedCount} subject(s)!`);
+            } catch (error) {
+                console.error('Import error:', error);
+                toast('Import failed. Please try again.');
+            }
+        }
+
+        // Export current subject only (JSON backup)
+        function exportCurrentSubjectBackup() {
+            if (!subjectData || !runtimeState.currentSubject) {
+                modal('No Subject', 'Please select a subject first.', null);
+                return;
+            }
+            
+            const state = getCurrentState();
+            const backup = {
+                _meta: {
+                    version: CONFIG.dataVersion,
+                    exportedAt: new Date().toISOString(),
+                    appName: 'Examiner\'s Advice',
+                    studentName: globalState.studentName || 'Unknown',
+                    examSystem: state.name,
+                    subject: subjectData.subject,
+                    subjectId: runtimeState.currentSubject
+                },
+                subjectState: subjectState
+            };
+            
+            backup._meta.checksum = generateChecksum(JSON.stringify(subjectState));
+            
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const date = new Date().toISOString().split('T')[0];
+            a.download = `${state.name}-${subjectData.subject}-backup-${date}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            toast('Subject backup exported!');
+        }
+
+        // Export results as text (human-readable report)
         function exportResults() {
             if (!subjectData) { modal('No Subject', 'Please select a subject first.', null); return; }
             const results = generateResultsText();
@@ -1296,36 +1775,240 @@
 
         function emailResults() {
             if (!subjectData) { modal('No Subject', 'Please select a subject first.', null); return; }
-            const results = generateResultsText();
-            const state = getCurrentState();
-            const subject = encodeURIComponent(`${state.name} ${subjectData.subject} Progress - ${globalState.studentName || 'Student'}`);
-            const body = encodeURIComponent(results);
-            window.location.href = `mailto:?subject=${subject}&body=${body}`;
+            showEmailOptionsModal();
         }
 
-        function generateResultsText() {
+        function showEmailOptionsModal() {
+            // Create modal if it doesn't exist
+            let emailModal = document.getElementById('emailOptionsModal');
+            if (!emailModal) {
+                emailModal = document.createElement('div');
+                emailModal.id = 'emailOptionsModal';
+                emailModal.className = 'modal-bg';
+                emailModal.innerHTML = `
+                    <div class="modal email-modal">
+                        <h2>📧 Share Results</h2>
+                        <p>Choose how to share your progress:</p>
+                        <div class="email-options">
+                            <button class="email-opt-btn" data-type="brief">
+                                <span class="email-opt-icon">📋</span>
+                                <div class="email-opt-text">
+                                    <strong>Brief Summary</strong>
+                                    <span>Overall stats only - quick update</span>
+                                </div>
+                            </button>
+                            <button class="email-opt-btn" data-type="detailed">
+                                <span class="email-opt-icon">📄</span>
+                                <div class="email-opt-text">
+                                    <strong>Detailed Report</strong>
+                                    <span>Category breakdown with accuracy</span>
+                                </div>
+                            </button>
+                            <button class="email-opt-btn" data-type="full">
+                                <span class="email-opt-icon">📊</span>
+                                <div class="email-opt-text">
+                                    <strong>Full Report</strong>
+                                    <span>Includes concepts needing work</span>
+                                </div>
+                            </button>
+                            <button class="email-opt-btn secondary" data-type="clipboard">
+                                <span class="email-opt-icon">📎</span>
+                                <div class="email-opt-text">
+                                    <strong>Copy to Clipboard</strong>
+                                    <span>For manual pasting</span>
+                                </div>
+                            </button>
+                        </div>
+                        <div class="modal-btns">
+                            <button class="btn btn-secondary" id="emailModalCancel">Cancel</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(emailModal);
+                
+                // Event listeners
+                emailModal.querySelector('#emailModalCancel').addEventListener('click', closeEmailModal);
+                emailModal.addEventListener('click', e => { if (e.target === emailModal) closeEmailModal(); });
+                
+                emailModal.querySelectorAll('.email-opt-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const type = btn.dataset.type;
+                        closeEmailModal();
+                        if (type === 'clipboard') {
+                            copyReportToClipboard('detailed');
+                        } else {
+                            sendEmailReport(type);
+                        }
+                    });
+                });
+            }
+            
+            emailModal.classList.add('show');
+        }
+
+        function closeEmailModal() {
+            const emailModal = document.getElementById('emailOptionsModal');
+            if (emailModal) emailModal.classList.remove('show');
+        }
+
+        function generateResultsText(type = 'detailed') {
             const state = getCurrentState();
             const total = getTotalQuestionCount();
             const answered = Object.keys(subjectState.responses).length;
             const correct = Object.values(subjectState.responses).filter(r => r && r.correct).length;
             const accuracy = answered > 0 ? Math.round((correct / answered) * 100) : 0;
+            const progress = total > 0 ? Math.round((answered / total) * 100) : 0;
 
-            let text = `${state.name} ${subjectData.subject} Examiner's Advice - Progress Report\n`;
-            text += `${'='.repeat(50)}\n\n`;
+            let text = `${state.name} ${subjectData.subject} - Progress Report\n`;
             text += `Student: ${globalState.studentName || 'Not provided'}\n`;
-            text += `Examination System: ${state.fullName}\n`;
-            text += `Date: ${new Date().toLocaleString()}\n\n`;
-            text += `Overall Progress: ${answered}/${total} (${total > 0 ? Math.round((answered / total) * 100) : 0}%)\n`;
-            text += `Accuracy: ${accuracy}%\n\n`;
-            text += `Category Breakdown:\n${'-'.repeat(30)}\n`;
+            text += `Date: ${new Date().toLocaleDateString()}\n\n`;
+            
+            text += `Progress: ${answered}/${total} (${progress}%)\n`;
+            text += `Accuracy: ${accuracy}%\n`;
 
+            // Brief - just overall stats
+            if (type === 'brief') {
+                text += `\n— Examiner's Advice`;
+                return text;
+            }
+
+            // Detailed - add category breakdown
+            text += `\nCategories:\n`;
             subjectData.categories.forEach(cat => {
                 const catQ = cat.concepts.reduce((s, c) => s + c.questions.length, 0);
-                let catAns = 0;
-                cat.concepts.forEach(c => c.questions.forEach((q, i) => { if (subjectState.responses[getResponseKey(c.id, i)]) catAns++; }));
-                text += `• ${cat.name}: ${catAns}/${catQ}\n`;
+                let catAns = 0, catCorrect = 0;
+                cat.concepts.forEach(c => c.questions.forEach((q, i) => { 
+                    const resp = subjectState.responses[getResponseKey(c.id, i)];
+                    if (resp) {
+                        catAns++;
+                        if (resp.correct) catCorrect++;
+                    }
+                }));
+                const catAcc = catAns > 0 ? Math.round((catCorrect / catAns) * 100) : 0;
+                text += `• ${cat.name}: ${catAns}/${catQ} (${catAcc}%)\n`;
             });
+
+            // Full - add concepts needing work
+            if (type === 'full') {
+                const needsWork = [];
+                subjectData.categories.forEach(cat => {
+                    cat.concepts.forEach(concept => {
+                        let answered = 0, correct = 0;
+                        concept.questions.forEach((q, i) => {
+                            const resp = subjectState.responses[getResponseKey(concept.id, i)];
+                            if (resp) {
+                                answered++;
+                                if (resp.correct) correct++;
+                            }
+                        });
+                        // Flag if attempted but low accuracy
+                        if (answered > 0 && correct < answered) {
+                            needsWork.push({
+                                title: concept.title,
+                                score: `${correct}/${concept.questions.length}`
+                            });
+                        }
+                    });
+                });
+
+                if (needsWork.length > 0) {
+                    text += `\nAreas for Review:\n`;
+                    needsWork.slice(0, 10).forEach(c => {
+                        text += `• ${c.title} (${c.score})\n`;
+                    });
+                    if (needsWork.length > 10) {
+                        text += `  ...and ${needsWork.length - 10} more\n`;
+                    }
+                }
+            }
+            
+            text += `\n— Examiner's Advice`;
             return text;
+        }
+
+        function sendEmailReport(type) {
+            const state = getCurrentState();
+            const subject = `${state.name} ${subjectData.subject} Progress - ${globalState.studentName || 'Student'}`;
+            const body = generateResultsText(type);
+            
+            const encodedSubject = encodeURIComponent(subject);
+            const encodedBody = encodeURIComponent(body);
+            const mailtoUrl = `mailto:?subject=${encodedSubject}&body=${encodedBody}`;
+            
+            // Check URL length - conservative limit
+            if (mailtoUrl.length > 1800) {
+                toast('Report too long for email link. Copying to clipboard...');
+                setTimeout(() => copyReportToClipboard(type), 300);
+                return;
+            }
+            
+            window.location.href = mailtoUrl;
+            toast('Opening email...');
+        }
+
+        function copyReportToClipboard(type) {
+            const body = generateResultsText(type);
+            
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(body).then(() => {
+                    showCopySuccessModal(body.length);
+                }).catch(() => {
+                    showCopyFallbackModal(body);
+                });
+            } else {
+                showCopyFallbackModal(body);
+            }
+        }
+
+        function showCopySuccessModal(charCount) {
+            toast(`✓ Copied! (${charCount} chars)`);
+            modal('Copied to Clipboard', 
+                'Your report is ready to paste.\n\nOpen your email app and paste (Ctrl+V or Cmd+V) into the message body.', 
+                null);
+        }
+
+        function showCopyFallbackModal(text) {
+            // Create fallback modal with textarea
+            let fallbackModal = document.getElementById('copyFallbackModal');
+            if (!fallbackModal) {
+                fallbackModal = document.createElement('div');
+                fallbackModal.id = 'copyFallbackModal';
+                fallbackModal.className = 'modal-bg';
+                fallbackModal.innerHTML = `
+                    <div class="modal" style="max-width: 420px;">
+                        <h2>📋 Copy Report</h2>
+                        <p>Select all and copy (Ctrl+C / Cmd+C):</p>
+                        <textarea id="copyFallbackText" readonly style="width:100%;height:150px;font-size:0.75rem;font-family:monospace;padding:8px;border:1px solid var(--border-color);border-radius:var(--radius-sm);resize:vertical;background:var(--bg-tertiary);color:var(--text-primary);"></textarea>
+                        <div class="modal-btns" style="margin-top: var(--space-3);">
+                            <button class="btn btn-secondary" id="selectAllBtn">Select All</button>
+                            <button class="btn btn-primary" id="closeFallbackBtn">Done</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(fallbackModal);
+                
+                fallbackModal.querySelector('#selectAllBtn').addEventListener('click', () => {
+                    const textarea = fallbackModal.querySelector('#copyFallbackText');
+                    textarea.focus();
+                    textarea.select();
+                });
+                fallbackModal.querySelector('#closeFallbackBtn').addEventListener('click', () => {
+                    fallbackModal.classList.remove('show');
+                });
+                fallbackModal.addEventListener('click', e => { 
+                    if (e.target === fallbackModal) fallbackModal.classList.remove('show'); 
+                });
+            }
+            
+            fallbackModal.querySelector('#copyFallbackText').value = text;
+            fallbackModal.classList.add('show');
+            
+            // Auto-select
+            setTimeout(() => {
+                const textarea = fallbackModal.querySelector('#copyFallbackText');
+                textarea.focus();
+                textarea.select();
+            }, 100);
         }
 
         function resetProgress() {
@@ -1437,6 +2120,9 @@
             });
             $('#exportBtn').addEventListener('click', exportResults);
             $('#emailBtn').addEventListener('click', emailResults);
+            $('#backupBtn').addEventListener('click', exportBackup);
+            $('#importBtn').addEventListener('click', () => $('#importFile').click());
+            $('#importFile').addEventListener('change', importBackup);
             $('#resetBtn').addEventListener('click', () => {
                 if (!runtimeState.currentSubject) { modal('No Subject', 'Please select a subject first.', null); return; }
                 modal('Reset Progress', 'This will delete all responses for the current subject. This cannot be undone.', resetProgress);
