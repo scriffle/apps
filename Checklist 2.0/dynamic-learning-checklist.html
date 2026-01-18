@@ -6899,6 +6899,71 @@ function debugRandomizeLevels() {
     }
 }
 
+/**
+ * Debug: Select the correct answer in the current quiz
+ */
+function debugSelectCorrectAnswer() {
+    if (!currentQuiz || currentQuiz.answered) return;
+    
+    if (currentQuiz.questionType === 'cloze') {
+        // For cloze questions, select correct option for each blank
+        currentQuiz.blankIds.forEach(blankId => {
+            const options = currentQuiz[`blankOptions_${blankId}`];
+            const correctOption = options.find(opt => opt.isCorrect);
+            if (correctOption) {
+                const select = document.querySelector(`.cloze-select[data-blank-id="${blankId}"]`);
+                if (select) {
+                    select.value = correctOption.value;
+                    onClozeSelectChange(select);
+                }
+            }
+        });
+        showToast('Debug: Correct answers selected', 'info');
+    } else {
+        // For MC questions, find and select the correct option
+        const correctIndex = currentQuiz.options.findIndex(opt => opt.isCorrect);
+        if (correctIndex !== -1) {
+            selectMCOption(correctIndex);
+            showToast('Debug: Correct answer selected', 'info');
+        }
+    }
+}
+
+/**
+ * Debug: Select a random wrong answer in the current quiz
+ */
+function debugSelectWrongAnswer() {
+    if (!currentQuiz || currentQuiz.answered) return;
+    
+    if (currentQuiz.questionType === 'cloze') {
+        // For cloze questions, select a wrong option for each blank
+        currentQuiz.blankIds.forEach(blankId => {
+            const options = currentQuiz[`blankOptions_${blankId}`];
+            const wrongOptions = options.filter(opt => !opt.isCorrect);
+            if (wrongOptions.length > 0) {
+                const randomWrong = wrongOptions[Math.floor(Math.random() * wrongOptions.length)];
+                const select = document.querySelector(`.cloze-select[data-blank-id="${blankId}"]`);
+                if (select) {
+                    select.value = randomWrong.value;
+                    onClozeSelectChange(select);
+                }
+            }
+        });
+        showToast('Debug: Wrong answers selected', 'info');
+    } else {
+        // For MC questions, find and select a random wrong option
+        const wrongIndices = currentQuiz.options
+            .map((opt, i) => opt.isCorrect ? -1 : i)
+            .filter(i => i !== -1);
+        
+        if (wrongIndices.length > 0) {
+            const randomIndex = wrongIndices[Math.floor(Math.random() * wrongIndices.length)];
+            selectMCOption(randomIndex);
+            showToast('Debug: Wrong answer selected', 'info');
+        }
+    }
+}
+
 // ============================================
 // TEXT SELECTION POPUP
 // ============================================
@@ -7234,22 +7299,44 @@ function setupEventListeners() {
     });
     
     // Keyboard shortcuts
-    const debugKeysPressed = { q: false, w: false, e: false };
+    const debugKeysPressed = { q: false, w: false, e: false, a: false, s: false, d: false };
     
     document.addEventListener('keydown', (e) => {
         // Track debug keys
         if (e.key === 'q') debugKeysPressed.q = true;
         if (e.key === 'w') debugKeysPressed.w = true;
         if (e.key === 'e') debugKeysPressed.e = true;
+        if (e.key === 'a') debugKeysPressed.a = true;
+        if (e.key === 's') debugKeysPressed.s = true;
+        if (e.key === 'd') debugKeysPressed.d = true;
         
-        // Check for debug combo (q+w+e)
+        // Check if quiz is active
+        const quizActive = document.getElementById('quiz-overlay')?.classList.contains('active');
+        
+        // Check for q+w+e combo
         if (debugKeysPressed.q && debugKeysPressed.w && debugKeysPressed.e) {
             e.preventDefault();
-            debugRandomizeLevels();
+            if (quizActive) {
+                debugSelectCorrectAnswer();
+            } else {
+                debugRandomizeLevels();
+            }
             // Reset to prevent repeated triggers
             debugKeysPressed.q = false;
             debugKeysPressed.w = false;
             debugKeysPressed.e = false;
+        }
+        
+        // Check for a+s+d combo (wrong answer in quiz)
+        if (debugKeysPressed.a && debugKeysPressed.s && debugKeysPressed.d) {
+            e.preventDefault();
+            if (quizActive) {
+                debugSelectWrongAnswer();
+            }
+            // Reset to prevent repeated triggers
+            debugKeysPressed.a = false;
+            debugKeysPressed.s = false;
+            debugKeysPressed.d = false;
         }
     });
     
@@ -7257,6 +7344,9 @@ function setupEventListeners() {
         if (e.key === 'q') debugKeysPressed.q = false;
         if (e.key === 'w') debugKeysPressed.w = false;
         if (e.key === 'e') debugKeysPressed.e = false;
+        if (e.key === 'a') debugKeysPressed.a = false;
+        if (e.key === 's') debugKeysPressed.s = false;
+        if (e.key === 'd') debugKeysPressed.d = false;
     });
 }
 
