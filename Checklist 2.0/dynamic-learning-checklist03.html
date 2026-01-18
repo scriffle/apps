@@ -2814,48 +2814,6 @@ body {
     line-height: 1.5;
 }
 
-.welcome-user-info {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-    padding: var(--space-4);
-    background: var(--color-bg-warm);
-    border-radius: var(--radius-md);
-    margin-bottom: var(--space-5);
-}
-
-.welcome-form-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-}
-
-.welcome-form-label {
-    font-size: var(--text-sm);
-    font-weight: 500;
-    color: var(--color-text);
-}
-
-.welcome-form-input {
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--text-base);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    background: var(--color-bg-card);
-    color: var(--color-text);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.welcome-form-input:focus {
-    outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px var(--color-primary-pale);
-}
-
-.welcome-form-input::placeholder {
-    color: var(--color-text-muted);
-}
-
 .welcome-footer-text {
     font-size: var(--text-sm);
     color: var(--color-text-muted);
@@ -3082,6 +3040,8 @@ body {
                     <button class="header-btn" id="new-checkin-btn" title="Start a new check-in">
                         <span>📋</span> Check In
                     </button>
+                    <button class="header-btn" id="undo-btn" title="Undo (Ctrl+Z)" disabled>↶</button>
+                    <button class="header-btn" id="redo-btn" title="Redo (Ctrl+Y)" disabled>↷</button>
                 </div>
             </div>
         </header>
@@ -3424,8 +3384,8 @@ body {
                             <input type="text" id="student-name-input" class="form-input" placeholder="Enter your name">
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="class-input">Your Classes</label>
-                            <input type="text" id="class-input" class="form-input" placeholder="e.g., VCE Biology U3, Year 7 English">
+                            <label class="form-label" for="class-input">Your Class</label>
+                            <input type="text" id="class-input" class="form-input" placeholder="e.g., VCE Biology U3">
                         </div>
                     </div>
                     
@@ -3719,18 +3679,6 @@ body {
                 <div class="welcome-body">
                     <p class="welcome-intro">This app helps you track your understanding of each topic as you learn. It is designed to support your learning journey, not to test you.</p>
                     
-                    <!-- User Info Section -->
-                    <div class="welcome-user-info">
-                        <div class="welcome-form-group">
-                            <label class="welcome-form-label" for="welcome-name-input">Your name</label>
-                            <input type="text" id="welcome-name-input" class="welcome-form-input" placeholder="Enter your name">
-                        </div>
-                        <div class="welcome-form-group">
-                            <label class="welcome-form-label" for="welcome-class-input">Your classes</label>
-                            <input type="text" id="welcome-class-input" class="welcome-form-input" placeholder="e.g., VCE Biology U3, Year 7 English">
-                        </div>
-                    </div>
-                    
                     <div class="welcome-features">
                         <div class="welcome-feature">
                             <span class="welcome-feature-icon">🎯</span>
@@ -3847,6 +3795,7 @@ const TOPIC_AVAILABILITY_KEY = 'learning-checkin-topic-availability';
 const LEVEL_PREFS_KEY = 'learning-checkin-level-prefs';
 const FIRST_RUN_KEY = 'learning-checkin-first-run-complete';
 const SELECTION_TIP_KEY = 'learning-checkin-selection-tip-shown';
+const MAX_UNDO = 50;
 const QUIZ_LOCKOUT_DURATION = 5 * 60 * 1000; // 5 minutes
 const AVAILABILITY_CACHE_DURATION = 60 * 60 * 1000; // 1 hour
 const SELECTION_TIP_DELAY = 3 * 60 * 1000; // 3 minutes
@@ -3919,6 +3868,10 @@ let topicProgressStore = {};
 // Currently selected dropdown values
 let selectedYearLevel = null;
 let selectedSubject = null;
+
+// Undo/Redo stacks
+let undoStack = [];
+let redoStack = [];
 
 // Quiz state
 let quizState = {};
@@ -4942,6 +4895,7 @@ function renderAll() {
     renderGoals();
     renderQuestions();
     renderDataSummary();
+    updateUndoRedoButtons();
     updateBadges();
 }
 
@@ -5636,6 +5590,9 @@ function applyLevelChange(itemKey, level) {
     const oldLevel = appState.learningItems[itemKey].level;
     
     if (oldLevel !== level) {
+        const uiState = captureUIState();
+        pushUndoState();
+        
         appState.learningItems[itemKey].level = level;
         appState.learningItems[itemKey].history.push({
             date: new Date().toISOString(),
@@ -5664,6 +5621,7 @@ function applyLevelChange(itemKey, level) {
         saveData();
         renderOverview();
         renderHistory();
+        restoreUIState(uiState);
     }
 }
 
@@ -6143,6 +6101,98 @@ function closeQuiz() {
     // Reset button handler
     document.getElementById('quiz-submit-btn').onclick = submitQuizAnswer;
 }
+// ============================================
+// UNDO/REDO
+// ============================================
+function pushUndoState() {
+    undoStack.push(JSON.stringify(appState));
+    if (undoStack.length > MAX_UNDO) undoStack.shift();
+    redoStack = [];
+    updateUndoRedoButtons();
+}
+
+function undo() {
+    if (undoStack.length === 0) return;
+    redoStack.push(JSON.stringify(appState));
+    appState = JSON.parse(undoStack.pop());
+    saveData();
+    renderAll();
+    showToast('Undone', 'info');
+    updateUndoRedoButtons();
+}
+
+function redo() {
+    if (redoStack.length === 0) return;
+    undoStack.push(JSON.stringify(appState));
+    appState = JSON.parse(redoStack.pop());
+    saveData();
+    renderAll();
+    showToast('Redone', 'info');
+    updateUndoRedoButtons();
+}
+
+function updateUndoRedoButtons() {
+    const undoBtn = document.getElementById('undo-btn');
+    const redoBtn = document.getElementById('redo-btn');
+    if (undoBtn) undoBtn.disabled = undoStack.length === 0;
+    if (redoBtn) redoBtn.disabled = redoStack.length === 0;
+}
+
+// ============================================
+// UI STATE PRESERVATION
+// ============================================
+function captureUIState() {
+    const state = {
+        expandedTopics: [],
+        expandedExplanations: [],
+        expandedHelp: []
+    };
+    
+    document.querySelectorAll('.topic-header[aria-expanded="true"]').forEach(h => {
+        state.expandedTopics.push(h.id);
+    });
+    
+    document.querySelectorAll('.explanation-toggle[aria-expanded="true"]').forEach(t => {
+        state.expandedExplanations.push(t.id);
+    });
+    
+    document.querySelectorAll('.help-toggle-inline[aria-expanded="true"]').forEach(t => {
+        state.expandedHelp.push(t.id);
+    });
+    
+    return state;
+}
+
+function restoreUIState(state) {
+    if (!state) return;
+    
+    state.expandedTopics.forEach(id => {
+        const header = document.getElementById(id);
+        if (header) {
+            header.setAttribute('aria-expanded', 'true');
+            const content = document.getElementById(header.getAttribute('aria-controls'));
+            if (content) content.classList.add('expanded');
+        }
+    });
+    
+    state.expandedExplanations.forEach(id => {
+        const toggle = document.getElementById(id);
+        if (toggle) {
+            toggle.setAttribute('aria-expanded', 'true');
+            const content = document.getElementById(toggle.getAttribute('aria-controls'));
+            if (content) content.classList.add('expanded');
+        }
+    });
+    
+    state.expandedHelp.forEach(id => {
+        const toggle = document.getElementById(id);
+        if (toggle) {
+            toggle.setAttribute('aria-expanded', 'true');
+            const content = document.getElementById(toggle.getAttribute('aria-controls'));
+            if (content) content.classList.add('expanded');
+        }
+    });
+}
 
 // ============================================
 // THEME
@@ -6185,13 +6235,6 @@ function showWelcomeDialog() {
         // Reset to first page
         document.getElementById('welcome-page-1')?.classList.add('active');
         document.getElementById('welcome-page-2')?.classList.remove('active');
-        
-        // Populate fields with existing data if available
-        const welcomeNameInput = document.getElementById('welcome-name-input');
-        const welcomeClassInput = document.getElementById('welcome-class-input');
-        if (welcomeNameInput) welcomeNameInput.value = appState.student.name || '';
-        if (welcomeClassInput) welcomeClassInput.value = appState.student.class || '';
-        
         overlay.classList.add('active');
     }
 }
@@ -6200,28 +6243,6 @@ function showWelcomeDialog() {
  * Hide the welcome dialog and mark first run as complete
  */
 function hideWelcomeDialog() {
-    // Save user info from welcome form
-    const welcomeNameInput = document.getElementById('welcome-name-input');
-    const welcomeClassInput = document.getElementById('welcome-class-input');
-    
-    if (welcomeNameInput && welcomeNameInput.value.trim()) {
-        appState.student.name = welcomeNameInput.value.trim();
-    }
-    if (welcomeClassInput && welcomeClassInput.value.trim()) {
-        appState.student.class = welcomeClassInput.value.trim();
-    }
-    
-    // Sync with settings inputs
-    const settingsNameInput = document.getElementById('student-name-input');
-    const settingsClassInput = document.getElementById('class-input');
-    if (settingsNameInput) settingsNameInput.value = appState.student.name || '';
-    if (settingsClassInput) settingsClassInput.value = appState.student.class || '';
-    
-    // Save and update display
-    saveData();
-    renderStudentInfo();
-    
-    // Hide overlay
     const overlay = document.getElementById('welcome-overlay');
     if (overlay) {
         overlay.classList.remove('active');
@@ -6669,6 +6690,8 @@ function addGoal() {
         return;
     }
     
+    pushUndoState();
+    
     appState.goals.push({
         text,
         created: new Date().toISOString(),
@@ -6683,6 +6706,7 @@ function addGoal() {
 }
 
 function deleteGoal(index) {
+    pushUndoState();
     appState.goals.splice(index, 1);
     saveData();
     renderGoals();
@@ -6697,6 +6721,8 @@ function addQuestion() {
         showToast('Please enter a question', 'warning');
         return;
     }
+    
+    pushUndoState();
     
     appState.questions.push({
         text,
@@ -6713,6 +6739,7 @@ function addQuestion() {
 }
 
 function deleteQuestion(index) {
+    pushUndoState();
     appState.questions.splice(index, 1);
     saveData();
     renderQuestions();
@@ -7139,6 +7166,8 @@ function setupEventListeners() {
     
     // Header buttons
     document.getElementById('new-checkin-btn')?.addEventListener('click', showCheckinStartModal);
+    document.getElementById('undo-btn')?.addEventListener('click', undo);
+    document.getElementById('redo-btn')?.addEventListener('click', redo);
     
     // Check-in modals
     document.getElementById('start-checkin-btn')?.addEventListener('click', showCheckinStartModal);
@@ -7266,6 +7295,17 @@ function setupEventListeners() {
             debugKeysPressed.q = false;
             debugKeysPressed.w = false;
             debugKeysPressed.e = false;
+        }
+        
+        // Undo/Redo
+        if (e.ctrlKey || e.metaKey) {
+            if (e.key === 'z') {
+                e.preventDefault();
+                undo();
+            } else if (e.key === 'y') {
+                e.preventDefault();
+                redo();
+            }
         }
     });
     
