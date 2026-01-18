@@ -391,6 +391,53 @@ body {
     background-color: var(--color-bg-warm);
 }
 
+.topic-dropdown option.unavailable {
+    color: var(--color-text-muted);
+    font-style: italic;
+}
+
+.topic-dropdown option:disabled {
+    color: var(--color-text-muted);
+    background-color: var(--color-bg-warm);
+}
+
+.topic-refresh-btn {
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-xs);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-card);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.topic-refresh-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: var(--color-primary-pale);
+}
+
+.topic-refresh-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.topic-refresh-btn.refreshing {
+    pointer-events: none;
+}
+
+.topic-refresh-btn.refreshing::after {
+    content: '...';
+    animation: ellipsis 1s infinite;
+}
+
+@keyframes ellipsis {
+    0% { content: '.'; }
+    33% { content: '..'; }
+    66% { content: '...'; }
+}
+
 .topic-dropdown-separator {
     color: var(--color-text-muted);
     font-size: var(--text-sm);
@@ -2482,6 +2529,7 @@ body {
                     <select class="topic-dropdown" id="topic-dropdown" aria-label="Select topic" disabled>
                         <option value="">Select Topic</option>
                     </select>
+                    <button class="topic-refresh-btn" id="refresh-topics-btn" title="Refresh topic availability" aria-label="Refresh topic availability">↻</button>
                 </div>
                 <div class="topic-loading-indicator" id="topic-loading-indicator">
                     <div class="topic-loading-spinner"></div>
@@ -2982,8 +3030,10 @@ const STORAGE_KEY = 'dynamicLearningCheckin_v2';
 const PROGRESS_STORE_KEY = 'learning-checkin-progress-store';
 const QUIZ_STATE_KEY = 'learning-checkin-quiz-state';
 const DROPDOWN_SELECTION_KEY = 'learning-checkin-dropdown-selection';
+const TOPIC_AVAILABILITY_KEY = 'learning-checkin-topic-availability';
 const MAX_UNDO = 50;
 const QUIZ_LOCKOUT_DURATION = 5 * 60 * 1000; // 5 minutes
+const AVAILABILITY_CACHE_DURATION = 60 * 60 * 1000; // 1 hour
 
 const levelNames = ['Not started', 'Beginning', 'Developing', 'Confident', 'Mastered'];
 const levelEmojis = ['🌱', '🌿', '🌳', '🌲', '⭐'];
@@ -3016,6 +3066,9 @@ let appState = {
 
 // Manifest data (loaded from manifest.json)
 let manifest = null;
+
+// Topic availability cache: { path: { available: bool, checkedAt: timestamp } }
+let topicAvailabilityCache = {};
 
 // Per-topic progress storage
 let topicProgressStore = {};
@@ -3567,15 +3620,184 @@ function populateTopicDropdown(yearLevelId, subjectId) {
     const subject = yearLevel.subjects.find(s => s.id === subjectId);
     if (!subject || !subject.topics) return;
     
+    // Add topics with availability status
     subject.topics.forEach(topic => {
         const option = document.createElement('option');
         option.value = topic.id;
         option.dataset.path = topic.path;
-        option.textContent = topic.name;
+        
+        const availability = topicAvailabilityCache[topic.path];
+        if (availability && availability.available === false) {
+            // Topic confirmed unavailable
+            option.textContent = `${topic.name} (unavailable)`;
+            option.disabled = true;
+            option.classList.add('unavailable');
+        } else if (availability && availability.available === true) {
+            // Topic confirmed available
+            option.textContent = topic.name;
+        } else {
+            // Unknown - show as pending check
+            option.textContent = `${topic.name}`;
+        }
+        
         dropdown.appendChild(option);
     });
     
     dropdown.disabled = false;
+    
+    // Check availability for unchecked topics in background
+    checkTopicsAvailability(subject.topics);
+}
+
+// ============================================
+// TOPIC AVAILABILITY CHECKING
+// ============================================
+
+/**
+ * Load availability cache from localStorage
+ */
+function loadAvailabilityCache() {
+    try {
+        const saved = localStorage.getItem(TOPIC_AVAILABILITY_KEY);
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            // Filter out expired entries
+            const now = Date.now();
+            Object.keys(parsed).forEach(path => {
+                if (parsed[path].checkedAt && (now - parsed[path].checkedAt) < AVAILABILITY_CACHE_DURATION) {
+                    topicAvailabilityCache[path] = parsed[path];
+                }
+            });
+        }
+    } catch (e) {
+        console.warn('Failed to load availability cache:', e);
+        topicAvailabilityCache = {};
+    }
+}
+
+/**
+ * Save availability cache to localStorage
+ */
+function saveAvailabilityCache() {
+    try {
+        localStorage.setItem(TOPIC_AVAILABILITY_KEY, JSON.stringify(topicAvailabilityCache));
+    } catch (e) {
+        console.warn('Failed to save availability cache:', e);
+    }
+}
+
+/**
+ * Check if a single topic is available (has topic.json)
+ */
+async function checkTopicAvailability(topicPath) {
+    const normalizedPath = topicPath.endsWith('/') ? topicPath : topicPath + '/';
+    const topicJsonUrl = normalizedPath + 'topic.json';
+    
+    try {
+        const response = await fetch(topicJsonUrl, { method: 'HEAD' });
+        const available = response.ok;
+        
+        topicAvailabilityCache[topicPath] = {
+            available,
+            checkedAt: Date.now()
+        };
+        
+        saveAvailabilityCache();
+        return available;
+    } catch (e) {
+        // Network error - mark as unavailable
+        topicAvailabilityCache[topicPath] = {
+            available: false,
+            checkedAt: Date.now()
+        };
+        saveAvailabilityCache();
+        return false;
+    }
+}
+
+/**
+ * Check availability for multiple topics (in background)
+ */
+async function checkTopicsAvailability(topics) {
+    const uncheckedTopics = topics.filter(topic => {
+        const cached = topicAvailabilityCache[topic.path];
+        // Check if not cached or cache expired
+        if (!cached) return true;
+        if ((Date.now() - cached.checkedAt) > AVAILABILITY_CACHE_DURATION) return true;
+        return false;
+    });
+    
+    if (uncheckedTopics.length === 0) return;
+    
+    // Check each topic and update dropdown as results come in
+    for (const topic of uncheckedTopics) {
+        await checkTopicAvailability(topic.path);
+        updateTopicOptionStatus(topic);
+    }
+}
+
+/**
+ * Update a single topic option in the dropdown after availability check
+ */
+function updateTopicOptionStatus(topic) {
+    const dropdown = document.getElementById('topic-dropdown');
+    if (!dropdown) return;
+    
+    const option = dropdown.querySelector(`option[data-path="${topic.path}"]`);
+    if (!option) return;
+    
+    const availability = topicAvailabilityCache[topic.path];
+    if (availability && availability.available === false) {
+        option.textContent = `${topic.name} (unavailable)`;
+        option.disabled = true;
+        option.classList.add('unavailable');
+    } else if (availability && availability.available === true) {
+        option.textContent = topic.name;
+        option.disabled = false;
+        option.classList.remove('unavailable');
+    }
+}
+
+/**
+ * Force refresh availability for all topics in current subject
+ */
+async function refreshTopicAvailability() {
+    if (!selectedYearLevel || !selectedSubject || !manifest) {
+        showToast('Select a year level and subject first', 'warning');
+        return;
+    }
+    
+    const yearLevel = manifest.yearLevels.find(y => y.id === selectedYearLevel);
+    if (!yearLevel) return;
+    
+    const subject = yearLevel.subjects.find(s => s.id === selectedSubject);
+    if (!subject || !subject.topics) return;
+    
+    // Clear cache for these topics
+    subject.topics.forEach(topic => {
+        delete topicAvailabilityCache[topic.path];
+    });
+    saveAvailabilityCache();
+    
+    // Re-populate dropdown (will trigger fresh checks)
+    populateTopicDropdown(selectedYearLevel, selectedSubject);
+    
+    showToast('Refreshing topic availability...', 'info');
+}
+
+/**
+ * Refresh all topic availability (for settings/manual refresh)
+ */
+async function refreshAllTopicAvailability() {
+    topicAvailabilityCache = {};
+    saveAvailabilityCache();
+    
+    // Re-populate current dropdown if applicable
+    if (selectedYearLevel && selectedSubject) {
+        populateTopicDropdown(selectedYearLevel, selectedSubject);
+    }
+    
+    showToast('Topic availability cache cleared', 'info');
 }
 
 // Dropdown event handlers
@@ -5417,6 +5639,7 @@ function clearAllData() {
     localStorage.removeItem(PROGRESS_STORE_KEY);
     localStorage.removeItem(QUIZ_STATE_KEY);
     localStorage.removeItem(DROPDOWN_SELECTION_KEY);
+    localStorage.removeItem(TOPIC_AVAILABILITY_KEY);
     
     // Reset state
     appState = {
@@ -5435,6 +5658,7 @@ function clearAllData() {
     topicProgressStore = {};
     quizState = {};
     questionsCache = {};
+    topicAvailabilityCache = {};
     
     renderAll();
     showToast('All data cleared', 'info');
@@ -5643,6 +5867,16 @@ function setupEventListeners() {
     document.getElementById('subject-dropdown')?.addEventListener('change', onSubjectChange);
     document.getElementById('topic-dropdown')?.addEventListener('change', onTopicChange);
     
+    // Topic refresh button
+    document.getElementById('refresh-topics-btn')?.addEventListener('click', async (e) => {
+        const btn = e.target;
+        btn.classList.add('refreshing');
+        btn.disabled = true;
+        await refreshTopicAvailability();
+        btn.classList.remove('refreshing');
+        btn.disabled = false;
+    });
+    
     // Header buttons
     document.getElementById('new-checkin-btn')?.addEventListener('click', showCheckinStartModal);
     document.getElementById('undo-btn')?.addEventListener('click', undo);
@@ -5753,6 +5987,7 @@ async function init() {
     // Load saved data
     loadData();
     loadQuizState();
+    loadAvailabilityCache();
     
     // Setup event listeners
     setupEventListeners();
