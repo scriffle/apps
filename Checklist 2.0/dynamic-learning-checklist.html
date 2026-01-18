@@ -3804,12 +3804,14 @@ async function refreshAllTopicAvailability() {
 function onYearLevelChange(event) {
     selectedYearLevel = event.target.value;
     populateSubjectDropdown(selectedYearLevel);
+    clearCurrentTopic();
     saveDropdownSelection();
 }
 
 function onSubjectChange(event) {
     selectedSubject = event.target.value;
     populateTopicDropdown(selectedYearLevel, selectedSubject);
+    clearCurrentTopic();
     saveDropdownSelection();
 }
 
@@ -3822,7 +3824,36 @@ function onTopicChange(event) {
         const topicPath = selectedOption.dataset.path;
         saveDropdownSelection();
         switchTopic(topicId, topicPath);
+    } else {
+        // "Select Topic" placeholder selected - clear current topic
+        clearCurrentTopic();
+        saveDropdownSelection();
     }
+}
+
+/**
+ * Clear the current topic and update UI
+ */
+function clearCurrentTopic() {
+    // Save progress for current topic before clearing
+    saveCurrentTopicProgress();
+    
+    // Clear topic state
+    appState.topic = null;
+    appState.currentTopicId = null;
+    appState.currentTopicPath = null;
+    appState.learningItems = {};
+    appState.checkins = [];
+    appState.goals = [];
+    appState.questions = [];
+    
+    // Update UI
+    renderLearningContent();
+    renderOverview();
+    renderHistory();
+    renderGoals();
+    renderQuestions();
+    updateTopicCurrentDisplay();
 }
 
 // Save/restore dropdown selection
@@ -4655,16 +4686,24 @@ function getLockoutRemainingTime(itemKey, toLevel) {
 async function handleLevelChange(itemKey, newLevel) {
     const currentLevel = appState.learningItems[itemKey]?.level || 1;
     
+    // Pre-topic check-in: allow free level changes without quizzes
+    const isPreTopicCheckin = checkinModeActive && currentCheckinType === 'pre';
+    
     if (newLevel > currentLevel) {
-        // Moving UP - check if quiz needed
-        const questions = await getQuestionsForLevel(itemKey, newLevel);
-        
-        if (questions.length > 0) {
-            // Show quiz
-            showQuiz(itemKey, currentLevel, newLevel);
-        } else {
-            // No questions available - allow immediate change
+        // Moving UP - check if quiz needed (unless pre-topic check-in)
+        if (isPreTopicCheckin) {
+            // Pre-topic: skip quiz, allow immediate change
             applyLevelChange(itemKey, newLevel);
+        } else {
+            const questions = await getQuestionsForLevel(itemKey, newLevel);
+            
+            if (questions.length > 0) {
+                // Show quiz
+                showQuiz(itemKey, currentLevel, newLevel);
+            } else {
+                // No questions available - allow immediate change
+                applyLevelChange(itemKey, newLevel);
+            }
         }
     } else if (newLevel < currentLevel) {
         // Moving DOWN - allow immediately
