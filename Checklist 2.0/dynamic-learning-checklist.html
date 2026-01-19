@@ -2953,6 +2953,162 @@ body {
 }
 
 /* ============================================
+   MESSAGE OVERLAY
+   ============================================ */
+.message-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2100;
+    padding: var(--space-4);
+    backdrop-filter: blur(4px);
+}
+
+.message-overlay.active {
+    display: flex;
+}
+
+.message-dialog {
+    background: var(--color-bg-card);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+    max-width: 500px;
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    animation: messageSlideIn 0.3s ease;
+}
+
+@keyframes messageSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.message-header {
+    padding: var(--space-5) var(--space-5) var(--space-3);
+    text-align: center;
+    border-bottom: 1px solid var(--color-border-light);
+}
+
+.message-icon {
+    font-size: 42px;
+    display: block;
+    margin-bottom: var(--space-2);
+}
+
+.message-title {
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--color-text);
+    margin: 0;
+}
+
+.message-date {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    margin-top: var(--space-1);
+}
+
+.message-body {
+    padding: var(--space-4) var(--space-5);
+}
+
+.message-content {
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+    line-height: 1.7;
+}
+
+.message-content p {
+    margin: 0 0 var(--space-3);
+}
+
+.message-content p:last-child {
+    margin-bottom: 0;
+}
+
+.message-content ul {
+    margin: var(--space-2) 0;
+    padding-left: var(--space-5);
+}
+
+.message-content li {
+    margin-bottom: var(--space-1);
+}
+
+.message-footer {
+    padding: var(--space-3) var(--space-5) var(--space-5);
+    display: flex;
+    justify-content: center;
+    gap: var(--space-3);
+}
+
+.message-badge {
+    display: inline-block;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.message-badge.update {
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+}
+
+.message-badge.info {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.message-badge.alert {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.message-badge.celebration {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+[data-theme="dark"] .message-badge.info {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+}
+
+[data-theme="dark"] .message-badge.alert {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+}
+
+[data-theme="dark"] .message-badge.celebration {
+    background: rgba(34, 197, 94, 0.2);
+    color: #4ade80;
+}
+
+.no-messages-state {
+    text-align: center;
+    padding: var(--space-4);
+    color: var(--color-text-muted);
+}
+
+.no-messages-icon {
+    font-size: 32px;
+    margin-bottom: var(--space-2);
+}
+
+/* ============================================
    MOBILE RESPONSIVE
    ============================================ */
 @media (max-width: 768px) {
@@ -3340,6 +3496,20 @@ body {
                             </div>
                         </div>
                         <button class="btn btn-secondary" id="show-welcome-btn">Show Welcome Guide</button>
+                    </div>
+                </div>
+                
+                <!-- Messages Section -->
+                <div class="card utility-help-card">
+                    <div class="utility-help-content">
+                        <div class="utility-help-text">
+                            <span class="utility-help-icon">&#x1F4E2;</span>
+                            <div>
+                                <strong>Messages &amp; Updates</strong>
+                                <span id="messages-status-text">Check for announcements and updates</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary" id="show-messages-btn">Show Messages</button>
                     </div>
                 </div>
                 
@@ -3797,6 +3967,25 @@ body {
         </div>
     </div>
 
+    <!-- Message Overlay -->
+    <div class="message-overlay" id="message-overlay">
+        <div class="message-dialog" role="dialog" aria-labelledby="message-title" aria-modal="true">
+            <div class="message-header">
+                <span class="message-icon" id="message-icon">&#x1F4E2;</span>
+                <h2 class="message-title" id="message-title">Message</h2>
+                <div class="message-date" id="message-date"></div>
+            </div>
+            <div class="message-body">
+                <div class="message-content" id="message-content">
+                    <!-- Message content loaded dynamically -->
+                </div>
+            </div>
+            <div class="message-footer">
+                <button class="btn btn-primary" id="message-dismiss-btn">Got it!</button>
+            </div>
+        </div>
+    </div>
+
     <script>
 // ============================================
 // CONSTANTS
@@ -3809,9 +3998,14 @@ const TOPIC_AVAILABILITY_KEY = 'learning-checkin-topic-availability';
 const LEVEL_PREFS_KEY = 'learning-checkin-level-prefs';
 const FIRST_RUN_KEY = 'learning-checkin-first-run-complete';
 const SELECTION_TIP_KEY = 'learning-checkin-selection-tip-shown';
+const MESSAGES_SEEN_KEY = 'learning-checkin-messages-seen';
 const QUIZ_LOCKOUT_DURATION = 5 * 60 * 1000; // 5 minutes
 const AVAILABILITY_CACHE_DURATION = 60 * 60 * 1000; // 1 hour
 const SELECTION_TIP_DELAY = 3 * 60 * 1000; // 3 minutes
+
+// Message system state
+let currentMessages = [];
+let seenMessageIds = [];
 
 const levelNames = ['Not started', 'Beginning', 'Developing', 'Confident', 'Mastered'];
 
@@ -6301,6 +6495,9 @@ function hideWelcomeDialog() {
     
     // Start the selection tip timer after welcome is closed
     scheduleSelectionTip();
+    
+    // Check for unseen messages after a short delay
+    setTimeout(() => checkAndShowMessages(), 300);
 }
 
 /**
@@ -6359,6 +6556,255 @@ function showSelectionTip() {
         toast.classList.add('toast-exit');
         setTimeout(() => toast.remove(), 200);
     }, 8000);
+}
+
+// ============================================
+// MESSAGE SYSTEM
+// ============================================
+
+/**
+ * Load seen message IDs from localStorage
+ */
+function loadSeenMessages() {
+    try {
+        const saved = localStorage.getItem(MESSAGES_SEEN_KEY);
+        if (saved) {
+            seenMessageIds = JSON.parse(saved);
+        }
+    } catch (e) {
+        console.warn('Failed to load seen messages:', e);
+        seenMessageIds = [];
+    }
+}
+
+/**
+ * Save seen message IDs to localStorage
+ */
+function saveSeenMessages() {
+    try {
+        localStorage.setItem(MESSAGES_SEEN_KEY, JSON.stringify(seenMessageIds));
+    } catch (e) {
+        console.warn('Failed to save seen messages:', e);
+    }
+}
+
+/**
+ * Mark a message as seen
+ */
+function markMessageSeen(messageId) {
+    if (!seenMessageIds.includes(messageId)) {
+        seenMessageIds.push(messageId);
+        saveSeenMessages();
+    }
+}
+
+/**
+ * Load messages from message.json
+ */
+async function loadMessages() {
+    try {
+        const response = await fetch('message.json');
+        if (!response.ok) {
+            // No message file or error - that's fine
+            currentMessages = [];
+            return [];
+        }
+        
+        const data = await response.json();
+        
+        // Handle both single message and array of messages
+        const messages = Array.isArray(data) ? data : [data];
+        
+        // Filter to only active/current messages
+        const now = new Date();
+        currentMessages = messages.filter(msg => {
+            // Check if message is active
+            if (msg.active === false || msg.inactive === true) {
+                return false;
+            }
+            
+            // Check start date
+            if (msg.startDate) {
+                const startDate = new Date(msg.startDate);
+                if (now < startDate) return false;
+            }
+            
+            // Check end date
+            if (msg.endDate) {
+                const endDate = new Date(msg.endDate);
+                if (now > endDate) return false;
+            }
+            
+            return true;
+        });
+        
+        updateMessagesStatusText();
+        return currentMessages;
+    } catch (e) {
+        console.log('No messages to load:', e.message);
+        currentMessages = [];
+        return [];
+    }
+}
+
+/**
+ * Update the messages status text in utilities
+ */
+function updateMessagesStatusText() {
+    const statusEl = document.getElementById('messages-status-text');
+    if (!statusEl) return;
+    
+    const unseenCount = currentMessages.filter(m => !seenMessageIds.includes(m.id)).length;
+    
+    if (currentMessages.length === 0) {
+        statusEl.textContent = 'No current messages';
+    } else if (unseenCount > 0) {
+        statusEl.textContent = `${unseenCount} new message${unseenCount > 1 ? 's' : ''} available`;
+    } else {
+        statusEl.textContent = `${currentMessages.length} message${currentMessages.length > 1 ? 's' : ''} (all read)`;
+    }
+}
+
+/**
+ * Get icon for message type
+ */
+function getMessageIcon(type) {
+    const icons = {
+        'update': '&#x1F4E2;',      // 📢
+        'info': '&#x2139;&#xFE0F;', // ℹ️
+        'alert': '&#x26A0;&#xFE0F;', // ⚠️
+        'celebration': '&#x1F389;', // 🎉
+        'seasonal': '&#x1F31F;',    // 🌟
+        'tip': '&#x1F4A1;',         // 💡
+        'new': '&#x2728;'           // ✨
+    };
+    return icons[type] || '&#x1F4E2;';
+}
+
+/**
+ * Format message date for display
+ */
+function formatMessageDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-AU', { 
+            day: 'numeric', 
+            month: 'short', 
+            year: 'numeric' 
+        });
+    } catch (e) {
+        return '';
+    }
+}
+
+/**
+ * Show the message overlay with a specific message
+ */
+function showMessage(message) {
+    const overlay = document.getElementById('message-overlay');
+    if (!overlay || !message) return;
+    
+    // Set icon
+    document.getElementById('message-icon').innerHTML = getMessageIcon(message.type);
+    
+    // Set title with optional badge
+    const titleEl = document.getElementById('message-title');
+    let titleHtml = escapeHtml(message.title || 'Message');
+    if (message.type) {
+        titleHtml = `<span class="message-badge ${message.type}">${message.type}</span> ${titleHtml}`;
+    }
+    titleEl.innerHTML = titleHtml;
+    
+    // Set date
+    const dateEl = document.getElementById('message-date');
+    const dateStr = formatMessageDate(message.date || message.startDate);
+    dateEl.textContent = dateStr;
+    dateEl.style.display = dateStr ? 'block' : 'none';
+    
+    // Set content - support both plain text and HTML
+    const contentEl = document.getElementById('message-content');
+    if (message.html) {
+        contentEl.innerHTML = message.html;
+    } else if (message.content) {
+        // Convert line breaks to paragraphs
+        const paragraphs = message.content.split('\n\n');
+        contentEl.innerHTML = paragraphs.map(p => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`).join('');
+    } else {
+        contentEl.innerHTML = '<p>No content available.</p>';
+    }
+    
+    // Setup dismiss button
+    const dismissBtn = document.getElementById('message-dismiss-btn');
+    dismissBtn.onclick = () => {
+        if (message.id) {
+            markMessageSeen(message.id);
+        }
+        hideMessage();
+        updateMessagesStatusText();
+    };
+    
+    // Show overlay
+    overlay.classList.add('active');
+}
+
+/**
+ * Hide the message overlay
+ */
+function hideMessage() {
+    const overlay = document.getElementById('message-overlay');
+    if (overlay) {
+        overlay.classList.remove('active');
+    }
+}
+
+/**
+ * Show all messages dialog (from utilities button)
+ */
+function showAllMessages() {
+    if (currentMessages.length === 0) {
+        // Show "no messages" state
+        const overlay = document.getElementById('message-overlay');
+        if (!overlay) return;
+        
+        document.getElementById('message-icon').innerHTML = '&#x1F4ED;'; // 📭
+        document.getElementById('message-title').innerHTML = 'No Messages';
+        document.getElementById('message-date').style.display = 'none';
+        document.getElementById('message-content').innerHTML = `
+            <div class="no-messages-state">
+                <div class="no-messages-icon">&#x2705;</div>
+                <p>You're all caught up! There are no current messages or announcements.</p>
+            </div>
+        `;
+        document.getElementById('message-dismiss-btn').onclick = hideMessage;
+        
+        overlay.classList.add('active');
+        return;
+    }
+    
+    // Find first unseen message, or show first message
+    const unseenMessage = currentMessages.find(m => !seenMessageIds.includes(m.id));
+    const messageToShow = unseenMessage || currentMessages[0];
+    
+    showMessage(messageToShow);
+}
+
+/**
+ * Check and show unseen messages (called after welcome dialog or on init)
+ */
+async function checkAndShowMessages() {
+    // Load messages if not already loaded
+    if (currentMessages.length === 0) {
+        await loadMessages();
+    }
+    
+    // Find unseen messages
+    const unseenMessages = currentMessages.filter(m => !seenMessageIds.includes(m.id));
+    
+    if (unseenMessages.length > 0) {
+        // Show the first unseen message
+        showMessage(unseenMessages[0]);
+    }
 }
 
 // ============================================
@@ -7279,6 +7725,16 @@ function setupEventListeners() {
     // Show welcome from utility tab
     document.getElementById('show-welcome-btn')?.addEventListener('click', showWelcomeDialog);
     
+    // Show messages from utility tab
+    document.getElementById('show-messages-btn')?.addEventListener('click', showAllMessages);
+    
+    // Message overlay dismiss
+    document.getElementById('message-overlay')?.addEventListener('click', (e) => {
+        if (e.target.id === 'message-overlay') {
+            hideMessage();
+        }
+    });
+    
     // Dropdown changes
     document.getElementById('year-level-dropdown')?.addEventListener('change', onYearLevelChange);
     document.getElementById('subject-dropdown')?.addEventListener('change', onSubjectChange);
@@ -7469,6 +7925,7 @@ async function init() {
     loadQuizState();
     loadAvailabilityCache();
     loadLevelPrefs();
+    loadSeenMessages();
     
     // Setup event listeners
     setupEventListeners();
@@ -7486,6 +7943,9 @@ async function init() {
     // Load manifest
     await loadManifest();
     
+    // Load messages (async, don't wait)
+    loadMessages();
+    
     // Render everything
     renderAll();
     updateTopicCurrentDisplay();
@@ -7494,9 +7954,12 @@ async function init() {
     const firstRunComplete = localStorage.getItem(FIRST_RUN_KEY);
     if (!firstRunComplete) {
         showWelcomeDialog();
+        // Messages will be shown after welcome dialog closes
     } else {
         // Not first run - schedule selection tip if not shown yet
         scheduleSelectionTip();
+        // Check for unseen messages after a short delay
+        setTimeout(() => checkAndShowMessages(), 500);
     }
     
     console.log('Initialization complete');
