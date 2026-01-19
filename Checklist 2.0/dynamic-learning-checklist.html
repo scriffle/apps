@@ -6314,19 +6314,21 @@ function processQuizResult(isCorrect, explanation) {
             document.getElementById('quiz-cancel-btn').style.display = 'none';
             document.getElementById('quiz-cancel-btn-footer').style.display = 'none';
         } else {
-            // Need more correct - capture values before closeQuiz nullifies currentQuiz
+            // Need more correct - capture values before any async operations
             const nextItemKey = currentQuiz.itemKey;
             const nextFromLevel = currentQuiz.fromLevel;
             const nextToLevel = currentQuiz.toLevel;
             
             document.getElementById('quiz-submit-btn').textContent = 'Next Question';
             document.getElementById('quiz-submit-btn').disabled = false;
-            document.getElementById('quiz-submit-btn').onclick = () => {
+            document.getElementById('quiz-submit-btn').onclick = async () => {
                 saveQuizState();
-                closeQuiz();
-                setTimeout(() => {
-                    showQuiz(nextItemKey, nextFromLevel, nextToLevel);
-                }, 100);
+                // Load next question in place (no close/reopen flicker)
+                const loaded = await loadNextQuizQuestion(nextItemKey, nextFromLevel, nextToLevel);
+                if (!loaded) {
+                    closeQuiz();
+                    showToast('No more questions available', 'error');
+                }
             };
         }
     } else {
@@ -6378,22 +6380,21 @@ function processQuizResult(isCorrect, explanation) {
             }
             progressContainer.innerHTML = dotsHtml;
             
-            // Capture values before closeQuiz nullifies currentQuiz
+            // Capture values before any async operations
             const retryItemKey = currentQuiz.itemKey;
             const retryFromLevel = currentQuiz.fromLevel;
             const retryToLevel = currentQuiz.toLevel;
             
             document.getElementById('quiz-submit-btn').textContent = 'Try Again';
             document.getElementById('quiz-submit-btn').disabled = false;
-            document.getElementById('quiz-submit-btn').onclick = () => {
+            document.getElementById('quiz-submit-btn').onclick = async () => {
                 saveQuizState();
-                closeQuiz();
-                // Show a new question automatically
-                setTimeout(() => {
-                    if (!showQuiz(retryItemKey, retryFromLevel, retryToLevel)) {
-                        showToast('No more questions available', 'error');
-                    }
-                }, 100);
+                // Load next question in place (no close/reopen flicker)
+                const loaded = await loadNextQuizQuestion(retryItemKey, retryFromLevel, retryToLevel);
+                if (!loaded) {
+                    closeQuiz();
+                    showToast('No more questions available', 'error');
+                }
             };
         }
     }
@@ -6407,6 +6408,78 @@ function closeQuiz() {
     
     // Reset button handler
     document.getElementById('quiz-submit-btn').onclick = submitQuizAnswer;
+}
+
+/**
+ * Load next question into existing quiz modal (no close/reopen flicker)
+ */
+async function loadNextQuizQuestion(itemKey, fromLevel, toLevel) {
+    const item = getItemByKey(itemKey);
+    if (!item) return false;
+    
+    const questions = await getQuestionsForLevel(itemKey, toLevel);
+    if (questions.length === 0) return false;
+    
+    const state = getQuizStateForItem(itemKey, toLevel);
+    
+    // Select a random question
+    const questionData = selectRandomQuestion(questions, state);
+    if (!questionData) return false;
+    
+    const { question, index } = questionData;
+    
+    // Determine question type
+    const questionType = question.type || 'mc';
+    
+    // Update current quiz data (don't reset itemKey/levels)
+    currentQuiz = {
+        itemKey,
+        fromLevel,
+        toLevel,
+        questionIndex: index,
+        question,
+        questionType,
+        selectedIndex: null,
+        clozeAnswers: {},
+        answered: false
+    };
+    
+    // Update streak info display
+    const streakInfo = document.getElementById('quiz-streak-info');
+    if (state.requiredCorrect > 1) {
+        streakInfo.style.display = 'block';
+        document.getElementById('quiz-streak-text').textContent = 
+            `You need ${state.requiredCorrect} correct answer${state.requiredCorrect > 1 ? 's' : ''} to advance`;
+        
+        // Render progress dots
+        const progressContainer = document.getElementById('quiz-streak-progress');
+        let dotsHtml = '';
+        for (let i = 0; i < state.requiredCorrect; i++) {
+            const filled = i < state.correctStreak;
+            dotsHtml += `<span class="quiz-streak-dot ${filled ? 'filled' : ''}"></span>`;
+        }
+        progressContainer.innerHTML = dotsHtml;
+    } else {
+        streakInfo.style.display = 'none';
+    }
+    
+    // Render the new question
+    if (questionType === 'cloze') {
+        renderClozeQuestion(question);
+    } else {
+        renderMCQuestion(question);
+    }
+    
+    // Reset result section and buttons
+    document.getElementById('quiz-result').classList.remove('visible', 'correct', 'incorrect');
+    document.getElementById('cloze-feedback').style.display = 'none';
+    document.getElementById('quiz-submit-btn').disabled = true;
+    document.getElementById('quiz-submit-btn').textContent = 'Check Answer';
+    document.getElementById('quiz-submit-btn').onclick = submitQuizAnswer;
+    document.getElementById('quiz-cancel-btn').style.display = '';
+    document.getElementById('quiz-cancel-btn-footer').style.display = '';
+    
+    return true;
 }
 
 // ============================================
