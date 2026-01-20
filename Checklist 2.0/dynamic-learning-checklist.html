@@ -7468,8 +7468,22 @@ function debugGenerateSampleProgressData() {
         return;
     }
     
-    // Clear existing progress events for this topic
-    progressEvents = progressEvents.filter(e => e.topic_id !== appState.currentTopicId);
+    // Find the most recent event date for this topic (to continue from there)
+    const existingTopicEvents = progressEvents.filter(e => e.topic_id === appState.currentTopicId);
+    let startDate = new Date();
+    
+    if (existingTopicEvents.length > 0) {
+        // Find the latest event and start from the day after
+        const latestEvent = existingTopicEvents.reduce((latest, e) => 
+            new Date(e.timestamp) > new Date(latest.timestamp) ? e : latest
+        );
+        startDate = new Date(latestEvent.timestamp);
+        startDate.setDate(startDate.getDate() + 1); // Start from next day
+        startDate.setHours(8, 0, 0, 0);
+    } else {
+        // No existing data - start 14 days ago
+        startDate.setDate(startDate.getDate() - 14);
+    }
     
     const now = new Date();
     const itemKeys = [];
@@ -7486,19 +7500,34 @@ function debugGenerateSampleProgressData() {
         return;
     }
     
-    // Track current levels for each item (start at 1)
+    // Track current levels for each item (use existing levels from appState)
     const currentLevels = {};
-    itemKeys.forEach(key => { currentLevels[key] = 1; });
+    itemKeys.forEach(key => { 
+        currentLevels[key] = appState.learningItems[key]?.level || 1; 
+    });
     
-    // Generate events over 14 days
-    const daysToSimulate = 14;
+    // Calculate days to simulate (from startDate to now, max 14 days)
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const daysDiff = Math.ceil((now - startDate) / msPerDay);
+    
+    // If startDate is today or in the future, nothing to add
+    if (daysDiff <= 0) {
+        showToast('Debug: Data already up to date. Use Shift+z+x+c to clear and regenerate.', 'info');
+        return;
+    }
+    
+    const daysToSimulate = Math.min(14, daysDiff);
     let eventCount = 0;
     let lockoutCount = 0;
     let checkinCount = 0;
     
-    for (let day = daysToSimulate; day >= 0; day--) {
-        const dayDate = new Date(now);
-        dayDate.setDate(dayDate.getDate() - day);
+    for (let day = 0; day <= daysToSimulate; day++) {
+        const dayDate = new Date(startDate);
+        dayDate.setDate(dayDate.getDate() + day);
+        
+        // Don't generate events in the future
+        if (dayDate > now) break;
+        
         const dateStr = dayDate.toISOString().split('T')[0];
         
         // Determine activity level for this day (some days more active than others)
@@ -7618,8 +7647,8 @@ function debugGenerateSampleProgressData() {
     renderAll();
     renderProgressVisualization();
     
-    showToast(`Debug: Generated ${eventCount} changes, ${lockoutCount} lockouts, ${checkinCount} check-ins over ${daysToSimulate} days`, 'info');
-    console.log('Debug sample data generated:', { eventCount, lockoutCount, checkinCount, totalEvents: progressEvents.length });
+    showToast(`Debug: Added ${eventCount} changes, ${lockoutCount} lockouts, ${checkinCount} check-ins (${daysToSimulate} new days)`, 'info');
+    console.log('Debug sample data added:', { eventCount, lockoutCount, checkinCount, totalEvents: progressEvents.length, daysAdded: daysToSimulate });
 }
 
 /**
