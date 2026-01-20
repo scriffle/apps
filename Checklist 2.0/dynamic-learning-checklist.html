@@ -3241,6 +3241,16 @@ body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.sparkline-color-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    flex-shrink: 0;
 }
 
 .sparkline-chart {
@@ -7495,21 +7505,35 @@ function debugGenerateSampleProgressData() {
     // Find the most recent event date for this topic (to continue from there)
     const existingTopicEvents = progressEvents.filter(e => e.topic_id === appState.currentTopicId);
     let startDate = new Date();
+    const now = new Date();
     
     if (existingTopicEvents.length > 0) {
-        // Find the latest event and start from the day after
+        // Find the latest event
         const latestEvent = existingTopicEvents.reduce((latest, e) => 
             new Date(e.timestamp) > new Date(latest.timestamp) ? e : latest
         );
-        startDate = new Date(latestEvent.timestamp);
-        startDate.setDate(startDate.getDate() + 1); // Start from next day
-        startDate.setHours(8, 0, 0, 0);
+        const latestDate = new Date(latestEvent.timestamp);
+        
+        // If latest event is today, just add more events to today
+        const today = now.toISOString().split('T')[0];
+        const latestDay = latestDate.toISOString().split('T')[0];
+        
+        if (latestDay === today) {
+            // Add more events to today (increment mode)
+            startDate = now;
+            startDate.setHours(latestDate.getHours() + 1, 0, 0, 0); // Start an hour later
+        } else {
+            // Fill in days from latest event to today
+            startDate = new Date(latestDate);
+            startDate.setDate(startDate.getDate() + 1);
+            startDate.setHours(8, 0, 0, 0);
+        }
     } else {
         // No existing data - start 14 days ago
         startDate.setDate(startDate.getDate() - 14);
+        startDate.setHours(8, 0, 0, 0);
     }
     
-    const now = new Date();
     const itemKeys = [];
     
     // Gather all item keys
@@ -7534,16 +7558,63 @@ function debugGenerateSampleProgressData() {
     const msPerDay = 24 * 60 * 60 * 1000;
     const daysDiff = Math.ceil((now - startDate) / msPerDay);
     
-    // If startDate is today or in the future, nothing to add
-    if (daysDiff <= 0) {
-        showToast('Debug: Data already up to date. Use Shift+z+x+c to clear and regenerate.', 'info');
-        return;
-    }
-    
-    const daysToSimulate = Math.min(14, daysDiff);
+    // Always allow at least adding events for today (daysDiff = 0 means same day)
+    const daysToSimulate = Math.max(0, Math.min(14, daysDiff));
     let eventCount = 0;
     let lockoutCount = 0;
     let checkinCount = 0;
+    
+    // If no new days to simulate, still add some events for "right now"
+    const addTodayBatch = daysToSimulate === 0;
+    
+    if (addTodayBatch) {
+        // Add a batch of events for right now (simulating a study session)
+        const batchSize = 5 + Math.floor(Math.random() * 10); // 5-15 events
+        const sessionStart = new Date();
+        
+        for (let i = 0; i < batchSize; i++) {
+            const itemKey = itemKeys[Math.floor(Math.random() * itemKeys.length)];
+            const currentLevel = currentLevels[itemKey];
+            
+            // Mostly move up
+            if (currentLevel < 5 && Math.random() < 0.85) {
+                const newLevel = Math.min(5, currentLevel + 1);
+                const eventTime = new Date(sessionStart.getTime() + i * 30000); // 30 sec apart
+                
+                progressEvents.push({
+                    id: generateEventId(),
+                    timestamp: eventTime.toISOString(),
+                    student_id: appState.student.name || 'anonymous',
+                    topic_id: appState.currentTopicId,
+                    learning_point_id: itemKey,
+                    event_type: 'confidence_change',
+                    old_value: currentLevel,
+                    new_value: newLevel,
+                    date: eventTime.toISOString().split('T')[0]
+                });
+                
+                currentLevels[itemKey] = newLevel;
+                eventCount++;
+            }
+        }
+        
+        // Add a lockout occasionally
+        if (Math.random() < 0.4) {
+            const itemKey = itemKeys[Math.floor(Math.random() * itemKeys.length)];
+            progressEvents.push({
+                id: generateEventId(),
+                timestamp: new Date().toISOString(),
+                student_id: appState.student.name || 'anonymous',
+                topic_id: appState.currentTopicId,
+                learning_point_id: itemKey,
+                event_type: 'lockout_triggered',
+                old_value: currentLevels[itemKey],
+                new_value: Math.min(5, currentLevels[itemKey] + 1),
+                date: new Date().toISOString().split('T')[0]
+            });
+            lockoutCount++;
+        }
+    }
     
     for (let day = 0; day <= daysToSimulate; day++) {
         const dayDate = new Date(startDate);
@@ -7628,28 +7699,51 @@ function debugGenerateSampleProgressData() {
             }
         }
         
-        // Add check-ins every few days
-        if (day % 3 === 0 && isActiveDay) {
+        // Add check-ins - more frequently and guarantee at least one
+        const shouldAddCheckin = (day % 2 === 0) || (day === daysToSimulate); // Every 2nd day + last day
+        if (shouldAddCheckin) {
             const hour = 15 + Math.floor(Math.random() * 5); // Afternoon check-ins
             const eventTime = new Date(dayDate);
             eventTime.setHours(hour, Math.floor(Math.random() * 60), 0, 0);
             
-            // Alternate between manual and auto check-ins
-            const eventType = Math.random() < 0.6 ? 'check_in_button' : 'check_in_auto';
-            
-            progressEvents.push({
-                id: generateEventId(),
-                timestamp: eventTime.toISOString(),
-                student_id: appState.student.name || 'anonymous',
-                topic_id: appState.currentTopicId,
-                learning_point_id: null,
-                event_type: eventType,
-                old_value: null,
-                new_value: null,
-                date: dateStr
-            });
-            checkinCount++;
+            // Don't add if in the future
+            if (eventTime <= now) {
+                // Alternate between manual and auto check-ins
+                const eventType = Math.random() < 0.6 ? 'check_in_button' : 'check_in_auto';
+                
+                progressEvents.push({
+                    id: generateEventId(),
+                    timestamp: eventTime.toISOString(),
+                    student_id: appState.student.name || 'anonymous',
+                    topic_id: appState.currentTopicId,
+                    learning_point_id: null,
+                    event_type: eventType,
+                    old_value: null,
+                    new_value: null,
+                    date: dateStr
+                });
+                checkinCount++;
+            }
         }
+    }
+    
+    // Guarantee at least one check-in if we added any events
+    if (checkinCount === 0 && eventCount > 0) {
+        const checkinTime = new Date();
+        checkinTime.setMinutes(checkinTime.getMinutes() - 5); // 5 minutes ago
+        
+        progressEvents.push({
+            id: generateEventId(),
+            timestamp: checkinTime.toISOString(),
+            student_id: appState.student.name || 'anonymous',
+            topic_id: appState.currentTopicId,
+            learning_point_id: null,
+            event_type: 'check_in_button',
+            old_value: null,
+            new_value: null,
+            date: checkinTime.toISOString().split('T')[0]
+        });
+        checkinCount++;
     }
     
     // Sort events by timestamp
@@ -7667,9 +7761,9 @@ function debugGenerateSampleProgressData() {
     saveProgressEvents();
     saveData();
     
-    // Re-render
+    // Re-render and switch to History tab to show the chart
     renderAll();
-    renderProgressVisualization();
+    switchTab('history');
     
     showToast(`Debug: Added ${eventCount} changes, ${lockoutCount} lockouts, ${checkinCount} check-ins (${daysToSimulate} new days)`, 'info');
     console.log('Debug sample data added:', { eventCount, lockoutCount, checkinCount, totalEvents: progressEvents.length, daysAdded: daysToSimulate });
@@ -8344,6 +8438,24 @@ function calculateSubtopicTimeline(subtopicId) {
     return calculateTimelineCompression(timeline);
 }
 
+// Consistent color palette for subtopics
+const SUBTOPIC_COLORS = [
+    '#10b981', // emerald
+    '#3b82f6', // blue
+    '#f59e0b', // amber
+    '#ec4899', // pink
+    '#8b5cf6', // violet
+    '#06b6d4', // cyan
+    '#f97316', // orange
+    '#84cc16', // lime
+    '#6366f1', // indigo
+    '#14b8a6', // teal
+];
+
+function getSubtopicColor(index) {
+    return SUBTOPIC_COLORS[index % SUBTOPIC_COLORS.length];
+}
+
 function renderMainChart() {
     const canvas = document.getElementById('main-progress-chart');
     if (!canvas) return;
@@ -8371,9 +8483,8 @@ function renderMainChart() {
     
     ctx.clearRect(0, 0, width, height);
     
-    const data = calculateAverageConfidence();
+    // Draw threshold line first (behind everything)
     const thresholdY = padding.top + chartHeight * (1 - (4 - 1) / 4);
-    
     ctx.beginPath();
     ctx.setLineDash([4, 4]);
     ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--color-text-muted');
@@ -8383,70 +8494,160 @@ function renderMainChart() {
     ctx.stroke();
     ctx.setLineDash([]);
     
-    if (data.length === 0) return;
+    // Get subtopic timelines
+    const subtopicTimelines = [];
+    if (appState.topic && appState.topic.subtopics) {
+        appState.topic.subtopics.forEach((subtopic, index) => {
+            const timeline = calculateSubtopicTimeline(subtopic.id);
+            if (timeline.length > 0) {
+                subtopicTimelines.push({
+                    id: subtopic.id,
+                    name: subtopic.name,
+                    icon: subtopic.icon,
+                    color: getSubtopicColor(index),
+                    data: timeline
+                });
+            }
+        });
+    }
     
-    const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim();
+    if (subtopicTimelines.length === 0) return;
+    
     const getCoords = (point) => ({
         x: padding.left + point.x * chartWidth,
         y: padding.top + chartHeight * (1 - (point.y - 1) / 4)
     });
     
-    if (vizPrefs.chartMode === 'line') {
-        ctx.beginPath();
-        const firstCoord = getCoords(data[0]);
-        ctx.moveTo(firstCoord.x, padding.top + chartHeight);
-        ctx.lineTo(firstCoord.x, firstCoord.y);
-        data.forEach((point, i) => { if (i > 0) ctx.lineTo(getCoords(point).x, getCoords(point).y); });
-        ctx.lineTo(getCoords(data[data.length - 1]).x, padding.top + chartHeight);
-        ctx.closePath();
-        ctx.fillStyle = primaryColor + '20';
-        ctx.fill();
-        
-        ctx.beginPath();
-        ctx.moveTo(firstCoord.x, firstCoord.y);
-        data.forEach((point, i) => { if (i > 0) ctx.lineTo(getCoords(point).x, getCoords(point).y); });
-        ctx.strokeStyle = primaryColor;
-        ctx.lineWidth = 2.5;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.stroke();
-        
-        data.forEach(point => {
-            const coord = getCoords(point);
-            ctx.beginPath();
-            ctx.arc(coord.x, coord.y, 4, 0, Math.PI * 2);
-            ctx.fillStyle = '#fff';
-            ctx.fill();
-            ctx.strokeStyle = primaryColor;
-            ctx.lineWidth = 2;
-            ctx.stroke();
-        });
-    } else {
-        const barWidth = Math.min(30, chartWidth / data.length * 0.7);
-        data.forEach(point => {
-            const coord = getCoords(point);
-            ctx.fillStyle = primaryColor + 'CC';
-            ctx.beginPath();
-            ctx.roundRect(coord.x - barWidth / 2, coord.y, barWidth, (padding.top + chartHeight) - coord.y, 3);
-            ctx.fill();
-        });
-    }
-    
+    // Draw check-in markers first (behind the data)
     const checkins = calculateTimelineCompression(getCheckinEvents());
     checkins.forEach(checkin => {
         const x = padding.left + checkin.x * chartWidth;
-        ctx.beginPath();
-        ctx.strokeStyle = primaryColor;
-        ctx.lineWidth = 2;
-        ctx.moveTo(x, padding.top + chartHeight);
-        ctx.lineTo(x, padding.top + chartHeight - 10);
-        ctx.stroke();
         
-        ctx.fillStyle = primaryColor;
-        ctx.font = '9px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(new Date(checkin.timestamp).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }), x, padding.top + chartHeight + 12);
+        // Draw vertical line spanning full chart height
+        ctx.beginPath();
+        ctx.strokeStyle = '#9ca3af'; // gray-400
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.moveTo(x, padding.top);
+        ctx.lineTo(x, padding.top + chartHeight);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // Draw diamond marker at bottom
+        const markerY = padding.top + chartHeight + 8;
+        ctx.beginPath();
+        ctx.fillStyle = '#6b7280'; // gray-500
+        ctx.moveTo(x, markerY - 5);
+        ctx.lineTo(x + 4, markerY);
+        ctx.lineTo(x, markerY + 5);
+        ctx.lineTo(x - 4, markerY);
+        ctx.closePath();
+        ctx.fill();
     });
+    
+    if (vizPrefs.chartMode === 'line') {
+        // Draw each subtopic as a separate colored line
+        subtopicTimelines.forEach((st, stIndex) => {
+            const data = st.data;
+            if (data.length === 0) return;
+            
+            // Draw filled area (semi-transparent)
+            ctx.beginPath();
+            const firstCoord = getCoords(data[0]);
+            ctx.moveTo(firstCoord.x, padding.top + chartHeight);
+            ctx.lineTo(firstCoord.x, firstCoord.y);
+            data.forEach((point, i) => { 
+                if (i > 0) ctx.lineTo(getCoords(point).x, getCoords(point).y); 
+            });
+            ctx.lineTo(getCoords(data[data.length - 1]).x, padding.top + chartHeight);
+            ctx.closePath();
+            ctx.fillStyle = st.color + '15'; // Very light fill
+            ctx.fill();
+            
+            // Draw the line
+            ctx.beginPath();
+            ctx.moveTo(firstCoord.x, firstCoord.y);
+            data.forEach((point, i) => { 
+                if (i > 0) ctx.lineTo(getCoords(point).x, getCoords(point).y); 
+            });
+            ctx.strokeStyle = st.color;
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+        });
+        
+        // Draw points on top of all lines
+        subtopicTimelines.forEach((st, stIndex) => {
+            const data = st.data;
+            // Only draw points for first and last, to avoid clutter
+            if (data.length > 0) {
+                [data[0], data[data.length - 1]].forEach(point => {
+                    if (!point) return;
+                    const coord = getCoords(point);
+                    ctx.beginPath();
+                    ctx.arc(coord.x, coord.y, 3, 0, Math.PI * 2);
+                    ctx.fillStyle = '#fff';
+                    ctx.fill();
+                    ctx.strokeStyle = st.color;
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                });
+            }
+        });
+        
+    } else {
+        // Bar mode: stacked bars showing subtopic composition
+        // First, find all unique x positions
+        const allXPositions = new Set();
+        subtopicTimelines.forEach(st => {
+            st.data.forEach(point => allXPositions.add(point.x.toFixed(4)));
+        });
+        const xPositions = Array.from(allXPositions).map(x => parseFloat(x)).sort((a, b) => a - b);
+        
+        const barWidth = Math.min(20, chartWidth / Math.max(xPositions.length, 1) * 0.6);
+        const subBarWidth = barWidth / subtopicTimelines.length;
+        
+        xPositions.forEach(xPos => {
+            subtopicTimelines.forEach((st, stIndex) => {
+                // Find closest point for this subtopic at this x position
+                const closestPoint = st.data.reduce((closest, point) => {
+                    if (!closest) return point;
+                    return Math.abs(point.x - xPos) < Math.abs(closest.x - xPos) ? point : closest;
+                }, null);
+                
+                if (closestPoint && Math.abs(closestPoint.x - xPos) < 0.05) {
+                    const x = padding.left + xPos * chartWidth;
+                    const coord = getCoords(closestPoint);
+                    const barX = x - barWidth / 2 + stIndex * subBarWidth;
+                    
+                    ctx.fillStyle = st.color + 'CC';
+                    ctx.beginPath();
+                    ctx.roundRect(barX, coord.y, subBarWidth - 1, (padding.top + chartHeight) - coord.y, 2);
+                    ctx.fill();
+                }
+            });
+        });
+    }
+    
+    // Draw legend at top-right
+    const legendX = width - padding.right - 10;
+    let legendY = padding.top + 5;
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'right';
+    
+    subtopicTimelines.slice(0, 5).forEach((st, i) => { // Show max 5 in legend
+        ctx.fillStyle = st.color;
+        ctx.fillRect(legendX - 8, legendY - 6, 8, 8);
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--color-text-secondary');
+        const label = st.name.length > 15 ? st.name.substring(0, 12) + '...' : st.name;
+        ctx.fillText(label, legendX - 12, legendY);
+        legendY += 12;
+    });
+    if (subtopicTimelines.length > 5) {
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--color-text-muted');
+        ctx.fillText(`+${subtopicTimelines.length - 5} more`, legendX, legendY);
+    }
 }
 
 function renderSparklines() {
@@ -8454,15 +8655,19 @@ function renderSparklines() {
     if (!container || !appState.topic?.subtopics) { if (container) container.innerHTML = ''; return; }
     
     let html = '';
-    appState.topic.subtopics.forEach(subtopic => {
+    appState.topic.subtopics.forEach((subtopic, index) => {
         const timeline = calculateSubtopicTimeline(subtopic.id);
         const currentAvg = timeline.length > 0 ? timeline[timeline.length - 1].y : 1;
         const isExpanded = vizPrefs.expandedSubtopics.has(subtopic.id);
+        const color = getSubtopicColor(index);
         
-        html += `<div class="sparkline-row" data-subtopic-id="${subtopic.id}">
-            <div class="sparkline-label" title="${escapeHtml(subtopic.name)}">${subtopic.icon || '📄'} ${escapeHtml(subtopic.name)}</div>
-            <canvas class="sparkline-chart" data-subtopic-id="${subtopic.id}" width="200" height="24"></canvas>
-            <div class="sparkline-value">${currentAvg.toFixed(1)}</div>
+        html += `<div class="sparkline-row" data-subtopic-id="${subtopic.id}" data-color-index="${index}">
+            <div class="sparkline-label" title="${escapeHtml(subtopic.name)}">
+                <span class="sparkline-color-dot" style="background: ${color};"></span>
+                ${subtopic.icon || '📄'} ${escapeHtml(subtopic.name)}
+            </div>
+            <canvas class="sparkline-chart" data-subtopic-id="${subtopic.id}" data-color="${color}" width="200" height="24"></canvas>
+            <div class="sparkline-value" style="color: ${color};">${currentAvg.toFixed(1)}</div>
         </div>`;
         
         if (isExpanded && subtopic.items) {
@@ -8471,7 +8676,7 @@ function renderSparklines() {
                 const level = appState.learningItems[getItemKey(subtopic.id, item.id)]?.level || 1;
                 html += `<div class="sparkline-lp-row">
                     <div class="sparkline-label" title="${escapeHtml(item.title)}">${escapeHtml(item.code)} ${escapeHtml(item.title)}</div>
-                    <div class="sparkline-chart" style="background: linear-gradient(to right, var(--color-primary) ${level * 20}%, var(--color-bg) ${level * 20}%); border-radius: 4px;"></div>
+                    <div class="sparkline-chart" style="background: linear-gradient(to right, ${color} ${level * 20}%, var(--color-bg) ${level * 20}%); border-radius: 4px;"></div>
                     <div class="sparkline-value">${level}</div>
                 </div>`;
             });
@@ -8481,9 +8686,12 @@ function renderSparklines() {
     
     container.innerHTML = html;
     
-    appState.topic.subtopics.forEach(subtopic => {
+    appState.topic.subtopics.forEach((subtopic, index) => {
         const canvas = container.querySelector(`canvas[data-subtopic-id="${subtopic.id}"]`);
-        if (canvas) renderSparklineCanvas(canvas, calculateSubtopicTimeline(subtopic.id));
+        if (canvas) {
+            const color = canvas.dataset.color || getSubtopicColor(index);
+            renderSparklineCanvas(canvas, calculateSubtopicTimeline(subtopic.id), color);
+        }
     });
     
     container.querySelectorAll('.sparkline-row').forEach(row => {
@@ -8497,21 +8705,43 @@ function renderSparklines() {
     });
 }
 
-function renderSparklineCanvas(canvas, data) {
+function renderSparklineCanvas(canvas, data, color) {
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Use passed color or fallback to primary
+    const lineColor = color || getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim();
     
     if (data.length < 2) {
         const y = data.length > 0 ? canvas.height - (data[0].y - 1) / 4 * canvas.height : canvas.height / 2;
         ctx.beginPath();
         ctx.moveTo(0, y);
         ctx.lineTo(canvas.width, y);
-        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() + '80';
+        ctx.strokeStyle = lineColor + '80';
         ctx.lineWidth = 1.5;
         ctx.stroke();
         return;
     }
     
+    // Draw filled area
+    ctx.beginPath();
+    ctx.moveTo(0, canvas.height);
+    data.forEach((point, i) => {
+        const x = point.x * canvas.width;
+        const y = canvas.height - (point.y - 1) / 4 * canvas.height;
+        if (i === 0) {
+            ctx.lineTo(x, canvas.height);
+            ctx.lineTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
+    ctx.lineTo(data[data.length - 1].x * canvas.width, canvas.height);
+    ctx.closePath();
+    ctx.fillStyle = lineColor + '20';
+    ctx.fill();
+    
+    // Draw line
     ctx.beginPath();
     data.forEach((point, i) => {
         const x = point.x * canvas.width;
@@ -8519,7 +8749,7 @@ function renderSparklineCanvas(canvas, data) {
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
     });
-    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim();
+    ctx.strokeStyle = lineColor;
     ctx.lineWidth = 1.5;
     ctx.lineCap = 'round';
     ctx.stroke();
