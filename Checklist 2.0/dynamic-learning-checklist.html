@@ -3091,6 +3091,19 @@ body {
     color: var(--color-text);
 }
 
+.progress-viz-title-area {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.progress-viz-subtitle {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    font-weight: 400;
+    padding-left: calc(1.2em + var(--space-2)); /* Align with title text after icon */
+}
+
 .progress-viz-title-icon {
     font-size: 1.2em;
 }
@@ -3652,9 +3665,14 @@ body {
                 <!-- Progress Visualisation -->
                 <div class="progress-viz-container" id="progress-viz">
                     <div class="progress-viz-header">
-                        <div class="progress-viz-title">
-                            <span class="progress-viz-title-icon">📈</span>
-                            <span>My Learning Journey</span>
+                        <div class="progress-viz-title-area">
+                            <div class="progress-viz-title">
+                                <span class="progress-viz-title-icon">📈</span>
+                                <span>How's it going?</span>
+                            </div>
+                            <div class="progress-viz-subtitle" id="progress-viz-subtitle">
+                                <!-- Dynamically populated: "Average of X learning points across Y subtopics" -->
+                            </div>
                         </div>
                         <div class="progress-viz-controls">
                             <div class="viz-toggle-group" role="radiogroup" aria-label="Chart type">
@@ -7101,6 +7119,12 @@ function switchTab(tabId) {
     document.querySelectorAll('.panel-content').forEach(panel => {
         panel.classList.toggle('active', panel.id === `${tabId}-panel`);
     });
+    
+    // Re-render progress visualization when History tab becomes visible
+    // (Canvas elements need to be visible to measure correctly)
+    if (tabId === 'history') {
+        setTimeout(() => renderProgressVisualization(), 50);
+    }
 }
 
 function navigateToLearningItem(itemKey) {
@@ -8326,6 +8350,10 @@ function renderMainChart() {
     
     const ctx = canvas.getContext('2d');
     const rect = canvas.parentElement.getBoundingClientRect();
+    
+    // Skip rendering if canvas container is not visible or has no size
+    if (rect.width < 10 || rect.height < 10) return;
+    
     const dpr = window.devicePixelRatio || 1;
     
     canvas.width = (rect.width - 30) * dpr;
@@ -8519,6 +8547,7 @@ function renderProgressVisualization() {
     const body = document.getElementById('progress-viz-body');
     const emptyState = document.getElementById('progress-viz-empty');
     const content = document.getElementById('progress-viz-content');
+    const subtitle = document.getElementById('progress-viz-subtitle');
     if (!body || !emptyState || !content) return;
     
     body.classList.toggle('hidden', !vizPrefs.visible);
@@ -8529,6 +8558,15 @@ function renderProgressVisualization() {
             ? '<span class="viz-visibility-icon">👁️</span><span>Hide</span>'
             : '<span class="viz-visibility-icon">👁️‍🗨️</span><span>Show</span>';
         visBtn.setAttribute('aria-expanded', vizPrefs.visible);
+    }
+    
+    // Update subtitle with aggregation info
+    if (subtitle && appState.topic && appState.topic.subtopics) {
+        const subtopicCount = appState.topic.subtopics.length;
+        const lpCount = appState.topic.subtopics.reduce((sum, st) => sum + (st.items?.length || 0), 0);
+        subtitle.textContent = `Average of ${lpCount} learning points across ${subtopicCount} subtopics`;
+    } else if (subtitle) {
+        subtitle.textContent = '';
     }
     
     const events = getTopicEvents();
