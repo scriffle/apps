@@ -3857,8 +3857,8 @@ body {
                         </p>
                         <div style="display: flex; flex-direction: column; gap: var(--space-2);">
                             <button class="btn btn-primary" id="export-pdf-btn">📄 Print Report</button>
+                            <button class="btn btn-primary" id="email-teacher-btn">✉️ Email to Teacher</button>
                             <button class="btn btn-secondary" id="export-json-btn">💾 Backup Data (JSON)</button>
-                            <button class="btn btn-secondary" id="email-report-btn">✉️ Email Summary</button>
                         </div>
                     </div>
                     
@@ -7263,31 +7263,274 @@ function exportToJSON() {
     showToast('Data exported', 'success');
 }
 
-function emailReport() {
-    const stats = calculateStats();
-    const subject = encodeURIComponent(`Learning Progress Report - ${appState.topic?.name || 'My Progress'}`);
-    const body = encodeURIComponent(`
-Learning Progress Report
-========================
-Student: ${appState.student.name || 'Unknown'}
-Topic: ${appState.topic?.name || 'Unknown'}
-Date: ${new Date().toLocaleDateString()}
-
-Overall Progress: ${stats.overallPercentage}%
-
-Level Breakdown:
-- Mastered: ${stats.mastered}
-- Confident: ${stats.confident}
-- Developing: ${stats.developing}
-- Beginning: ${stats.beginning}
-- Not Started: ${stats.notStarted}
-
-Total Check-ins: ${appState.checkins.length}
-Goals Set: ${appState.goals.length}
-Questions Asked: ${appState.questions.length}
-    `.trim());
+function generateTeacherEmail() {
+    if (!appState.topic) {
+        showToast('Please load a topic first', 'warning');
+        return;
+    }
     
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    const stats = calculateStats();
+    const emojis = getLevelEmojis();
+    const studentName = appState.student.name || 'Student';
+    const topicName = appState.topic?.name || 'Unknown Topic';
+    const className = appState.student.class || '';
+    const date = new Date().toLocaleDateString('en-AU', { 
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+    });
+    
+    // Calculate subtopic details
+    const subtopicDetails = [];
+    if (appState.topic?.subtopics) {
+        appState.topic.subtopics.forEach((subtopic, index) => {
+            const items = [];
+            let subtopicTotal = 0;
+            let subtopicCount = 0;
+            
+            if (subtopic.items) {
+                subtopic.items.forEach(item => {
+                    const itemKey = getItemKey(subtopic.id, item.id);
+                    const itemData = appState.learningItems[itemKey] || { level: 1 };
+                    items.push({
+                        code: item.code,
+                        title: item.title,
+                        level: itemData.level
+                    });
+                    subtopicTotal += itemData.level;
+                    subtopicCount++;
+                });
+            }
+            
+            const avgLevel = subtopicCount > 0 ? subtopicTotal / subtopicCount : 1;
+            const progress = Math.round(((avgLevel - 1) / 4) * 100);
+            
+            subtopicDetails.push({
+                name: subtopic.name,
+                icon: subtopic.icon || '📄',
+                color: SUBTOPIC_COLORS[index % SUBTOPIC_COLORS.length],
+                progress,
+                avgLevel: avgLevel.toFixed(1),
+                items
+            });
+        });
+    }
+    
+    // Get recent activity from progress events
+    const recentEvents = getTopicEvents()
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        .slice(0, 10);
+    
+    // Get check-in count
+    const checkinCount = getCheckinEvents().length;
+    
+    // Build recent events HTML separately to avoid nested template issues
+    let recentEventsHtml = '';
+    if (recentEvents.length > 0) {
+        const rows = recentEvents.slice(0, 6).map(e => {
+            const eventDate = new Date(e.timestamp).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+            let activity = e.event_type.replace(/_/g, ' ');
+            let change = '';
+            if (e.event_type === 'confidence_change') {
+                activity = e.learning_point_id?.split('-').pop() || 'Item';
+                if (e.old_value && e.new_value) {
+                    change = emojis[e.old_value - 1] + ' → ' + emojis[e.new_value - 1];
+                }
+            } else if (e.event_type === 'check_in_button' || e.event_type === 'check_in_auto') {
+                activity = '✓ Check-in';
+            } else if (e.event_type === 'lockout_triggered') {
+                activity = '🔒 Quiz passed';
+            }
+            return '<tr><td>' + eventDate + '</td><td>' + activity + '</td><td>' + change + '</td></tr>';
+        }).join('');
+        
+        recentEventsHtml = '<div class="card"><h2 style="margin: 0 0 12px 0; font-size: 16px;">🕐 Recent Activity</h2><table><tr><th>Date</th><th>Activity</th><th>Change</th></tr>' + rows + '</table></div>';
+    }
+    
+    // Items needing attention (level 1-2)
+    const needsAttention = [];
+    if (appState.topic?.subtopics) {
+        appState.topic.subtopics.forEach(subtopic => {
+            if (subtopic.items) {
+                subtopic.items.forEach(item => {
+                    const itemKey = getItemKey(subtopic.id, item.id);
+                    const itemData = appState.learningItems[itemKey] || { level: 1 };
+                    if (itemData.level <= 2) {
+                        needsAttention.push({
+                            subtopic: subtopic.name,
+                            code: item.code,
+                            title: item.title,
+                            level: itemData.level
+                        });
+                    }
+                });
+            }
+        });
+    }
+    
+    // Build HTML email
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5; color: #1f2937; max-width: 700px; margin: 0 auto; padding: 20px; background: #f9fafb; }
+        .card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+        .header h1 { margin: 0 0 8px 0; font-size: 24px; }
+        .header p { margin: 0; opacity: 0.9; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+        .stat-box { background: white; border-radius: 8px; padding: 16px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .stat-value { font-size: 28px; font-weight: 700; color: #10b981; }
+        .stat-label { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+        .progress-bar { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin: 8px 0; }
+        .progress-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+        .subtopic { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #e5e7eb; }
+        .subtopic:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .subtopic-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .subtopic-name { font-weight: 600; flex: 1; }
+        .subtopic-progress { font-size: 14px; color: #6b7280; }
+        .lp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; }
+        .lp-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f9fafb; border-radius: 6px; font-size: 13px; }
+        .lp-code { font-weight: 600; color: #374151; min-width: 50px; }
+        .lp-title { flex: 1; color: #4b5563; }
+        .lp-level { font-size: 16px; }
+        .attention-item { padding: 10px 12px; background: #fef3c7; border-left: 3px solid #f59e0b; margin-bottom: 8px; border-radius: 0 6px 6px 0; }
+        .attention-item:last-child { margin-bottom: 0; }
+        .level-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; font-size: 12px; }
+        .level-item { display: flex; align-items: center; gap: 4px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+        th { background: #f9fafb; font-weight: 600; color: #374151; }
+        .copy-btn { background: #10b981; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; cursor: pointer; margin-right: 8px; }
+        .copy-btn:hover { background: #059669; }
+        .actions { margin-bottom: 20px; padding: 16px; background: #ecfdf5; border-radius: 8px; }
+        @media print { .actions { display: none; } body { background: white; } }
+    </style>
+</head>
+<body>
+    <div class="actions">
+        <button class="copy-btn" onclick="copyToClipboard()">📋 Copy Email Content</button>
+        <button class="copy-btn" onclick="window.print()">🖨️ Print</button>
+        <span style="color: #6b7280; font-size: 13px;">Copy and paste into your email client</span>
+    </div>
+
+    <div class="header">
+        <h1>📚 Learning Progress Report</h1>
+        <p><strong>${studentName}</strong>${className ? ` • ${className}` : ''} • ${date}</p>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-box">
+            <div class="stat-value">${stats.overallPercentage}%</div>
+            <div class="stat-label">Overall</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-value">${stats.mastered + stats.confident}</div>
+            <div class="stat-label">At Standard+</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-value">${checkinCount}</div>
+            <div class="stat-label">Check-ins</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-value">${stats.total}</div>
+            <div class="stat-label">Total Items</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 style="margin: 0 0 4px 0; font-size: 16px;">📖 ${topicName}</h2>
+        <div class="progress-bar">
+            <div class="progress-fill" style="width: ${stats.overallPercentage}%; background: linear-gradient(90deg, #10b981, #059669);"></div>
+        </div>
+        <div class="level-legend">
+            <span class="level-item">${emojis[0]} Not started: ${stats.notStarted}</span>
+            <span class="level-item">${emojis[1]} Beginning: ${stats.beginning}</span>
+            <span class="level-item">${emojis[2]} Developing: ${stats.developing}</span>
+            <span class="level-item">${emojis[3]} Confident: ${stats.confident}</span>
+            <span class="level-item">${emojis[4]} Mastered: ${stats.mastered}</span>
+        </div>
+    </div>
+
+    ${needsAttention.length > 0 ? `
+    <div class="card">
+        <h2 style="margin: 0 0 12px 0; font-size: 16px;">⚠️ Needs Attention (${needsAttention.length} items)</h2>
+        ${needsAttention.slice(0, 8).map(item => `
+            <div class="attention-item">
+                <strong>${item.code}</strong> ${item.title}
+                <span style="float: right; color: #92400e;">${emojis[item.level - 1]} ${levelNames[item.level - 1]}</span>
+            </div>
+        `).join('')}
+        ${needsAttention.length > 8 ? `<p style="color: #6b7280; font-size: 13px; margin: 8px 0 0 0;">+ ${needsAttention.length - 8} more items need attention</p>` : ''}
+    </div>
+    ` : ''}
+
+    <div class="card">
+        <h2 style="margin: 0 0 16px 0; font-size: 16px;">📊 Progress by Subtopic</h2>
+        ${subtopicDetails.map(st => `
+            <div class="subtopic">
+                <div class="subtopic-header">
+                    <span style="width: 10px; height: 10px; border-radius: 2px; background: ${st.color};"></span>
+                    <span class="subtopic-name">${st.icon} ${st.name}</span>
+                    <span class="subtopic-progress">${st.progress}% (avg ${st.avgLevel})</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${st.progress}%; background: ${st.color};"></div>
+                </div>
+                <div class="lp-grid">
+                    ${st.items.map(item => `
+                        <div class="lp-item">
+                            <span class="lp-code">${item.code}</span>
+                            <span class="lp-title">${item.title}</span>
+                            <span class="lp-level">${emojis[item.level - 1]}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `).join('')}
+    </div>
+
+    ${recentEventsHtml}
+
+    <div style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
+        Generated by Learning Checklist • ${new Date().toISOString().split('T')[0]}
+    </div>
+
+    <script>
+        function copyToClipboard() {
+            const content = document.body.cloneNode(true);
+            content.querySelector('.actions')?.remove();
+            content.querySelector('script')?.remove();
+            
+            const blob = new Blob([content.innerHTML], { type: 'text/html' });
+            const item = new ClipboardItem({ 'text/html': blob, 'text/plain': new Blob([document.body.innerText], { type: 'text/plain' }) });
+            
+            navigator.clipboard.write([item]).then(() => {
+                alert('✓ Email content copied! Paste into your email client.');
+            }).catch(() => {
+                // Fallback
+                const range = document.createRange();
+                range.selectNode(document.body);
+                window.getSelection().removeAllRanges();
+                window.getSelection().addRange(range);
+                document.execCommand('copy');
+                window.getSelection().removeAllRanges();
+                alert('✓ Content selected and copied!');
+            });
+        }
+    <\/script>
+</body>
+</html>`;
+
+    // Open in new window
+    const win = window.open('', '_blank', 'width=800,height=900');
+    win.document.write(html);
+    win.document.close();
+}
+
+function emailReport() {
+    // Legacy simple email - redirect to teacher email
+    generateTeacherEmail();
 }
 
 // ============================================
@@ -8108,7 +8351,7 @@ function setupEventListeners() {
     // Export
     document.getElementById('export-pdf-btn')?.addEventListener('click', exportToPDF);
     document.getElementById('export-json-btn')?.addEventListener('click', exportToJSON);
-    document.getElementById('email-report-btn')?.addEventListener('click', emailReport);
+    document.getElementById('email-teacher-btn')?.addEventListener('click', generateTeacherEmail);
     
     // Expand/Collapse all
     document.getElementById('expand-all-btn')?.addEventListener('click', () => {
