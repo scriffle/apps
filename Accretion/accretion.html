@@ -1,0 +1,2641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gravitational Accretion Simulation</title>
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #14141f;
+      --bg-panel: #1a1a2e;
+      --text-primary: #e0e0e0;
+      --text-secondary: #a0a0a0;
+      --accent: #4a9eff;
+      --accent-hover: #6bb3ff;
+      --success: #4ade80;
+      --warning: #fbbf24;
+      --error: #f87171;
+      --border: #2a2a3e;
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 24px;
+      --space-6: 32px;
+      --radius: 8px;
+      --transition: 0.2s ease;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      height: 100dvh;
+      max-height: 100dvh; /* Prevent body from exceeding viewport */
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Header */
+    header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: var(--space-3) var(--space-4);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      flex-shrink: 0;
+    }
+
+    h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      flex-wrap: wrap;
+    }
+
+    /* Buttons */
+    button {
+      background: var(--bg-panel);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 0.875rem;
+      transition: all var(--transition);
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      min-height: 36px;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    button.primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+    }
+
+    /* Select */
+    select {
+      background: var(--bg-panel);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      min-height: 36px;
+      cursor: pointer;
+    }
+
+    select:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+
+    /* Main Layout */
+    main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      min-height: 0; /* Critical for nested flex scrolling */
+    }
+
+    /* Control Panel */
+    .control-panel {
+      width: 280px;
+      height: 100%; /* Fill parent height */
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      padding: var(--space-4);
+      overflow-y: auto;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+      flex-shrink: 0;
+    }
+
+    .panel-section {
+      background: var(--bg-panel);
+      border-radius: var(--radius);
+      padding: var(--space-3);
+    }
+
+    .panel-section h2 {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      margin-bottom: var(--space-3);
+    }
+
+    .control-row {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+      margin-bottom: var(--space-3);
+    }
+
+    .control-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .control-row label {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .control-row label span.value {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--border);
+      cursor: pointer;
+      -webkit-appearance: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    input[type="number"] {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      padding: var(--space-2);
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      width: 100%;
+    }
+
+    input[type="number"]:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+
+    /* Canvas Container */
+    .canvas-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: var(--bg-primary);
+      min-height: 0; /* Important: allows flex to work properly */
+      min-width: 0;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+      touch-action: none;
+    }
+
+    canvas:active {
+      cursor: grabbing;
+    }
+
+    /* Playback Transport Bar */
+    .playback-transport {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      padding: var(--space-3) var(--space-4);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      flex-shrink: 0; /* Never shrink - always visible */
+      min-height: 90px; /* Ensure transport is always usable */
+    }
+
+    /* Timeline / Scrubber */
+    .timeline-container {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: 0 var(--space-2);
+    }
+
+    .timeline-time {
+      font-size: 0.75rem;
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+      color: var(--text-secondary);
+      min-width: 70px;
+      text-align: center;
+    }
+
+    .timeline-time.current {
+      color: var(--text-primary);
+    }
+
+    .timeline-scrubber {
+      flex: 1;
+      position: relative;
+      height: 24px;
+      display: flex;
+      align-items: center;
+    }
+
+    .timeline-track {
+      width: 100%;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      position: relative;
+      cursor: pointer;
+    }
+
+    .timeline-progress {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      background: var(--accent);
+      border-radius: 3px;
+      pointer-events: none;
+    }
+
+    .timeline-scrubber input[type="range"] {
+      position: absolute;
+      width: 100%;
+      height: 24px;
+      opacity: 0;
+      cursor: pointer;
+      margin: 0;
+    }
+
+    .timeline-handle {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 14px;
+      height: 14px;
+      background: var(--accent);
+      border: 2px solid var(--text-primary);
+      border-radius: 50%;
+      pointer-events: none;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+
+    /* Transport Controls */
+    .transport-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+    }
+
+    .transport-btn {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all var(--transition);
+      font-size: 1rem;
+      padding: 0;
+      min-height: auto;
+    }
+
+    .transport-btn:hover:not(:disabled) {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .transport-btn.play-pause {
+      width: 52px;
+      height: 52px;
+      font-size: 1.25rem;
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .transport-btn.play-pause:hover:not(:disabled) {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+      transform: scale(1.05);
+    }
+
+    .transport-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* Speed Control in Transport */
+    .transport-speed {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-left: auto;
+      padding-left: var(--space-4);
+      border-left: 1px solid var(--border);
+    }
+
+    .transport-speed label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .transport-speed select {
+      background: var(--bg-panel);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      padding: var(--space-1) var(--space-2);
+      border-radius: var(--radius);
+      font-size: 0.8rem;
+      min-height: auto;
+    }
+
+    /* Frame Counter */
+    .frame-counter {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-right: auto;
+      padding-right: var(--space-4);
+      border-right: 1px solid var(--border);
+    }
+
+    .frame-counter label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .frame-counter .frame-display {
+      font-size: 0.8rem;
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+      color: var(--text-primary);
+      background: var(--bg-panel);
+      padding: var(--space-1) var(--space-2);
+      border-radius: 4px;
+      min-width: 100px;
+      text-align: center;
+    }
+
+    /* Progress Overlay */
+    .progress-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: var(--space-5);
+      text-align: center;
+      min-width: 300px;
+      z-index: 100;
+    }
+
+    .progress-overlay.hidden {
+      display: none;
+    }
+
+    .progress-bar-container {
+      background: var(--border);
+      border-radius: 4px;
+      height: 8px;
+      margin: var(--space-3) 0;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      background: var(--accent);
+      height: 100%;
+      width: 0%;
+      transition: width 0.1s;
+    }
+
+    .progress-text {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+
+    /* Status Bar */
+    .status-bar {
+      position: absolute;
+      top: var(--space-3);
+      right: var(--space-3);
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: var(--space-2) var(--space-3);
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+    }
+
+    .status-item {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-4);
+    }
+
+    .status-item span:last-child {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    /* Toast Notifications */
+    .toast-container {
+      position: fixed;
+      bottom: 80px;
+      right: var(--space-4);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      z-index: 1000;
+    }
+
+    .toast {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: var(--space-3) var(--space-4);
+      font-size: 0.875rem;
+      animation: slideIn 0.3s ease;
+      max-width: 300px;
+    }
+
+    .toast.success {
+      border-color: var(--success);
+    }
+
+    .toast.error {
+      border-color: var(--error);
+    }
+
+    .toast.warning {
+      border-color: var(--warning);
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    /* Mode Toggle */
+    .mode-toggle {
+      display: flex;
+      background: var(--bg-panel);
+      border-radius: var(--radius);
+      padding: 2px;
+      border: 1px solid var(--border);
+    }
+
+    .mode-toggle button {
+      border: none;
+      background: transparent;
+      padding: var(--space-2) var(--space-3);
+      border-radius: 6px;
+      min-height: auto;
+    }
+
+    .mode-toggle button.active {
+      background: var(--accent);
+    }
+
+    .mode-toggle button:hover:not(.active) {
+      background: var(--border);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .control-panel {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 50;
+        transform: translateX(-100%);
+        transition: transform var(--transition);
+        max-height: 100%;
+        overflow-y: auto;
+      }
+
+      .control-panel.open {
+        transform: translateX(0);
+      }
+
+      header h1 {
+        font-size: 1rem;
+      }
+      
+      .playback-transport {
+        padding: var(--space-2) var(--space-3);
+      }
+      
+      .transport-controls {
+        flex-wrap: wrap;
+        gap: var(--space-2);
+      }
+      
+      .frame-counter,
+      .transport-speed {
+        border: none;
+        padding: 0;
+      }
+    }
+
+    /* Hidden utility */
+    .hidden {
+      display: none !important;
+    }
+
+    /* Checkbox styling */
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-bottom: var(--space-2);
+    }
+
+    .checkbox-row input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    .checkbox-row label {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+
+    /* Sub-controls (nested options) */
+    .sub-control {
+      margin-left: var(--space-4);
+      padding-left: var(--space-3);
+      border-left: 2px solid var(--border);
+      margin-bottom: var(--space-2);
+    }
+
+    .sub-control label {
+      font-size: 0.75rem;
+    }
+
+    .sub-control select {
+      font-size: 0.75rem;
+      padding: var(--space-1) var(--space-2);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Gravitational Accretion</h1>
+    <div class="header-controls">
+      <div class="mode-toggle">
+        <button id="modeSimulate" class="active">Generate</button>
+        <button id="modePlayback">Playback</button>
+      </div>
+      <select id="precomputedSelect" class="hidden">
+        <option value="">-- Select Simulation --</option>
+      </select>
+      <button id="toggleAdvanced">Advanced</button>
+      <button id="exportBtn" class="hidden">Export JSON</button>
+    </div>
+  </header>
+
+  <main>
+    <aside class="control-panel" id="controlPanel">
+      <!-- Source Info (shown during playback) -->
+      <div class="panel-section hidden" id="sourceInfo">
+        <h2>Loaded Simulation</h2>
+        <div id="sourceDetails"></div>
+      </div>
+
+      <!-- Simple Controls -->
+      <div class="panel-section" id="simpleControls">
+        <h2>Parameters</h2>
+        
+        <div class="control-row">
+          <label>Particles <span class="value" id="particleCountValue">250</span></label>
+          <input type="range" id="particleCountSimple" min="50" max="2000" step="50" value="250">
+        </div>
+
+        <div class="control-row">
+          <label>Duration <span class="value" id="durationValue">Medium</span></label>
+          <input type="range" id="durationSimple" min="1" max="5" step="1" value="3">
+        </div>
+
+        <div class="control-row">
+          <label>Spread <span class="value" id="spreadValue">Medium</span></label>
+          <input type="range" id="spreadSimple" min="1" max="5" step="1" value="3">
+        </div>
+      </div>
+
+      <!-- Advanced Controls -->
+      <div class="panel-section hidden" id="advancedControls">
+        <h2>Advanced Parameters</h2>
+        
+        <div class="control-row">
+          <label>Particle Count</label>
+          <input type="number" id="particleCountAdv" value="150" min="10" max="5000">
+        </div>
+
+        <div class="control-row">
+          <label>Steps</label>
+          <input type="number" id="stepsAdv" value="50000" min="1000" max="200000" step="1000">
+        </div>
+
+        <div class="control-row">
+          <label>Time Step (Δt)</label>
+          <input type="number" id="dtAdv" value="0.01" min="0.0001" max="1" step="0.001">
+        </div>
+
+        <div class="control-row">
+          <label>Initial Spread</label>
+          <input type="number" id="spreadAdv" value="700" min="100" max="2000">
+        </div>
+
+        <div class="control-row">
+          <label>Gravity (G)</label>
+          <input type="number" id="gravityAdv" value="10.0" min="0.1" max="20" step="0.1">
+        </div>
+
+        <div class="control-row">
+          <label>Softening (ε)</label>
+          <input type="number" id="softeningAdv" value="0.01" min="0.001" max="1" step="0.001">
+        </div>
+
+        <div class="control-row">
+          <label>Barnes-Hut (θ)</label>
+          <input type="number" id="thetaAdv" value="0.5" min="0.1" max="2" step="0.1">
+        </div>
+      </div>
+
+      <!-- Generation Controls -->
+      <div class="panel-section" id="generateSection">
+        <h2>Generate</h2>
+        <div style="display: flex; gap: var(--space-2);">
+          <button id="startBtn" class="primary" style="flex:1;">Start</button>
+          <button id="stopBtn" disabled>Stop</button>
+        </div>
+      </div>
+
+      <!-- View Controls -->
+      <div class="panel-section">
+        <h2>View</h2>
+        
+        <div class="control-row">
+          <label>Zoom <span class="value" id="zoomValue">1.0x</span></label>
+          <input type="range" id="zoomSlider" min="0.1" max="10" step="0.1" value="1">
+        </div>
+
+        <div class="control-row">
+          <label>Track:</label>
+          <select id="trackMode">
+            <option value="center">Center of Mass</option>
+            <option value="largest">Largest Mass</option>
+            <option value="none">Free Camera</option>
+          </select>
+        </div>
+
+        <button id="recenterBtn" style="width: 100%;">Recenter View</button>
+        
+        <div class="checkbox-row" style="margin-top: var(--space-3);">
+          <input type="checkbox" id="largerView">
+          <label for="largerView">Larger particles</label>
+        </div>
+      </div>
+
+      <!-- Visualization Settings -->
+      <div class="panel-section">
+        <h2>Effects</h2>
+        
+        <div class="checkbox-row">
+          <input type="checkbox" id="showTrails">
+          <label for="showTrails">Particle trails</label>
+        </div>
+        <div class="control-row sub-control" id="trailOptions" style="display:none;">
+          <label>Length <span class="value" id="trailLengthValue">50</span></label>
+          <input type="range" id="trailLength" min="10" max="200" step="10" value="50">
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="showCollisionFlash" checked>
+          <label for="showCollisionFlash">Collision flash</label>
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="showOrbitColors">
+          <label for="showOrbitColors">Orbit direction colors</label>
+        </div>
+        <div class="control-row sub-control" id="orbitColorOptions" style="display:none; padding-left: 20px;">
+          <label>Relative to:</label>
+          <select id="orbitRelativeTo">
+            <option value="center">Center of Mass</option>
+            <option value="largest">Largest Mass</option>
+          </select>
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="showVelocityVectors">
+          <label for="showVelocityVectors">Velocity vectors</label>
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="showForceVectors">
+          <label for="showForceVectors">Force vectors</label>
+        </div>
+
+        <div class="control-row sub-control" id="vectorOptions" style="display:none; padding-left: 20px;">
+          <label>Show on:</label>
+          <select id="vectorTarget">
+            <option value="top">Top 10% only</option>
+            <option value="all">All particles</option>
+          </select>
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="showGravityWells">
+          <label for="showGravityWells">Gravity wells</label>
+        </div>
+      </div>
+
+      <!-- Playback Speed - moved to transport bar -->
+    </aside>
+
+    <div class="canvas-container">
+      <canvas id="canvas"></canvas>
+      
+      <div class="status-bar">
+        <div class="status-item">
+          <span>Particles:</span>
+          <span id="particleStatus">0</span>
+        </div>
+        <div class="status-item">
+          <span>Largest:</span>
+          <span id="largestStatus">1.0</span>
+        </div>
+      </div>
+
+      <div class="progress-overlay hidden" id="progressOverlay">
+        <div>Generating simulation...</div>
+        <div class="progress-bar-container">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <div class="progress-text" id="progressText">0%</div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="playback-transport">
+    <!-- Timeline Scrubber -->
+    <div class="timeline-container">
+      <span class="timeline-time current" id="currentTime">0:00</span>
+      <div class="timeline-scrubber">
+        <div class="timeline-track">
+          <div class="timeline-progress" id="timelineProgress"></div>
+        </div>
+        <div class="timeline-handle" id="timelineHandle"></div>
+        <input type="range" id="scrubSlider" min="0" max="0" value="0">
+      </div>
+      <span class="timeline-time" id="totalTime">0:00</span>
+    </div>
+
+    <!-- Transport Buttons -->
+    <div class="transport-controls">
+      <div class="frame-counter">
+        <label>Frame</label>
+        <span class="frame-display" id="frameDisplay">0 / 0</span>
+      </div>
+
+      <button class="transport-btn" id="skipStartBtn" title="Go to start">⏮</button>
+      <button class="transport-btn" id="stepBackBtn" title="Step back">⏪</button>
+      <button class="transport-btn play-pause" id="playPauseBtn" title="Play/Pause">▶</button>
+      <button class="transport-btn" id="stepForwardBtn" title="Step forward">⏩</button>
+      <button class="transport-btn" id="skipEndBtn" title="Go to end">⏭</button>
+
+      <div class="transport-speed">
+        <label>Speed</label>
+        <select id="speedSelect">
+          <option value="0.25">0.25x</option>
+          <option value="0.5">0.5x</option>
+          <option value="1" selected>1x</option>
+          <option value="2">2x</option>
+          <option value="4">4x</option>
+          <option value="8">8x</option>
+        </select>
+      </div>
+    </div>
+  </footer>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script>
+'use strict';
+
+/* =============================================================================
+ * Configuration & State
+ * ============================================================================= */
+const CONFIG = {
+  MANIFEST_PATH: 'simulations/manifest.json',
+  SIMULATIONS_PATH: 'simulations/',
+  BATCH_SIZE: 50,           // Steps per batch during generation
+  STORE_INTERVAL: 10,       // Store every N steps
+  MIN_HALF_SIZE: 1e-10,
+  MAX_DEPTH: 50,
+  DEFAULT_PARAMS: {
+    particleCount: 150,
+    steps: 50000,
+    dt: 0.01,
+    spread: 700,
+    G: 10.0,
+    softening: 0.01,
+    theta: 0.5
+  }
+};
+
+// Duration presets (simple mode) - shifted longer
+const DURATION_PRESETS = [25000, 50000, 75000, 100000, 150000];
+const DURATION_LABELS = ['Very Short', 'Short', 'Medium', 'Long', 'Very Long'];
+const SPREAD_PRESETS = [300, 500, 700, 1000, 1500];
+const SPREAD_LABELS = ['Tight', 'Narrow', 'Medium', 'Wide', 'Very Wide'];
+
+// Application State
+const state = {
+  mode: 'generate',         // 'generate' or 'playback'
+  isAdvanced: false,
+  isGenerating: false,
+  isPlaying: false,
+  
+  // Simulation data
+  params: { ...CONFIG.DEFAULT_PARAMS },
+  frames: [],               // Array of frame data
+  currentFrame: 0,
+  maxFrame: 0,
+  
+  // Live simulation state
+  particles: [],
+  
+  // View state
+  zoom: 1.0,
+  offsetX: 0,
+  offsetY: 0,
+  trackMode: 'center',  // 'center', 'largest', 'none'
+  
+  // Playback
+  playbackSpeed: 1.0,
+  lastPlaybackTime: 0,
+  
+  // Precomputed simulations
+  manifest: null,
+  loadedSimulation: null,
+  
+  // Camera
+  isPanning: false,
+  lastMouseX: 0,
+  lastMouseY: 0,
+  
+  // Visualization settings
+  showTrails: false,
+  trailLength: 50,
+  showCollisionFlash: true,
+  showOrbitColors: false,
+  orbitRelativeTo: 'center',
+  showVelocityVectors: false,
+  showForceVectors: false,
+  vectorTarget: 'top',
+  showGravityWells: false,
+  largerView: false,
+  
+  // Trail data (particle id -> array of {x, y})
+  trails: new Map(),
+  
+  // Collision flash data (array of {x, y, frame, radius})
+  collisionFlashes: []
+};
+
+/* =============================================================================
+ * DOM References
+ * ============================================================================= */
+const $ = id => document.getElementById(id);
+const canvas = $('canvas');
+const ctx = canvas.getContext('2d');
+
+/* =============================================================================
+ * Utilities
+ * ============================================================================= */
+function showToast(message, type = 'info') {
+  const container = $('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(100%)';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+function formatNumber(n, decimals = 1) {
+  if (n >= 1000000) return (n / 1000000).toFixed(decimals) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(decimals) + 'K';
+  return n.toFixed(decimals);
+}
+
+/* =============================================================================
+ * Canvas Setup
+ * ============================================================================= */
+function resizeCanvas() {
+  const container = canvas.parentElement;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = container.clientWidth * dpr;
+  canvas.height = container.clientHeight * dpr;
+  ctx.scale(dpr, dpr);
+  
+  // Redraw current frame
+  if (state.frames.length > 0) {
+    drawFrame(state.currentFrame);
+  }
+}
+
+window.addEventListener('resize', resizeCanvas);
+
+/* =============================================================================
+ * Particle & Physics
+ * ============================================================================= */
+let uniqueIdCounter = 0;
+
+function createParticle(x, y, vx = 0, vy = 0, mass = 1) {
+  return {
+    id: uniqueIdCounter++,
+    x, y, vx, vy, mass,
+    radius: Math.cbrt(mass),
+    fx: 0, fy: 0,
+    index: 0  // Will be set during simulation
+  };
+}
+
+function initializeParticles(count, spread) {
+  const particles = [];
+  uniqueIdCounter = 0;
+  
+  for (let i = 0; i < count; i++) {
+    // Distribute in a disk with some randomness
+    const angle = Math.random() * Math.PI * 2;
+    const r = Math.sqrt(Math.random()) * spread;
+    const x = r * Math.cos(angle);
+    const y = r * Math.sin(angle);
+    
+    // Very small initial tangential velocity for slight rotation
+    const speed = 0.005 * Math.sqrt(r + 1);
+    const vx = -speed * Math.sin(angle) * (Math.random() > 0.5 ? 1 : -1);
+    const vy = speed * Math.cos(angle) * (Math.random() > 0.5 ? 1 : -1);
+    
+    particles.push(createParticle(x, y, vx, vy, 1));
+  }
+  
+  return particles;
+}
+
+/* =============================================================================
+ * Barnes-Hut Quadtree
+ * ============================================================================= */
+class QuadNode {
+  constructor(xMid, yMid, halfSize) {
+    this.xMid = xMid;
+    this.yMid = yMid;
+    this.halfSize = halfSize;
+    this.mass = 0;
+    this.cmx = 0;
+    this.cmy = 0;
+    this.isLeaf = true;
+    this.particleIndex = -1;
+    this.children = [null, null, null, null];
+  }
+}
+
+function buildQuadTree(particles) {
+  if (particles.length === 0) return null;
+  
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+  
+  for (const p of particles) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+  
+  const centerX = 0.5 * (minX + maxX);
+  const centerY = 0.5 * (minY + maxY);
+  let halfSize = 0.5 * Math.max(maxX - minX, maxY - minY);
+  if (halfSize < 1e-6) halfSize = 1e-6;
+  
+  const root = new QuadNode(centerX, centerY, halfSize);
+  
+  for (let i = 0; i < particles.length; i++) {
+    particles[i].index = i;
+    insertParticle(root, particles, i, 0);
+  }
+  
+  return root;
+}
+
+function insertParticle(node, particles, i, depth) {
+  const p = particles[i];
+  
+  if (node.isLeaf && node.particleIndex < 0) {
+    node.particleIndex = i;
+    node.mass = p.mass;
+    node.cmx = p.x * p.mass;
+    node.cmy = p.y * p.mass;
+    return;
+  }
+  
+  if (node.isLeaf && node.particleIndex >= 0) {
+    const oldIndex = node.particleIndex;
+    node.particleIndex = -1;
+    node.isLeaf = false;
+    insertIntoChild(node, particles, oldIndex, depth + 1);
+    insertIntoChild(node, particles, i, depth + 1);
+    updateNodeMass(node, particles);
+    return;
+  }
+  
+  insertIntoChild(node, particles, i, depth + 1);
+  updateNodeMass(node, particles);
+}
+
+function insertIntoChild(node, particles, i, depth) {
+  if (node.halfSize < CONFIG.MIN_HALF_SIZE || depth > CONFIG.MAX_DEPTH) {
+    // Merge particles if too small
+    if (node.particleIndex >= 0) {
+      mergeParticles(particles, node.particleIndex, i);
+    }
+    return;
+  }
+  
+  const p = particles[i];
+  const midX = node.xMid, midY = node.yMid;
+  const half = node.halfSize / 2;
+  const isNorth = p.y >= midY;
+  const isWest = p.x < midX;
+  
+  let childIndex = 0;
+  if (isNorth && !isWest) childIndex = 1;
+  else if (!isNorth && isWest) childIndex = 2;
+  else if (!isNorth && !isWest) childIndex = 3;
+  
+  if (!node.children[childIndex]) {
+    let cx = midX, cy = midY;
+    if (childIndex === 0) { cx = midX - half; cy = midY + half; }
+    if (childIndex === 1) { cx = midX + half; cy = midY + half; }
+    if (childIndex === 2) { cx = midX - half; cy = midY - half; }
+    if (childIndex === 3) { cx = midX + half; cy = midY - half; }
+    node.children[childIndex] = new QuadNode(cx, cy, half);
+    node.isLeaf = false;
+  }
+  
+  insertParticle(node.children[childIndex], particles, i, depth + 1);
+}
+
+function updateNodeMass(node, particles) {
+  node.mass = 0;
+  node.cmx = 0;
+  node.cmy = 0;
+  
+  if (node.isLeaf && node.particleIndex >= 0) {
+    const p = particles[node.particleIndex];
+    node.mass = p.mass;
+    node.cmx = p.x * p.mass;
+    node.cmy = p.y * p.mass;
+    return;
+  }
+  
+  for (let c = 0; c < 4; c++) {
+    const child = node.children[c];
+    if (child && child.mass > 0) {
+      node.mass += child.mass;
+      node.cmx += child.cmx;
+      node.cmy += child.cmy;
+    }
+  }
+}
+
+function mergeParticles(particles, i, j) {
+  const pi = particles[i];
+  const pj = particles[j];
+  
+  const totalMass = pi.mass + pj.mass;
+  pi.vx = (pi.mass * pi.vx + pj.mass * pj.vx) / totalMass;
+  pi.vy = (pi.mass * pi.vy + pj.mass * pj.vy) / totalMass;
+  pi.mass = totalMass;
+  pi.radius = Math.cbrt(totalMass);
+  
+  pj.mass = 0; // Mark for removal
+}
+
+/* =============================================================================
+ * Force Calculation
+ * ============================================================================= */
+function computeForces(particles, root, theta, G, softening) {
+  for (const p of particles) {
+    if (p.mass <= 0) continue;
+    p.fx = 0;
+    p.fy = 0;
+    const [fx, fy] = computeForceOnParticle(p, root, theta, G, softening, particles);
+    p.fx = fx;
+    p.fy = fy;
+  }
+}
+
+function computeForceOnParticle(p, node, theta, G, softening, particles) {
+  if (!node || node.mass <= 0) return [0, 0];
+  
+  if (node.isLeaf && node.particleIndex >= 0) {
+    if (node.particleIndex === p.index) return [0, 0];
+    return directForce(p, particles[node.particleIndex], G, softening);
+  }
+  
+  const dx = (node.cmx / node.mass) - p.x;
+  const dy = (node.cmy / node.mass) - p.y;
+  const dist = Math.sqrt(dx * dx + dy * dy) + 1e-12;
+  
+  if ((node.halfSize * 2) / dist < theta) {
+    const fMag = (G * p.mass * node.mass) / (dist * dist + softening * softening);
+    return [fMag * (dx / dist), fMag * (dy / dist)];
+  }
+  
+  let fxSum = 0, fySum = 0;
+  for (let c = 0; c < 4; c++) {
+    const child = node.children[c];
+    if (child && child.mass > 0) {
+      const [fx, fy] = computeForceOnParticle(p, child, theta, G, softening, particles);
+      fxSum += fx;
+      fySum += fy;
+    }
+  }
+  return [fxSum, fySum];
+}
+
+function directForce(p1, p2, G, softening) {
+  if (p2.mass <= 0) return [0, 0];
+  
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const r2 = dx * dx + dy * dy + softening * softening;
+  const r = Math.sqrt(r2);
+  
+  if (r < 1e-12) return [0, 0];
+  
+  const f = (G * p1.mass * p2.mass) / r2;
+  return [f * (dx / r), f * (dy / r)];
+}
+
+/* =============================================================================
+ * Integration & Collisions
+ * ============================================================================= */
+function integrate(particles, dt) {
+  for (const p of particles) {
+    if (p.mass <= 0) continue;
+    p.vx += (p.fx / p.mass) * dt;
+    p.vy += (p.fy / p.mass) * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+  }
+}
+
+function handleCollisions(particles, collisions = []) {
+  const n = particles.length;
+  const toRemove = new Set();
+  
+  for (let i = 0; i < n; i++) {
+    const pi = particles[i];
+    if (pi.mass <= 0 || toRemove.has(i)) continue;
+    
+    for (let j = i + 1; j < n; j++) {
+      const pj = particles[j];
+      if (pj.mass <= 0 || toRemove.has(j)) continue;
+      
+      const dx = pj.x - pi.x;
+      const dy = pj.y - pi.y;
+      const rSum = pi.radius + pj.radius;
+      
+      if (dx * dx + dy * dy < rSum * rSum) {
+        // Record collision before merge
+        collisions.push({
+          x: (pi.x + pj.x) / 2,
+          y: (pi.y + pj.y) / 2,
+          radius: Math.max(pi.radius, pj.radius)
+        });
+        
+        // Merge
+        const totalMass = pi.mass + pj.mass;
+        pi.vx = (pi.mass * pi.vx + pj.mass * pj.vx) / totalMass;
+        pi.vy = (pi.mass * pi.vy + pj.mass * pj.vy) / totalMass;
+        pi.mass = totalMass;
+        pi.radius = Math.cbrt(totalMass);
+        toRemove.add(j);
+      }
+    }
+  }
+  
+  if (toRemove.size > 0) {
+    return particles.filter((_, i) => !toRemove.has(i));
+  }
+  return particles;
+}
+
+/* =============================================================================
+ * Frame Packing/Unpacking
+ * ============================================================================= */
+function packFrame(particles, collisions = []) {
+  const live = particles.filter(p => p.mass > 0);
+  // 7 values per particle: id, x, y, vx, vy, mass, radius
+  const data = new Float32Array(live.length * 7);
+  
+  for (let i = 0; i < live.length; i++) {
+    const p = live[i];
+    const off = i * 7;
+    data[off] = p.id;
+    data[off + 1] = p.x;
+    data[off + 2] = p.y;
+    data[off + 3] = p.vx;
+    data[off + 4] = p.vy;
+    data[off + 5] = p.mass;
+    data[off + 6] = p.radius;
+  }
+  
+  return {
+    particles: data,
+    collisions: collisions.length > 0 ? collisions : null
+  };
+}
+
+function unpackFrame(frameData) {
+  // Handle both old format (just Float32Array) and new format (object)
+  const data = frameData.particles || frameData;
+  const collisions = frameData.collisions || [];
+  
+  const stride = data.length > 0 && (data.length % 7 === 0) ? 7 : 6;
+  const count = data.length / stride;
+  const particles = [];
+  
+  for (let i = 0; i < count; i++) {
+    const off = i * stride;
+    if (stride === 7) {
+      particles.push({
+        id: data[off],
+        x: data[off + 1],
+        y: data[off + 2],
+        vx: data[off + 3],
+        vy: data[off + 4],
+        mass: data[off + 5],
+        radius: data[off + 6]
+      });
+    } else {
+      // Old format without ID
+      particles.push({
+        id: i,
+        x: data[off],
+        y: data[off + 1],
+        vx: data[off + 2],
+        vy: data[off + 3],
+        mass: data[off + 4],
+        radius: data[off + 5]
+      });
+    }
+  }
+  
+  return { particles, collisions };
+}
+
+/* =============================================================================
+ * Simulation Generation
+ * ============================================================================= */
+async function runSimulation() {
+  if (state.isGenerating) return;
+  
+  state.isGenerating = true;
+  state.frames = [];
+  state.trails.clear(); // Clear trails from previous simulation
+  state.currentFrame = 0;
+  state.isPlaying = false;
+  
+  // Get parameters
+  const params = getParameters();
+  state.params = params;
+  
+  // Initialize particles
+  state.particles = initializeParticles(params.particleCount, params.spread);
+  
+  // UI updates
+  $('startBtn').disabled = true;
+  $('stopBtn').disabled = false;
+  $('progressOverlay').classList.remove('hidden');
+  $('exportBtn').classList.add('hidden');
+  $('playPauseBtn').textContent = '▶';
+  
+  const totalSteps = params.steps;
+  let currentStep = 0;
+  let frameCollisions = [];
+  
+  // Store initial frame
+  state.frames.push(packFrame(state.particles, []));
+  
+  // Run simulation in batches
+  while (currentStep < totalSteps && state.isGenerating) {
+    await runBatch(params, CONFIG.BATCH_SIZE, frameCollisions);
+    currentStep += CONFIG.BATCH_SIZE;
+    
+    // Update progress
+    const progress = Math.min(100, (currentStep / totalSteps) * 100);
+    $('progressBar').style.width = progress + '%';
+    $('progressText').textContent = `${progress.toFixed(0)}% (${state.particles.length} particles)`;
+    
+    // Store frame periodically
+    if (currentStep % CONFIG.STORE_INTERVAL === 0) {
+      state.frames.push(packFrame(state.particles, frameCollisions));
+      frameCollisions = []; // Reset for next frame
+    }
+    
+    // Allow UI to update
+    await new Promise(r => setTimeout(r, 0));
+  }
+  
+  // Final frame
+  if (state.frames.length === 0 || currentStep % CONFIG.STORE_INTERVAL !== 0) {
+    state.frames.push(packFrame(state.particles, frameCollisions));
+  }
+  
+  // Complete
+  state.isGenerating = false;
+  state.maxFrame = state.frames.length - 1;
+  
+  $('startBtn').disabled = false;
+  $('stopBtn').disabled = true;
+  $('progressOverlay').classList.add('hidden');
+  $('exportBtn').classList.remove('hidden');
+  
+  $('scrubSlider').max = state.maxFrame;
+  $('scrubSlider').value = 0;
+  updateFrameInfo();
+  
+  // Draw first frame
+  state.currentFrame = 0;
+  drawFrame(0);
+  
+  // Switch to playback mode
+  setMode('playback');
+  
+  showToast(`Simulation complete: ${state.frames.length} frames`, 'success');
+}
+
+async function runBatch(params, batchSize, batchCollisions) {
+  const { dt, G, softening, theta } = params;
+  
+  for (let i = 0; i < batchSize && state.isGenerating; i++) {
+    // Build tree
+    const root = buildQuadTree(state.particles);
+    
+    // Compute forces
+    computeForces(state.particles, root, theta, G, softening);
+    
+    // Integrate
+    integrate(state.particles, dt);
+    
+    // Handle collisions - pass array to collect collision events
+    state.particles = handleCollisions(state.particles, batchCollisions);
+    
+    // Remove dead particles
+    state.particles = state.particles.filter(p => p.mass > 0);
+  }
+}
+
+function stopSimulation() {
+  state.isGenerating = false;
+}
+
+/* =============================================================================
+ * Playback
+ * ============================================================================= */
+function startPlayback() {
+  if (state.frames.length === 0) return;
+  
+  state.isPlaying = true;
+  $('playPauseBtn').textContent = '⏸';
+  $('playPauseBtn').title = 'Pause';
+  state.lastPlaybackTime = performance.now();
+  requestAnimationFrame(playbackLoop);
+}
+
+function stopPlayback() {
+  state.isPlaying = false;
+  $('playPauseBtn').textContent = '▶';
+  $('playPauseBtn').title = 'Play';
+}
+
+function togglePlayback() {
+  if (state.isPlaying) {
+    stopPlayback();
+  } else {
+    startPlayback();
+  }
+}
+
+function stepForward() {
+  if (state.currentFrame < state.maxFrame) {
+    seekToFrame(state.currentFrame + 1);
+  }
+}
+
+function stepBack() {
+  if (state.currentFrame > 0) {
+    seekToFrame(state.currentFrame - 1);
+  }
+}
+
+function skipToStart() {
+  seekToFrame(0);
+}
+
+function skipToEnd() {
+  seekToFrame(state.maxFrame);
+}
+
+let accumulatedTime = 0;
+const FRAME_INTERVAL = 100; // ms between frames at 1x speed
+
+function playbackLoop(timestamp) {
+  if (!state.isPlaying) return;
+  
+  const elapsed = timestamp - state.lastPlaybackTime;
+  state.lastPlaybackTime = timestamp;
+  
+  accumulatedTime += elapsed * state.playbackSpeed;
+  
+  while (accumulatedTime >= FRAME_INTERVAL) {
+    accumulatedTime -= FRAME_INTERVAL;
+    state.currentFrame++;
+    
+    if (state.currentFrame > state.maxFrame) {
+      state.currentFrame = state.maxFrame;
+      stopPlayback();
+      return;
+    }
+  }
+  
+  $('scrubSlider').value = state.currentFrame;
+  updateFrameInfo();
+  drawFrame(state.currentFrame);
+  
+  requestAnimationFrame(playbackLoop);
+}
+
+function seekToFrame(frame) {
+  const newFrame = Math.max(0, Math.min(frame, state.maxFrame));
+  
+  // Clear trails if seeking backwards or jumping more than a few frames
+  if (newFrame < state.currentFrame || Math.abs(newFrame - state.currentFrame) > 5) {
+    state.trails.clear();
+  }
+  
+  state.currentFrame = newFrame;
+  $('scrubSlider').value = state.currentFrame;
+  updateTransportUI();
+  drawFrame(state.currentFrame);
+}
+
+function restart() {
+  seekToFrame(0);
+  if (!state.isPlaying) {
+    startPlayback();
+  }
+}
+
+function updateTransportUI() {
+  const current = state.currentFrame;
+  const total = state.maxFrame;
+  
+  // Frame display
+  $('frameDisplay').textContent = `${current} / ${total}`;
+  
+  // Time display (approximate, based on frame rate)
+  const currentSec = current * 0.1; // ~10fps playback
+  const totalSec = total * 0.1;
+  $('currentTime').textContent = formatTime(currentSec);
+  $('totalTime').textContent = formatTime(totalSec);
+  
+  // Progress bar and handle
+  const progress = total > 0 ? (current / total) * 100 : 0;
+  $('timelineProgress').style.width = progress + '%';
+  $('timelineHandle').style.left = progress + '%';
+}
+
+function formatTime(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function updateFrameInfo() {
+  updateTransportUI();
+}
+
+/* =============================================================================
+ * Drawing
+ * ============================================================================= */
+function drawFrame(frameIndex) {
+  if (frameIndex < 0 || frameIndex >= state.frames.length) return;
+  
+  const frameData = state.frames[frameIndex];
+  const { particles, collisions } = unpackFrame(frameData);
+  
+  // Sort by mass to find top particles
+  const sortedByMass = [...particles].sort((a, b) => b.mass - a.mass);
+  const largest = sortedByMass[0] || null;
+  const maxMass = largest ? largest.mass : 0;
+  
+  // Determine which particles get trails: largest 50, or all if ≤50 total
+  const trailCount = Math.min(50, particles.length);
+  const trailParticles = new Set(sortedByMass.slice(0, trailCount).map(p => p.id));
+  
+  // Update status
+  $('particleStatus').textContent = particles.length;
+  $('largestStatus').textContent = formatNumber(maxMass);
+  
+  // Calculate center of mass for orbit direction
+  const com = calculateCenterOfMass(particles);
+  
+  // Get orbit reference point
+  let refPoint = com;
+  if (state.orbitRelativeTo === 'largest' && largest) {
+    refPoint = { x: largest.x, y: largest.y };
+  }
+  
+  // Apply tracking mode
+  if (!state.isPanning && state.trackMode !== 'none') {
+    if (state.trackMode === 'center') {
+      state.offsetX = -com.x;
+      state.offsetY = -com.y;
+    } else if (state.trackMode === 'largest' && largest) {
+      state.offsetX = -largest.x;
+      state.offsetY = -largest.y;
+    }
+  }
+  
+  // Clear canvas
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, w, h);
+  
+  // Transform helpers
+  const cx = w / 2;
+  const cy = h / 2;
+  const scale = state.zoom;
+  
+  const toScreen = (x, y) => ({
+    x: cx + (x + state.offsetX) * scale,
+    y: cy - (y + state.offsetY) * scale
+  });
+  
+  // Update trails for tracked particles
+  if (state.showTrails) {
+    for (const p of particles) {
+      if (trailParticles.has(p.id)) {
+        if (!state.trails.has(p.id)) {
+          state.trails.set(p.id, []);
+        }
+        const trail = state.trails.get(p.id);
+        trail.push({ x: p.x, y: p.y });
+        
+        // Limit trail length
+        while (trail.length > state.trailLength) {
+          trail.shift();
+        }
+      }
+    }
+    
+    // Remove trails for particles that no longer exist
+    const currentIds = new Set(particles.map(p => p.id));
+    for (const id of state.trails.keys()) {
+      if (!currentIds.has(id)) {
+        state.trails.delete(id);
+      }
+    }
+    
+    // Draw trails with fading/tapering effect
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (const [id, trail] of state.trails) {
+      if (trail.length < 2) continue;
+      
+      // Draw as a single continuous path with gradient-like tapering
+      // We'll draw segments with decreasing width and alpha
+      for (let i = 1; i < trail.length; i++) {
+        const prev = toScreen(trail[i - 1].x, trail[i - 1].y);
+        const curr = toScreen(trail[i].x, trail[i].y);
+        
+        // Progress from 0 (oldest) to 1 (newest)
+        const progress = i / trail.length;
+        
+        // Alpha: very faint at start, slightly visible at end
+        const alpha = progress * 0.25;
+        
+        // Width: tapers from thin to thicker
+        const width = 0.5 + progress * 1.5;
+        
+        ctx.beginPath();
+        ctx.moveTo(prev.x, prev.y);
+        ctx.lineTo(curr.x, curr.y);
+        ctx.lineWidth = width;
+        ctx.strokeStyle = `rgba(120, 180, 255, ${alpha})`;
+        ctx.stroke();
+      }
+    }
+  }
+  
+  // Draw gravity wells (behind particles)
+  if (state.showGravityWells) {
+    // Show wells for all particles (larger ones will be more prominent)
+    for (const p of particles) {
+      const screen = toScreen(p.x, p.y);
+      
+      // Well radius scales with mass (cube root for visual balance) - large radius
+      const wellRadius = Math.cbrt(p.mass) * scale * 80;
+      
+      // Skip very small wells
+      if (wellRadius < 5) continue;
+      
+      // Skip if completely off-screen
+      if (screen.x < -wellRadius || screen.x > w + wellRadius || 
+          screen.y < -wellRadius || screen.y > h + wellRadius) continue;
+      
+      // Create radial gradient for the well
+      const gradient = ctx.createRadialGradient(
+        screen.x, screen.y, 0,
+        screen.x, screen.y, wellRadius
+      );
+      
+      // Purple/blue tint for gravity wells - intensity scales with mass
+      const intensity = Math.min(0.35, 0.08 + p.mass * 0.008);
+      gradient.addColorStop(0, `rgba(120, 60, 220, ${intensity})`);
+      gradient.addColorStop(0.2, `rgba(100, 50, 200, ${intensity * 0.7})`);
+      gradient.addColorStop(0.5, `rgba(70, 35, 160, ${intensity * 0.4})`);
+      gradient.addColorStop(1, 'rgba(40, 20, 120, 0)');
+      
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(screen.x, screen.y, wellRadius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  
+  // Draw particles
+  for (const p of particles) {
+    const screen = toScreen(p.x, p.y);
+    
+    // Calculate radius based on view mode
+    let r;
+    if (state.largerView) {
+      // Larger view: doubled minimum, cubic scaling emphasized
+      r = Math.max(2, Math.cbrt(p.mass) * scale * 1.5);
+    } else {
+      // Normal view
+      r = Math.max(1, p.radius * scale * 0.5);
+    }
+    
+    // Skip if off-screen
+    if (screen.x < -r || screen.x > w + r || screen.y < -r || screen.y > h + r) continue;
+    
+    // Determine color
+    let color;
+    if (p === largest) {
+      color = '#ffffff';
+    } else if (state.showOrbitColors) {
+      // Calculate orbit direction (prograde vs retrograde)
+      const dx = p.x - refPoint.x;
+      const dy = p.y - refPoint.y;
+      // Cross product of position and velocity gives rotation direction
+      const cross = dx * p.vy - dy * p.vx;
+      
+      if (cross > 0.01) {
+        color = '#4ade80'; // Prograde - green (counter-clockwise)
+      } else if (cross < -0.01) {
+        color = '#f97316'; // Retrograde - orange (clockwise)
+      } else {
+        color = '#a0a0a0'; // Radial/uncertain - gray
+      }
+    } else if (p.mass > 10) {
+      color = '#ffd700';
+    } else if (p.mass > 5) {
+      color = '#ff8c00';
+    } else {
+      color = '#a0a0a0';
+    }
+    
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(screen.x, screen.y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  
+  // Draw velocity vectors
+  if (state.showVelocityVectors) {
+    const showAll = state.vectorTarget === 'all';
+    const vectorCount = showAll ? particles.length : Math.min(Math.ceil(particles.length * 0.1), 50);
+    const vectorParticles = showAll ? particles : sortedByMass.slice(0, vectorCount);
+    
+    ctx.strokeStyle = 'rgba(100, 200, 255, 0.7)';
+    ctx.lineWidth = 1.5;
+    
+    for (const p of vectorParticles) {
+      const screen = toScreen(p.x, p.y);
+      const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+      if (speed < 0.001) continue;
+      
+      // Calculate particle radius (same as drawing)
+      let pRadius;
+      if (state.largerView) {
+        pRadius = Math.max(2, Math.cbrt(p.mass) * scale * 1.5);
+      } else {
+        pRadius = Math.max(1, p.radius * scale * 0.5);
+      }
+      
+      // Scale arrow length (velocity * multiplier, capped)
+      const arrowLen = Math.min(speed * scale * 5, 80);
+      const angle = Math.atan2(-p.vy, p.vx); // Negative vy because screen Y is inverted
+      
+      // Start from circumference, not center
+      const startX = screen.x + Math.cos(angle) * pRadius;
+      const startY = screen.y + Math.sin(angle) * pRadius;
+      const endX = startX + Math.cos(angle) * arrowLen;
+      const endY = startY + Math.sin(angle) * arrowLen;
+      
+      // Draw arrow line
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+      
+      // Draw arrowhead
+      const headLen = 6;
+      const headAngle = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(endX, endY);
+      ctx.lineTo(endX - headLen * Math.cos(angle - headAngle), endY - headLen * Math.sin(angle - headAngle));
+      ctx.moveTo(endX, endY);
+      ctx.lineTo(endX - headLen * Math.cos(angle + headAngle), endY - headLen * Math.sin(angle + headAngle));
+      ctx.stroke();
+    }
+  }
+  
+  // Draw force vectors (calculate forces on-the-fly)
+  if (state.showForceVectors) {
+    const showAll = state.vectorTarget === 'all';
+    const vectorCount = showAll ? particles.length : Math.min(Math.ceil(particles.length * 0.1), 50);
+    const vectorParticles = showAll ? particles : sortedByMass.slice(0, vectorCount);
+    
+    // Calculate gravitational forces for display
+    const G = state.params?.G || 10.0;
+    const softening = state.params?.softening || 0.01;
+    
+    ctx.strokeStyle = 'rgba(255, 150, 100, 0.7)';
+    ctx.lineWidth = 1.5;
+    
+    for (const p of vectorParticles) {
+      // Sum forces from all other particles
+      let fx = 0, fy = 0;
+      for (const other of particles) {
+        if (other === p) continue;
+        const dx = other.x - p.x;
+        const dy = other.y - p.y;
+        const r2 = dx * dx + dy * dy + softening;
+        const r = Math.sqrt(r2);
+        const f = (G * p.mass * other.mass) / r2;
+        fx += f * dx / r;
+        fy += f * dy / r;
+      }
+      
+      const forceMag = Math.sqrt(fx * fx + fy * fy);
+      if (forceMag < 0.001) continue;
+      
+      const screen = toScreen(p.x, p.y);
+      
+      // Calculate particle radius (same as drawing)
+      let pRadius;
+      if (state.largerView) {
+        pRadius = Math.max(2, Math.cbrt(p.mass) * scale * 1.5);
+      } else {
+        pRadius = Math.max(1, p.radius * scale * 0.5);
+      }
+      
+      // Scale arrow length (log scale for large force differences)
+      const arrowLen = Math.min(Math.log(forceMag + 1) * scale * 3, 60);
+      const angle = Math.atan2(-fy, fx); // Negative fy because screen Y is inverted
+      
+      // Start from circumference, not center
+      const startX = screen.x + Math.cos(angle) * pRadius;
+      const startY = screen.y + Math.sin(angle) * pRadius;
+      const endX = startX + Math.cos(angle) * arrowLen;
+      const endY = startY + Math.sin(angle) * arrowLen;
+      
+      // Draw arrow line
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+      
+      // Draw arrowhead
+      const headLen = 5;
+      const headAngle = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(endX, endY);
+      ctx.lineTo(endX - headLen * Math.cos(angle - headAngle), endY - headLen * Math.sin(angle - headAngle));
+      ctx.moveTo(endX, endY);
+      ctx.lineTo(endX - headLen * Math.cos(angle + headAngle), endY - headLen * Math.sin(angle + headAngle));
+      ctx.stroke();
+    }
+  }
+  
+  // Draw collision flashes
+  if (state.showCollisionFlash && collisions && collisions.length > 0) {
+    for (const c of collisions) {
+      const screen = toScreen(c.x, c.y);
+      let flashRadius = Math.max(8, (c.radius || 5) * scale);
+      
+      // 3x larger when larger particles view is on
+      if (state.largerView) {
+        flashRadius *= 3;
+      }
+      
+      // Draw flash with glow
+      const gradient = ctx.createRadialGradient(
+        screen.x, screen.y, 0,
+        screen.x, screen.y, flashRadius
+      );
+      gradient.addColorStop(0, 'rgba(255, 255, 200, 0.9)');
+      gradient.addColorStop(0.5, 'rgba(255, 200, 100, 0.5)');
+      gradient.addColorStop(1, 'rgba(255, 150, 50, 0)');
+      
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(screen.x, screen.y, flashRadius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+/* =============================================================================
+ * Parameters
+ * ============================================================================= */
+function getParameters() {
+  if (state.isAdvanced) {
+    return {
+      particleCount: parseInt($('particleCountAdv').value),
+      steps: parseInt($('stepsAdv').value),
+      dt: parseFloat($('dtAdv').value),
+      spread: parseFloat($('spreadAdv').value),
+      G: parseFloat($('gravityAdv').value),
+      softening: parseFloat($('softeningAdv').value),
+      theta: parseFloat($('thetaAdv').value)
+    };
+  } else {
+    const durationIndex = parseInt($('durationSimple').value) - 1;
+    const spreadIndex = parseInt($('spreadSimple').value) - 1;
+    
+    return {
+      particleCount: parseInt($('particleCountSimple').value),
+      steps: DURATION_PRESETS[durationIndex],
+      dt: 0.01,
+      spread: SPREAD_PRESETS[spreadIndex],
+      G: 10.0,
+      softening: 0.01,
+      theta: 0.5
+    };
+  }
+}
+
+function setParametersFromLoaded(params) {
+  // Set advanced controls
+  $('particleCountAdv').value = params.particleCount;
+  $('stepsAdv').value = params.steps;
+  $('dtAdv').value = params.dt;
+  $('spreadAdv').value = params.spread;
+  $('gravityAdv').value = params.G;
+  $('softeningAdv').value = params.softening;
+  $('thetaAdv').value = params.theta;
+  
+  // Set simple controls approximations
+  $('particleCountSimple').value = params.particleCount;
+  $('particleCountValue').textContent = params.particleCount;
+  
+  // Find closest duration preset
+  let durationIndex = 2;
+  let minDiff = Infinity;
+  for (let i = 0; i < DURATION_PRESETS.length; i++) {
+    const diff = Math.abs(DURATION_PRESETS[i] - params.steps);
+    if (diff < minDiff) {
+      minDiff = diff;
+      durationIndex = i;
+    }
+  }
+  $('durationSimple').value = durationIndex + 1;
+  $('durationValue').textContent = DURATION_LABELS[durationIndex];
+  
+  // Find closest spread preset
+  let spreadIndex = 2;
+  minDiff = Infinity;
+  for (let i = 0; i < SPREAD_PRESETS.length; i++) {
+    const diff = Math.abs(SPREAD_PRESETS[i] - params.spread);
+    if (diff < minDiff) {
+      minDiff = diff;
+      spreadIndex = i;
+    }
+  }
+  $('spreadSimple').value = spreadIndex + 1;
+  $('spreadValue').textContent = SPREAD_LABELS[spreadIndex];
+  
+  state.params = params;
+}
+
+/* =============================================================================
+ * JSON Export/Import
+ * ============================================================================= */
+function exportSimulation() {
+  if (state.frames.length === 0) {
+    showToast('No simulation to export', 'error');
+    return;
+  }
+  
+  // Convert frame data for JSON
+  const framesData = state.frames.map(f => {
+    // Handle both old format (Float32Array) and new format (object)
+    if (f.particles) {
+      return {
+        particles: Array.from(f.particles),
+        collisions: f.collisions || null
+      };
+    } else {
+      // Old format - just particle data
+      return { particles: Array.from(f), collisions: null };
+    }
+  });
+  
+  const exportData = {
+    version: 2, // Incremented for new format
+    name: `Accretion ${new Date().toISOString().slice(0, 10)}`,
+    description: `${state.params.particleCount} particles, ${state.frames.length} frames`,
+    params: state.params,
+    frames: framesData
+  };
+  
+  const json = JSON.stringify(exportData);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `accretion_${Date.now()}.json`;
+  a.click();
+  
+  URL.revokeObjectURL(url);
+  showToast('Simulation exported', 'success');
+}
+
+async function loadSimulation(url) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    
+    const data = await response.json();
+    
+    // Validate
+    if (!data.version || !data.params || !data.frames) {
+      throw new Error('Invalid simulation file format');
+    }
+    
+    // Convert arrays back - handle both v1 and v2 formats
+    state.frames = data.frames.map(f => {
+      if (f.particles) {
+        // v2 format with particles and collisions
+        return {
+          particles: new Float32Array(f.particles),
+          collisions: f.collisions || []
+        };
+      } else if (Array.isArray(f)) {
+        // v1 format - just particle array
+        return {
+          particles: new Float32Array(f),
+          collisions: []
+        };
+      }
+      return f;
+    });
+    state.params = data.params;
+    state.maxFrame = state.frames.length - 1;
+    state.currentFrame = 0;
+    state.loadedSimulation = data;
+    
+    // Clear trails when loading new simulation
+    state.trails.clear();
+    
+    // Update UI
+    setParametersFromLoaded(data.params);
+    $('scrubSlider').max = state.maxFrame;
+    $('scrubSlider').value = 0;
+    updateFrameInfo();
+    
+    // Show source info
+    $('sourceInfo').classList.remove('hidden');
+    $('sourceDetails').innerHTML = `
+      <div style="font-size: 0.85rem; margin-bottom: 8px;"><strong>${data.name || 'Unnamed'}</strong></div>
+      <div style="font-size: 0.75rem; color: var(--text-secondary);">${data.description || ''}</div>
+      <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 8px;">
+        Particles: ${data.params.particleCount}<br>
+        Frames: ${state.frames.length}<br>
+        G: ${data.params.G}, Spread: ${data.params.spread}
+      </div>
+    `;
+    
+    // Draw first frame
+    drawFrame(0);
+    
+    showToast('Simulation loaded', 'success');
+    return true;
+  } catch (err) {
+    showToast(`Failed to load: ${err.message}`, 'error');
+    return false;
+  }
+}
+
+/* =============================================================================
+ * Manifest & Precomputed Simulations
+ * ============================================================================= */
+async function loadManifest() {
+  try {
+    const response = await fetch(CONFIG.MANIFEST_PATH);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    
+    state.manifest = await response.json();
+    
+    // Populate select
+    const select = $('precomputedSelect');
+    select.innerHTML = '<option value="">-- Select Simulation --</option>';
+    
+    for (const sim of state.manifest.simulations) {
+      const option = document.createElement('option');
+      option.value = sim.filename;
+      option.textContent = sim.name || sim.filename;
+      select.appendChild(option);
+    }
+    
+    console.log(`Loaded manifest: ${state.manifest.simulations.length} simulations available`);
+    return true;
+  } catch (err) {
+    console.log('No manifest found, generate mode only');
+    state.manifest = null;
+    return false;
+  }
+}
+
+/* =============================================================================
+ * Camera Controls
+ * ============================================================================= */
+function setupCameraControls() {
+  // Track mouse position for zoom-to-cursor
+  let mouseX = 0;
+  let mouseY = 0;
+  
+  canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    mouseX = e.clientX - rect.left;
+    mouseY = e.clientY - rect.top;
+  });
+  
+  // Mouse wheel zoom - zoom towards cursor position
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    
+    const rect = canvas.getBoundingClientRect();
+    const cursorX = e.clientX - rect.left;
+    const cursorY = e.clientY - rect.top;
+    
+    // Convert cursor to world coordinates before zoom
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    const cx = w / 2;
+    const cy = h / 2;
+    
+    const worldX = (cursorX - cx) / state.zoom - state.offsetX;
+    const worldY = -(cursorY - cy) / state.zoom - state.offsetY;
+    
+    // Apply zoom
+    const delta = -e.deltaY * 0.001;
+    const oldZoom = state.zoom;
+    state.zoom = Math.max(0.1, Math.min(20, state.zoom * (1 + delta)));
+    
+    // Adjust offset to keep cursor position fixed in world space
+    const newScreenX = (worldX + state.offsetX) * state.zoom + cx;
+    const newScreenY = -(worldY + state.offsetY) * state.zoom + cy;
+    
+    state.offsetX += (cursorX - newScreenX) / state.zoom;
+    state.offsetY -= (cursorY - newScreenY) / state.zoom;
+    
+    // If zooming, switch to free camera
+    if (Math.abs(state.zoom - oldZoom) > 0.01) {
+      state.trackMode = 'none';
+      $('trackMode').value = 'none';
+    }
+    
+    $('zoomSlider').value = state.zoom;
+    $('zoomValue').textContent = state.zoom.toFixed(1) + 'x';
+    
+    if (!state.isPlaying) {
+      drawFrame(state.currentFrame);
+    }
+  }, { passive: false });
+  
+  // Pinch-to-zoom for touch devices
+  let initialPinchDistance = 0;
+  let initialPinchZoom = 1;
+  let pinchCenterX = 0;
+  let pinchCenterY = 0;
+  let activeTouches = [];
+  
+  canvas.addEventListener('touchstart', e => {
+    activeTouches = Array.from(e.touches);
+    
+    if (activeTouches.length === 2) {
+      e.preventDefault();
+      const touch1 = activeTouches[0];
+      const touch2 = activeTouches[1];
+      
+      initialPinchDistance = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY
+      );
+      initialPinchZoom = state.zoom;
+      
+      // Center of pinch
+      const rect = canvas.getBoundingClientRect();
+      pinchCenterX = (touch1.clientX + touch2.clientX) / 2 - rect.left;
+      pinchCenterY = (touch1.clientY + touch2.clientY) / 2 - rect.top;
+    } else if (activeTouches.length === 1) {
+      // Single touch for panning
+      state.isPanning = true;
+      state.lastMouseX = activeTouches[0].clientX;
+      state.lastMouseY = activeTouches[0].clientY;
+    }
+  }, { passive: false });
+  
+  canvas.addEventListener('touchmove', e => {
+    activeTouches = Array.from(e.touches);
+    
+    if (activeTouches.length === 2) {
+      e.preventDefault();
+      const touch1 = activeTouches[0];
+      const touch2 = activeTouches[1];
+      
+      const currentDistance = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY
+      );
+      
+      if (initialPinchDistance > 0) {
+        // Calculate new zoom
+        const scale = currentDistance / initialPinchDistance;
+        const newZoom = Math.max(0.1, Math.min(20, initialPinchZoom * scale));
+        
+        // Convert pinch center to world coordinates before zoom
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        const cx = w / 2;
+        const cy = h / 2;
+        
+        const worldX = (pinchCenterX - cx) / state.zoom - state.offsetX;
+        const worldY = -(pinchCenterY - cy) / state.zoom - state.offsetY;
+        
+        state.zoom = newZoom;
+        
+        // Adjust offset to keep pinch center fixed
+        const newScreenX = (worldX + state.offsetX) * state.zoom + cx;
+        const newScreenY = -(worldY + state.offsetY) * state.zoom + cy;
+        
+        state.offsetX += (pinchCenterX - newScreenX) / state.zoom;
+        state.offsetY -= (pinchCenterY - newScreenY) / state.zoom;
+        
+        state.trackMode = 'none';
+        $('trackMode').value = 'none';
+        
+        $('zoomSlider').value = state.zoom;
+        $('zoomValue').textContent = state.zoom.toFixed(1) + 'x';
+        
+        if (!state.isPlaying) {
+          drawFrame(state.currentFrame);
+        }
+      }
+    } else if (activeTouches.length === 1 && state.isPanning) {
+      // Single touch pan
+      const dx = activeTouches[0].clientX - state.lastMouseX;
+      const dy = activeTouches[0].clientY - state.lastMouseY;
+      state.lastMouseX = activeTouches[0].clientX;
+      state.lastMouseY = activeTouches[0].clientY;
+      
+      state.offsetX += dx / state.zoom;
+      state.offsetY -= dy / state.zoom;
+      
+      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+        state.trackMode = 'none';
+        $('trackMode').value = 'none';
+      }
+      
+      if (!state.isPlaying) {
+        drawFrame(state.currentFrame);
+      }
+    }
+  }, { passive: false });
+  
+  canvas.addEventListener('touchend', e => {
+    activeTouches = Array.from(e.touches);
+    if (activeTouches.length < 2) {
+      initialPinchDistance = 0;
+    }
+    if (activeTouches.length === 0) {
+      state.isPanning = false;
+    }
+  });
+  
+  canvas.addEventListener('touchcancel', e => {
+    activeTouches = [];
+    initialPinchDistance = 0;
+    state.isPanning = false;
+  });
+  
+  // Mouse pan
+  canvas.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'touch') return; // Handled by touch events
+    if (e.button !== 0) return;
+    state.isPanning = true;
+    state.lastMouseX = e.clientX;
+    state.lastMouseY = e.clientY;
+    canvas.setPointerCapture(e.pointerId);
+  });
+  
+  canvas.addEventListener('pointermove', e => {
+    if (e.pointerType === 'touch') return; // Handled by touch events
+    if (!state.isPanning) return;
+    
+    const dx = e.clientX - state.lastMouseX;
+    const dy = e.clientY - state.lastMouseY;
+    state.lastMouseX = e.clientX;
+    state.lastMouseY = e.clientY;
+    
+    state.offsetX += dx / state.zoom;
+    state.offsetY -= dy / state.zoom;
+    
+    // Disable tracking when manually panning
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+      state.trackMode = 'none';
+      $('trackMode').value = 'none';
+    }
+    
+    if (!state.isPlaying) {
+      drawFrame(state.currentFrame);
+    }
+  });
+  
+  canvas.addEventListener('pointerup', e => {
+    if (e.pointerType === 'touch') return;
+    state.isPanning = false;
+  });
+  
+  canvas.addEventListener('pointercancel', e => {
+    if (e.pointerType === 'touch') return;
+    state.isPanning = false;
+  });
+}
+
+function recenterView() {
+  state.trackMode = $('trackMode').value;
+  
+  // Find tracking target in current frame
+  if (state.frames.length > 0) {
+    const { particles } = unpackFrame(state.frames[state.currentFrame]);
+    
+    if (state.trackMode === 'center') {
+      // Calculate center of mass
+      const com = calculateCenterOfMass(particles);
+      state.offsetX = -com.x;
+      state.offsetY = -com.y;
+    } else if (state.trackMode === 'largest') {
+      // Find largest mass
+      let largest = null;
+      let maxMass = 0;
+      for (const p of particles) {
+        if (p.mass > maxMass) {
+          maxMass = p.mass;
+          largest = p;
+        }
+      }
+      if (largest) {
+        state.offsetX = -largest.x;
+        state.offsetY = -largest.y;
+      }
+    }
+  }
+  
+  drawFrame(state.currentFrame);
+}
+
+function updateVectorOptionsVisibility() {
+  const showOptions = state.showVelocityVectors || state.showForceVectors;
+  $('vectorOptions').style.display = showOptions ? 'block' : 'none';
+}
+
+function calculateCenterOfMass(particles) {
+  let totalMass = 0;
+  let cmx = 0;
+  let cmy = 0;
+  
+  for (const p of particles) {
+    totalMass += p.mass;
+    cmx += p.x * p.mass;
+    cmy += p.y * p.mass;
+  }
+  
+  if (totalMass > 0) {
+    return { x: cmx / totalMass, y: cmy / totalMass };
+  }
+  return { x: 0, y: 0 };
+}
+
+/* =============================================================================
+ * UI Setup
+ * ============================================================================= */
+function setupUI() {
+  // Mode toggle
+  $('modeSimulate').addEventListener('click', () => setMode('generate'));
+  $('modePlayback').addEventListener('click', () => setMode('playback'));
+  
+  // Advanced toggle
+  $('toggleAdvanced').addEventListener('click', () => {
+    state.isAdvanced = !state.isAdvanced;
+    $('simpleControls').classList.toggle('hidden', state.isAdvanced);
+    $('advancedControls').classList.toggle('hidden', !state.isAdvanced);
+    $('toggleAdvanced').textContent = state.isAdvanced ? 'Simple' : 'Advanced';
+  });
+  
+  // Simple controls
+  $('particleCountSimple').addEventListener('input', e => {
+    $('particleCountValue').textContent = e.target.value;
+  });
+  
+  $('durationSimple').addEventListener('input', e => {
+    const index = parseInt(e.target.value) - 1;
+    $('durationValue').textContent = DURATION_LABELS[index];
+  });
+  
+  $('spreadSimple').addEventListener('input', e => {
+    const index = parseInt(e.target.value) - 1;
+    $('spreadValue').textContent = SPREAD_LABELS[index];
+  });
+  
+  // Generation controls
+  $('startBtn').addEventListener('click', runSimulation);
+  $('stopBtn').addEventListener('click', stopSimulation);
+  
+  // Export
+  $('exportBtn').addEventListener('click', exportSimulation);
+  
+  // Transport controls
+  $('playPauseBtn').addEventListener('click', togglePlayback);
+  $('skipStartBtn').addEventListener('click', skipToStart);
+  $('skipEndBtn').addEventListener('click', skipToEnd);
+  $('stepBackBtn').addEventListener('click', stepBack);
+  $('stepForwardBtn').addEventListener('click', stepForward);
+  
+  $('scrubSlider').addEventListener('input', e => {
+    seekToFrame(parseInt(e.target.value));
+  });
+  
+  $('speedSelect').addEventListener('change', e => {
+    state.playbackSpeed = parseFloat(e.target.value);
+  });
+  
+  // Keyboard shortcuts for transport
+  document.addEventListener('keydown', e => {
+    // Don't trigger if user is typing in an input
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    
+    switch(e.code) {
+      case 'Space':
+        e.preventDefault();
+        togglePlayback();
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        stepBack();
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        stepForward();
+        break;
+      case 'Home':
+        e.preventDefault();
+        skipToStart();
+        break;
+      case 'End':
+        e.preventDefault();
+        skipToEnd();
+        break;
+    }
+  });
+  
+  // View controls
+  $('zoomSlider').addEventListener('input', e => {
+    state.zoom = parseFloat(e.target.value);
+    $('zoomValue').textContent = state.zoom.toFixed(1) + 'x';
+    if (!state.isPlaying) {
+      drawFrame(state.currentFrame);
+    }
+  });
+  
+  $('trackMode').addEventListener('change', e => {
+    state.trackMode = e.target.value;
+    if (state.trackMode !== 'none') {
+      recenterView();
+    }
+  });
+  
+  $('recenterBtn').addEventListener('click', recenterView);
+  
+  $('largerView').addEventListener('change', e => {
+    state.largerView = e.target.checked;
+    if (!state.isPlaying) drawFrame(state.currentFrame);
+  });
+  
+  // Visualization controls
+  $('showTrails').addEventListener('change', e => {
+    state.showTrails = e.target.checked;
+    $('trailOptions').style.display = e.target.checked ? 'block' : 'none';
+    if (!e.target.checked) {
+      state.trails.clear(); // Clear trails when disabled
+    }
+    if (!state.isPlaying) drawFrame(state.currentFrame);
+  });
+  
+  $('trailLength').addEventListener('input', e => {
+    state.trailLength = parseInt(e.target.value);
+    $('trailLengthValue').textContent = e.target.value;
+  });
+  
+  $('showCollisionFlash').addEventListener('change', e => {
+    state.showCollisionFlash = e.target.checked;
+    if (!state.isPlaying) drawFrame(state.currentFrame);
+  });
+  
+  $('showOrbitColors').addEventListener('change', e => {
+    state.showOrbitColors = e.target.checked;
+    $('orbitColorOptions').style.display = e.target.checked ? 'block' : 'none';
+    if (!state.isPlaying) drawFrame(state.currentFrame);
+  });
+  
+  $('orbitRelativeTo').addEventListener('change', e => {
+    state.orbitRelativeTo = e.target.value;
+    if (!state.isPlaying) drawFrame(state.currentFrame);
+  });
+  
+  $('showVelocityVectors').addEventListener('change', e => {
+    state.showVelocityVectors = e.target.checked;
+    updateVectorOptionsVisibility();
+    if (!state.isPlaying) drawFrame(state.currentFrame);
+  });
+  
+  $('showForceVectors').addEventListener('change', e => {
+    state.showForceVectors = e.target.checked;
+    updateVectorOptionsVisibility();
+    if (!state.isPlaying) drawFrame(state.currentFrame);
+  });
+  
+  $('vectorTarget').addEventListener('change', e => {
+    state.vectorTarget = e.target.value;
+    if (!state.isPlaying) drawFrame(state.currentFrame);
+  });
+  
+  $('showGravityWells').addEventListener('change', e => {
+    state.showGravityWells = e.target.checked;
+    if (!state.isPlaying) drawFrame(state.currentFrame);
+  });
+  
+  // Precomputed select
+  $('precomputedSelect').addEventListener('change', async e => {
+    if (!e.target.value) return;
+    
+    const filename = e.target.value;
+    const url = CONFIG.SIMULATIONS_PATH + filename;
+    await loadSimulation(url);
+  });
+}
+
+function setMode(mode) {
+  state.mode = mode;
+  
+  $('modeSimulate').classList.toggle('active', mode === 'generate');
+  $('modePlayback').classList.toggle('active', mode === 'playback');
+  
+  $('generateSection').classList.toggle('hidden', mode === 'playback');
+  $('precomputedSelect').classList.toggle('hidden', mode === 'generate' || !state.manifest);
+  
+  if (mode === 'generate') {
+    $('sourceInfo').classList.add('hidden');
+  }
+}
+
+/* =============================================================================
+ * Initialization
+ * ============================================================================= */
+async function init() {
+  resizeCanvas();
+  setupCameraControls();
+  setupUI();
+  
+  // Try to load manifest
+  const hasManifest = await loadManifest();
+  
+  if (!hasManifest) {
+    showToast('No precomputed simulations found. Generate mode only.', 'warning');
+  }
+  
+  // Start in generate mode
+  setMode('generate');
+  
+  // Draw empty state
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = '#404040';
+  ctx.font = '14px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Click "Start" to generate a simulation', w / 2, h / 2);
+}
+
+window.addEventListener('load', init);
+  </script>
+</body>
+</html>

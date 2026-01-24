@@ -1,0 +1,2550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Point Through Earth</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@300;400;500;600&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --bg-dark: #0a0d12;
+            --bg-card: rgba(15, 20, 30, 0.9);
+            --accent-green: #00ff88;
+            --accent-red: #ff3366;
+            --accent-blue: #00aaff;
+            --text-primary: #ffffff;
+            --text-muted: rgba(255, 255, 255, 0.6);
+        }
+        
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        /* Tab Navigation */
+        .tab-nav {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 56px;
+            display: flex;
+            background: linear-gradient(180deg, rgba(10, 13, 18, 0.98) 0%, rgba(10, 13, 18, 0.85) 100%);
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .tab-btn {
+            flex: 1;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-family: 'Orbitron', monospace;
+            font-size: 11px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+        
+        .tab-btn .icon {
+            font-size: 20px;
+        }
+        
+        .tab-btn.active {
+            color: var(--accent-green);
+        }
+        
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 20%;
+            right: 20%;
+            height: 2px;
+            background: var(--accent-green);
+            box-shadow: 0 0 10px var(--accent-green);
+        }
+        
+        .tab-btn:active {
+            transform: scale(0.95);
+        }
+        
+        /* View Containers */
+        .view-container {
+            position: absolute;
+            top: 56px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: none;
+        }
+        
+        .view-container.active {
+            display: block;
+        }
+        
+        .view-container canvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Shared UI Elements */
+        #info-panel {
+            position: absolute;
+            top: 64px;
+            left: 8px;
+            right: 8px;
+            background: var(--bg-card);
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            max-width: 300px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 50;
+        }
+        
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-red);
+            box-shadow: 0 0 6px var(--accent-red);
+        }
+        
+        .status-dot.active {
+            background: var(--accent-green);
+            box-shadow: 0 0 6px var(--accent-green);
+        }
+        
+        #target-panel {
+            position: absolute;
+            top: 120px;
+            left: 8px;
+            background: var(--bg-card);
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 50;
+        }
+        
+        .target-name {
+            font-family: 'Orbitron', monospace;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--accent-red);
+        }
+        
+        .target-distance {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+        
+        #accuracy-ring {
+            position: absolute;
+            bottom: 90px;
+            left: 12px;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-card);
+            z-index: 50;
+            transition: all 0.3s ease;
+        }
+        
+        #accuracy-value {
+            font-family: 'Orbitron', monospace;
+            font-size: 22px;
+            font-weight: 700;
+        }
+        
+        #accuracy-label {
+            font-size: 9px;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+        
+        #direction-hint {
+            position: absolute;
+            bottom: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-card);
+            padding: 10px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 50;
+            max-width: 220px;
+        }
+        
+        #sky-warning {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 51, 102, 0.95);
+            padding: 20px 30px;
+            border-radius: 12px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: 600;
+            display: none;
+            z-index: 200;
+        }
+        
+        /* Country Selector */
+        #country-selector {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(0deg, rgba(10, 13, 18, 0.98) 0%, rgba(10, 13, 18, 0.9) 100%);
+            padding: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            z-index: 100;
+        }
+        
+        #country-selector.open {
+            transform: translateY(0);
+        }
+        
+        .selector-header {
+            text-align: center;
+            font-size: 11px;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+        }
+        
+        .country-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+        
+        @media (min-width: 400px) {
+            .country-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        
+        .country-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: var(--text-primary);
+            padding: 10px 8px;
+            border-radius: 8px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .country-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .country-btn.active {
+            background: rgba(0, 255, 136, 0.15);
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+        
+        /* Dropdown styling */
+        .dropdown-wrapper {
+            margin-top: 8px;
+        }
+        
+        #country-dropdown {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            transition: all 0.2s ease;
+        }
+        
+        #country-dropdown:hover,
+        #country-dropdown:focus {
+            border-color: var(--accent-green);
+            outline: none;
+            background-color: rgba(255, 255, 255, 0.12);
+        }
+        
+        #country-dropdown option {
+            background: #1a2030;
+            color: var(--text-primary);
+            padding: 10px;
+        }
+        
+        #toggle-selector {
+            position: absolute;
+            bottom: 16px;
+            right: 16px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: var(--bg-card);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            color: var(--text-primary);
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 101;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #toggle-selector:active {
+            transform: scale(0.9);
+        }
+        
+        #toggle-selector.open {
+            transform: rotate(45deg);
+            border-color: var(--accent-green);
+        }
+        
+        /* Simulation Controls */
+        #sim-controls {
+            position: absolute;
+            bottom: 90px;
+            right: 12px;
+            background: var(--bg-card);
+            padding: 12px 16px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            z-index: 50;
+            min-width: 180px;
+        }
+        
+        .sim-label {
+            font-family: 'Orbitron', monospace;
+            font-size: 10px;
+            letter-spacing: 2px;
+            color: var(--accent-blue);
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .sim-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 8px 0;
+            font-size: 11px;
+        }
+        
+        .sim-row span:first-child {
+            width: 55px;
+            color: var(--text-muted);
+        }
+        
+        .sim-row span:last-child {
+            width: 40px;
+            text-align: right;
+            font-family: 'Orbitron', monospace;
+            color: var(--accent-green);
+        }
+        
+        .sim-row input[type="range"] {
+            flex: 1;
+            height: 4px;
+            -webkit-appearance: none;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            outline: none;
+        }
+        
+        .sim-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .sim-row input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+        
+        /* Predictive trajectory lines */
+        .trajectory-path {
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            opacity: 0.6;
+        }
+        
+        .trajectory-horizontal {
+            stroke: url(#trajectory-gradient-h);
+            stroke-dasharray: 8 4;
+            animation: dash-flow 1s linear infinite;
+        }
+        
+        .trajectory-vertical {
+            stroke: url(#trajectory-gradient-v);
+            stroke-dasharray: 8 4;
+            animation: dash-flow 1s linear infinite reverse;
+        }
+        
+        @keyframes dash-flow {
+            to {
+                stroke-dashoffset: -24;
+            }
+        }
+        
+        /* Confetti particles */
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            pointer-events: none;
+            z-index: 200;
+            animation: confetti-fall 1.5s ease-out forwards;
+        }
+        
+        @keyframes confetti-fall {
+            0% {
+                opacity: 1;
+                transform: translate(0, 0) rotate(0deg) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(var(--tx), var(--ty)) rotate(720deg) scale(0.3);
+            }
+        }
+        
+        /* First Run Explainer */
+        #explainer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(5, 8, 12, 0.95);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            opacity: 1;
+            transition: opacity 0.4s ease;
+        }
+        
+        #explainer-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .explainer-card {
+            background: linear-gradient(145deg, rgba(20, 30, 45, 0.95), rgba(10, 15, 25, 0.98));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 32px 28px;
+            max-width: 360px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: card-appear 0.5s ease-out;
+        }
+        
+        @keyframes card-appear {
+            from {
+                opacity: 0;
+                transform: scale(0.9) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+        
+        .explainer-icon {
+            font-size: 36px;
+            margin-bottom: 12px;
+            letter-spacing: 8px;
+        }
+        
+        .explainer-card h1 {
+            font-family: 'Orbitron', monospace;
+            font-size: 22px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .explainer-question {
+            font-size: 18px;
+            margin: 0 0 20px 0;
+            line-height: 1.4;
+        }
+        
+        .explainer-question span {
+            color: var(--accent-green);
+            font-weight: 600;
+        }
+        
+        .explainer-tagline {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin: 0 0 24px 0;
+            font-style: italic;
+        }
+        
+        .explainer-steps {
+            text-align: left;
+            margin: 20px 0;
+        }
+        
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 14px;
+        }
+        
+        .step:last-child {
+            border-bottom: none;
+        }
+        
+        .step-icon {
+            font-size: 20px;
+            width: 32px;
+            text-align: center;
+        }
+        
+        .explainer-hint {
+            background: rgba(0, 255, 136, 0.08);
+            border-left: 3px solid var(--accent-green);
+            padding: 10px 14px;
+            margin: 20px 0;
+            font-size: 12px;
+            text-align: left;
+            border-radius: 0 8px 8px 0;
+            color: var(--text-muted);
+        }
+        
+        .explainer-hint em {
+            color: var(--accent-green);
+            font-style: normal;
+            font-weight: 600;
+        }
+        
+        .explainer-btn {
+            background: linear-gradient(135deg, var(--accent-green), #00cc6a);
+            border: none;
+            color: #000;
+            font-family: 'Orbitron', monospace;
+            font-size: 14px;
+            font-weight: 700;
+            padding: 14px 40px;
+            border-radius: 30px;
+            cursor: pointer;
+            margin: 16px 0 12px;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        
+        .explainer-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 20px rgba(0, 255, 136, 0.4);
+        }
+        
+        .explainer-btn:active {
+            transform: scale(0.98);
+        }
+        
+        .explainer-checkbox {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 11px;
+            color: var(--text-muted);
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        
+        .explainer-checkbox input {
+            accent-color: var(--accent-green);
+        }
+        
+        /* Landscape explainer */
+        @media (orientation: landscape) and (max-height: 500px) {
+            .explainer-card {
+                padding: 16px 24px;
+                max-width: 500px;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+            
+            .explainer-icon {
+                grid-column: 1 / -1;
+                margin-bottom: 0;
+                font-size: 28px;
+            }
+            
+            .explainer-card h1 {
+                grid-column: 1 / -1;
+                font-size: 18px;
+                margin-bottom: 0;
+            }
+            
+            .explainer-question {
+                grid-column: 1 / -1;
+                font-size: 14px;
+                margin-bottom: 8px;
+            }
+            
+            .explainer-steps {
+                margin: 0;
+            }
+            
+            .step {
+                padding: 6px 0;
+                font-size: 12px;
+            }
+            
+            .step-icon {
+                font-size: 16px;
+                width: 24px;
+            }
+            
+            .explainer-hint {
+                margin: 0;
+                font-size: 10px;
+                padding: 8px 10px;
+            }
+            
+            .explainer-btn {
+                grid-column: 1 / -1;
+                padding: 10px 30px;
+                margin: 8px 0 4px;
+            }
+            
+            .explainer-checkbox {
+                grid-column: 1 / -1;
+            }
+        }
+        
+        /* Exit Point Display */
+        #exit-point {
+            position: absolute;
+            top: 175px;
+            left: 8px;
+            background: var(--bg-card);
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 11px;
+            z-index: 50;
+        }
+        
+        #exit-point .label {
+            color: var(--text-muted);
+            font-size: 9px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        
+        #exit-point .coords {
+            font-family: 'Orbitron', monospace;
+            font-size: 12px;
+            color: var(--accent-blue);
+        }
+        
+        /* Flat Map specific */
+        #flat-map-container {
+            width: 100%;
+            height: 100%;
+            background: var(--bg-dark);
+        }
+        
+        #flat-map-container svg {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .country-path {
+            fill: #3a4a60;
+            stroke: #5a6a80;
+            stroke-width: 0.5;
+            transition: fill 0.2s ease;
+        }
+        
+        .country-path:hover {
+            fill: #4a5a70;
+        }
+        
+        .graticule {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.08);
+            stroke-width: 0.5;
+        }
+        
+        .exit-marker {
+            fill: var(--accent-red);
+            filter: drop-shadow(0 0 8px var(--accent-red));
+        }
+        
+        .user-marker {
+            fill: var(--accent-green);
+            filter: drop-shadow(0 0 8px var(--accent-green));
+        }
+        
+        .target-marker {
+            fill: var(--accent-blue);
+            filter: drop-shadow(0 0 6px var(--accent-blue));
+        }
+        
+        /* 3D Arrow view canvas */
+        #arrow-canvas {
+            background: radial-gradient(ellipse at center, #151a25 0%, #0a0d12 100%);
+        }
+        
+        /* Globe canvas */
+        #globe-canvas {
+            background: radial-gradient(ellipse at center, #0f1520 0%, #050608 100%);
+        }
+        
+        @media (min-width: 600px) {
+            .tab-btn {
+                font-size: 12px;
+            }
+            
+            #info-panel {
+                max-width: 350px;
+            }
+            
+            .country-grid {
+                grid-template-columns: repeat(6, 1fr);
+            }
+            
+            #accuracy-ring {
+                width: 100px;
+                height: 100px;
+            }
+            
+            #accuracy-value {
+                font-size: 28px;
+            }
+            
+            #country-selector {
+                max-width: 500px;
+                left: 50%;
+                transform: translateX(-50%) translateY(100%);
+            }
+            
+            #country-selector.open {
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+        
+        /* Landscape mode adjustments */
+        @media (orientation: landscape) and (max-height: 500px) {
+            .tab-nav {
+                height: 44px;
+            }
+            
+            .tab-btn {
+                font-size: 10px;
+            }
+            
+            .tab-btn .icon {
+                font-size: 16px;
+            }
+            
+            .view-container {
+                top: 44px;
+            }
+            
+            #info-panel {
+                top: 52px;
+                padding: 4px 8px;
+                font-size: 10px;
+            }
+            
+            #target-panel {
+                top: 52px;
+                left: auto;
+                right: 8px;
+                padding: 8px 12px;
+            }
+            
+            .target-name {
+                font-size: 14px;
+            }
+            
+            #exit-point {
+                display: none;
+            }
+            
+            #accuracy-ring {
+                width: 60px;
+                height: 60px;
+                bottom: 70px;
+            }
+            
+            #accuracy-value {
+                font-size: 16px;
+            }
+            
+            #accuracy-label {
+                font-size: 7px;
+            }
+            
+            #direction-hint {
+                bottom: 70px;
+                font-size: 11px;
+                padding: 6px 10px;
+            }
+            
+            #sim-controls {
+                bottom: 70px;
+                padding: 8px 12px;
+                min-width: 150px;
+            }
+            
+            .sim-row {
+                margin: 4px 0;
+            }
+            
+            #country-selector {
+                padding: 10px;
+            }
+            
+            .country-grid {
+                grid-template-columns: repeat(6, 1fr);
+                gap: 4px;
+            }
+            
+            .country-btn {
+                padding: 6px 4px;
+                font-size: 11px;
+            }
+            
+            #toggle-selector {
+                width: 44px;
+                height: 44px;
+                bottom: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- First Run Explainer -->
+    <div id="explainer-overlay">
+        <div class="explainer-card">
+            <div class="explainer-icon">🌏📱🎯</div>
+            <h1>Point Through Earth</h1>
+            <p class="explainer-question">Can you point to <span id="random-country">China</span>, like right now?</p>
+            
+            <div class="explainer-steps">
+                <div class="step">
+                    <span class="step-icon">📱</span>
+                    <span>Tilt your phone toward the ground</span>
+                </div>
+                <div class="step">
+                    <span class="step-icon">🔴</span>
+                    <span>Watch where your ray exits Earth</span>
+                </div>
+                <div class="step">
+                    <span class="step-icon">🎯</span>
+                    <span>Aim for countries on the other side</span>
+                </div>
+            </div>
+            
+            <p class="explainer-hint">Pro tip: Your antipode (exact opposite point) is probably in the ocean. Most of Earth is water!</p>
+            
+            <button class="explainer-btn" onclick="dismissExplainer()">Let's Point</button>
+            
+            <label class="explainer-checkbox">
+                <input type="checkbox" id="dont-show-again" checked>
+                <span>Don't show this again</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <nav class="tab-nav">
+        <button class="tab-btn" data-view="arrows" onclick="switchView('arrows')">
+            <span class="icon">🎯</span>
+            <span>ARROWS</span>
+        </button>
+        <button class="tab-btn active" data-view="flat" onclick="switchView('flat')">
+            <span class="icon">🗺️</span>
+            <span>FLAT MAP</span>
+        </button>
+        <button class="tab-btn" data-view="globe" onclick="switchView('globe')">
+            <span class="icon">🌐</span>
+            <span>GLOBE</span>
+        </button>
+    </nav>
+    
+    <!-- Arrow View -->
+    <div class="view-container" id="arrows-view">
+        <canvas id="arrow-canvas"></canvas>
+    </div>
+    
+    <!-- Flat Map View -->
+    <div class="view-container active" id="flat-view">
+        <div id="flat-map-container"></div>
+    </div>
+    
+    <!-- Globe View -->
+    <div class="view-container" id="globe-view">
+        <canvas id="globe-canvas"></canvas>
+    </div>
+    
+    <!-- Shared UI -->
+    <div id="info-panel">
+        <div class="status-row">
+            <div class="status-indicator">
+                <div class="status-dot" id="gps-status"></div>
+                <span>GPS</span>
+            </div>
+            <div class="status-indicator">
+                <div class="status-dot" id="sensor-status"></div>
+                <span>SENSORS</span>
+            </div>
+        </div>
+    </div>
+    
+    <div id="target-panel">
+        <div class="target-name" id="target-name">China</div>
+        <div class="target-distance"><span id="distance">0</span> km through Earth</div>
+    </div>
+    
+    <div id="exit-point">
+        <div class="label">Phone Exit Point</div>
+        <div class="coords" id="exit-coords">--°, --°</div>
+    </div>
+    
+    <div id="accuracy-ring">
+        <div id="accuracy-value">0%</div>
+        <div id="accuracy-label">ACCURACY</div>
+    </div>
+    
+    <div id="direction-hint"></div>
+    
+    <div id="sky-warning">
+        ☁️ Pointing at Sky!<br>
+        <small>Tilt phone forward</small>
+    </div>
+    
+    <!-- Simulation Controls (shown when sensors unavailable) -->
+    <div id="sim-controls" style="display: none;">
+        <div class="sim-label">MANUAL MODE</div>
+        <div class="sim-row">
+            <span>Azimuth</span>
+            <input type="range" min="0" max="360" value="45" oninput="handleSimAzimuth(this.value)">
+            <span id="sim-az-value">45°</span>
+        </div>
+        <div class="sim-row">
+            <span>Elevation</span>
+            <input type="range" min="-90" max="10" value="-30" oninput="handleSimElevation(this.value)">
+            <span id="sim-el-value">-30°</span>
+        </div>
+    </div>
+    
+    <button id="toggle-selector" onclick="toggleSelector()">🌏</button>
+    
+    <div id="country-selector">
+        <div class="selector-header">Quick Select</div>
+        <div class="country-grid">
+            <button class="country-btn active" onclick="setTarget('China', 35.86, 104.20)">🇨🇳 China</button>
+            <button class="country-btn" onclick="setTarget('USA', 37.09, -95.71)">🇺🇸 USA</button>
+            <button class="country-btn" onclick="setTarget('UK', 55.38, -3.44)">🇬🇧 UK</button>
+            <button class="country-btn" onclick="setTarget('Brazil', -14.24, -51.93)">🇧🇷 Brazil</button>
+            <button class="country-btn" onclick="setTarget('Japan', 36.20, 138.25)">🇯🇵 Japan</button>
+            <button class="country-btn" onclick="setTarget('India', 20.59, 78.96)">🇮🇳 India</button>
+        </div>
+        
+        <div class="selector-header" style="margin-top: 16px;">All Countries (by population)</div>
+        <div class="dropdown-wrapper">
+            <select id="country-dropdown" onchange="handleCountryDropdown(this.value)">
+                <option value="">— Select a country —</option>
+                <option value="China|35.86|104.20">🇨🇳 China (1.4B)</option>
+                <option value="India|20.59|78.96">🇮🇳 India (1.4B)</option>
+                <option value="USA|37.09|-95.71">🇺🇸 United States (335M)</option>
+                <option value="Indonesia|-0.79|113.92">🇮🇩 Indonesia (277M)</option>
+                <option value="Pakistan|30.38|69.35">🇵🇰 Pakistan (235M)</option>
+                <option value="Brazil|-14.24|-51.93">🇧🇷 Brazil (216M)</option>
+                <option value="Nigeria|9.08|8.68">🇳🇬 Nigeria (224M)</option>
+                <option value="Bangladesh|23.68|90.36">🇧🇩 Bangladesh (173M)</option>
+                <option value="Russia|61.52|105.32">🇷🇺 Russia (144M)</option>
+                <option value="Mexico|23.63|-102.55">🇲🇽 Mexico (129M)</option>
+                <option value="Japan|36.20|138.25">🇯🇵 Japan (124M)</option>
+                <option value="Ethiopia|9.15|40.49">🇪🇹 Ethiopia (126M)</option>
+                <option value="Philippines|12.88|121.77">🇵🇭 Philippines (117M)</option>
+                <option value="Egypt|26.82|30.80">🇪🇬 Egypt (112M)</option>
+                <option value="Vietnam|14.06|108.28">🇻🇳 Vietnam (99M)</option>
+                <option value="DR Congo|-4.04|21.76">🇨🇩 DR Congo (102M)</option>
+                <option value="Turkey|38.96|35.24">🇹🇷 Turkey (85M)</option>
+                <option value="Iran|32.43|53.69">🇮🇷 Iran (89M)</option>
+                <option value="Germany|51.17|10.45">🇩🇪 Germany (84M)</option>
+                <option value="Thailand|15.87|100.99">🇹🇭 Thailand (72M)</option>
+                <option value="UK|55.38|-3.44">🇬🇧 United Kingdom (68M)</option>
+                <option value="France|46.23|2.21">🇫🇷 France (68M)</option>
+                <option value="Tanzania|-6.37|34.89">🇹🇿 Tanzania (65M)</option>
+                <option value="Italy|41.87|12.57">🇮🇹 Italy (59M)</option>
+                <option value="South Africa|-30.56|22.94">🇿🇦 South Africa (60M)</option>
+                <option value="Kenya|-0.02|37.91">🇰🇪 Kenya (54M)</option>
+                <option value="Myanmar|21.91|95.96">🇲🇲 Myanmar (54M)</option>
+                <option value="South Korea|35.91|127.77">🇰🇷 South Korea (52M)</option>
+                <option value="Colombia|4.57|-74.30">🇨🇴 Colombia (52M)</option>
+                <option value="Spain|40.46|-3.75">🇪🇸 Spain (48M)</option>
+            </select>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+    <script>
+        // ==================== GLOBAL STATE ====================
+        let currentView = 'flat';
+        
+        // User location (default Melbourne)
+        let userLat = -37.8136;
+        let userLon = 144.9631;
+        
+        // Target location
+        let targetLat = 35.86;
+        let targetLon = 104.20;
+        let targetName = 'China';
+        
+        // Device orientation
+        let deviceAlpha = 0;   // Compass heading
+        let deviceBeta = 90;   // Tilt front-back
+        let deviceGamma = 0;   // Tilt left-right
+        
+        // Calculated exit point (where phone ray exits Earth)
+        let exitLat = 0;
+        let exitLon = 0;
+        
+        // Status flags
+        let hasLocation = false;
+        let hasOrientation = false;
+        
+        // Three.js scenes
+        let arrowScene, arrowCamera, arrowRenderer;
+        let globeScene, globeCamera, globeRenderer;
+        let phoneArrow, targetArrow;
+        let globe, exitMarkerGlobe, userMarkerGlobe, targetMarkerGlobe;
+        
+        // D3 flat map
+        let flatMapSvg, flatMapProjection, flatMapPath;
+        let exitMarkerFlat, userMarkerFlat, targetMarkerFlat;
+        let worldData = null;
+        
+        // ==================== MATH UTILITIES ====================
+        function toRad(deg) { return deg * Math.PI / 180; }
+        function toDeg(rad) { return rad * 180 / Math.PI; }
+        
+        // Convert lat/lon to 3D unit vector
+        function latLonToVec3(lat, lon) {
+            const phi = toRad(lat);
+            const lambda = toRad(lon);
+            return {
+                x: Math.cos(phi) * Math.cos(lambda),
+                y: Math.sin(phi),
+                z: Math.cos(phi) * Math.sin(lambda)
+            };
+        }
+        
+        // Convert 3D unit vector to lat/lon
+        function vec3ToLatLon(v) {
+            const lat = toDeg(Math.asin(v.y));
+            const lon = toDeg(Math.atan2(v.z, v.x));
+            return { lat, lon };
+        }
+        
+        // Calculate direction through Earth to target
+        function calculateThroughEarth(lat1, lon1, lat2, lon2) {
+            const phi1 = toRad(lat1), lambda1 = toRad(lon1);
+            const phi2 = toRad(lat2), lambda2 = toRad(lon2);
+            
+            // Convert to Cartesian
+            const p1 = latLonToVec3(lat1, lon1);
+            const p2 = latLonToVec3(lat2, lon2);
+            
+            // Vector through Earth
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const dz = p2.z - p1.z;
+            
+            // Local ENU frame at user location
+            const east = [-Math.sin(lambda1), 0, Math.cos(lambda1)];
+            const north = [-Math.sin(phi1) * Math.cos(lambda1), Math.cos(phi1), -Math.sin(phi1) * Math.sin(lambda1)];
+            const up = [Math.cos(phi1) * Math.cos(lambda1), Math.sin(phi1), Math.cos(phi1) * Math.sin(lambda1)];
+            
+            // Project onto local axes
+            const localEast = dx * east[0] + dy * east[1] + dz * east[2];
+            const localNorth = dx * north[0] + dy * north[1] + dz * north[2];
+            const localUp = dx * up[0] + dy * up[1] + dz * up[2];
+            
+            // Azimuth and elevation
+            let azimuth = toDeg(Math.atan2(localEast, localNorth));
+            if (azimuth < 0) azimuth += 360;
+            
+            const horizontalDist = Math.sqrt(localEast * localEast + localNorth * localNorth);
+            const elevation = toDeg(Math.atan2(localUp, horizontalDist));
+            
+            // Distance through Earth (chord length)
+            const distance = Math.sqrt(dx * dx + dy * dy + dz * dz) * 6371;
+            
+            return { azimuth, elevation, distance };
+        }
+        
+        // Calculate where phone ray exits Earth
+        function calculateExitPoint(userLat, userLon, azimuth, elevation) {
+            // If pointing up, no exit point
+            if (elevation >= 0) {
+                return null;
+            }
+            
+            // User position as unit vector
+            const P = latLonToVec3(userLat, userLon);
+            
+            // Build local ENU frame
+            const phi = toRad(userLat);
+            const lambda = toRad(userLon);
+            
+            const east = { x: -Math.sin(lambda), y: 0, z: Math.cos(lambda) };
+            const north = { 
+                x: -Math.sin(phi) * Math.cos(lambda), 
+                y: Math.cos(phi), 
+                z: -Math.sin(phi) * Math.sin(lambda) 
+            };
+            const up = { x: P.x, y: P.y, z: P.z };
+            
+            // Direction in local frame
+            const azRad = toRad(azimuth);
+            const elRad = toRad(elevation);
+            
+            const localX = Math.cos(elRad) * Math.sin(azRad);  // East component
+            const localY = Math.cos(elRad) * Math.cos(azRad);  // North component
+            const localZ = Math.sin(elRad);                     // Up component
+            
+            // Convert to global direction
+            const D = {
+                x: localX * east.x + localY * north.x + localZ * up.x,
+                y: localX * east.y + localY * north.y + localZ * up.y,
+                z: localX * east.z + localY * north.z + localZ * up.z
+            };
+            
+            // Normalize D
+            const Dlen = Math.sqrt(D.x * D.x + D.y * D.y + D.z * D.z);
+            D.x /= Dlen; D.y /= Dlen; D.z /= Dlen;
+            
+            // Ray-sphere intersection: P + t*D intersects unit sphere
+            // t = -2 * (P · D)
+            const PdotD = P.x * D.x + P.y * D.y + P.z * D.z;
+            const t = -2 * PdotD;
+            
+            if (t <= 0) return null; // No valid exit
+            
+            // Exit point
+            const E = {
+                x: P.x + t * D.x,
+                y: P.y + t * D.y,
+                z: P.z + t * D.z
+            };
+            
+            return vec3ToLatLon(E);
+        }
+        
+        // ==================== VIEW SWITCHING ====================
+        function switchView(view) {
+            currentView = view;
+            
+            // Update tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.view === view);
+            });
+            
+            // Update view containers
+            document.querySelectorAll('.view-container').forEach(container => {
+                container.classList.remove('active');
+            });
+            document.getElementById(`${view}-view`).classList.add('active');
+            
+            // Resize renderers
+            setTimeout(() => {
+                if (view === 'arrows') resizeArrowRenderer();
+                if (view === 'globe') resizeGlobeRenderer();
+                if (view === 'flat') resizeFlatMap();
+            }, 50);
+        }
+        
+        // ==================== ARROW VIEW (Three.js) ====================
+        function initArrowView() {
+            const canvas = document.getElementById('arrow-canvas');
+            const container = document.getElementById('arrows-view');
+            
+            arrowScene = new THREE.Scene();
+            arrowScene.fog = new THREE.Fog(0x0a0d12, 5, 30);
+            
+            arrowCamera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 100);
+            arrowCamera.position.set(5, 3, 5);
+            arrowCamera.lookAt(0, 0, 0);
+            
+            arrowRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+            arrowRenderer.setSize(container.clientWidth, container.clientHeight);
+            arrowRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            
+            // Lighting
+            arrowScene.add(new THREE.AmbientLight(0xffffff, 0.4));
+            const dir1 = new THREE.DirectionalLight(0xffffff, 0.6);
+            dir1.position.set(10, 10, 5);
+            arrowScene.add(dir1);
+            
+            // Phone arrow (green)
+            const phoneGeo = new THREE.ConeGeometry(0.3, 1.8, 16);
+            const phoneMat = new THREE.MeshPhongMaterial({
+                color: 0x00ff88,
+                emissive: 0x00aa55,
+                emissiveIntensity: 0.3,
+                shininess: 100
+            });
+            phoneArrow = new THREE.Mesh(phoneGeo, phoneMat);
+            arrowScene.add(phoneArrow);
+            
+            // Target arrow (red, semi-transparent)
+            const targetGeo = new THREE.ConeGeometry(0.3, 1.8, 16);
+            const targetMat = new THREE.MeshPhongMaterial({
+                color: 0xff3366,
+                emissive: 0xaa2244,
+                emissiveIntensity: 0.3,
+                opacity: 0.5,
+                transparent: true
+            });
+            targetArrow = new THREE.Mesh(targetGeo, targetMat);
+            arrowScene.add(targetArrow);
+            
+            // Grid
+            const grid = new THREE.GridHelper(12, 12, 0x1a2a3a, 0x0f1520);
+            grid.position.y = -3;
+            arrowScene.add(grid);
+            
+            // Compass ring
+            const ringGeo = new THREE.RingGeometry(2.5, 2.7, 64);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.1, transparent: true, side: THREE.DoubleSide });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = -Math.PI / 2;
+            arrowScene.add(ring);
+            
+            // North marker
+            const northGeo = new THREE.ConeGeometry(0.12, 0.35, 4);
+            const northMat = new THREE.MeshBasicMaterial({ color: 0xff3366, opacity: 0.8, transparent: true });
+            const northMark = new THREE.Mesh(northGeo, northMat);
+            northMark.position.set(0, 0, -3);
+            northMark.rotation.x = Math.PI / 2;
+            arrowScene.add(northMark);
+        }
+        
+        function resizeArrowRenderer() {
+            const container = document.getElementById('arrows-view');
+            if (!container || !arrowCamera || !arrowRenderer) return;
+            
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            if (width <= 0 || height <= 0) return;
+            
+            arrowCamera.aspect = width / height;
+            arrowCamera.updateProjectionMatrix();
+            arrowRenderer.setSize(width, height);
+        }
+        
+        function updateArrowView() {
+            if (!phoneArrow || !targetArrow) return;
+            
+            const target = calculateThroughEarth(userLat, userLon, targetLat, targetLon);
+            const cameraElevation = deviceBeta - 90;
+            
+            // Target arrow direction
+            const tAz = toRad(target.azimuth);
+            const tEl = toRad(target.elevation);
+            const tDir = new THREE.Vector3(
+                Math.cos(tEl) * Math.sin(tAz),
+                Math.sin(tEl),
+                -Math.cos(tEl) * Math.cos(tAz)
+            );
+            targetArrow.lookAt(tDir);
+            targetArrow.rotateX(Math.PI / 2);
+            
+            // Phone arrow direction - use deviceAlpha directly
+            const pAz = toRad(deviceAlpha);
+            const pEl = toRad(cameraElevation);
+            const pDir = new THREE.Vector3(
+                Math.cos(pEl) * Math.sin(pAz),
+                Math.sin(pEl),
+                -Math.cos(pEl) * Math.cos(pAz)
+            );
+            phoneArrow.lookAt(pDir);
+            phoneArrow.rotateX(Math.PI / 2);
+            
+            // Color phone arrow by accuracy
+            const accuracy = calculateAccuracy(target.azimuth, target.elevation, deviceAlpha, cameraElevation);
+            const hue = accuracy * 1.2 / 360;
+            phoneArrow.material.color.setHSL(hue, 1, 0.5);
+            phoneArrow.material.emissive.setHSL(hue, 1, 0.25);
+            
+            arrowRenderer.render(arrowScene, arrowCamera);
+        }
+        
+        // ==================== FLAT MAP VIEW (D3.js) ====================
+        function initFlatMap() {
+            const container = document.getElementById('flat-map-container');
+            const width = container.clientWidth || window.innerWidth;
+            const height = container.clientHeight || (window.innerHeight - 56);
+            
+            flatMapSvg = d3.select('#flat-map-container')
+                .append('svg')
+                .attr('width', '100%')
+                .attr('height', '100%')
+                .attr('viewBox', `0 0 ${width} ${height}`)
+                .attr('preserveAspectRatio', 'xMidYMid meet');
+            
+            // Add gradient definitions for trajectory lines
+            const defs = flatMapSvg.append('defs');
+            
+            // Horizontal trajectory gradient (cyan to magenta)
+            const gradH = defs.append('linearGradient')
+                .attr('id', 'trajectory-gradient-h')
+                .attr('gradientUnits', 'userSpaceOnUse');
+            gradH.append('stop').attr('offset', '0%').attr('stop-color', '#00ffff').attr('stop-opacity', 0.2);
+            gradH.append('stop').attr('offset', '50%').attr('stop-color', '#ff3366').attr('stop-opacity', 0.8);
+            gradH.append('stop').attr('offset', '100%').attr('stop-color', '#ff00ff').attr('stop-opacity', 0.2);
+            
+            // Vertical trajectory gradient (yellow to cyan)
+            const gradV = defs.append('linearGradient')
+                .attr('id', 'trajectory-gradient-v')
+                .attr('gradientUnits', 'userSpaceOnUse');
+            gradV.append('stop').attr('offset', '0%').attr('stop-color', '#ffff00').attr('stop-opacity', 0.2);
+            gradV.append('stop').attr('offset', '50%').attr('stop-color', '#ff3366').attr('stop-opacity', 0.8);
+            gradV.append('stop').attr('offset', '100%').attr('stop-color', '#00ffff').attr('stop-opacity', 0.2);
+            
+            flatMapProjection = d3.geoEquirectangular()
+                .scale(width / 6.5)
+                .translate([width / 2, height / 2]);
+            
+            flatMapPath = d3.geoPath().projection(flatMapProjection);
+            
+            // Create layers in correct z-order (bottom to top):
+            // 1. Graticule (grid lines) - bottom
+            const graticule = d3.geoGraticule();
+            flatMapSvg.append('path')
+                .datum(graticule())
+                .attr('class', 'graticule')
+                .attr('d', flatMapPath);
+            
+            // 2. Countries group (will be populated async)
+            flatMapSvg.append('g').attr('class', 'countries');
+            
+            // 3. Trajectory paths (on top of countries)
+            const trajectories = flatMapSvg.append('g').attr('class', 'trajectories');
+            trajectories.append('path')
+                .attr('class', 'trajectory-path trajectory-horizontal')
+                .attr('id', 'traj-horizontal');
+            trajectories.append('path')
+                .attr('class', 'trajectory-path trajectory-vertical')
+                .attr('id', 'traj-vertical');
+            
+            // 4. Markers group (on top of everything)
+            const markers = flatMapSvg.append('g').attr('class', 'markers');
+            
+            // User position marker
+            userMarkerFlat = markers.append('circle')
+                .attr('class', 'user-marker')
+                .attr('r', 6);
+            
+            // Target marker
+            targetMarkerFlat = markers.append('circle')
+                .attr('class', 'target-marker')
+                .attr('r', 8);
+            
+            // Exit point marker (phone ray)
+            exitMarkerFlat = markers.append('g').attr('class', 'exit-marker-group');
+            exitMarkerFlat.append('circle')
+                .attr('class', 'exit-marker')
+                .attr('r', 10);
+            exitMarkerFlat.append('circle')
+                .attr('class', 'exit-marker')
+                .attr('r', 16)
+                .style('fill', 'none')
+                .style('stroke', 'var(--accent-red)')
+                .style('stroke-width', 2)
+                .style('opacity', 0.5);
+            
+            // Load world data (async - populates countries group)
+            loadWorldData();
+        }
+        
+        async function loadWorldData() {
+            try {
+                const response = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+                const world = await response.json();
+                worldData = topojson.feature(world, world.objects.countries);
+                
+                // Add country paths to the pre-created countries group
+                flatMapSvg.select('.countries')
+                    .selectAll('path')
+                    .data(worldData.features)
+                    .enter()
+                    .append('path')
+                    .attr('class', 'country-path')
+                    .attr('d', flatMapPath);
+            } catch (e) {
+                console.warn('Could not load world map data:', e);
+            }
+        }
+        
+        function resizeFlatMap() {
+            const container = document.getElementById('flat-map-container');
+            if (!container || !flatMapSvg) return;
+            
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            
+            if (width <= 0 || height <= 0) return;
+            
+            flatMapSvg.attr('viewBox', `0 0 ${width} ${height}`);
+            flatMapProjection
+                .scale(Math.min(width, height * 2) / 6.5)
+                .translate([width / 2, height / 2]);
+            flatMapPath = d3.geoPath().projection(flatMapProjection);
+            
+            // Re-render all paths
+            flatMapSvg.selectAll('.country-path').attr('d', flatMapPath);
+            flatMapSvg.select('.graticule').attr('d', flatMapPath);
+            
+            // Update gradient positions
+            const gradH = flatMapSvg.select('#trajectory-gradient-h');
+            const gradV = flatMapSvg.select('#trajectory-gradient-v');
+            if (gradH.node()) {
+                gradH.attr('x1', 0).attr('y1', height/2).attr('x2', width).attr('y2', height/2);
+            }
+            if (gradV.node()) {
+                gradV.attr('x1', width/2).attr('y1', 0).attr('x2', width/2).attr('y2', height);
+            }
+        }
+        
+        function updateFlatMap() {
+            if (!flatMapSvg) return;
+            
+            const phoneBearing = window.currentPhoneBearing || 0;
+            const elevation = window.currentElevation || -30;
+            
+            // Update user position
+            const userPos = flatMapProjection([userLon, userLat]);
+            if (userPos) {
+                userMarkerFlat.attr('cx', userPos[0]).attr('cy', userPos[1]);
+            }
+            
+            // Update target position
+            const targetPos = flatMapProjection([targetLon, targetLat]);
+            if (targetPos) {
+                targetMarkerFlat.attr('cx', targetPos[0]).attr('cy', targetPos[1]);
+            }
+            
+            // Update exit point
+            if (exitLat !== null && exitLon !== null) {
+                const exitPos = flatMapProjection([exitLon, exitLat]);
+                if (exitPos) {
+                    exitMarkerFlat.attr('transform', `translate(${exitPos[0]}, ${exitPos[1]})`);
+                    exitMarkerFlat.style('display', 'block');
+                }
+            } else {
+                exitMarkerFlat.style('display', 'none');
+            }
+            
+            // Draw trajectory curves
+            drawFlatTrajectories(phoneBearing, elevation);
+        }
+        
+        function drawFlatTrajectories(azimuth, elevation) {
+            if (!flatMapSvg || elevation >= 0) {
+                // Hide trajectories if pointing up
+                d3.select('#traj-horizontal').attr('d', '');
+                d3.select('#traj-vertical').attr('d', '');
+                return;
+            }
+            
+            // Horizontal trajectory (left-right rotation)
+            const hPoints = calculateTrajectory(azimuth, elevation, 'horizontal', 20, 90);
+            const hPathData = buildSvgPath(hPoints);
+            d3.select('#traj-horizontal').attr('d', hPathData);
+            
+            // Update gradient direction based on path
+            const hValidPoints = hPoints.filter(p => p !== null);
+            if (hValidPoints.length >= 2) {
+                const first = flatMapProjection([hValidPoints[0].lon, hValidPoints[0].lat]);
+                const last = flatMapProjection([hValidPoints[hValidPoints.length - 1].lon, hValidPoints[hValidPoints.length - 1].lat]);
+                if (first && last) {
+                    d3.select('#trajectory-gradient-h')
+                        .attr('x1', first[0]).attr('y1', first[1])
+                        .attr('x2', last[0]).attr('y2', last[1]);
+                }
+            }
+            
+            // Vertical trajectory (tilt up-down)
+            const vPoints = calculateTrajectory(azimuth, elevation, 'vertical', 15, 50);
+            const vPathData = buildSvgPath(vPoints);
+            d3.select('#traj-vertical').attr('d', vPathData);
+            
+            // Update vertical gradient
+            const vValidPoints = vPoints.filter(p => p !== null);
+            if (vValidPoints.length >= 2) {
+                const first = flatMapProjection([vValidPoints[0].lon, vValidPoints[0].lat]);
+                const last = flatMapProjection([vValidPoints[vValidPoints.length - 1].lon, vValidPoints[vValidPoints.length - 1].lat]);
+                if (first && last) {
+                    d3.select('#trajectory-gradient-v')
+                        .attr('x1', first[0]).attr('y1', first[1])
+                        .attr('x2', last[0]).attr('y2', last[1]);
+                }
+            }
+        }
+        
+        function buildSvgPath(points) {
+            let path = '';
+            let inPath = false;
+            
+            for (const pt of points) {
+                if (pt === null) {
+                    inPath = false;
+                    continue;
+                }
+                
+                const pos = flatMapProjection([pt.lon, pt.lat]);
+                if (!pos) {
+                    inPath = false;
+                    continue;
+                }
+                
+                if (!inPath) {
+                    path += `M ${pos[0]} ${pos[1]} `;
+                    inPath = true;
+                } else {
+                    path += `L ${pos[0]} ${pos[1]} `;
+                }
+            }
+            
+            return path;
+        }
+        
+        // ==================== GLOBE VIEW (Three.js) ====================
+        let trajLineH, trajLineV; // Trajectory lines for globe
+        let globeGroup;           // Group containing globe and all markers
+        let electricLineGlobe;    // Electric line through Earth
+        let globeRotationX = 0;   // User drag rotation offset (latitude)
+        let globeRotationY = (-144.9631 - 90) * Math.PI / 180;   // Initial rotation for default Melbourne location
+        let isDraggingGlobe = false;
+        let lastDragX = 0;
+        let lastDragY = 0;
+        let globeLandmasses = null; // Land outline meshes
+        
+        function initGlobeView() {
+            const canvas = document.getElementById('globe-canvas');
+            const container = document.getElementById('globe-view');
+            
+            globeScene = new THREE.Scene();
+            
+            globeCamera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+            globeCamera.position.set(0, 0, 3.5);
+            
+            globeRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+            globeRenderer.setSize(container.clientWidth, container.clientHeight);
+            globeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            
+            // Lighting
+            globeScene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            const sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            sunLight.position.set(5, 3, 5);
+            globeScene.add(sunLight);
+            
+            // Create group for globe and all markers (so they rotate together)
+            globeGroup = new THREE.Group();
+            globeScene.add(globeGroup);
+            
+            // Globe sphere (translucent)
+            const globeGeo = new THREE.SphereGeometry(1, 64, 64);
+            const globeMat = new THREE.MeshPhongMaterial({
+                color: 0x1a2a40,
+                emissive: 0x0a1520,
+                emissiveIntensity: 0.2,
+                transparent: true,
+                opacity: 0.15,
+                shininess: 30,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            globe = new THREE.Mesh(globeGeo, globeMat);
+            globeGroup.add(globe);
+            
+            // Wireframe overlay (more subtle now that we have landmasses)
+            const wireGeo = new THREE.SphereGeometry(1.001, 24, 12);
+            const wireMat = new THREE.MeshBasicMaterial({
+                color: 0x00aaff,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.08
+            });
+            const wireGlobe = new THREE.Mesh(wireGeo, wireMat);
+            globeGroup.add(wireGlobe);
+            
+            // Load and render landmasses
+            loadGlobeLandmasses();
+            
+            // Equator ring
+            const eqGeo = new THREE.TorusGeometry(1.01, 0.004, 8, 100);
+            const eqMat = new THREE.MeshBasicMaterial({ color: 0x00aaff, opacity: 0.3, transparent: true });
+            const equator = new THREE.Mesh(eqGeo, eqMat);
+            equator.rotation.x = Math.PI / 2;
+            globeGroup.add(equator);
+            
+            // User marker on globe
+            const userMarkerGeo = new THREE.SphereGeometry(0.04, 16, 16);
+            const userMarkerMat = new THREE.MeshBasicMaterial({ color: 0x00ff88 });
+            userMarkerGlobe = new THREE.Mesh(userMarkerGeo, userMarkerMat);
+            globeGroup.add(userMarkerGlobe);
+            
+            // Target marker on globe
+            const targetMarkerGeo = new THREE.SphereGeometry(0.05, 16, 16);
+            const targetMarkerMat = new THREE.MeshBasicMaterial({ color: 0x00aaff });
+            targetMarkerGlobe = new THREE.Mesh(targetMarkerGeo, targetMarkerMat);
+            globeGroup.add(targetMarkerGlobe);
+            
+            // Exit point marker (larger, pulsing feel via glow)
+            const exitMarkerGeo = new THREE.SphereGeometry(0.06, 16, 16);
+            const exitMarkerMat = new THREE.MeshBasicMaterial({ color: 0xff3366 });
+            exitMarkerGlobe = new THREE.Mesh(exitMarkerGeo, exitMarkerMat);
+            globeGroup.add(exitMarkerGlobe);
+            
+            // Glow ring around exit marker
+            const glowGeo = new THREE.RingGeometry(0.08, 0.12, 32);
+            const glowMat = new THREE.MeshBasicMaterial({ 
+                color: 0xff3366, 
+                transparent: true, 
+                opacity: 0.5,
+                side: THREE.DoubleSide
+            });
+            const glowRing = new THREE.Mesh(glowGeo, glowMat);
+            exitMarkerGlobe.add(glowRing);
+            
+            // Horizontal trajectory line (left-right)
+            const trajHGeo = new THREE.BufferGeometry();
+            const trajHMat = new THREE.LineBasicMaterial({ 
+                color: 0x00ffff, 
+                transparent: true, 
+                opacity: 0.6,
+                linewidth: 2
+            });
+            trajLineH = new THREE.Line(trajHGeo, trajHMat);
+            globeGroup.add(trajLineH);
+            
+            // Vertical trajectory line (up-down)
+            const trajVGeo = new THREE.BufferGeometry();
+            const trajVMat = new THREE.LineBasicMaterial({ 
+                color: 0xffff00, 
+                transparent: true, 
+                opacity: 0.6,
+                linewidth: 2
+            });
+            trajLineV = new THREE.Line(trajVGeo, trajVMat);
+            globeGroup.add(trajLineV);
+            
+            // Electric line through Earth (user to exit point) - only visible at 96%+
+            // Using cylinder for thickness since WebGL linewidth doesn't work on most platforms
+            const electricGeo = new THREE.CylinderGeometry(0.015, 0.015, 1, 8);
+            const electricMat = new THREE.MeshBasicMaterial({
+                color: 0x00ddff,
+                transparent: true,
+                opacity: 0.9,
+                depthTest: false
+            });
+            electricLineGlobe = new THREE.Mesh(electricGeo, electricMat);
+            electricLineGlobe.visible = false;
+            globeGroup.add(electricLineGlobe);
+            
+            // Glow layer for electric effect
+            const electricGlowGeo = new THREE.CylinderGeometry(0.03, 0.03, 1, 8);
+            const electricGlowMat = new THREE.MeshBasicMaterial({
+                color: 0x0088ff,
+                transparent: true,
+                opacity: 0.4,
+                depthTest: false
+            });
+            const electricGlow = new THREE.Mesh(electricGlowGeo, electricGlowMat);
+            electricGlow.name = 'electricGlow';
+            electricGlow.visible = false;
+            globeGroup.add(electricGlow);
+            
+            // Mouse drag events
+            canvas.addEventListener('mousedown', (e) => {
+                isDraggingGlobe = true;
+                lastDragX = e.clientX;
+                lastDragY = e.clientY;
+                canvas.style.cursor = 'grabbing';
+            });
+            
+            window.addEventListener('mousemove', (e) => {
+                if (!isDraggingGlobe) return;
+                const deltaX = e.clientX - lastDragX;
+                const deltaY = e.clientY - lastDragY;
+                globeRotationY += deltaX * 0.005;
+                globeRotationX += deltaY * 0.005;
+                globeRotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, globeRotationX));
+                lastDragX = e.clientX;
+                lastDragY = e.clientY;
+            });
+            
+            window.addEventListener('mouseup', () => {
+                isDraggingGlobe = false;
+                canvas.style.cursor = 'grab';
+            });
+            
+            // Touch drag events
+            canvas.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    isDraggingGlobe = true;
+                    lastDragX = e.touches[0].clientX;
+                    lastDragY = e.touches[0].clientY;
+                }
+            }, { passive: true });
+            
+            canvas.addEventListener('touchmove', (e) => {
+                if (!isDraggingGlobe || e.touches.length !== 1) return;
+                const deltaX = e.touches[0].clientX - lastDragX;
+                const deltaY = e.touches[0].clientY - lastDragY;
+                globeRotationY += deltaX * 0.005;
+                globeRotationX += deltaY * 0.005;
+                globeRotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, globeRotationX));
+                lastDragX = e.touches[0].clientX;
+                lastDragY = e.touches[0].clientY;
+            }, { passive: true });
+            
+            canvas.addEventListener('touchend', () => {
+                isDraggingGlobe = false;
+            });
+            
+            canvas.style.cursor = 'grab';
+        }
+        
+        async function loadGlobeLandmasses() {
+            try {
+                const response = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+                const world = await response.json();
+                const countries = topojson.feature(world, world.objects.countries);
+                
+                const landGroup = new THREE.Group();
+                landGroup.name = 'landmasses';
+                
+                const lineMaterial = new THREE.LineBasicMaterial({
+                    color: 0x88aacc,
+                    transparent: true,
+                    opacity: 0.9,
+                    depthTest: false
+                });
+                
+                // Convert each country's coordinates to 3D lines
+                countries.features.forEach(feature => {
+                    const geometry = feature.geometry;
+                    
+                    if (geometry.type === 'Polygon') {
+                        geometry.coordinates.forEach(ring => {
+                            const line = createGlobeLine(ring, lineMaterial);
+                            if (line) landGroup.add(line);
+                        });
+                    } else if (geometry.type === 'MultiPolygon') {
+                        geometry.coordinates.forEach(polygon => {
+                            polygon.forEach(ring => {
+                                const line = createGlobeLine(ring, lineMaterial);
+                                if (line) landGroup.add(line);
+                            });
+                        });
+                    }
+                });
+                
+                globeGroup.add(landGroup);
+                globeLandmasses = landGroup;
+            } catch (e) {
+                console.warn('Could not load globe landmasses:', e);
+            }
+        }
+        
+        function createGlobeLine(coordinates, material) {
+            if (coordinates.length < 2) return null;
+            
+            const points = [];
+            const radius = 1.005; // Slightly above globe surface
+            
+            for (const coord of coordinates) {
+                const lon = coord[0];
+                const lat = coord[1];
+                const pos = latLonToGlobePos(lat, lon, radius);
+                points.push(pos);
+            }
+            
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            return new THREE.Line(geometry, material);
+        }
+        
+        function resizeGlobeRenderer() {
+            const container = document.getElementById('globe-view');
+            if (!container || !globeCamera || !globeRenderer) return;
+            
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            if (width <= 0 || height <= 0) return;
+            
+            globeCamera.aspect = width / height;
+            globeCamera.updateProjectionMatrix();
+            globeRenderer.setSize(width, height);
+        }
+        
+        function latLonToGlobePos(lat, lon, radius = 1.02) {
+            const phi = toRad(90 - lat);
+            const theta = toRad(lon + 90);
+            return new THREE.Vector3(
+                -radius * Math.sin(phi) * Math.cos(theta),
+                radius * Math.cos(phi),
+                radius * Math.sin(phi) * Math.sin(theta)
+            );
+        }
+        
+        function updateGlobeView() {
+            if (!globeGroup) return;
+            
+            const phoneBearing = window.currentPhoneBearing || 0;
+            const elevation = window.currentElevation || -30;
+            
+            // Apply user drag rotation to entire globe group
+            globeGroup.rotation.x = globeRotationX;
+            globeGroup.rotation.y = globeRotationY;
+            
+            // Update user marker
+            const userPos = latLonToGlobePos(userLat, userLon);
+            userMarkerGlobe.position.copy(userPos);
+            
+            // Update target marker
+            const targetPos = latLonToGlobePos(targetLat, targetLon);
+            targetMarkerGlobe.position.copy(targetPos);
+            
+            // Update exit marker
+            if (exitLat !== null && exitLon !== null) {
+                const exitPos = latLonToGlobePos(exitLat, exitLon);
+                exitMarkerGlobe.position.copy(exitPos);
+                exitMarkerGlobe.visible = true;
+                
+                // Orient glow ring to face outward
+                exitMarkerGlobe.lookAt(0, 0, 0);
+                
+                // Show electric line only at 96%+ accuracy
+                if (electricLineGlobe) {
+                    if (currentAccuracy >= 96) {
+                        // Position cylinder between user and exit point
+                        const midPoint = new THREE.Vector3().addVectors(userPos, exitPos).multiplyScalar(0.5);
+                        const direction = new THREE.Vector3().subVectors(exitPos, userPos);
+                        const length = direction.length();
+                        
+                        // Reset rotation then orient
+                        electricLineGlobe.position.copy(midPoint);
+                        electricLineGlobe.scale.y = length;
+                        electricLineGlobe.quaternion.setFromUnitVectors(
+                            new THREE.Vector3(0, 1, 0),
+                            direction.normalize()
+                        );
+                        electricLineGlobe.visible = true;
+                        
+                        // Pulse opacity for electric buzzing effect
+                        const pulse = 0.6 + 0.4 * Math.sin(Date.now() / 50);
+                        electricLineGlobe.material.opacity = pulse;
+                        
+                        // Update glow layer
+                        const glow = globeGroup.getObjectByName('electricGlow');
+                        if (glow) {
+                            glow.position.copy(midPoint);
+                            glow.scale.y = length;
+                            glow.quaternion.copy(electricLineGlobe.quaternion);
+                            glow.visible = true;
+                            glow.material.opacity = 0.2 + 0.2 * Math.sin(Date.now() / 80);
+                        }
+                    } else {
+                        electricLineGlobe.visible = false;
+                        const glow = globeGroup.getObjectByName('electricGlow');
+                        if (glow) glow.visible = false;
+                    }
+                }
+            } else {
+                exitMarkerGlobe.visible = false;
+                if (electricLineGlobe) {
+                    electricLineGlobe.visible = false;
+                    const glow = globeGroup.getObjectByName('electricGlow');
+                    if (glow) glow.visible = false;
+                }
+            }
+            
+            // Update trajectory lines
+            updateGlobeTrajectories(phoneBearing, elevation);
+            
+            globeRenderer.render(globeScene, globeCamera);
+        }
+        
+        function updateGlobeTrajectories(azimuth, elevation) {
+            if (!trajLineH || !trajLineV) return;
+            
+            if (elevation >= 0) {
+                // Hide if pointing up
+                trajLineH.visible = false;
+                trajLineV.visible = false;
+                return;
+            }
+            
+            trajLineH.visible = true;
+            trajLineV.visible = true;
+            
+            // Horizontal trajectory
+            const hPoints = calculateTrajectory(azimuth, elevation, 'horizontal', 25, 90);
+            const hPositions = [];
+            for (const pt of hPoints) {
+                if (pt !== null) {
+                    const pos = latLonToGlobePos(pt.lat, pt.lon, 1.025);
+                    hPositions.push(pos.x, pos.y, pos.z);
+                }
+            }
+            if (hPositions.length > 0) {
+                trajLineH.geometry.setAttribute('position', 
+                    new THREE.Float32BufferAttribute(hPositions, 3));
+                trajLineH.geometry.attributes.position.needsUpdate = true;
+            }
+            
+            // Vertical trajectory  
+            const vPoints = calculateTrajectory(azimuth, elevation, 'vertical', 20, 50);
+            const vPositions = [];
+            for (const pt of vPoints) {
+                if (pt !== null) {
+                    const pos = latLonToGlobePos(pt.lat, pt.lon, 1.025);
+                    vPositions.push(pos.x, pos.y, pos.z);
+                }
+            }
+            if (vPositions.length > 0) {
+                trajLineV.geometry.setAttribute('position',
+                    new THREE.Float32BufferAttribute(vPositions, 3));
+                trajLineV.geometry.attributes.position.needsUpdate = true;
+            }
+            
+            // Pulsing opacity effect
+            const pulse = 0.4 + 0.3 * Math.sin(Date.now() / 300);
+            trajLineH.material.opacity = pulse;
+            trajLineV.material.opacity = pulse;
+        }
+        
+        // ==================== ACCURACY & UI ====================
+        
+        // Confetti state
+        let confettiInterval = null;
+        let confettiColorIndex = 0;
+        let currentAccuracy = 0; // Track accuracy for electric line
+        const confettiColors = ['#ff3366', '#00ff88', '#00aaff', '#ffff00', '#ff00ff', '#00ffff', '#ff8800'];
+        
+        // Burst confetti from a screen position with a single color
+        function burstConfetti(screenX, screenY, color) {
+            const particleCount = 25;
+            
+            for (let i = 0; i < particleCount; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                
+                // Random direction outward
+                const angle = (Math.PI * 2 * i / particleCount) + (Math.random() - 0.5) * 0.5;
+                const velocity = 60 + Math.random() * 100;
+                const tx = Math.cos(angle) * velocity;
+                const ty = Math.sin(angle) * velocity - 40;
+                
+                confetti.style.cssText = `
+                    left: ${screenX}px;
+                    top: ${screenY}px;
+                    background: ${color};
+                    --tx: ${tx}px;
+                    --ty: ${ty}px;
+                    border-radius: ${Math.random() > 0.5 ? '50%' : '2px'};
+                    width: ${5 + Math.random() * 7}px;
+                    height: ${5 + Math.random() * 7}px;
+                    animation-duration: ${0.8 + Math.random() * 0.6}s;
+                    animation-delay: ${Math.random() * 0.05}s;
+                `;
+                
+                document.body.appendChild(confetti);
+                
+                // Remove after animation
+                setTimeout(() => confetti.remove(), 1500);
+            }
+        }
+        
+        // Start confetti pulses
+        function startConfettiPulse() {
+            if (confettiInterval) return; // Already running
+            
+            // Immediate first burst
+            triggerConfettiBurst();
+            
+            // Then pulse every second
+            confettiInterval = setInterval(triggerConfettiBurst, 1000);
+        }
+        
+        // Stop confetti pulses
+        function stopConfettiPulse() {
+            if (confettiInterval) {
+                clearInterval(confettiInterval);
+                confettiInterval = null;
+            }
+        }
+        
+        // Trigger a single confetti burst
+        function triggerConfettiBurst() {
+            const screenPos = getExitScreenPosition();
+            if (screenPos) {
+                const color = confettiColors[confettiColorIndex % confettiColors.length];
+                confettiColorIndex++;
+                burstConfetti(screenPos.x, screenPos.y, color);
+            }
+        }
+        
+        // Get screen position of exit point for current view
+        function getExitScreenPosition() {
+            if (exitLat === null || exitLon === null) return null;
+            
+            if (currentView === 'flat') {
+                const pos = flatMapProjection([exitLon, exitLat]);
+                if (pos) {
+                    const svg = document.querySelector('#flat-map-container svg');
+                    if (!svg) return null;
+                    const svgRect = svg.getBoundingClientRect();
+                    
+                    // Scale from viewBox to screen
+                    const viewBox = svg.viewBox.baseVal;
+                    const scaleX = svgRect.width / viewBox.width;
+                    const scaleY = svgRect.height / viewBox.height;
+                    
+                    return {
+                        x: svgRect.left + pos[0] * scaleX,
+                        y: svgRect.top + pos[1] * scaleY
+                    };
+                }
+            } else if (currentView === 'globe') {
+                // Project 3D position to screen
+                const pos3D = latLonToGlobePos(exitLat, exitLon, 1.02);
+                
+                // Apply globe group rotation manually
+                const rotatedPos = pos3D.clone();
+                rotatedPos.applyEuler(new THREE.Euler(globeRotationX, globeRotationY, 0, 'XYZ'));
+                
+                // Project to screen
+                rotatedPos.project(globeCamera);
+                
+                const container = document.getElementById('globe-view');
+                const rect = container.getBoundingClientRect();
+                
+                return {
+                    x: rect.left + (rotatedPos.x + 1) / 2 * rect.width,
+                    y: rect.top + (-rotatedPos.y + 1) / 2 * rect.height
+                };
+            } else if (currentView === 'arrows') {
+                // Use center of screen for arrows view
+                return {
+                    x: window.innerWidth / 2,
+                    y: window.innerHeight / 2
+                };
+            }
+            
+            return null;
+        }
+        
+        // Calculate predictive trajectory points
+        function calculateTrajectory(baseAzimuth, baseElevation, axis, steps = 15, range = 60) {
+            const points = [];
+            
+            for (let i = -steps; i <= steps; i++) {
+                const t = i / steps; // -1 to 1
+                const offset = t * range;
+                
+                let az = baseAzimuth;
+                let el = baseElevation;
+                
+                if (axis === 'horizontal') {
+                    az = (baseAzimuth + offset + 360) % 360;
+                } else {
+                    el = Math.max(-89, Math.min(5, baseElevation + offset));
+                }
+                
+                // Skip if pointing up
+                if (el >= 0) {
+                    points.push(null);
+                    continue;
+                }
+                
+                const exit = calculateExitPoint(userLat, userLon, az, el);
+                if (exit) {
+                    points.push({ lat: exit.lat, lon: exit.lon, t: t });
+                } else {
+                    points.push(null);
+                }
+            }
+            
+            return points;
+        }
+        
+        function calculateAccuracy(targetAz, targetEl, phoneAz, phoneEl) {
+            let azDiff = Math.abs(targetAz - phoneAz);
+            if (azDiff > 180) azDiff = 360 - azDiff;
+            const elDiff = Math.abs(targetEl - phoneEl);
+            const totalError = Math.sqrt(azDiff * azDiff + elDiff * elDiff);
+            return Math.max(0, Math.min(100, 100 - totalError * 1.5));
+        }
+        
+        function updateUI() {
+            const cameraElevation = deviceBeta - 90;
+            
+            // Calculate exit point
+            const exit = calculateExitPoint(userLat, userLon, deviceAlpha, cameraElevation);
+            if (exit) {
+                exitLat = exit.lat;
+                exitLon = exit.lon;
+                document.getElementById('exit-coords').textContent = 
+                    `${exitLat.toFixed(2)}°, ${exitLon.toFixed(2)}°`;
+            } else {
+                exitLat = null;
+                exitLon = null;
+                document.getElementById('exit-coords').textContent = 'Sky ↑';
+            }
+            
+            // Calculate target direction and accuracy
+            const target = calculateThroughEarth(userLat, userLon, targetLat, targetLon);
+            const accuracy = calculateAccuracy(target.azimuth, target.elevation, deviceAlpha, cameraElevation);
+            currentAccuracy = accuracy;
+            
+            // Update target info
+            document.getElementById('target-name').textContent = targetName;
+            document.getElementById('distance').textContent = Math.round(target.distance);
+            
+            // Update accuracy display
+            const accValue = document.getElementById('accuracy-value');
+            const accRing = document.getElementById('accuracy-ring');
+            accValue.textContent = Math.round(accuracy) + '%';
+            
+            // Start/stop confetti pulses based on accuracy
+            if (accuracy >= 96) {
+                startConfettiPulse();
+            } else {
+                stopConfettiPulse();
+            }
+            
+            if (accuracy > 80) {
+                accRing.style.borderColor = 'var(--accent-green)';
+                accValue.style.color = 'var(--accent-green)';
+            } else if (accuracy > 50) {
+                accRing.style.borderColor = '#ffaa00';
+                accValue.style.color = '#ffaa00';
+            } else {
+                accRing.style.borderColor = 'var(--accent-red)';
+                accValue.style.color = 'var(--accent-red)';
+            }
+            
+            // Direction hints
+            let hint = '';
+            if (cameraElevation > 0) {
+                document.getElementById('sky-warning').style.display = 'block';
+                hint = '';
+            } else {
+                document.getElementById('sky-warning').style.display = 'none';
+                
+                if (accuracy > 90) {
+                    hint = '✅ Perfect alignment!';
+                } else {
+                    let azDiff = ((target.azimuth - deviceAlpha + 540) % 360) - 180;
+                    if (Math.abs(azDiff) > 10) {
+                        hint += azDiff > 0 ? '↻ Turn RIGHT ' : '↺ Turn LEFT ';
+                    }
+                    if (Math.abs(target.elevation - cameraElevation) > 10) {
+                        hint += target.elevation < cameraElevation ? '📱 Tilt flatter' : '📱 Tilt steeper';
+                    }
+                }
+            }
+            document.getElementById('direction-hint').innerHTML = hint;
+            
+            // Store for predictive curves
+            window.currentPhoneBearing = deviceAlpha;
+            window.currentElevation = cameraElevation;
+        }
+        
+        // ==================== FIRST RUN EXPLAINER ====================
+        const countryList = [
+            { name: 'China', lat: 35.86, lon: 104.20 },
+            { name: 'India', lat: 20.59, lon: 78.96 },
+            { name: 'USA', lat: 37.09, lon: -95.71 },
+            { name: 'Indonesia', lat: -0.79, lon: 113.92 },
+            { name: 'Brazil', lat: -14.24, lon: -51.93 },
+            { name: 'Nigeria', lat: 9.08, lon: 8.68 },
+            { name: 'Russia', lat: 61.52, lon: 105.32 },
+            { name: 'Japan', lat: 36.20, lon: 138.25 },
+            { name: 'Mexico', lat: 23.63, lon: -102.55 },
+            { name: 'Egypt', lat: 26.82, lon: 30.80 },
+            { name: 'Germany', lat: 51.17, lon: 10.45 },
+            { name: 'France', lat: 46.23, lon: 2.21 },
+            { name: 'UK', lat: 55.38, lon: -3.44 },
+            { name: 'Italy', lat: 41.87, lon: 12.57 },
+            { name: 'South Africa', lat: -30.56, lon: 22.94 },
+            { name: 'South Korea', lat: 35.91, lon: 127.77 },
+            { name: 'Spain', lat: 40.46, lon: -3.75 },
+            { name: 'Argentina', lat: -38.42, lon: -63.62 },
+            { name: 'Kenya', lat: -0.02, lon: 37.91 },
+            { name: 'Thailand', lat: 15.87, lon: 100.99 }
+        ];
+        
+        let challengeCountry = null;
+        
+        function checkFirstRun() {
+            const hideExplainer = localStorage.getItem('hideExplainer');
+            
+            // Pick random country for the challenge
+            challengeCountry = countryList[Math.floor(Math.random() * countryList.length)];
+            document.getElementById('random-country').textContent = challengeCountry.name;
+            
+            if (hideExplainer === 'true') {
+                document.getElementById('explainer-overlay').classList.add('hidden');
+            }
+        }
+        
+        function dismissExplainer() {
+            const dontShow = document.getElementById('dont-show-again').checked;
+            if (dontShow) {
+                localStorage.setItem('hideExplainer', 'true');
+            }
+            document.getElementById('explainer-overlay').classList.add('hidden');
+            
+            // Set the challenge country as the target
+            if (challengeCountry) {
+                setTarget(challengeCountry.name, challengeCountry.lat, challengeCountry.lon);
+            }
+            
+            // Trigger sensor permission request after dismissing
+            requestOrientation();
+        }
+        
+        // ==================== CONTROLS ====================
+        function toggleSelector() {
+            const selector = document.getElementById('country-selector');
+            const btn = document.getElementById('toggle-selector');
+            selector.classList.toggle('open');
+            btn.classList.toggle('open');
+        }
+        
+        function setTarget(name, lat, lon) {
+            targetName = name;
+            targetLat = lat;
+            targetLon = lon;
+            
+            // Stop confetti and reset color index for new target
+            stopConfettiPulse();
+            confettiColorIndex = 0;
+            
+            // Update quick buttons
+            document.querySelectorAll('.country-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.textContent.includes(name));
+            });
+            
+            // Update dropdown to match (if exists in dropdown)
+            const dropdown = document.getElementById('country-dropdown');
+            let found = false;
+            for (const opt of dropdown.options) {
+                if (opt.value.startsWith(name + '|')) {
+                    dropdown.value = opt.value;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                dropdown.value = '';
+            }
+            
+            // Auto-close on mobile
+            if (window.innerWidth < 600) {
+                setTimeout(() => {
+                    document.getElementById('country-selector').classList.remove('open');
+                    document.getElementById('toggle-selector').classList.remove('open');
+                }, 300);
+            }
+        }
+        
+        function handleCountryDropdown(value) {
+            if (!value) return;
+            
+            const [name, lat, lon] = value.split('|');
+            setTarget(name, parseFloat(lat), parseFloat(lon));
+        }
+        
+        // ==================== DEVICE SENSORS ====================
+        let simulationMode = false;
+        let simAzimuth = 45;
+        let simElevation = -30;
+        
+        function getUserLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    pos => {
+                        userLat = pos.coords.latitude;
+                        userLon = pos.coords.longitude;
+                        hasLocation = true;
+                        document.getElementById('gps-status').classList.add('active');
+                        
+                        // Set initial globe rotation to center on user
+                        globeRotationY = toRad(-userLon - 90);
+                    },
+                    err => {
+                        hasLocation = true; // Use default
+                        document.getElementById('gps-status').classList.remove('active');
+                        
+                        // Set initial globe rotation for default location
+                        globeRotationY = toRad(-userLon - 90);
+                    },
+                    { enableHighAccuracy: true, timeout: 10000 }
+                );
+            }
+        }
+        
+        function handleOrientation(event) {
+            // Try to get compass heading (different browsers use different properties)
+            let alpha = event.alpha;
+            
+            // Chrome on Android uses webkitCompassHeading
+            if (event.webkitCompassHeading !== undefined) {
+                alpha = event.webkitCompassHeading;
+            }
+            // For absolute orientation events
+            if (event.absolute && event.alpha !== null) {
+                alpha = event.alpha;
+            }
+            
+            if (alpha !== null || event.beta !== null) {
+                if (alpha !== null) deviceAlpha = alpha;
+                if (event.beta !== null) deviceBeta = event.beta;
+                if (event.gamma !== null) deviceGamma = event.gamma;
+                
+                if (!hasOrientation) {
+                    hasOrientation = true;
+                    simulationMode = false;
+                    document.getElementById('sensor-status').classList.add('active');
+                    document.getElementById('sim-controls').style.display = 'none';
+                }
+            }
+        }
+        
+        function requestOrientation() {
+            // Try iOS permission first
+            if (typeof DeviceOrientationEvent !== 'undefined' && 
+                typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(response => {
+                        if (response === 'granted') {
+                            addOrientationListeners();
+                        } else {
+                            enableSimulation();
+                        }
+                    })
+                    .catch(() => {
+                        enableSimulation();
+                    });
+            } else {
+                addOrientationListeners();
+                
+                // If no events fire within 2 seconds, enable simulation
+                setTimeout(() => {
+                    if (!hasOrientation) {
+                        enableSimulation();
+                    }
+                }, 2000);
+            }
+        }
+        
+        function addOrientationListeners() {
+            // Try multiple event types - different browsers support different ones
+            
+            // Standard event
+            window.addEventListener('deviceorientation', handleOrientation);
+            
+            // Absolute orientation (preferred for compass on some browsers)
+            window.addEventListener('deviceorientationabsolute', handleOrientation);
+            
+            // Some browsers need this for permission
+            if (navigator.permissions && navigator.permissions.query) {
+                navigator.permissions.query({ name: 'accelerometer' }).catch(() => {});
+                navigator.permissions.query({ name: 'gyroscope' }).catch(() => {});
+                navigator.permissions.query({ name: 'magnetometer' }).catch(() => {});
+            }
+        }
+        
+        function enableSimulation() {
+            simulationMode = true;
+            hasOrientation = true;
+            document.getElementById('sensor-status').classList.remove('active');
+            document.getElementById('sim-controls').style.display = 'block';
+            updateSimulation();
+        }
+        
+        function updateSimulation() {
+            if (simulationMode) {
+                deviceAlpha = simAzimuth;
+                deviceBeta = 90 + simElevation; // Convert elevation to beta
+            }
+        }
+        
+        function handleSimAzimuth(value) {
+            simAzimuth = parseFloat(value);
+            document.getElementById('sim-az-value').textContent = Math.round(simAzimuth) + '°';
+            updateSimulation();
+        }
+        
+        function handleSimElevation(value) {
+            simElevation = parseFloat(value);
+            document.getElementById('sim-el-value').textContent = Math.round(simElevation) + '°';
+            updateSimulation();
+        }
+        
+        // ==================== ANIMATION LOOP ====================
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            updateUI();
+            
+            if (currentView === 'arrows') {
+                updateArrowView();
+            } else if (currentView === 'flat') {
+                updateFlatMap();
+            } else if (currentView === 'globe') {
+                updateGlobeView();
+            }
+        }
+        
+        // ==================== INITIALIZATION ====================
+        window.addEventListener('load', () => {
+            checkFirstRun();
+            
+            initArrowView();
+            initFlatMap();
+            initGlobeView();
+            
+            getUserLocation();
+            
+            // Request orientation if explainer was previously dismissed
+            if (localStorage.getItem('hideExplainer') === 'true') {
+                requestOrientation();
+            }
+            
+            animate();
+            
+            // Handle resize and orientation change
+            function handleResize() {
+                resizeArrowRenderer();
+                resizeGlobeRenderer();
+                resizeFlatMap();
+            }
+            
+            // Debounced resize handler
+            let resizeTimeout;
+            function debouncedResize() {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(handleResize, 100);
+            }
+            
+            window.addEventListener('resize', debouncedResize);
+            window.addEventListener('orientationchange', () => {
+                // Orientation change needs a slight delay for dimensions to update
+                setTimeout(handleResize, 150);
+            });
+            
+            // Modern screen orientation API
+            if (screen.orientation) {
+                screen.orientation.addEventListener('change', () => {
+                    setTimeout(handleResize, 150);
+                });
+            }
+        });
+        
+        // iOS permission on first tap (after explainer)
+        document.addEventListener('click', (e) => {
+            // Don't trigger if clicking explainer button (it handles this itself)
+            if (e.target.classList.contains('explainer-btn')) return;
+            requestOrientation();
+        }, { once: true });
+    </script>
+</body>
+</html>

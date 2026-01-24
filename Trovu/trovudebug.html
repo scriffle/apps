@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trovu Debug Loader</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            padding: 2rem;
+            line-height: 1.6;
+        }
+        h1 { color: #4fc3f7; margin-bottom: 1rem; }
+        h2 { color: #81c784; margin: 1.5rem 0 0.5rem; font-size: 1.2rem; }
+        .container { max-width: 900px; margin: 0 auto; }
+        .card {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            border-left: 4px solid #666;
+        }
+        .card.success { border-left-color: #4caf50; }
+        .card.error { border-left-color: #f44336; }
+        .card.warning { border-left-color: #ff9800; }
+        .card.info { border-left-color: #2196f3; }
+        .status {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+        .status.success { background: #4caf50; }
+        .status.error { background: #f44336; }
+        .status.warning { background: #ff9800; }
+        .status.info { background: #2196f3; }
+        .path { 
+            font-family: monospace; 
+            background: #0d1b2a; 
+            padding: 0.2rem 0.5rem; 
+            border-radius: 4px;
+            word-break: break-all;
+            display: inline-block;
+            margin: 0.25rem 0;
+        }
+        .details {
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background: #0d1b2a;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow: auto;
+        }
+        .info-box {
+            background: #0f3460;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+        .info-box code {
+            background: #0d1b2a;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        button {
+            background: #4fc3f7;
+            color: #1a1a2e;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 0.5rem 0.5rem 0.5rem 0;
+        }
+        button:hover { background: #81d4fa; }
+        .test-input {
+            display: flex;
+            gap: 0.5rem;
+            margin: 1rem 0;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .test-input input, .test-input select {
+            padding: 0.75rem;
+            border-radius: 6px;
+            border: 1px solid #444;
+            background: #0d1b2a;
+            color: #eee;
+            font-family: monospace;
+        }
+        .test-input input { flex: 1; min-width: 200px; }
+        .test-input select { min-width: 150px; }
+        .test-input label { margin-right: 0.5rem; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+        th, td {
+            padding: 0.5rem;
+            text-align: left;
+            border-bottom: 1px solid #333;
+        }
+        th { color: #4fc3f7; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Trovu Debug Loader</h1>
+        
+        <div class="info-box">
+            <strong>Current Location Info:</strong>
+            <table>
+                <tr><th>Property</th><th>Value</th></tr>
+                <tr><td>Full URL</td><td><code id="infoFullUrl"></code></td></tr>
+                <tr><td>Origin</td><td><code id="infoOrigin"></code></td></tr>
+                <tr><td>Path</td><td><code id="infoPath"></code></td></tr>
+                <tr><td>Base Directory</td><td><code id="infoBase"></code></td></tr>
+            </table>
+        </div>
+
+        <h2>Base Path Configuration</h2>
+        <div class="test-input">
+            <label>Base Path:</label>
+            <select id="basePath">
+                <option value="./">Relative: ./</option>
+                <option value="/">Server Root: /</option>
+            </select>
+            <span style="color: #888; margin-left: 1rem;">
+                Manifest will be at: <code id="manifestPreview"></code>
+            </span>
+        </div>
+
+        <h2>Tests</h2>
+        <button onclick="runAllTests()">▶ Run All Tests</button>
+        <button onclick="findManifest()">🔍 Search for Manifest</button>
+        <button onclick="clearLog()">Clear Log</button>
+        
+        <h2>Custom Path Test</h2>
+        <div class="test-input">
+            <input type="text" id="customPath" placeholder="data/hpe/manifest.json">
+            <button onclick="testCustomPath()">Test Path</button>
+        </div>
+
+        <h2>Results</h2>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        const log = document.getElementById('log');
+        
+        // Show current location info
+        document.getElementById('infoFullUrl').textContent = window.location.href;
+        document.getElementById('infoOrigin').textContent = window.location.origin;
+        document.getElementById('infoPath').textContent = window.location.pathname;
+        
+        // Calculate base directory (directory containing this HTML file)
+        const pathParts = window.location.pathname.split('/');
+        pathParts.pop(); // Remove filename
+        const baseDir = pathParts.join('/') + '/';
+        document.getElementById('infoBase').textContent = baseDir || '/';
+
+        // Update manifest preview when base path changes
+        const basePathSelect = document.getElementById('basePath');
+        const manifestPreview = document.getElementById('manifestPreview');
+        
+        function updatePreview() {
+            const base = basePathSelect.value;
+            manifestPreview.textContent = base + 'data/hpe/manifest.json';
+        }
+        basePathSelect.addEventListener('change', updatePreview);
+        updatePreview();
+
+        function getBasePath() {
+            return basePathSelect.value;
+        }
+
+        function clearLog() {
+            log.innerHTML = '';
+        }
+
+        function addCard(status, title, message, details = null) {
+            const card = document.createElement('div');
+            card.className = `card ${status}`;
+            
+            let html = `
+                <span class="status ${status}">${status.toUpperCase()}</span>
+                <strong>${title}</strong>
+                <div style="margin-top: 0.5rem;">${message}</div>
+            `;
+            
+            if (details) {
+                const detailStr = typeof details === 'string' ? details : JSON.stringify(details, null, 2);
+                html += `<div class="details">${escapeHtml(detailStr)}</div>`;
+            }
+            
+            card.innerHTML = html;
+            log.appendChild(card);
+            return card;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function testFile(path, description = '') {
+            const fullUrl = new URL(path, window.location.href).href;
+            
+            const card = addCard('info', `Testing: ${path}`, `Full URL: <span class="path">${fullUrl}</span>`);
+
+            try {
+                const response = await fetch(path, { cache: 'no-store' });
+                
+                if (!response.ok) {
+                    card.className = 'card error';
+                    card.innerHTML = `
+                        <span class="status error">${response.status}</span>
+                        <strong>${path}</strong>
+                        <div style="margin-top: 0.5rem;">
+                            <span class="path">${fullUrl}</span><br><br>
+                            HTTP ${response.status}: ${response.statusText}
+                        </div>
+                    `;
+                    return { success: false, status: response.status };
+                }
+
+                const text = await response.text();
+                let data;
+                
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    card.className = 'card error';
+                    card.innerHTML = `
+                        <span class="status error">PARSE ERROR</span>
+                        <strong>${path}</strong>
+                        <div style="margin-top: 0.5rem;">
+                            File loaded but JSON invalid: ${e.message}<br>
+                            <span class="path">${fullUrl}</span>
+                        </div>
+                        <div class="details">${escapeHtml(text.substring(0, 500))}</div>
+                    `;
+                    return { success: false, parseError: e.message };
+                }
+
+                // Detect file type and show relevant info
+                let info = `Size: ${text.length.toLocaleString()} bytes`;
+                if (data.topics) {
+                    info += `\nType: Manifest\nTopics: ${data.topics.length}`;
+                    data.topics.forEach(t => {
+                        info += `\n  • ${t.id} - "${t.title}" (${t.parts?.length || t.topicCount || '?'} parts)`;
+                    });
+                } else if (data.metadata) {
+                    info += `\nType: Content File\nTopic: ${data.metadata.topicTitle}\nPart: ${data.metadata.partNumber}/${data.metadata.totalParts}\nFocus: ${data.metadata.focusArea}`;
+                }
+
+                card.className = 'card success';
+                card.innerHTML = `
+                    <span class="status success">OK</span>
+                    <strong>${path}</strong>
+                    <div style="margin-top: 0.5rem;">
+                        ✓ Loaded successfully<br>
+                        <span class="path">${fullUrl}</span>
+                    </div>
+                    <div class="details">${escapeHtml(info)}</div>
+                `;
+                
+                return { success: true, data };
+
+            } catch (error) {
+                card.className = 'card error';
+                card.innerHTML = `
+                    <span class="status error">NETWORK</span>
+                    <strong>${path}</strong>
+                    <div style="margin-top: 0.5rem;">
+                        Failed to fetch: ${error.message}<br>
+                        <span class="path">${fullUrl}</span>
+                    </div>
+                `;
+                return { success: false, error: error.message };
+            }
+        }
+
+        async function findManifest() {
+            clearLog();
+            addCard('info', 'Searching for manifest...', 'Trying multiple possible locations');
+
+            const possiblePaths = [
+                'data/hpe/manifest.json',
+                './data/hpe/manifest.json',
+                '/data/hpe/manifest.json',
+                '../data/hpe/manifest.json',
+                'manifest.json',
+                './manifest.json',
+                'hpe/manifest.json',
+                './hpe/manifest.json',
+            ];
+
+            let found = [];
+            let notFound = [];
+
+            for (const path of possiblePaths) {
+                try {
+                    const response = await fetch(path, { cache: 'no-store' });
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.topics) {
+                            found.push({ path, data });
+                        }
+                    } else {
+                        notFound.push({ path, status: response.status });
+                    }
+                } catch (e) {
+                    notFound.push({ path, error: e.message });
+                }
+            }
+
+            if (found.length > 0) {
+                addCard('success', `Found ${found.length} manifest(s)!`, 
+                    found.map(f => `<span class="path">${f.path}</span> - ${f.data.topics?.length || 0} topics`).join('<br>'),
+                    found.map(f => `${f.path}:\n${f.data.topics?.map(t => `  • ${t.id}`).join('\n')}`).join('\n\n')
+                );
+            } else {
+                addCard('error', 'No manifest found', 
+                    `Searched ${possiblePaths.length} locations. None contained a valid manifest.`,
+                    notFound.map(n => `${n.path}: ${n.status || n.error}`).join('\n')
+                );
+            }
+        }
+
+        async function runAllTests() {
+            clearLog();
+            const base = getBasePath();
+            
+            addCard('info', 'Test Configuration', 
+                `Base path: <span class="path">${base}</span><br>
+                 Page location: <span class="path">${window.location.href}</span>`);
+
+            // Test manifest
+            const manifestPath = base + 'data/hpe/manifest.json';
+            const manifestResult = await testFile(manifestPath, 'HPE Manifest');
+
+            if (manifestResult.success && manifestResult.data.topics) {
+                // Test content files based on manifest
+                for (const topic of manifestResult.data.topics) {
+                    const parts = topic.parts || [];
+                    const partCount = parts.length || topic.topicCount || 3;
+                    
+                    for (let i = 1; i <= Math.min(partCount, 3); i++) {
+                        // Test for 7-8 level
+                        const contentPath = `${base}data/hpe/hpe_${topic.id}_7-8_topic-${i}.json`;
+                        await testFile(contentPath, `${topic.title} Part ${i}`);
+                    }
+                }
+            }
+
+            // Summary
+            const cards = log.querySelectorAll('.card');
+            let success = 0, errors = 0;
+            cards.forEach(c => {
+                if (c.classList.contains('success')) success++;
+                if (c.classList.contains('error')) errors++;
+            });
+
+            addCard(errors > 0 ? 'warning' : 'success', 'Test Complete', 
+                `${success} files loaded, ${errors} failed`);
+        }
+
+        async function testCustomPath() {
+            const path = document.getElementById('customPath').value.trim();
+            if (!path) {
+                alert('Please enter a path');
+                return;
+            }
+            await testFile(path);
+        }
+
+        // Initial message
+        addCard('info', 'Ready', 
+            `Click <strong>"Run All Tests"</strong> to test with selected base path, or <strong>"Search for Manifest"</strong> to find it automatically.`);
+    </script>
+</body>
+</html>

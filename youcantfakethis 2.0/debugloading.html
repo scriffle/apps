@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouCantFakeThis - JSON Debug Checker</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        h1 { color: #667eea; margin-bottom: 10px; }
+        .subtitle { color: #888; margin-bottom: 30px; }
+        .controls { margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .summary { background: #252540; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+        .summary h2 { color: #667eea; margin-bottom: 15px; font-size: 18px; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; }
+        .stat { background: #1a1a2e; padding: 15px; border-radius: 8px; text-align: center; }
+        .stat-value { font-size: 28px; font-weight: bold; color: #667eea; }
+        .stat-label { font-size: 12px; color: #888; margin-top: 5px; }
+        .results { display: flex; flex-direction: column; gap: 15px; }
+        .file-result { background: #252540; border-radius: 12px; padding: 20px; border-left: 4px solid #888; }
+        .file-result.success { border-left-color: #10b981; }
+        .file-result.error { border-left-color: #ef4444; }
+        .file-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .file-name { font-weight: 600; font-size: 16px; }
+        .file-status { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .file-status.success { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .file-status.error { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 10px;
+            color: #ef4444;
+            font-family: monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .validation-list { margin-top: 10px; }
+        .validation-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 13px; }
+        .validation-item.pass { color: #10b981; }
+        .validation-item.fail { color: #ef4444; }
+        .icon { font-size: 16px; }
+        .tabs-breakdown { margin-top: 15px; }
+        .tab-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            background: #1a1a2e;
+            border-radius: 6px;
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+        .concepts-list { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 5px; }
+        .concept-tag {
+            background: rgba(102, 126, 234, 0.2);
+            color: #667eea;
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 11px;
+        }
+        .progress-bar { width: 100%; height: 6px; background: #333; border-radius: 3px; margin: 20px 0; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 3px; transition: width 0.3s ease; }
+        .log {
+            background: #0d0d1a;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-entry { padding: 3px 0; border-bottom: 1px solid #222; }
+        .log-entry.info { color: #3b82f6; }
+        .log-entry.success { color: #10b981; }
+        .log-entry.error { color: #ef4444; }
+        .log-entry.warn { color: #f59e0b; }
+        .timestamp { color: #666; margin-right: 10px; }
+        .section-header {
+            background: #1a1a2e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0 10px 0;
+            font-weight: 600;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <h1>YouCantFakeThis - JSON Debug Checker</h1>
+    <p class="subtitle">Validates all JSON files from states.json → study-manifest → topic-manifest → topic files</p>
+
+    <div class="controls">
+        <button id="runBtn" onclick="runAllChecks()">Run All Checks</button>
+        <button onclick="clearResults()">Clear Results</button>
+    </div>
+
+    <div class="progress-bar" id="progressBar" style="display: none;">
+        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+    </div>
+
+    <div class="summary" id="summary" style="display: none;">
+        <h2>Summary</h2>
+        <div class="stats">
+            <div class="stat"><div class="stat-value" id="totalFiles">0</div><div class="stat-label">Files Checked</div></div>
+            <div class="stat"><div class="stat-value" id="passedFiles">0</div><div class="stat-label">Passed</div></div>
+            <div class="stat"><div class="stat-value" id="failedFiles">0</div><div class="stat-label">Failed</div></div>
+            <div class="stat"><div class="stat-value" id="totalQuestions">0</div><div class="stat-label">Total Questions</div></div>
+            <div class="stat"><div class="stat-value" id="totalConcepts">0</div><div class="stat-label">Total Concepts</div></div>
+        </div>
+    </div>
+
+    <div class="results" id="results"></div>
+    <div class="log" id="log"></div>
+
+    <script>
+        const BASE_PATH = './';
+        const STATES_FILE = 'states.json';
+
+        let totalQuestions = 0, totalConcepts = 0, passedCount = 0, failedCount = 0;
+
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerHTML = `<span class="timestamp">[${new Date().toLocaleTimeString()}]</span>${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('log').innerHTML = '';
+            document.getElementById('summary').style.display = 'none';
+            document.getElementById('progressBar').style.display = 'none';
+            totalQuestions = totalConcepts = passedCount = failedCount = 0;
+        }
+
+        function updateSummary() {
+            document.getElementById('totalFiles').textContent = passedCount + failedCount;
+            document.getElementById('passedFiles').textContent = passedCount;
+            document.getElementById('failedFiles').textContent = failedCount;
+            document.getElementById('totalQuestions').textContent = totalQuestions;
+            document.getElementById('totalConcepts').textContent = totalConcepts;
+            document.getElementById('summary').style.display = 'block';
+        }
+
+        async function loadJSON(filepath) {
+            const response = await fetch(filepath);
+            if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            return JSON.parse(await response.text());
+        }
+
+        function addSectionHeader(title) {
+            const div = document.createElement('div');
+            div.className = 'section-header';
+            div.textContent = title;
+            document.getElementById('results').appendChild(div);
+        }
+
+        function validateStatesFile(data) {
+            return [
+                { pass: !!data.version, message: `Has 'version' field: ${data.version || 'MISSING'}` },
+                { pass: Array.isArray(data.states), message: `Has 'states' array: ${Array.isArray(data.states) ? data.states.length + ' states' : 'MISSING'}` },
+                ...(data.states || []).map((s, i) => ({ pass: !!s.id && !!s.path, message: `State ${i+1}: id="${s.id}", path="${s.path}"` }))
+            ];
+        }
+
+        function validateStudyManifest(data) {
+            return [
+                { pass: !!data.curriculum, message: `Has 'curriculum' field: ${data.curriculum || 'MISSING'}` },
+                { pass: Array.isArray(data.subjects), message: `Has 'subjects' array: ${Array.isArray(data.subjects) ? data.subjects.length + ' subjects' : 'MISSING'}` },
+                ...(data.subjects || []).map((s, i) => ({ pass: !!s.id && !!s.path, message: `Subject ${i+1}: id="${s.id}", name="${s.name}", path="${s.path}"` }))
+            ];
+        }
+
+        function validateTopicManifest(data) {
+            let topicCount = 0, availableCount = 0;
+            (data.units || []).forEach(u => (u.areasOfStudy || []).forEach(a => {
+                topicCount += (a.topics || []).length;
+                availableCount += (a.topics || []).filter(t => t.status === 'available').length;
+            }));
+            return [
+                { pass: !!data.subject, message: `Has 'subject' field: ${data.subject || 'MISSING'}` },
+                { pass: !!data.curriculum, message: `Has 'curriculum' field: ${data.curriculum || 'MISSING'}` },
+                { pass: Array.isArray(data.units), message: `Has 'units' array: ${(data.units || []).length} units` },
+                { pass: topicCount > 0, message: `Total topics: ${topicCount} (${availableCount} available)` }
+            ];
+        }
+
+        function validateTopicFile(data) {
+            const validations = [], errors = [];
+            let questionCount = 0, conceptCount = 0;
+            const tabsInfo = {}, allConceptsUsed = new Set();
+
+            validations.push({ pass: !!data.metadata, message: `Has 'metadata' object` });
+            if (data.metadata) {
+                validations.push({ pass: !!data.metadata.id, message: `Metadata ID: ${data.metadata.id || 'MISSING'}` });
+                validations.push({ pass: !!data.metadata.topicName, message: `Topic name: ${data.metadata.topicName || 'MISSING'}` });
+            }
+            validations.push({ pass: Array.isArray(data.tabs) && data.tabs.length > 0, message: `Has tabs array: ${data.tabs?.length || 0} tabs` });
+
+            ['round1', 'round2', 'round3'].forEach(round => {
+                validations.push({ pass: !!data.content?.[round], message: `Has '${round}' content` });
+                if (data.content?.[round]) {
+                    Object.entries(data.content[round]).forEach(([tabId, tabContent]) => {
+                        if (!tabsInfo[tabId]) tabsInfo[tabId] = { rounds: 0, questions: 0 };
+                        tabsInfo[tabId].rounds++;
+                        (tabContent.sentences || []).forEach((sentence, sIdx) => {
+                            Object.entries(sentence.questions || {}).forEach(([qId, q]) => {
+                                questionCount++;
+                                tabsInfo[tabId].questions++;
+                                if (!q.distractors || q.distractors.length !== 3) errors.push(`${round}/${tabId}/s${sIdx}/${qId}: ${q.distractors?.length || 0} distractors (need 3)`);
+                                if (!q.correct) errors.push(`${round}/${tabId}/s${sIdx}/${qId}: Missing 'correct'`);
+                                if (!q.concept) errors.push(`${round}/${tabId}/s${sIdx}/${qId}: Missing 'concept'`);
+                                else allConceptsUsed.add(q.concept);
+                                if (!q.tooltip) errors.push(`${round}/${tabId}/s${sIdx}/${qId}: Missing 'tooltip'`);
+                            });
+                        });
+                    });
+                }
+            });
+
+            if (data.concepts) {
+                conceptCount = Object.keys(data.concepts).length;
+                validations.push({ pass: conceptCount > 0, message: `Has concepts: ${conceptCount} defined` });
+                allConceptsUsed.forEach(c => { if (!data.concepts[c]) errors.push(`Concept '${c}' not defined`); });
+            } else {
+                validations.push({ pass: false, message: `Missing 'concepts' object` });
+            }
+
+            validations.push({ pass: questionCount >= 60, message: `Total questions: ${questionCount} (min 60)` });
+            Object.entries(tabsInfo).forEach(([t, i]) => { if (i.questions < 15) errors.push(`Tab '${t}': ${i.questions} questions (min 15)`); });
+            validations.push({ pass: errors.length === 0, message: errors.length === 0 ? 'All checks passed' : `${errors.length} issues` });
+
+            return { validations, errors, questionCount, conceptCount, tabsInfo, conceptsUsed: Array.from(allConceptsUsed) };
+        }
+
+        function renderFileResult(filename, status, validations, details = null, errors = []) {
+            const div = document.createElement('div');
+            div.className = `file-result ${status}`;
+            let html = `<div class="file-header"><span class="file-name">${filename}</span><span class="file-status ${status}">${status.toUpperCase()}</span></div>`;
+            
+            if (validations) {
+                html += '<div class="validation-list">' + validations.map(v => 
+                    `<div class="validation-item ${v.pass ? 'pass' : 'fail'}"><span class="icon">${v.pass ? '✓' : '✗'}</span>${v.message}</div>`
+                ).join('') + '</div>';
+            }
+            if (details?.tabsInfo) {
+                html += '<div class="tabs-breakdown"><strong>Questions by Tab:</strong>' + 
+                    Object.entries(details.tabsInfo).map(([t, i]) => `<div class="tab-row"><span>${t}</span><span>${i.questions} questions (${i.rounds} rounds)</span></div>`).join('') + '</div>';
+            }
+            if (details?.conceptsUsed?.length) {
+                html += '<div class="concepts-list"><strong style="width:100%;margin-bottom:5px;">Concepts:</strong>' + 
+                    details.conceptsUsed.map(c => `<span class="concept-tag">${c}</span>`).join('') + '</div>';
+            }
+            if (errors.length) {
+                html += '<div class="error-message">' + errors.slice(0, 20).join('\n') + (errors.length > 20 ? `\n... +${errors.length - 20} more` : '') + '</div>';
+            }
+            div.innerHTML = html;
+            document.getElementById('results').appendChild(div);
+        }
+
+        async function runAllChecks() {
+            clearResults();
+            document.getElementById('runBtn').disabled = true;
+            document.getElementById('progressBar').style.display = 'block';
+            log('Starting validation...', 'info');
+
+            // Level 1: states.json
+            addSectionHeader('Level 1: Root States File');
+            let statesData;
+            try {
+                statesData = await loadJSON(BASE_PATH + STATES_FILE);
+                const v = validateStatesFile(statesData);
+                const ok = v.every(x => x.pass);
+                ok ? passedCount++ : failedCount++;
+                log(`${STATES_FILE}: ${ok ? 'PASSED' : 'FAILED'}`, ok ? 'success' : 'error');
+                renderFileResult(STATES_FILE, ok ? 'success' : 'error', v);
+            } catch (e) {
+                failedCount++;
+                log(`${STATES_FILE}: ERROR - ${e.message}`, 'error');
+                renderFileResult(STATES_FILE, 'error', null, null, [e.message]);
+                updateSummary();
+                document.getElementById('runBtn').disabled = false;
+                return;
+            }
+
+            // Level 2+: Traverse hierarchy
+            for (const state of statesData.states || []) {
+                addSectionHeader(`Level 2: Study Manifest for ${state.name}`);
+                let studyManifest;
+                try {
+                    studyManifest = await loadJSON(BASE_PATH + state.path);
+                    const v = validateStudyManifest(studyManifest);
+                    const ok = v.every(x => x.pass);
+                    ok ? passedCount++ : failedCount++;
+                    log(`${state.path}: ${ok ? 'PASSED' : 'FAILED'}`, ok ? 'success' : 'error');
+                    renderFileResult(state.path, ok ? 'success' : 'error', v);
+                } catch (e) {
+                    failedCount++;
+                    log(`${state.path}: ERROR - ${e.message}`, 'error');
+                    renderFileResult(state.path, 'error', null, null, [e.message]);
+                    continue;
+                }
+
+                const stateBase = state.path.substring(0, state.path.lastIndexOf('/') + 1);
+                for (const subject of studyManifest.subjects || []) {
+                    addSectionHeader(`Level 3: Topic Manifest for ${subject.name}`);
+                    const tmPath = stateBase + subject.path;
+                    let topicManifest;
+                    try {
+                        topicManifest = await loadJSON(BASE_PATH + tmPath);
+                        const v = validateTopicManifest(topicManifest);
+                        const ok = v.every(x => x.pass);
+                        ok ? passedCount++ : failedCount++;
+                        log(`${tmPath}: ${ok ? 'PASSED' : 'FAILED'}`, ok ? 'success' : 'error');
+                        renderFileResult(tmPath, ok ? 'success' : 'error', v);
+                    } catch (e) {
+                        failedCount++;
+                        log(`${tmPath}: ERROR - ${e.message}`, 'error');
+                        renderFileResult(tmPath, 'error', null, null, [e.message]);
+                        continue;
+                    }
+
+                    addSectionHeader(`Level 4: Topic Files for ${subject.name}`);
+                    const subjectBase = tmPath.substring(0, tmPath.lastIndexOf('/') + 1);
+                    const topics = [];
+                    (topicManifest.units || []).forEach(u => (u.areasOfStudy || []).forEach(a => 
+                        (a.topics || []).filter(t => t.filename && t.status === 'available').forEach(t => 
+                            topics.push({ ...t, unit: u.id, aos: a.id }))));
+                    
+                    log(`Found ${topics.length} topic files`, 'info');
+                    for (const topic of topics) {
+                        const path = subjectBase + topic.filename;
+                        try {
+                            const data = await loadJSON(BASE_PATH + path);
+                            const r = validateTopicFile(data);
+                            if (topic.totalQuestions && r.questionCount !== topic.totalQuestions)
+                                r.errors.push(`Count mismatch: manifest=${topic.totalQuestions}, file=${r.questionCount}`);
+                            const ok = r.validations.every(x => x.pass) && r.errors.length === 0;
+                            totalQuestions += r.questionCount;
+                            totalConcepts += r.conceptCount;
+                            ok ? passedCount++ : failedCount++;
+                            log(`${topic.filename}: ${ok ? 'PASSED' : 'FAILED'} (${r.questionCount}q, ${r.conceptCount}c)`, ok ? 'success' : 'error');
+                            renderFileResult(`${topic.filename} (${topic.name})`, ok ? 'success' : 'error', r.validations, r, r.errors);
+                        } catch (e) {
+                            failedCount++;
+                            log(`${topic.filename}: ERROR - ${e.message}`, 'error');
+                            renderFileResult(topic.filename, 'error', null, null, [e.message]);
+                        }
+                        await new Promise(r => setTimeout(r, 50));
+                    }
+                }
+            }
+
+            updateSummary();
+            log(`Done: ${passedCount} passed, ${failedCount} failed, ${totalQuestions} questions`, failedCount === 0 ? 'success' : 'warn');
+            document.getElementById('runBtn').disabled = false;
+        }
+    </script>
+</body>
+</html>
