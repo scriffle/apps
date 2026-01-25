@@ -1088,8 +1088,18 @@ body {
     opacity: 0.3;
 }
 
-.level-notch.locked::after {
+/* Direct lock - failed quiz 3 times on this level */
+.level-notch.locked:not(.cascade-locked)::after {
     content: '🔙';
+    position: absolute;
+    font-size: 8px;
+    bottom: -2px;
+    right: -2px;
+}
+
+/* Cascade lock - blocked because a lower level is locked */
+.level-notch.locked.cascade-locked::after {
+    content: '🔐';
     position: absolute;
     font-size: 8px;
     bottom: -2px;
@@ -5620,13 +5630,19 @@ function renderLearningItem(item, subtopic) {
             ${[1, 2, 3, 4, 5].map(level => {
                 const isFilled = level <= data.level;
                 const isActive = level === data.level;
-                const isLocked = level > data.level && isLevelLocked(itemKey, level);
-                return `<button class="level-notch ${isFilled ? 'filled' : ''} ${isActive ? 'active' : ''} ${isLocked ? 'locked' : ''}" 
-                    data-level="${level}" 
+                // Check for direct lock on this level
+                const isDirectlyLocked = level > data.level && isLevelLocked(itemKey, level);
+                // Check for cascade lock (a lower level is blocking this one)
+                const isCascadeLocked = level > data.level && !isDirectlyLocked && isAnyLevelLockedBelow(itemKey, data.level, level);
+                const isLocked = isDirectlyLocked || isCascadeLocked;
+                const lockType = isDirectlyLocked ? 'direct' : (isCascadeLocked ? 'cascade' : '');
+                return `<button class="level-notch ${isFilled ? 'filled' : ''} ${isActive ? 'active' : ''} ${isLocked ? 'locked' : ''} ${isCascadeLocked ? 'cascade-locked' : ''}"
+                    data-level="${level}"
                     data-label="${levelNames[level - 1]}"
+                    data-lock-type="${lockType}"
                     role="radio"
                     aria-checked="${isActive}"
-                    aria-label="${emojis[level - 1]} ${levelNames[level - 1]}${isLocked ? ' (locked)' : ''}"
+                    aria-label="${emojis[level - 1]} ${levelNames[level - 1]}${isDirectlyLocked ? ' (locked)' : ''}${isCascadeLocked ? ' (blocked)' : ''}"
                     tabindex="${isActive ? '0' : '-1'}">${getNotchContent(level)}</button>`;
             }).join('')}
         </div>
@@ -5701,21 +5717,34 @@ function setupLearningContentListeners() {
             const notchContainer = notch.closest('.level-notches');
             const itemKey = notchContainer.dataset.itemKey;
             const level = parseInt(notch.dataset.level);
-            
+            const currentLevel = appState.learningItems[itemKey]?.level || 1;
+
             // Check if this level is locked
             if (notch.classList.contains('locked')) {
-                const remaining = getLockoutRemainingTime(itemKey, level);
-                const mins = Math.floor(remaining / 60);
-                const secs = remaining % 60;
-                showToast(`Locked for ${mins}:${secs.toString().padStart(2, '0')}`, 'error');
+                const lockType = notch.dataset.lockType;
+
+                if (lockType === 'cascade') {
+                    // Find the blocking level and show appropriate message
+                    const blockingLevel = findBlockingLevel(itemKey, currentLevel, level);
+                    const remaining = getLockoutRemainingTime(itemKey, blockingLevel);
+                    const mins = Math.floor(remaining / 60);
+                    const secs = remaining % 60;
+                    showToast(`Complete Level ${blockingLevel} first (locked for ${mins}:${secs.toString().padStart(2, '0')})`, 'error');
+                } else {
+                    // Direct lock on this level
+                    const remaining = getLockoutRemainingTime(itemKey, level);
+                    const mins = Math.floor(remaining / 60);
+                    const secs = remaining % 60;
+                    showToast(`Locked for ${mins}:${secs.toString().padStart(2, '0')}`, 'error');
+                }
                 return;
             }
-            
+
             // Mark as reviewed in check-in mode
             if (checkinModeActive) {
                 markItemReviewed(itemKey);
             }
-            
+
             // Update level (may trigger quiz for upward moves)
             handleLevelChange(itemKey, level);
         });
@@ -5995,6 +6024,32 @@ function getLockoutRemainingTime(itemKey, toLevel) {
         return Math.ceil((state.lockedUntil - Date.now()) / 1000);
     }
     return 0;
+}
+
+/**
+ * Check if any level between current and target is locked (cascade lock)
+ * Returns true if any intermediate level is locked, blocking access to higher levels
+ */
+function isAnyLevelLockedBelow(itemKey, currentLevel, targetLevel) {
+    for (let lvl = currentLevel + 1; lvl <= targetLevel; lvl++) {
+        if (isLevelLocked(itemKey, lvl)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Find the first (lowest) level that is blocking access to higher levels
+ * Returns the blocking level number, or null if no level is blocking
+ */
+function findBlockingLevel(itemKey, currentLevel, targetLevel) {
+    for (let lvl = currentLevel + 1; lvl <= targetLevel; lvl++) {
+        if (isLevelLocked(itemKey, lvl)) {
+            return lvl;
+        }
+    }
+    return null;
 }
 
 // ============================================
