@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>EV Energy Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            color: white;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px 20px;
+            max-width: 400px;
+            width: 100%;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
+
+        .energy-display {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        .energy-value {
+            font-size: 48px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -1px;
+            margin-bottom: 5px;
+        }
+
+        .energy-value.positive {
+            color: #4ade80;
+        }
+
+        .energy-value.negative {
+            color: #f87171;
+        }
+
+        .energy-label {
+            font-size: 14px;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.8;
+            text-transform: uppercase;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .mass-input {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .mass-input label {
+            display: block;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .mass-input input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 10px;
+            color: white;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        .mass-input input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        button {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .log-container {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 15px;
+            padding: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .log-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.9;
+        }
+
+        .log-entry {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .log-time {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        .log-energy {
+            font-size: 18px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .log-energy.positive {
+            color: #4ade80;
+        }
+
+        .log-energy.negative {
+            color: #f87171;
+        }
+
+        .status {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .status-icon {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+            background: #f87171;
+        }
+
+        .status.active .status-icon {
+            background: #4ade80;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .error {
+            background: rgba(248, 113, 113, 0.2);
+            border: 1px solid rgba(248, 113, 113, 0.5);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .buffer-indicator {
+            font-size: 10px;
+            opacity: 0.7;
+            text-align: center;
+            margin-top: 5px;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚡ EV Energy Tracker</h1>
+        
+        <div class="energy-display">
+            <div class="energy-value" id="energyValue">0.000</div>
+            <div class="energy-label">kWh (75% efficiency)</div>
+            <div class="buffer-indicator" id="bufferIndicator">Buffering: 0/7</div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="altitudeValue">--</div>
+                <div class="stat-label">Altitude (m)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="deltaAltitude">0</div>
+                <div class="stat-label">Δ Altitude (m)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="distanceValue">0.0</div>
+                <div class="stat-label">Distance (km)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="rawEnergy">0.000</div>
+                <div class="stat-label">Raw GPE (kWh)</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="mass-input">
+                <label for="mass">Vehicle Mass (kg)</label>
+                <input type="number" id="mass" value="2000" min="500" max="5000" step="100">
+            </div>
+            
+            <button id="rezeroBtn" onclick="rezero()">Rezero</button>
+        </div>
+
+        <div class="log-container">
+            <div class="log-title">Energy Log</div>
+            <div id="logEntries"></div>
+        </div>
+
+        <div class="status" id="status">
+            <span class="status-icon"></span>
+            <span id="statusText">Initializing GPS...</span>
+        </div>
+
+        <div id="errorMsg" style="display: none;"></div>
+    </div>
+
+    <script>
+        let watchId = null;
+        let lastPosition = null;
+        let referenceAltitude = null;
+        let totalDistance = 0;
+        let altitudeBuffer = [];
+        let energyLog = [];
+        let currentEnergy = 0;
+        
+        const EFFICIENCY = 0.75; // 75% round-trip efficiency
+        const GRAVITY = 9.81; // m/s²
+        const BUFFER_SIZE = 7; // Moving average of 7 readings
+        
+        // Start tracking immediately on page load
+        window.addEventListener('load', () => {
+            startTracking();
+        });
+        
+        function startTracking() {
+            if (!navigator.geolocation) {
+                showError("Geolocation is not supported by your browser");
+                return;
+            }
+            
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            };
+            
+            watchId = navigator.geolocation.watchPosition(
+                handlePosition,
+                handleError,
+                options
+            );
+            
+            updateStatus('GPS Active', true);
+        }
+        
+        function handlePosition(position) {
+            const altitude = position.coords.altitude;
+            const latitude = position.coords.latitude;
+            const longitude = position.coords.longitude;
+            
+            // Check if altitude is available
+            if (altitude === null || altitude === undefined) {
+                showError("Altitude data not available. GPS may need clear sky view.");
+                document.getElementById('altitudeValue').textContent = 'N/A';
+                return;
+            }
+            
+            hideError();
+            
+            // Add altitude to buffer
+            altitudeBuffer.push(altitude);
+            if (altitudeBuffer.length > BUFFER_SIZE) {
+                altitudeBuffer.shift();
+            }
+            
+            // Update buffer indicator
+            document.getElementById('bufferIndicator').textContent = 
+                `Buffering: ${altitudeBuffer.length}/${BUFFER_SIZE}`;
+            
+            // Calculate average altitude
+            const avgAltitude = altitudeBuffer.reduce((sum, val) => sum + val, 0) / altitudeBuffer.length;
+            
+            // Set reference altitude on first reading
+            if (referenceAltitude === null) {
+                referenceAltitude = avgAltitude;
+            }
+            
+            // Update altitude display (show actual current, not average)
+            document.getElementById('altitudeValue').textContent = Math.round(altitude);
+            
+            // Calculate distance if we have a previous position
+            if (lastPosition) {
+                const distance = calculateDistance(
+                    lastPosition.latitude,
+                    lastPosition.longitude,
+                    latitude,
+                    longitude
+                );
+                totalDistance += distance;
+                
+                document.getElementById('distanceValue').textContent = 
+                    (totalDistance / 1000).toFixed(1);
+            }
+            
+            // Calculate altitude change and energy using averaged altitude
+            const altitudeDelta = avgAltitude - referenceAltitude;
+            document.getElementById('deltaAltitude').textContent = 
+                altitudeDelta > 0 ? `+${Math.round(altitudeDelta)}` : Math.round(altitudeDelta);
+            
+            // Calculate energy change
+            currentEnergy = calculateEnergy(altitudeDelta);
+            
+            // Store current position
+            lastPosition = {
+                latitude: latitude,
+                longitude: longitude,
+                altitude: altitude
+            };
+            
+            // Update status to show we're tracking
+            if (altitudeBuffer.length === BUFFER_SIZE) {
+                updateStatus('Tracking (Averaged)', true);
+            } else {
+                updateStatus(`Building buffer (${altitudeBuffer.length}/${BUFFER_SIZE})`, true);
+            }
+        }
+        
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000; // Earth's radius in meters
+            const φ1 = lat1 * Math.PI / 180;
+            const φ2 = lat2 * Math.PI / 180;
+            const Δφ = (lat2 - lat1) * Math.PI / 180;
+            const Δλ = (lon2 - lon1) * Math.PI / 180;
+            
+            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                      Math.cos(φ1) * Math.cos(φ2) *
+                      Math.sin(Δλ/2) * Math.sin(Δλ/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            
+            return R * c; // Distance in meters
+        }
+        
+        function calculateEnergy(altitudeDelta) {
+            const mass = parseFloat(document.getElementById('mass').value);
+            
+            // GPE = mgh (in joules)
+            const energyJoules = mass * GRAVITY * altitudeDelta;
+            
+            // Convert to kWh (1 kWh = 3.6 × 10^6 J)
+            const rawEnergyKwh = energyJoules / 3600000;
+            
+            // Apply efficiency
+            let effectiveEnergyKwh;
+            if (altitudeDelta > 0) {
+                // Going uphill: energy consumed from battery
+                effectiveEnergyKwh = rawEnergyKwh / EFFICIENCY;
+            } else {
+                // Going downhill: energy recovered to battery
+                effectiveEnergyKwh = rawEnergyKwh * EFFICIENCY;
+            }
+            
+            // Update displays
+            document.getElementById('rawEnergy').textContent = rawEnergyKwh.toFixed(3);
+            
+            const energyElement = document.getElementById('energyValue');
+            energyElement.textContent = effectiveEnergyKwh.toFixed(3);
+            
+            // Color coding
+            if (effectiveEnergyKwh > 0) {
+                energyElement.className = 'energy-value negative'; // Energy consumed
+            } else if (effectiveEnergyKwh < 0) {
+                energyElement.className = 'energy-value positive'; // Energy recovered
+            } else {
+                energyElement.className = 'energy-value';
+            }
+            
+            return effectiveEnergyKwh;
+        }
+        
+        function handleError(error) {
+            let message;
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    message = "Location permission denied. Please enable GPS access.";
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    message = "Location information unavailable. Check GPS settings.";
+                    break;
+                case error.TIMEOUT:
+                    message = "Location request timed out. Retrying...";
+                    break;
+                default:
+                    message = "An unknown error occurred.";
+            }
+            showError(message);
+        }
+        
+        function showError(message) {
+            const errorElement = document.getElementById('errorMsg');
+            errorElement.className = 'error';
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+        }
+        
+        function hideError() {
+            document.getElementById('errorMsg').style.display = 'none';
+        }
+        
+        function rezero() {
+            // Log the current energy before resetting
+            if (currentEnergy !== 0 && altitudeBuffer.length > 0) {
+                const now = new Date();
+                const timeString = now.toLocaleTimeString('en-US', { 
+                    hour: '2-digit', 
+                    minute: '2-digit', 
+                    second: '2-digit' 
+                });
+                
+                energyLog.unshift({
+                    time: timeString,
+                    energy: currentEnergy
+                });
+                
+                // Keep only last 20 entries
+                if (energyLog.length > 20) {
+                    energyLog.pop();
+                }
+                
+                updateLogDisplay();
+            }
+            
+            // Reset reference altitude to current average
+            if (altitudeBuffer.length > 0) {
+                referenceAltitude = altitudeBuffer.reduce((sum, val) => sum + val, 0) / altitudeBuffer.length;
+            }
+            
+            // Reset displays
+            document.getElementById('energyValue').textContent = '0.000';
+            document.getElementById('energyValue').className = 'energy-value';
+            document.getElementById('deltaAltitude').textContent = '0';
+            document.getElementById('rawEnergy').textContent = '0.000';
+            
+            // Reset distance
+            totalDistance = 0;
+            document.getElementById('distanceValue').textContent = '0.0';
+            
+            hideError();
+        }
+        
+        function updateLogDisplay() {
+            const logContainer = document.getElementById('logEntries');
+            logContainer.innerHTML = '';
+            
+            energyLog.forEach(entry => {
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry';
+                
+                const timeSpan = document.createElement('span');
+                timeSpan.className = 'log-time';
+                timeSpan.textContent = entry.time;
+                
+                const energySpan = document.createElement('span');
+                energySpan.className = 'log-energy';
+                if (entry.energy > 0) {
+                    energySpan.className += ' negative';
+                } else if (entry.energy < 0) {
+                    energySpan.className += ' positive';
+                }
+                energySpan.textContent = `${entry.energy.toFixed(3)} kWh`;
+                
+                logEntry.appendChild(timeSpan);
+                logEntry.appendChild(energySpan);
+                logContainer.appendChild(logEntry);
+            });
+            
+            if (energyLog.length === 0) {
+                logContainer.innerHTML = '<div style="text-align: center; opacity: 0.5; font-size: 14px;">No entries yet. Press "Rezero" to log current energy.</div>';
+            }
+        }
+        
+        function updateStatus(text, active) {
+            const statusElement = document.getElementById('status');
+            const statusText = document.getElementById('statusText');
+            
+            statusText.textContent = text;
+            if (active) {
+                statusElement.className = 'status active';
+            } else {
+                statusElement.className = 'status';
+            }
+        }
+        
+        // Initialize log display
+        updateLogDisplay();
+    </script>
+</body>
+</html>
