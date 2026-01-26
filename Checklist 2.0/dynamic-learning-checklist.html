@@ -3205,6 +3205,47 @@ body {
     margin-bottom: var(--space-3);
 }
 
+.restore-type-badge {
+    display: inline-block;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-bottom: var(--space-3);
+}
+
+.restore-type-full {
+    background: rgba(139, 92, 246, 0.15);
+    color: #8b5cf6;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.restore-type-single {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.restore-topics-list {
+    margin-top: var(--space-3);
+    padding: var(--space-3);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+}
+
+.restore-topics-list ul {
+    margin: var(--space-2) 0 0 var(--space-4);
+    padding: 0;
+}
+
+.restore-topics-list li {
+    margin-bottom: var(--space-1);
+    color: var(--color-text-secondary);
+}
+
 .restore-preview-actions {
     display: flex;
     justify-content: flex-end;
@@ -4807,11 +4848,12 @@ body {
                             <div class="export-option-icon">✉️</div>
                             <div class="export-option-content">
                                 <h3 class="export-option-title">Email Summary</h3>
-                                <p class="export-option-desc">Copy a structured summary to share with your teacher</p>
+                                <p class="export-option-desc">Share a structured summary with your teacher</p>
                             </div>
                             <div class="export-option-buttons">
-                                <button class="btn btn-secondary" id="email-preview-btn">Preview</button>
-                                <button class="btn btn-primary" id="email-copy-btn">Copy to Clipboard</button>
+                                <button class="btn btn-ghost" id="email-preview-btn">Preview</button>
+                                <button class="btn btn-secondary" id="email-copy-btn">Copy</button>
+                                <button class="btn btn-primary" id="email-send-btn">Email</button>
                             </div>
                         </div>
                     </div>
@@ -4827,19 +4869,19 @@ body {
                     </div>
 
                     <div class="export-grid">
-                        <!-- Backup Data -->
+                        <!-- Backup All Data -->
                         <div class="export-option">
-                            <div class="export-option-icon">⬇️</div>
+                            <div class="export-option-icon">💾</div>
                             <div class="export-option-content">
-                                <h3 class="export-option-title">Backup Data</h3>
-                                <p class="export-option-desc">Download your complete learning data as a backup file</p>
+                                <h3 class="export-option-title">Backup All Data</h3>
+                                <p class="export-option-desc">Download all your learning data across all topics</p>
                             </div>
-                            <button class="btn btn-secondary" id="export-json-btn">Download Backup</button>
+                            <button class="btn btn-primary" id="export-all-btn">Download Full Backup</button>
                         </div>
 
-                        <!-- Restore Data -->
+                        <!-- Restore All Data -->
                         <div class="export-option">
-                            <div class="export-option-icon">⬆️</div>
+                            <div class="export-option-icon">📂</div>
                             <div class="export-option-content">
                                 <h3 class="export-option-title">Restore Data</h3>
                                 <p class="export-option-desc">Restore your progress from a backup file</p>
@@ -4860,8 +4902,8 @@ body {
                         <div class="restore-preview-content" id="restore-preview-content">
                             <!-- Dynamically populated -->
                         </div>
-                        <div class="restore-preview-warning">
-                            ⚠️ This will replace all current data for this topic
+                        <div class="restore-preview-warning" id="restore-preview-warning">
+                            ⚠️ This will replace all current data
                         </div>
                         <div class="restore-preview-actions">
                             <button class="btn btn-ghost" id="restore-cancel-btn">Cancel</button>
@@ -4888,7 +4930,8 @@ body {
                     </div>
                     <div class="email-preview-actions">
                         <button class="btn btn-secondary" id="email-copy-json-btn">Copy JSON Only</button>
-                        <button class="btn btn-primary" id="email-copy-full-btn">Copy Full Summary</button>
+                        <button class="btn btn-secondary" id="email-copy-full-btn">Copy Full Summary</button>
+                        <button class="btn btn-primary" id="email-open-btn">Open in Email App</button>
                     </div>
                 </div>
 
@@ -11236,26 +11279,70 @@ function exportToPDF() {
     window.print();
 }
 
-function exportToJSON() {
+/**
+ * Export ALL data across all topics
+ */
+function exportAllData() {
+    // Make sure current topic data is saved to the store first
+    if (appState.currentTopicPath) {
+        topicProgressStore[appState.currentTopicPath] = {
+            learningItems: appState.learningItems,
+            checkins: appState.checkins,
+            goals: appState.goals,
+            questions: appState.questions,
+            sessions: appState.sessions,
+            practiceCalendar: appState.practiceCalendar,
+            quizStats: appState.quizStats,
+            growthCharacters: appState.growthCharacters
+        };
+    }
+
     const data = {
+        exportType: 'full',
+        exportVersion: '1.0',
+        appVersion: '2.0',
         exportDate: new Date().toISOString(),
+
+        // Student info
         student: appState.student,
-        topic: appState.topic?.name,
-        learningItems: appState.learningItems,
-        checkins: appState.checkins,
-        goals: appState.goals,
-        questions: appState.questions
+
+        // All topics progress data
+        topicProgressStore: topicProgressStore,
+
+        // Current topic context (for convenience on restore)
+        currentTopicPath: appState.currentTopicPath,
+        currentTopic: appState.topic?.name || null,
+
+        // Global settings
+        settings: {
+            theme: appState.theme,
+            skipPreTopicQuestions: appState.skipPreTopicQuestions
+        },
+
+        // Summary stats for preview
+        summary: {
+            topicCount: Object.keys(topicProgressStore).length,
+            topicNames: Object.keys(topicProgressStore).map(path => {
+                const parts = path.split('/');
+                return parts[parts.length - 1].replace(/-/g, ' ');
+            })
+        }
     };
-    
+
+    // Create filename with student name
+    const studentSlug = (appState.student?.name || 'student').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const dateStr = new Date().toISOString().split('T')[0];
+    const filename = `learning-backup-full-${studentSlug}-${dateStr}.json`;
+
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `learning-progress-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-    
-    showToast('Data exported', 'success');
+
+    showToast(`Full backup downloaded (${data.summary.topicCount} topics)`, 'success');
 }
 
 // ============================================
@@ -11296,6 +11383,22 @@ function hideEmailPreview() {
 }
 
 /**
+ * Open email client with pre-populated subject and body
+ */
+function openEmailClient() {
+    const metrics = gatherExportMetrics();
+    const subject = generateEmailSubject(metrics);
+    const body = generateEmailText(metrics);
+
+    // Encode for mailto: URL
+    const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+    window.location.href = mailtoUrl;
+    hideEmailPreview();
+    showToast('Opening email client...', 'success');
+}
+
+/**
  * Copy full email summary to clipboard
  */
 function copyEmailSummary() {
@@ -11303,7 +11406,7 @@ function copyEmailSummary() {
     const emailText = generateEmailText(metrics);
 
     navigator.clipboard.writeText(emailText).then(() => {
-        showToast('Email summary copied to clipboard', 'success');
+        showToast('Summary copied to clipboard', 'success');
         hideEmailPreview();
     }).catch(() => {
         showToast('Failed to copy to clipboard', 'error');
@@ -11318,7 +11421,7 @@ function copyEmailJSON() {
     const jsonData = generateEmailJSON(metrics);
 
     navigator.clipboard.writeText(JSON.stringify(jsonData, null, 2)).then(() => {
-        showToast('JSON data copied to clipboard', 'success');
+        showToast('JSON copied to clipboard', 'success');
         hideEmailPreview();
     }).catch(() => {
         showToast('Failed to copy to clipboard', 'error');
@@ -11535,48 +11638,90 @@ function handleRestoreFileSelect(event) {
 
 /**
  * Validate restore data and show preview
+ * Handles both full backups (exportType: 'full') and legacy single-topic backups
  */
 function validateAndPreviewRestore(data) {
+    // Check if this is a full backup or legacy single-topic backup
+    const isFullBackup = data.exportType === 'full';
+
     // Basic validation
-    if (!data.learningItems && !data.exportDate) {
+    if (!isFullBackup && !data.learningItems && !data.exportDate) {
         showToast('This file does not appear to be a valid backup', 'error');
+        return;
+    }
+
+    if (isFullBackup && !data.topicProgressStore) {
+        showToast('This full backup file appears to be corrupted', 'error');
         return;
     }
 
     pendingRestoreData = data;
 
-    // Build preview content
-    const topicName = data.topicMeta?.name || data.topic || 'Unknown';
     const backupDate = data.exportDate ? new Date(data.exportDate).toLocaleDateString('en-AU') : 'Unknown';
-    const itemCount = data.learningItems ? Object.keys(data.learningItems).length : 0;
-    const checkinCount = data.checkins ? data.checkins.length : 0;
+    let previewHTML = '';
+    let warningText = '';
 
-    // Check for topic mismatch
-    const currentTopic = appState.topic?.name || '';
-    const topicMismatch = topicName !== currentTopic && currentTopic !== '';
+    if (isFullBackup) {
+        // Full backup preview
+        const topicCount = data.summary?.topicCount || Object.keys(data.topicProgressStore).length;
+        const topicNames = data.summary?.topicNames || Object.keys(data.topicProgressStore);
+        const studentName = data.student?.name || 'Unknown';
 
-    let previewHTML = `
-        <dl>
-            <dt>Topic:</dt>
-            <dd>${topicName}</dd>
-            <dt>Backup Date:</dt>
-            <dd>${backupDate}</dd>
-            <dt>Learning Items:</dt>
-            <dd>${itemCount}</dd>
-            <dt>Check-ins:</dt>
-            <dd>${checkinCount}</dd>
-        </dl>
-    `;
-
-    if (topicMismatch) {
-        previewHTML += `
-            <div class="restore-topic-mismatch">
-                ⚠️ Warning: This backup is for "${topicName}" but you currently have "${currentTopic}" loaded. Restoring may cause unexpected behavior.
+        previewHTML = `
+            <div class="restore-type-badge restore-type-full">Full Backup</div>
+            <dl>
+                <dt>Student:</dt>
+                <dd>${studentName}</dd>
+                <dt>Backup Date:</dt>
+                <dd>${backupDate}</dd>
+                <dt>Topics Included:</dt>
+                <dd>${topicCount}</dd>
+            </dl>
+            <div class="restore-topics-list">
+                <strong>Topics:</strong>
+                <ul>
+                    ${topicNames.slice(0, 10).map(name => `<li>${name}</li>`).join('')}
+                    ${topicNames.length > 10 ? `<li><em>...and ${topicNames.length - 10} more</em></li>` : ''}
+                </ul>
             </div>
         `;
+        warningText = '⚠️ This will replace ALL your learning data across all topics';
+    } else {
+        // Legacy single-topic backup preview
+        const topicName = data.topicMeta?.name || data.topic || 'Unknown';
+        const itemCount = data.learningItems ? Object.keys(data.learningItems).length : 0;
+        const checkinCount = data.checkins ? data.checkins.length : 0;
+
+        // Check for topic mismatch
+        const currentTopic = appState.topic?.name || '';
+        const topicMismatch = topicName !== currentTopic && currentTopic !== '';
+
+        previewHTML = `
+            <div class="restore-type-badge restore-type-single">Single Topic Backup</div>
+            <dl>
+                <dt>Topic:</dt>
+                <dd>${topicName}</dd>
+                <dt>Backup Date:</dt>
+                <dd>${backupDate}</dd>
+                <dt>Learning Items:</dt>
+                <dd>${itemCount}</dd>
+                <dt>Check-ins:</dt>
+                <dd>${checkinCount}</dd>
+            </dl>
+        `;
+
+        if (topicMismatch) {
+            previewHTML += `
+                <div class="restore-topic-mismatch">
+                    ⚠️ Warning: This backup is for "${topicName}" but you currently have "${currentTopic}" loaded.
+                </div>
+            `;
+        }
+        warningText = '⚠️ This will replace data for the current topic only';
     }
 
     document.getElementById('restore-preview-content').innerHTML = previewHTML;
+    document.getElementById('restore-preview-warning').textContent = warningText;
     document.getElementById('restore-preview-panel').style.display = 'block';
 }
 
@@ -11590,6 +11735,7 @@ function hideRestorePreview() {
 
 /**
  * Execute the restore operation
+ * Handles both full backups and legacy single-topic backups
  */
 function executeRestore() {
     if (!pendingRestoreData) {
@@ -11598,7 +11744,79 @@ function executeRestore() {
     }
 
     const data = pendingRestoreData;
+    const isFullBackup = data.exportType === 'full';
 
+    if (isFullBackup) {
+        // Full restore - replace everything
+        executeFullRestore(data);
+    } else {
+        // Legacy single-topic restore
+        executeSingleTopicRestore(data);
+    }
+}
+
+/**
+ * Execute a full restore (all topics)
+ */
+function executeFullRestore(data) {
+    // Restore student info
+    if (data.student) {
+        appState.student = data.student;
+        document.getElementById('student-name-display').textContent = data.student.name || 'Student';
+        document.getElementById('student-name-input').value = data.student.name || '';
+        document.getElementById('class-input').value = data.student.class || '';
+    }
+
+    // Restore all topic progress data
+    if (data.topicProgressStore) {
+        topicProgressStore = data.topicProgressStore;
+    }
+
+    // Restore global settings
+    if (data.settings) {
+        if (data.settings.theme) {
+            appState.theme = data.settings.theme;
+            document.body.classList.toggle('dark-mode', data.settings.theme === 'dark');
+            document.getElementById('dark-mode-toggle').checked = data.settings.theme === 'dark';
+        }
+        if (data.settings.skipPreTopicQuestions !== undefined) {
+            appState.skipPreTopicQuestions = data.settings.skipPreTopicQuestions;
+        }
+    }
+
+    // If a topic is currently loaded, refresh its data from the restored store
+    if (appState.currentTopicPath && topicProgressStore[appState.currentTopicPath]) {
+        const stored = topicProgressStore[appState.currentTopicPath];
+        appState.learningItems = stored.learningItems || {};
+        appState.checkins = stored.checkins || [];
+        appState.goals = stored.goals || [];
+        appState.questions = stored.questions || [];
+        appState.sessions = stored.sessions || [];
+        appState.practiceCalendar = stored.practiceCalendar || {};
+        appState.quizStats = stored.quizStats || {};
+        appState.growthCharacters = stored.growthCharacters || [];
+    }
+
+    // Save everything
+    saveData();
+    hideRestorePreview();
+
+    // Refresh UI
+    renderOverview();
+    renderLearningContent();
+    renderHistory();
+    renderGoals();
+    renderQuestions();
+    updateBadges();
+
+    const topicCount = Object.keys(topicProgressStore).length;
+    showToast(`Full restore complete (${topicCount} topics)`, 'success');
+}
+
+/**
+ * Execute a single-topic restore (legacy format)
+ */
+function executeSingleTopicRestore(data) {
     // Restore learning items
     if (data.learningItems) {
         appState.learningItems = data.learningItems;
@@ -11619,7 +11837,7 @@ function executeRestore() {
         appState.questions = data.questions;
     }
 
-    // Restore Growth Character data (if present in new format backups)
+    // Restore Growth Character data (if present)
     if (data.growthCharacters) {
         appState.growthCharacters = data.growthCharacters;
     }
@@ -11632,11 +11850,8 @@ function executeRestore() {
         appState.practiceCalendar = data.practiceCalendar;
     }
 
-    // Restore settings (if present)
-    if (data.settings) {
-        if (data.settings.levelEmojis) {
-            // Apply level emoji settings if they exist
-        }
+    if (data.sessions) {
+        appState.sessions = data.sessions;
     }
 
     // Save and refresh
@@ -12251,12 +12466,14 @@ function setupEventListeners() {
     document.getElementById('export-pdf-btn')?.addEventListener('click', exportToPDF);
     document.getElementById('email-preview-btn')?.addEventListener('click', showEmailPreview);
     document.getElementById('email-copy-btn')?.addEventListener('click', copyEmailSummary);
+    document.getElementById('email-send-btn')?.addEventListener('click', openEmailClient);
     document.getElementById('email-preview-close')?.addEventListener('click', hideEmailPreview);
     document.getElementById('email-copy-json-btn')?.addEventListener('click', copyEmailJSON);
     document.getElementById('email-copy-full-btn')?.addEventListener('click', copyEmailSummary);
+    document.getElementById('email-open-btn')?.addEventListener('click', openEmailClient);
 
     // Export - Data Management
-    document.getElementById('export-json-btn')?.addEventListener('click', exportToJSON);
+    document.getElementById('export-all-btn')?.addEventListener('click', exportAllData);
     document.getElementById('restore-browse-btn')?.addEventListener('click', () => {
         document.getElementById('restore-file-input')?.click();
     });
