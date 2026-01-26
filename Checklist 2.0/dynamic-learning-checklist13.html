@@ -3895,7 +3895,19 @@ let appState = {
     questions: [],
     theme: 'light',
     skipPreTopicQuestions: false, // When true, skip quizzes during pre-topic check-ins
-    lastSaved: null
+    lastSaved: null,
+
+    // Growth Character System - Session tracking
+    sessions: [],              // Array of session records
+
+    // Growth Character System - Practice calendar (keyed by YYYYMMDD)
+    practiceCalendar: {},
+
+    // Growth Character System - Per-LP, per-question stats
+    quizStats: {},
+
+    // Growth Character System - Generated Growth Characters
+    growthCharacters: []
 };
 
 // Manifest data (loaded from manifest.json)
@@ -3930,6 +3942,20 @@ let checkinStartTime = null;
 let selectionPopup = null;
 let selectionTimeout = null;
 
+// Session tracking for Growth Character System
+let currentSession = null;
+let lastInteractionTime = null;
+let sessionIdleTimeout = null;
+const SESSION_IDLE_THRESHOLD_MS = 60000;  // 60 seconds idle = pause active time
+
+// Activity flags for session tracking (bitmask)
+const ACTIVITY = {
+    QUIZ: 1,
+    CONTENT: 2,
+    SEARCH: 4,
+    QUESTION: 8
+};
+
 // ============================================
 // STORAGE FUNCTIONS
 // ============================================
@@ -3942,10 +3968,15 @@ function saveData() {
                 learningItems: appState.learningItems,
                 checkins: appState.checkins,
                 goals: appState.goals,
-                questions: appState.questions
+                questions: appState.questions,
+                // Growth Character System data (per-topic)
+                sessions: appState.sessions,
+                practiceCalendar: appState.practiceCalendar,
+                quizStats: appState.quizStats,
+                growthCharacters: appState.growthCharacters
             };
         }
-        
+
         // Save app state
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
             student: appState.student,
@@ -3957,7 +3988,12 @@ function saveData() {
             goals: appState.goals,
             questions: appState.questions,
             theme: appState.theme,
-            lastSaved: appState.lastSaved
+            lastSaved: appState.lastSaved,
+            // Growth Character System data
+            sessions: appState.sessions,
+            practiceCalendar: appState.practiceCalendar,
+            quizStats: appState.quizStats,
+            growthCharacters: appState.growthCharacters
         }));
         
         // Save per-topic progress store
@@ -3991,7 +4027,13 @@ function loadData() {
             appState.goals = parsed.goals || [];
             appState.questions = parsed.questions || [];
             appState.theme = parsed.theme || 'light';
-            
+
+            // Growth Character System data (with migration for existing users)
+            appState.sessions = parsed.sessions || [];
+            appState.practiceCalendar = parsed.practiceCalendar || {};
+            appState.quizStats = parsed.quizStats || {};
+            appState.growthCharacters = parsed.growthCharacters || [];
+
             if (appState.theme) applyTheme(appState.theme);
         }
     } catch (e) {
@@ -6895,13 +6937,26 @@ function executeClearAllData() {
         questions: [],
         theme: 'light',
         skipPreTopicQuestions: false,
-        lastSaved: null
+        lastSaved: null,
+        // Growth Character System
+        sessions: [],
+        practiceCalendar: {},
+        quizStats: {},
+        growthCharacters: []
     };
-    
+
     topicProgressStore = {};
     quizState = {};
     questionsCache = {};
     topicAvailabilityCache = {};
+
+    // Reset session tracking
+    currentSession = null;
+    lastInteractionTime = null;
+    if (sessionIdleTimeout) {
+        clearTimeout(sessionIdleTimeout);
+        sessionIdleTimeout = null;
+    }
     levelPrefs = {
         displayMode: 'emoji',
         emojiProgression: 0,
