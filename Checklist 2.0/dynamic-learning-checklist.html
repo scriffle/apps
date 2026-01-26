@@ -5101,6 +5101,191 @@ function getAllDerivedMetrics() {
 }
 
 // ============================================
+// LEARNING QUALITIES (Growth Character System)
+// ============================================
+
+/**
+ * Quality label thresholds and text
+ */
+const QUALITY_LABELS = {
+    foundation: [
+        [30, "Building from the ground up"],
+        [50, "Establishing foundations"],
+        [70, "Solid starting point"],
+        [85, "Strong prior knowledge"],
+        [100, "Excellent foundation"]
+    ],
+    momentum: [
+        [30, "Taking time to build understanding"],
+        [50, "Building at a steady pace"],
+        [70, "Good forward progress"],
+        [85, "Strong momentum"],
+        [100, "Excellent momentum"]
+    ],
+    steadiness: [
+        [30, "Working through challenges"],
+        [50, "Building consistency"],
+        [70, "Progressing steadily"],
+        [85, "Smooth progression"],
+        [100, "Very consistent progress"]
+    ],
+    engagedCuriosity: [
+        [30, "Opportunity to explore more"],
+        [50, "Beginning to investigate"],
+        [70, "Actively engaging"],
+        [85, "Curious and thorough"],
+        [100, "Deeply engaged"]
+    ],
+    persistence: [
+        [30, "Building resilience"],
+        [50, "Developing determination"],
+        [70, "Shows persistence"],
+        [85, "Resilient and determined"],
+        [100, "Highly persistent"]
+    ],
+    learningHabits: [
+        [30, "Building study habits"],
+        [50, "Developing learning strategies"],
+        [70, "Good learning approach"],
+        [85, "Strong study habits"],
+        [100, "Excellent learning strategies"]
+    ]
+};
+
+/**
+ * Get the label for a quality score
+ * @param {string} quality - Quality name
+ * @param {number} score - Score 0-100
+ * @returns {string}
+ */
+function getQualityLabel(quality, score) {
+    const thresholds = QUALITY_LABELS[quality];
+    if (!thresholds) return '';
+
+    for (const [threshold, label] of thresholds) {
+        if (score <= threshold) return label;
+    }
+    return thresholds[thresholds.length - 1][1];
+}
+
+/**
+ * Calculate Foundation quality (0-100)
+ * Based on pre-topic starting level
+ */
+function calculateFoundation(metrics) {
+    // Scale 1-5 to 0-100
+    return Math.round(((metrics.preTopicLevel - 1) / 4) * 100);
+}
+
+/**
+ * Calculate Momentum quality (0-100)
+ * Based on growth rate and spacing
+ */
+function calculateMomentum(metrics) {
+    // Expected growth: ~0.1 levels per day of the topic duration
+    const expectedGrowth = metrics.totalDays * 0.1;
+    const velocityScore = Math.min(1, metrics.growthMagnitude / Math.max(expectedGrowth, 0.1));
+
+    // 60% velocity, 40% spacing
+    return Math.round((velocityScore * 60) + (metrics.spacingScore * 40));
+}
+
+/**
+ * Calculate Steadiness quality (0-100)
+ * Based on error rate and lockouts
+ */
+function calculateSteadiness(metrics) {
+    let score = 100;
+
+    // Error rate penalty (up to -40)
+    score -= metrics.errorRate * 40;
+
+    // Lockout penalty (up to -30, scaled by item count)
+    const lockoutRate = metrics.lockoutCount / Math.max(metrics.totalItems, 1);
+    score -= Math.min(lockoutRate * 100, 30);
+
+    return Math.round(Math.max(0, Math.min(100, score)));
+}
+
+/**
+ * Calculate Engaged Curiosity quality (0-100)
+ * Based on content engagement, consolidation, questions, session variety
+ */
+function calculateEngagedCuriosity(metrics) {
+    // Content engagement: 35%
+    const contentComponent = metrics.contentEngagementRate * 35;
+
+    // Consolidation: 25%
+    const consolidationComponent = metrics.consolidationRate * 25;
+
+    // Questions submitted: 20% (cap at 5)
+    const questionsComponent = (Math.min(metrics.questionsSubmitted, 5) / 5) * 20;
+
+    // Session variety: 20%
+    const varietyComponent = metrics.sessionVariety * 20;
+
+    return Math.round(contentComponent + consolidationComponent + questionsComponent + varietyComponent);
+}
+
+/**
+ * Calculate Persistence quality (0-100)
+ * Based on recovery rate, spacing, session consistency
+ */
+function calculatePersistence(metrics) {
+    // Recovery from setbacks: 40%
+    const recoveryComponent = metrics.recoveryRate * 40;
+
+    // Spacing (kept coming back): 30%
+    const spacingComponent = metrics.spacingScore * 30;
+
+    // Session consistency: 30%
+    const consistencyComponent = metrics.sessionConsistency * 30;
+
+    return Math.round(recoveryComponent + spacingComponent + consistencyComponent);
+}
+
+/**
+ * Calculate Learning Habits quality (0-100)
+ * Based on spacing, content engagement, session variety
+ */
+function calculateLearningHabits(metrics) {
+    // Spacing: 40%
+    const spacingComponent = metrics.spacingScore * 40;
+
+    // Content engagement: 30%
+    const contentComponent = metrics.contentEngagementRate * 30;
+
+    // Session variety: 30%
+    const varietyComponent = metrics.sessionVariety * 30;
+
+    return Math.round(spacingComponent + contentComponent + varietyComponent);
+}
+
+/**
+ * Calculate all six learning qualities
+ * @returns {object} { qualities, qualityLabels }
+ */
+function calculateAllQualities() {
+    const metrics = getAllDerivedMetrics();
+
+    const qualities = {
+        foundation: calculateFoundation(metrics),
+        momentum: calculateMomentum(metrics),
+        steadiness: calculateSteadiness(metrics),
+        engagedCuriosity: calculateEngagedCuriosity(metrics),
+        persistence: calculatePersistence(metrics),
+        learningHabits: calculateLearningHabits(metrics)
+    };
+
+    const qualityLabels = {};
+    Object.keys(qualities).forEach(q => {
+        qualityLabels[q] = getQualityLabel(q, qualities[q]);
+    });
+
+    return { qualities, qualityLabels, metrics };
+}
+
+// ============================================
 // QUIZ STATE MANAGEMENT
 // ============================================
 function saveQuizState() {
