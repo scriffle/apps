@@ -4708,6 +4708,124 @@ function trackQuestionSubmission() {
 }
 
 // ============================================
+// QUIZ STATS TRACKING (Growth Character System)
+// ============================================
+
+/**
+ * Record a quiz result for Growth Character stats
+ * @param {string} lpKey - The learning item key
+ * @param {number} questionIndex - The question index within the LP
+ * @param {boolean} wasCorrect - Whether the answer was correct
+ */
+function recordQuizResult(lpKey, questionIndex, wasCorrect) {
+    // Track as quiz activity
+    trackInteraction(ACTIVITY.QUIZ);
+
+    // Initialize quizStats structure if needed
+    if (!appState.quizStats[lpKey]) {
+        appState.quizStats[lpKey] = {};
+    }
+
+    const qKey = String(questionIndex);
+
+    if (!appState.quizStats[lpKey][qKey]) {
+        appState.quizStats[lpKey][qKey] = {
+            attempts: 0,
+            correct: 0,
+            lastTs: null
+        };
+    }
+
+    const stat = appState.quizStats[lpKey][qKey];
+    stat.attempts++;
+    if (wasCorrect) stat.correct++;
+    stat.lastTs = Date.now();
+
+    // Update consolidation tracking
+    updateConsolidation(lpKey);
+}
+
+/**
+ * Update consolidation status for a learning item
+ * @param {string} lpKey - The learning item key
+ */
+function updateConsolidation(lpKey) {
+    const item = appState.learningItems[lpKey];
+    if (!item) return;
+
+    // Initialize consolidation if needed
+    if (!item.consolidation) {
+        item.consolidation = {
+            masteredAt: null,
+            qAttempted: 0,
+            qCorrect: 0,
+            qTotal: 0,
+            isConsolidated: false
+        };
+    }
+
+    const cons = item.consolidation;
+
+    // Track mastery timestamp when reaching level 5
+    if (item.level === 5 && !cons.masteredAt) {
+        cons.masteredAt = Date.now();
+    }
+
+    // Get question count for this LP (from cache if available)
+    const lpStats = appState.quizStats[lpKey] || {};
+
+    // Count unique questions attempted
+    cons.qAttempted = Object.keys(lpStats).length;
+
+    // Count questions ever answered correctly
+    let everCorrect = 0;
+    Object.values(lpStats).forEach(q => {
+        if (q.correct > 0) everCorrect++;
+    });
+    cons.qCorrect = everCorrect;
+
+    // Get total questions available (async, so we update when known)
+    updateConsolidationTotal(lpKey);
+
+    // Check if consolidated (all questions attempted)
+    if (cons.qTotal > 0 && cons.qAttempted >= cons.qTotal) {
+        cons.isConsolidated = true;
+    }
+}
+
+/**
+ * Update the total question count for consolidation
+ * @param {string} lpKey - The learning item key
+ */
+async function updateConsolidationTotal(lpKey) {
+    const item = appState.learningItems[lpKey];
+    if (!item || !item.consolidation) return;
+
+    // Extract UUID from the item key to look up questions
+    const itemEl = document.querySelector(`[data-item-key="${lpKey}"]`);
+    const uuid = itemEl?.dataset.uuid;
+
+    if (uuid && questionsCache[uuid]) {
+        const questions = questionsCache[uuid];
+        if (questions && questions.questions) {
+            // Count all questions across all levels
+            let total = 0;
+            Object.values(questions.questions).forEach(levelQuestions => {
+                if (Array.isArray(levelQuestions)) {
+                    total += levelQuestions.length;
+                }
+            });
+            item.consolidation.qTotal = total;
+
+            // Re-check consolidation status
+            if (total > 0 && item.consolidation.qAttempted >= total) {
+                item.consolidation.isConsolidated = true;
+            }
+        }
+    }
+}
+
+// ============================================
 // QUIZ STATE MANAGEMENT
 // ============================================
 function saveQuizState() {
@@ -6808,6 +6926,9 @@ function submitClozeAnswer() {
 }
 
 function processQuizResult(isCorrect, explanation) {
+    // Record quiz result for Growth Character System
+    recordQuizResult(currentQuiz.itemKey, currentQuiz.questionIndex, isCorrect);
+
     const state = getQuizStateForItem(currentQuiz.itemKey, currentQuiz.toLevel);
     
     // Mark question as used
