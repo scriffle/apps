@@ -5260,37 +5260,35 @@ function updateConsolidation(lpKey) {
  * @param {string} lpKey - The learning item key
  */
 async function updateConsolidationTotal(lpKey) {
-    const item = appState.learningItems[lpKey];
-    if (!item || !item.consolidation) return;
+    try {
+        const item = appState.learningItems[lpKey];
+        if (!item || !item.consolidation) return;
 
-    // Extract UUID from the item to look up questions
-    const lpItem = getItemByKey(lpKey);
-    const uuid = lpItem?.uuid;
-    if (!uuid) return;
+        // Extract UUID from the item to look up questions
+        const lpItem = getItemByKey(lpKey);
+        const uuid = lpItem?.uuid;
+        if (!uuid) return;
 
-    // Fetch questions if not in cache
-    let questionData = questionsCache[uuid];
-    if (questionData === undefined) {
-        questionData = await loadQuestionsForItem(uuid);
-    }
+        // Only use cached questions - don't fetch (to avoid blocking)
+        const questionData = questionsCache[uuid];
+        if (questionData && questionData !== null) {
+            // Count all questions across all levels (format: toLevel2, toLevel3, toLevel4, toLevel5)
+            let total = 0;
+            for (let level = 2; level <= 5; level++) {
+                const levelKey = `toLevel${level}`;
+                if (Array.isArray(questionData[levelKey])) {
+                    total += questionData[levelKey].length;
+                }
+            }
+            item.consolidation.qTotal = total;
 
-    if (questionData) {
-        // Count all questions across all levels (format: toLevel2, toLevel3, toLevel4, toLevel5)
-        let total = 0;
-        for (let level = 2; level <= 5; level++) {
-            const levelKey = `toLevel${level}`;
-            if (Array.isArray(questionData[levelKey])) {
-                total += questionData[levelKey].length;
+            // Re-check consolidation status
+            if (total > 0 && item.consolidation.qAttempted >= total) {
+                item.consolidation.isConsolidated = true;
             }
         }
-        item.consolidation.qTotal = total;
-
-        // Re-check consolidation status
-        if (total > 0 && item.consolidation.qAttempted >= total) {
-            item.consolidation.isConsolidated = true;
-        }
-
-        saveData();
+    } catch (e) {
+        console.error('Error updating consolidation total:', e);
     }
 }
 
@@ -8033,12 +8031,9 @@ function applyLevelChange(itemKey, level) {
             itemEl.dataset.level = level;
         }
 
-        // If reached level 5 (secured), update consolidation total and re-render
+        // If reached level 5 (secured), re-render to show consolidation row
         if (level === 5) {
-            // Update qTotal before rendering so it shows the correct count
-            updateConsolidationTotal(itemKey).then(() => {
-                renderLearningContentPreserveState();
-            });
+            renderLearningContentPreserveState();
         }
 
         saveData();
