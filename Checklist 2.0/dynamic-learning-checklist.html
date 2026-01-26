@@ -5263,27 +5263,34 @@ async function updateConsolidationTotal(lpKey) {
     const item = appState.learningItems[lpKey];
     if (!item || !item.consolidation) return;
 
-    // Extract UUID from the item key to look up questions
-    const itemEl = document.querySelector(`[data-item-key="${lpKey}"]`);
-    const uuid = itemEl?.dataset.uuid;
+    // Extract UUID from the item to look up questions
+    const lpItem = getItemByKey(lpKey);
+    const uuid = lpItem?.uuid;
+    if (!uuid) return;
 
-    if (uuid && questionsCache[uuid]) {
-        const questions = questionsCache[uuid];
-        if (questions && questions.questions) {
-            // Count all questions across all levels
-            let total = 0;
-            Object.values(questions.questions).forEach(levelQuestions => {
-                if (Array.isArray(levelQuestions)) {
-                    total += levelQuestions.length;
-                }
-            });
-            item.consolidation.qTotal = total;
+    // Fetch questions if not in cache
+    let questionData = questionsCache[uuid];
+    if (questionData === undefined) {
+        questionData = await loadQuestionsForItem(uuid);
+    }
 
-            // Re-check consolidation status
-            if (total > 0 && item.consolidation.qAttempted >= total) {
-                item.consolidation.isConsolidated = true;
+    if (questionData) {
+        // Count all questions across all levels (format: toLevel2, toLevel3, toLevel4, toLevel5)
+        let total = 0;
+        for (let level = 2; level <= 5; level++) {
+            const levelKey = `toLevel${level}`;
+            if (Array.isArray(questionData[levelKey])) {
+                total += questionData[levelKey].length;
             }
         }
+        item.consolidation.qTotal = total;
+
+        // Re-check consolidation status
+        if (total > 0 && item.consolidation.qAttempted >= total) {
+            item.consolidation.isConsolidated = true;
+        }
+
+        saveData();
     }
 }
 
@@ -8026,9 +8033,12 @@ function applyLevelChange(itemKey, level) {
             itemEl.dataset.level = level;
         }
 
-        // If reached level 5 (secured), re-render to show consolidation row
+        // If reached level 5 (secured), update consolidation total and re-render
         if (level === 5) {
-            renderLearningContentPreserveState();
+            // Update qTotal before rendering so it shows the correct count
+            updateConsolidationTotal(itemKey).then(() => {
+                renderLearningContentPreserveState();
+            });
         }
 
         saveData();
