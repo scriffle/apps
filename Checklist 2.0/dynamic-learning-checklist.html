@@ -5453,7 +5453,7 @@ body {
                             <span class="welcome-feature-icon">🎓</span>
                             <div class="welcome-feature-text">
                                 <strong>Quick checks</strong>
-                                <span>When you move to a higher level, you may be asked a quick question to confirm your understanding. This helps ensure your self-assessment is accurate.</span>
+                                <span>When you move to a higher level, you will be asked a quick question to confirm your understanding. This helps ensure your self-assessment is accurate.</span>
                             </div>
                         </div>
                     </div>
@@ -5561,7 +5561,7 @@ body {
                             <span class="welcome-feature-icon">✉️</span>
                             <div class="welcome-feature-text">
                                 <strong>Email Summary</strong>
-                                <span>Send a structured summary to your teacher. The email includes data they can use to track class progress.</span>
+                                <span>Send a structured summary to your teacher. The email includes data they can use to track your progress.</span>
                             </div>
                         </div>
                         <div class="welcome-feature">
@@ -7648,7 +7648,13 @@ async function loadManifest() {
             throw new Error(`HTTP ${response.status}`);
         }
         manifest = await response.json();
-        
+
+        // Ensure selector bar is visible (in case it was previously hidden)
+        const selectorBar = document.querySelector('.topic-selector-bar');
+        if (selectorBar) {
+            selectorBar.style.display = '';
+        }
+
         // Populate year level dropdown
         populateYearLevelDropdown();
         
@@ -11337,7 +11343,11 @@ function gatherExportMetrics() {
             date: d.date.toISOString().split('T')[0],
             hasActivity: d.hasActivity,
             isToday: d.isToday
-        }))
+        })),
+
+        // Student questions and goals
+        questions: appState.questions || [],
+        goals: appState.goals || []
     };
 }
 
@@ -12243,7 +12253,46 @@ Topic: ${metrics.topic.name}
 Subject: ${metrics.topic.subject || 'N/A'} | Year: ${metrics.topic.yearLevel || 'N/A'}
 Report Date: ${new Date().toISOString().split('T')[0]}
 Period: ${metrics.activityRange.firstDate || 'N/A'} to ${metrics.activityRange.lastDate || 'N/A'}
+`;
 
+    // Add Questions for Teacher (critical - at the top)
+    if (metrics.questions && metrics.questions.length > 0) {
+        text += `
+═══════════════════════════════════
+QUESTIONS FOR MY TEACHER
+═══════════════════════════════════
+
+`;
+        metrics.questions.forEach((q, i) => {
+            text += `${i + 1}. ${q}\n`;
+        });
+    }
+
+    // Add Learning Character narrative if available
+    if (metrics.narrative) {
+        text += `
+─────────────────────────────────
+LEARNING CHARACTER
+─────────────────────────────────
+
+${metrics.narrative}
+`;
+    }
+
+    // Add Student Goals if any
+    if (metrics.goals && metrics.goals.length > 0) {
+        text += `
+─────────────────────────────────
+MY LEARNING GOALS
+─────────────────────────────────
+
+`;
+        metrics.goals.forEach((g, i) => {
+            text += `${i + 1}. ${g}\n`;
+        });
+    }
+
+    text += `
 ─────────────────────────────────
 SUMMARY METRICS
 ─────────────────────────────────
@@ -12376,12 +12425,15 @@ function generateEmailJSON(metrics) {
         },
         levelDistribution: metrics.levelDistribution,
         qualities: metrics.qualities,
+        narrative: metrics.narrative || null,
         subtopics: metrics.subtopics.map(st => ({
             name: st.name,
             totalItems: st.totalItems,
             avgLevel: st.avgLevel,
             securedCount: st.securedCount
-        }))
+        })),
+        questions: metrics.questions || [],
+        goals: metrics.goals || []
     };
 }
 
