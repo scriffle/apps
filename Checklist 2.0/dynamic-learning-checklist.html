@@ -4826,6 +4826,281 @@ async function updateConsolidationTotal(lpKey) {
 }
 
 // ============================================
+// DERIVED METRICS (Growth Character System)
+// ============================================
+
+/**
+ * Calculate days between two dates
+ */
+function daysBetween(date1, date2) {
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    const diffTime = Math.abs(d2 - d1);
+    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Parse a YYYYMMDD date key back to a Date
+ */
+function parseDateKey(dateKey) {
+    const year = parseInt(dateKey.substring(0, 4));
+    const month = parseInt(dateKey.substring(4, 6)) - 1;
+    const day = parseInt(dateKey.substring(6, 8));
+    return new Date(year, month, day);
+}
+
+/**
+ * Calculate spacing score (how well-distributed practice is)
+ * @returns {number} 0-1, higher = better distributed
+ */
+function calculateSpacingScore() {
+    const calendar = appState.practiceCalendar;
+    const activeDays = Object.keys(calendar).length;
+
+    if (activeDays === 0) return 0;
+
+    // Find topic start date from first check-in
+    const firstCheckin = appState.checkins.find(c => c.type === 'pre') || appState.checkins[0];
+    if (!firstCheckin) return 0;
+
+    const startDate = new Date(firstCheckin.date);
+    const totalDays = Math.max(1, daysBetween(startDate, new Date()));
+
+    return Math.min(1, activeDays / totalDays);
+}
+
+/**
+ * Calculate session variety (how many different activities per session)
+ * @returns {number} 0-1, higher = more varied sessions
+ */
+function calculateSessionVariety() {
+    const sessions = appState.sessions;
+    if (sessions.length === 0) return 0;
+
+    let variedSessions = 0;
+    sessions.forEach(s => {
+        // Count bits set in activities bitmask
+        let activityCount = 0;
+        let n = s.activities;
+        while (n) {
+            activityCount += n & 1;
+            n >>= 1;
+        }
+        if (activityCount >= 2) variedSessions++;
+    });
+
+    return variedSessions / sessions.length;
+}
+
+/**
+ * Calculate content engagement rate (% of items with help content viewed)
+ * @returns {number} 0-1
+ */
+function calculateContentEngagementRate() {
+    const items = Object.values(appState.learningItems);
+    if (items.length === 0) return 0;
+
+    let itemsWithEngagement = 0;
+    items.forEach(item => {
+        const counts = item.engagementCounts || {};
+        if (counts.what || counts.why || counts.example) {
+            itemsWithEngagement++;
+        }
+    });
+
+    return itemsWithEngagement / items.length;
+}
+
+/**
+ * Calculate consolidation rate (% of mastered items that are consolidated)
+ * @returns {number} 0-1
+ */
+function calculateConsolidationRate() {
+    const items = Object.values(appState.learningItems);
+    let masteredCount = 0;
+    let consolidatedCount = 0;
+
+    items.forEach(item => {
+        if (item.level === 5) {
+            masteredCount++;
+            if (item.consolidation?.isConsolidated) {
+                consolidatedCount++;
+            }
+        }
+    });
+
+    return masteredCount > 0 ? consolidatedCount / masteredCount : 0;
+}
+
+/**
+ * Calculate error metrics from quiz stats and history
+ * @returns {object} { errorRate, lockoutCount }
+ */
+function calculateErrorMetrics() {
+    let totalAttempts = 0;
+    let totalErrors = 0;
+    let lockoutCount = 0;
+
+    // Count from quiz stats
+    Object.values(appState.quizStats).forEach(lpStats => {
+        Object.values(lpStats).forEach(q => {
+            totalAttempts += q.attempts;
+            totalErrors += (q.attempts - q.correct);
+        });
+    });
+
+    // Count lockouts from history
+    Object.values(appState.learningItems).forEach(item => {
+        (item.history || []).forEach(h => {
+            // Check for level drops (lockouts cause level to stay same or context indicates lockout)
+            if (h.previousLevel && h.level < h.previousLevel) {
+                lockoutCount++;
+            }
+        });
+    });
+
+    const errorRate = totalAttempts > 0 ? totalErrors / totalAttempts : 0;
+
+    return { errorRate, lockoutCount };
+}
+
+/**
+ * Calculate recovery rate (% of lockouts followed by subsequent progress)
+ * @returns {number} 0-1
+ */
+function calculateRecoveryRate() {
+    let lockouts = 0;
+    let recoveries = 0;
+
+    Object.values(appState.learningItems).forEach(item => {
+        const history = item.history || [];
+        for (let i = 0; i < history.length; i++) {
+            const h = history[i];
+            // Detect lockout (level drop)
+            if (h.previousLevel && h.level < h.previousLevel) {
+                lockouts++;
+                // Check if any subsequent entry shows recovery
+                for (let j = i + 1; j < history.length; j++) {
+                    if (history[j].level > h.level) {
+                        recoveries++;
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
+    return lockouts > 0 ? recoveries / lockouts : 1;
+}
+
+/**
+ * Calculate session consistency (regularity of practice gaps)
+ * @returns {number} 0-1, higher = more consistent
+ */
+function calculateSessionConsistency() {
+    const dates = Object.keys(appState.practiceCalendar).sort();
+    if (dates.length < 2) return 0.5;
+
+    // Calculate gaps between sessions
+    const gaps = [];
+    for (let i = 1; i < dates.length; i++) {
+        const gap = daysBetween(parseDateKey(dates[i - 1]), parseDateKey(dates[i]));
+        gaps.push(gap);
+    }
+
+    if (gaps.length === 0) return 0.5;
+
+    // Calculate variance
+    const avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+    const variance = gaps.reduce((sum, g) => sum + Math.pow(g - avgGap, 2), 0) / gaps.length;
+
+    // Convert to 0-1 score (lower variance = higher score)
+    // Variance of 25 (5 day std dev) = 0 score
+    return Math.max(0, 1 - (variance / 25));
+}
+
+/**
+ * Get the overall level as a 1-5 average
+ * @returns {number}
+ */
+function calculateOverallLevel() {
+    const items = Object.values(appState.learningItems);
+    if (items.length === 0) return 1;
+    return items.reduce((sum, i) => sum + i.level, 0) / items.length;
+}
+
+/**
+ * Get the pre-topic level (from first check-in)
+ * @returns {number}
+ */
+function getPreTopicLevel() {
+    const firstCheckin = appState.checkins.find(c => c.type === 'pre');
+    if (firstCheckin?.stats?.overallPercentage !== undefined) {
+        // Convert percentage back to 1-5 scale
+        return 1 + (firstCheckin.stats.overallPercentage / 100) * 4;
+    }
+    return 1;
+}
+
+/**
+ * Get all derived metrics for Growth Character generation
+ * @returns {object}
+ */
+function getAllDerivedMetrics() {
+    const preTopicLevel = getPreTopicLevel();
+    const currentLevel = calculateOverallLevel();
+    const growthMagnitude = (currentLevel - preTopicLevel) / 4; // Normalize to 0-1
+
+    const firstCheckin = appState.checkins.find(c => c.type === 'pre') || appState.checkins[0];
+    const topicStartDate = firstCheckin?.date || new Date().toISOString();
+    const totalDays = Math.max(1, daysBetween(new Date(topicStartDate), new Date()));
+    const activeDays = Object.keys(appState.practiceCalendar).length;
+
+    const spacingScore = calculateSpacingScore();
+    const sessionVariety = calculateSessionVariety();
+    const contentEngagementRate = calculateContentEngagementRate();
+    const consolidationRate = calculateConsolidationRate();
+    const { errorRate, lockoutCount } = calculateErrorMetrics();
+    const recoveryRate = calculateRecoveryRate();
+    const sessionConsistency = calculateSessionConsistency();
+
+    const totalItems = Object.keys(appState.learningItems).length;
+    const masteredCount = Object.values(appState.learningItems).filter(i => i.level === 5).length;
+    const consolidatedCount = Object.values(appState.learningItems).filter(i => i.consolidation?.isConsolidated).length;
+    const questionsSubmitted = appState.questions?.length || 0;
+
+    // Calculate total active time
+    const totalActiveMs = appState.sessions.reduce((sum, s) => sum + s.activeMs, 0);
+
+    return {
+        // Achievement
+        preTopicLevel,
+        currentLevel,
+        growthMagnitude,
+        totalDays,
+        activeDays,
+
+        // High-value metrics
+        spacingScore,
+        sessionVariety,
+        contentEngagementRate,
+        consolidationRate,
+        errorRate,
+        lockoutCount,
+        recoveryRate,
+        sessionConsistency,
+
+        // Counts
+        totalItems,
+        masteredCount,
+        consolidatedCount,
+        questionsSubmitted,
+        sessionCount: appState.sessions.length,
+        totalActiveMs
+    };
+}
+
+// ============================================
 // QUIZ STATE MANAGEMENT
 // ============================================
 function saveQuizState() {
