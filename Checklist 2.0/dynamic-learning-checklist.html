@@ -11282,6 +11282,9 @@ function exportToPDF() {
 /**
  * Export ALL data across all topics
  */
+/**
+ * Export ALL data across all topics
+ */
 function exportAllData() {
     // Make sure current topic data is saved to the store first
     if (appState.currentTopicPath) {
@@ -11296,6 +11299,14 @@ function exportAllData() {
             growthCharacters: appState.growthCharacters
         };
     }
+
+    // Calculate total stats across all topics
+    let totalCheckins = 0;
+    let totalItems = 0;
+    Object.values(topicProgressStore).forEach(topic => {
+        totalCheckins += (topic.checkins || []).length;
+        totalItems += Object.keys(topic.learningItems || {}).length;
+    });
 
     const data = {
         exportType: 'full',
@@ -11316,12 +11327,20 @@ function exportAllData() {
         // Global settings
         settings: {
             theme: appState.theme,
-            skipPreTopicQuestions: appState.skipPreTopicQuestions
+            skipPreTopicQuestions: appState.skipPreTopicQuestions,
+            // Level display preferences
+            levelPrefs: {
+                displayMode: levelPrefs.displayMode,
+                emojiProgression: levelPrefs.emojiProgression,
+                colors: levelPrefs.colors
+            }
         },
 
         // Summary stats for preview
         summary: {
             topicCount: Object.keys(topicProgressStore).length,
+            totalCheckins: totalCheckins,
+            totalItems: totalItems,
             topicNames: Object.keys(topicProgressStore).map(path => {
                 const parts = path.split('/');
                 return parts[parts.length - 1].replace(/-/g, ' ');
@@ -11621,15 +11640,46 @@ function handleRestoreFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
 
+    // Check file type
+    if (!file.name.endsWith('.json')) {
+        showToast('Please select a JSON backup file', 'error');
+        event.target.value = '';
+        return;
+    }
+
+    // Check file size (warn if over 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+        showToast('File is very large. This may take a moment...', 'warning');
+    }
+
     const reader = new FileReader();
+
     reader.onload = function(e) {
         try {
             const data = JSON.parse(e.target.result);
+
+            // Basic sanity check - must be an object
+            if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+                showToast('Invalid backup file structure', 'error');
+                return;
+            }
+
             validateAndPreviewRestore(data);
         } catch (err) {
-            showToast('Invalid file format. Please select a valid backup file.', 'error');
+            console.error('Restore parse error:', err);
+            if (err instanceof SyntaxError) {
+                showToast('File contains invalid JSON. It may be corrupted.', 'error');
+            } else {
+                showToast('Failed to read backup file. Please try again.', 'error');
+            }
         }
     };
+
+    reader.onerror = function() {
+        showToast('Failed to read the file. Please try again.', 'error');
+    };
+
     reader.readAsText(file);
 
     // Reset file input so same file can be selected again
@@ -11655,9 +11705,17 @@ function validateAndPreviewRestore(data) {
         return;
     }
 
+    // Version compatibility check
+    const exportVersion = data.exportVersion || '0.0';
+    const supportedVersions = ['1.0'];
+    if (data.exportVersion && !supportedVersions.includes(exportVersion)) {
+        showToast(`Backup version ${exportVersion} may not be fully compatible. Proceeding with caution.`, 'warning');
+    }
+
     pendingRestoreData = data;
 
     const backupDate = data.exportDate ? new Date(data.exportDate).toLocaleDateString('en-AU') : 'Unknown';
+    const appVersion = data.appVersion || 'Unknown';
     let previewHTML = '';
     let warningText = '';
 
@@ -11666,6 +11724,8 @@ function validateAndPreviewRestore(data) {
         const topicCount = data.summary?.topicCount || Object.keys(data.topicProgressStore).length;
         const topicNames = data.summary?.topicNames || Object.keys(data.topicProgressStore);
         const studentName = data.student?.name || 'Unknown';
+        const totalCheckins = data.summary?.totalCheckins || 0;
+        const totalItems = data.summary?.totalItems || 0;
 
         previewHTML = `
             <div class="restore-type-badge restore-type-full">Full Backup</div>
@@ -11674,11 +11734,17 @@ function validateAndPreviewRestore(data) {
                 <dd>${studentName}</dd>
                 <dt>Backup Date:</dt>
                 <dd>${backupDate}</dd>
-                <dt>Topics Included:</dt>
+                <dt>App Version:</dt>
+                <dd>${appVersion}</dd>
+                <dt>Topics:</dt>
                 <dd>${topicCount}</dd>
+                <dt>Total Learning Items:</dt>
+                <dd>${totalItems}</dd>
+                <dt>Total Check-ins:</dt>
+                <dd>${totalCheckins}</dd>
             </dl>
             <div class="restore-topics-list">
-                <strong>Topics:</strong>
+                <strong>Topics included:</strong>
                 <ul>
                     ${topicNames.slice(0, 10).map(name => `<li>${name}</li>`).join('')}
                     ${topicNames.length > 10 ? `<li><em>...and ${topicNames.length - 10} more</em></li>` : ''}
@@ -11781,6 +11847,15 @@ function executeFullRestore(data) {
         }
         if (data.settings.skipPreTopicQuestions !== undefined) {
             appState.skipPreTopicQuestions = data.settings.skipPreTopicQuestions;
+            document.getElementById('skip-pretopic-questions-toggle').checked = data.settings.skipPreTopicQuestions;
+        }
+        // Restore level display preferences
+        if (data.settings.levelPrefs) {
+            levelPrefs.displayMode = data.settings.levelPrefs.displayMode || 'emoji';
+            levelPrefs.emojiProgression = data.settings.levelPrefs.emojiProgression || 0;
+            levelPrefs.colors = data.settings.levelPrefs.colors || [...defaultLevelColors];
+            saveLevelPreferences();
+            applyLevelPreferences();
         }
     }
 
