@@ -7522,10 +7522,13 @@ function renderLearningItem(item, subtopic) {
 
     // Build consolidation row for secured items (level 5)
     let consolidationHtml = '';
-    if (isSecured && !checkinModeActive) {
+    if (isSecured && !checkinModeActive && item.uuid) {
         const progressPercent = consolidation.qTotal > 0
             ? Math.round((consolidation.qAttempted / consolidation.qTotal) * 100)
             : 0;
+
+        // Check if we know questions don't exist (cache set to null after 404)
+        const questionsKnownMissing = questionsCache[item.uuid] === null;
 
         if (consolidation.isConsolidated) {
             consolidationHtml = `
@@ -7536,6 +7539,9 @@ function renderLearningItem(item, subtopic) {
                     </div>
                 </div>
             `;
+        } else if (questionsKnownMissing) {
+            // Questions file doesn't exist - don't show practice option
+            consolidationHtml = '';
         } else {
             consolidationHtml = `
                 <div class="consolidation-row">
@@ -8019,7 +8025,12 @@ function applyLevelChange(itemKey, level) {
         if (itemEl) {
             itemEl.dataset.level = level;
         }
-        
+
+        // If reached level 5 (secured), re-render to show consolidation row
+        if (level === 5) {
+            renderLearningContentPreserveState();
+        }
+
         saveData();
         renderOverview();
         renderHistory();
@@ -8037,31 +8048,37 @@ function applyLevelChange(itemKey, level) {
  * @param {string} uuid - The item's UUID for fetching questions
  */
 async function startConsolidationPractice(itemKey, uuid) {
-    // Fetch all questions for this item
+    // Fetch all questions for this item (uses same loader as regular quizzes)
     const questionData = await fetchQuestionsForUUID(uuid);
-    if (!questionData || !questionData.questions) {
-        showToast('No questions available for practice.', 'warning');
+    if (!questionData) {
+        showToast('No practice questions available for this item.', 'info');
+        // Re-render to hide the button now that we know questions don't exist
+        renderLearningContentPreserveState();
         return;
     }
 
-    // Flatten all questions from all levels into one array with level info
+    // Flatten all questions from all levels into one array
+    // Question data format is: { toLevel2: [...], toLevel3: [...], toLevel4: [...], toLevel5: [...] }
     const allQuestions = [];
-    Object.entries(questionData.questions).forEach(([level, questions]) => {
+    for (let level = 2; level <= 5; level++) {
+        const levelKey = `toLevel${level}`;
+        const questions = questionData[levelKey];
         if (Array.isArray(questions)) {
             questions.forEach((q, idx) => {
                 allQuestions.push({
                     question: q,
-                    level: parseInt(level),
+                    level: level,
                     originalIndex: idx,
-                    // Create a unique key for tracking
+                    // Create a unique key for tracking: "level-index" format
                     globalIndex: allQuestions.length
                 });
             });
         }
-    });
+    }
 
     if (allQuestions.length === 0) {
         showToast('No questions available for practice.', 'warning');
+        renderLearningContentPreserveState();
         return;
     }
 
@@ -8140,32 +8157,13 @@ async function startConsolidationPractice(itemKey, uuid) {
 
 /**
  * Fetch questions for a UUID (used by consolidation)
+ * Uses the same loading mechanism as the regular quiz system
  * @param {string} uuid - The item UUID
  * @returns {object|null} Question data
  */
 async function fetchQuestionsForUUID(uuid) {
-    // Check cache first
-    if (questionsCache[uuid]) {
-        return questionsCache[uuid];
-    }
-
-    // Try to fetch
-    if (!appState.currentTopicPath) return null;
-
-    try {
-        const basePath = appState.currentTopicPath.endsWith('/')
-            ? appState.currentTopicPath
-            : appState.currentTopicPath + '/';
-        const response = await fetch(`${basePath}questions/${uuid}.json`);
-        if (!response.ok) return null;
-
-        const data = await response.json();
-        questionsCache[uuid] = data;
-        return data;
-    } catch (e) {
-        console.error('Failed to fetch questions for consolidation:', e);
-        return null;
-    }
+    // Use the existing loadQuestionsForItem which handles caching and correct path
+    return await loadQuestionsForItem(uuid);
 }
 
 // ============================================
