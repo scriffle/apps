@@ -4488,6 +4488,226 @@ function updateSaveStatus() {
 }
 
 // ============================================
+// SESSION TRACKING (Growth Character System)
+// ============================================
+
+/**
+ * Generate a UUID v4
+ */
+function generateSessionId() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
+/**
+ * Format a date as YYYYMMDD for practice calendar keys
+ */
+function formatDateKey(date) {
+    const d = date || new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}${month}${day}`;
+}
+
+/**
+ * Start a new session
+ */
+function startSession() {
+    if (currentSession) return; // Already have an active session
+
+    currentSession = {
+        id: generateSessionId(),
+        start: Date.now(),
+        end: null,
+        activeMs: 0,
+        activities: 0
+    };
+    lastInteractionTime = Date.now();
+
+    // Set up idle timeout
+    resetIdleTimeout();
+}
+
+/**
+ * Reset the idle timeout
+ */
+function resetIdleTimeout() {
+    if (sessionIdleTimeout) {
+        clearTimeout(sessionIdleTimeout);
+    }
+    sessionIdleTimeout = setTimeout(endSession, SESSION_IDLE_THRESHOLD_MS);
+}
+
+/**
+ * Track a user interaction and accumulate active time
+ * @param {number} activityType - Optional activity flag (ACTIVITY.QUIZ, etc.)
+ */
+function trackInteraction(activityType) {
+    // Start session if not already active
+    if (!currentSession) {
+        startSession();
+        return; // First interaction just starts the session
+    }
+
+    const now = Date.now();
+    const gap = now - lastInteractionTime;
+
+    // Only count time if gap < idle threshold (user was active)
+    if (gap < SESSION_IDLE_THRESHOLD_MS) {
+        currentSession.activeMs += gap;
+    }
+
+    lastInteractionTime = now;
+
+    // Set activity flag if provided
+    if (activityType) {
+        currentSession.activities |= activityType;
+    }
+
+    // Reset idle timeout
+    resetIdleTimeout();
+}
+
+/**
+ * End the current session and save it
+ */
+function endSession() {
+    if (!currentSession) return;
+
+    // Clear idle timeout
+    if (sessionIdleTimeout) {
+        clearTimeout(sessionIdleTimeout);
+        sessionIdleTimeout = null;
+    }
+
+    // Finalize session
+    currentSession.end = Date.now();
+
+    // Only save if there was meaningful activity (at least 5 seconds)
+    if (currentSession.activeMs >= 5000) {
+        appState.sessions.push(currentSession);
+        updatePracticeCalendar(currentSession);
+        saveData();
+    }
+
+    // Reset
+    currentSession = null;
+    lastInteractionTime = null;
+}
+
+/**
+ * Update the practice calendar with session data
+ */
+function updatePracticeCalendar(session) {
+    const dateKey = formatDateKey(new Date(session.start));
+
+    if (!appState.practiceCalendar[dateKey]) {
+        appState.practiceCalendar[dateKey] = {
+            sessions: 0,
+            activeMs: 0,
+            levelsGained: 0
+        };
+    }
+
+    appState.practiceCalendar[dateKey].sessions++;
+    appState.practiceCalendar[dateKey].activeMs += session.activeMs;
+}
+
+/**
+ * Track a level change in today's practice calendar
+ */
+function trackLevelGain(fromLevel, toLevel) {
+    if (toLevel <= fromLevel) return;
+
+    const dateKey = formatDateKey(new Date());
+
+    if (!appState.practiceCalendar[dateKey]) {
+        appState.practiceCalendar[dateKey] = {
+            sessions: 0,
+            activeMs: 0,
+            levelsGained: 0
+        };
+    }
+
+    appState.practiceCalendar[dateKey].levelsGained += (toLevel - fromLevel);
+}
+
+/**
+ * Initialize session tracking event listeners
+ */
+function initSessionTracking() {
+    // Track clicks
+    document.addEventListener('click', () => trackInteraction(), { passive: true });
+
+    // Track key presses
+    document.addEventListener('keydown', () => trackInteraction(), { passive: true });
+
+    // Track scrolling (throttled via passive listener)
+    document.addEventListener('scroll', () => trackInteraction(), { passive: true });
+
+    // End session on page unload
+    window.addEventListener('beforeunload', endSession);
+
+    // Also end session on visibility change (tab hidden)
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            endSession();
+        }
+    });
+}
+
+// ============================================
+// CONTENT ENGAGEMENT TRACKING (Growth Character System)
+// ============================================
+
+/**
+ * Track content expansion (What/Why/Example)
+ * @param {string} itemKey - The learning item key
+ * @param {string} contentType - 'what', 'why', or 'example' (or 'all' for combined toggle)
+ */
+function trackContentExpansion(itemKey, contentType) {
+    trackInteraction(ACTIVITY.CONTENT);
+
+    // Initialize engagementCounts if needed
+    if (!appState.learningItems[itemKey]) return;
+
+    if (!appState.learningItems[itemKey].engagementCounts) {
+        appState.learningItems[itemKey].engagementCounts = {
+            what: 0,
+            why: 0,
+            example: 0
+        };
+    }
+
+    // For combined "What Why Example" button, count all three
+    if (contentType === 'all') {
+        appState.learningItems[itemKey].engagementCounts.what++;
+        appState.learningItems[itemKey].engagementCounts.why++;
+        appState.learningItems[itemKey].engagementCounts.example++;
+    } else if (contentType in appState.learningItems[itemKey].engagementCounts) {
+        appState.learningItems[itemKey].engagementCounts[contentType]++;
+    }
+}
+
+/**
+ * Track search activity (Google search from selection popup)
+ */
+function trackSearchActivity() {
+    trackInteraction(ACTIVITY.SEARCH);
+}
+
+/**
+ * Track question submission
+ */
+function trackQuestionSubmission() {
+    trackInteraction(ACTIVITY.QUESTION);
+}
+
+// ============================================
 // QUIZ STATE MANAGEMENT
 // ============================================
 function saveQuizState() {
@@ -5844,6 +6064,15 @@ function setupLearningContentListeners() {
             toggle.setAttribute('aria-expanded', !expanded);
             const content = document.getElementById(toggle.getAttribute('aria-controls'));
             if (content) content.classList.toggle('expanded', !expanded);
+
+            // Track content expansion (Growth Character System)
+            if (!expanded) {
+                const itemEl = toggle.closest('.learning-item-simple');
+                if (itemEl) {
+                    const itemKey = itemEl.dataset.itemKey;
+                    trackContentExpansion(itemKey, 'all');
+                }
+            }
         });
     });
     
@@ -6164,7 +6393,10 @@ function applyLevelChange(itemKey, level) {
             level: level,
             previousLevel: oldLevel
         });
-        
+
+        // Track level gain in practice calendar (Growth Character System)
+        trackLevelGain(oldLevel, level);
+
         // Update visuals immediately
         const notchContainer = document.querySelector(`.level-notches[data-item-key="${itemKey}"]`);
         if (notchContainer) {
@@ -7722,19 +7954,22 @@ function deleteGoal(index) {
 function addQuestion() {
     const input = document.getElementById('new-question-input');
     const text = input.value.trim();
-    
+
     if (!text) {
         showToast('Please enter a question', 'warning');
         return;
     }
-    
+
+    // Track question submission (Growth Character System)
+    trackQuestionSubmission();
+
     appState.questions.push({
         text,
         context: '',
         created: new Date().toISOString(),
         status: 'pending'
     });
-    
+
     input.value = '';
     saveData();
     renderQuestions();
@@ -8166,20 +8401,23 @@ function getSelectionContext() {
 }
 
 function handleTeacherQuestion(selectedText, context) {
+    // Track question submission (Growth Character System)
+    trackQuestionSubmission();
+
     switchTab('goals');
-    
+
     let questionText = `I need help understanding: "${selectedText}"`;
     if (context?.itemTitle) {
         questionText += `\n\n(This is about: ${context.itemTitle})`;
     }
-    
+
     appState.questions.push({
         text: questionText,
         context: context?.itemTitle || '',
         created: new Date().toISOString(),
         status: 'pending'
     });
-    
+
     saveData();
     renderQuestions();
     updateBadges();
@@ -8187,10 +8425,13 @@ function handleTeacherQuestion(selectedText, context) {
 }
 
 function handleGoogleSearch(selectedText, context) {
+    // Track search activity (Growth Character System)
+    trackSearchActivity();
+
     let query = `please explain "${selectedText}"`;
     if (context?.subject) query += ` ${context.subject}`;
     if (context?.yearLevel) query += ` ${context.yearLevel}`;
-    
+
     window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank');
 }
 
@@ -8248,9 +8489,18 @@ function setupEventListeners() {
         }
     });
 
-    // Close messages dialog on Escape
+    // Close modals on Escape
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
+            // Close quiz modal if open and cancel button is visible
+            const quizOverlay = document.getElementById('quiz-overlay');
+            const quizCancelBtn = document.getElementById('quiz-cancel-btn');
+            if (quizOverlay?.classList.contains('active') && quizCancelBtn?.style.display !== 'none') {
+                closeQuiz();
+                return;
+            }
+
+            // Close messages dialog if open
             const messagesOverlay = document.getElementById('messages-overlay');
             if (messagesOverlay?.classList.contains('active')) {
                 hideMessagesDialog();
@@ -8455,7 +8705,10 @@ async function init() {
     
     // Setup event listeners
     setupEventListeners();
-    
+
+    // Initialize session tracking (Growth Character System)
+    initSessionTracking();
+
     // Initialize selection popup
     initSelectionPopup();
     
