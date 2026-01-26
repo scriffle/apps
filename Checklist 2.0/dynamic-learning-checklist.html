@@ -3250,6 +3250,31 @@ body {
     color: var(--color-text);
 }
 
+.email-subject-line {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-bg-warm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-3);
+    font-size: var(--text-sm);
+}
+
+.email-subject-label {
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+}
+
+.email-subject-text {
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .email-preview-content {
     max-height: 400px;
     overflow-y: auto;
@@ -3261,6 +3286,16 @@ body {
     font-size: var(--text-xs);
     white-space: pre-wrap;
     line-height: 1.5;
+    margin-bottom: var(--space-3);
+}
+
+.email-preview-hint {
+    padding: var(--space-2) var(--space-3);
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
     margin-bottom: var(--space-3);
 }
 
@@ -4841,8 +4876,15 @@ body {
                         <h3>Email Summary Preview</h3>
                         <button class="email-preview-close" id="email-preview-close">×</button>
                     </div>
+                    <div class="email-subject-line">
+                        <span class="email-subject-label">Subject:</span>
+                        <span class="email-subject-text" id="email-subject-text">Learning Progress: Student - Topic - Date</span>
+                    </div>
                     <div class="email-preview-content" id="email-preview-content">
                         <!-- Dynamically populated -->
+                    </div>
+                    <div class="email-preview-hint">
+                        💡 Tip: Teachers can extract the JSON block at the bottom for class-wide data aggregation
                     </div>
                     <div class="email-preview-actions">
                         <button class="btn btn-secondary" id="email-copy-json-btn">Copy JSON Only</button>
@@ -11221,14 +11263,29 @@ function exportToJSON() {
 // ============================================
 
 /**
+ * Generate email subject line
+ * @param {object} metrics - Output from gatherExportMetrics()
+ * @returns {string} Email subject line
+ */
+function generateEmailSubject(metrics) {
+    const date = new Date().toISOString().split('T')[0];
+    return `Learning Progress: ${metrics.student} - ${metrics.topic.name} - ${date}`;
+}
+
+/**
  * Show email summary preview panel
  */
 function showEmailPreview() {
     const metrics = gatherExportMetrics();
     const emailText = generateEmailText(metrics);
+    const subjectLine = generateEmailSubject(metrics);
 
+    document.getElementById('email-subject-text').textContent = subjectLine;
     document.getElementById('email-preview-content').textContent = emailText;
     document.getElementById('email-preview-panel').style.display = 'block';
+
+    // Scroll panel into view
+    document.getElementById('email-preview-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 /**
@@ -11269,20 +11326,40 @@ function copyEmailJSON() {
 }
 
 /**
+ * Generate ASCII bar for level distribution visualization
+ * @param {number} count - Number of items at this level
+ * @param {number} total - Total number of items
+ * @param {number} maxWidth - Maximum bar width in characters
+ * @returns {string} ASCII bar string
+ */
+function generateAsciiBar(count, total, maxWidth = 20) {
+    if (total === 0) return '';
+    const percent = count / total;
+    const filled = Math.round(percent * maxWidth);
+    return '█'.repeat(filled) + '░'.repeat(maxWidth - filled);
+}
+
+/**
  * Generate human-readable email text
  * @param {object} metrics - Output from gatherExportMetrics()
  * @returns {string} Formatted email text
  */
 function generateEmailText(metrics) {
-    // TODO: Full implementation in Phase 2
-    const levelNames = ['Not Started', 'Beginning', 'Developing', 'Confident', 'Secured'];
+    const total = metrics.metrics.totalItems || 1;
+
+    // Calculate percentages for level distribution
+    const l5Pct = Math.round((metrics.levelDistribution.level5 / total) * 100);
+    const l4Pct = Math.round((metrics.levelDistribution.level4 / total) * 100);
+    const l3Pct = Math.round((metrics.levelDistribution.level3 / total) * 100);
+    const l2Pct = Math.round((metrics.levelDistribution.level2 / total) * 100);
+    const l1Pct = Math.round((metrics.levelDistribution.level1 / total) * 100);
 
     let text = `LEARNING PROGRESS REPORT
 ========================
 
 Student: ${metrics.student}
 Topic: ${metrics.topic.name}
-Subject: ${metrics.topic.subject} | Year: ${metrics.topic.yearLevel}
+Subject: ${metrics.topic.subject || 'N/A'} | Year: ${metrics.topic.yearLevel || 'N/A'}
 Report Date: ${new Date().toISOString().split('T')[0]}
 Period: ${metrics.activityRange.firstDate || 'N/A'} to ${metrics.activityRange.lastDate || 'N/A'}
 
@@ -11300,11 +11377,11 @@ Total Active Days: ${metrics.metrics.totalActiveDays}
 LEVEL DISTRIBUTION
 ─────────────────────────────────
 
-Level 5 (Secured):    ${metrics.levelDistribution.level5} (${Math.round(metrics.levelDistribution.level5 / metrics.metrics.totalItems * 100) || 0}%)
-Level 4 (Confident):  ${metrics.levelDistribution.level4} (${Math.round(metrics.levelDistribution.level4 / metrics.metrics.totalItems * 100) || 0}%)
-Level 3 (Developing): ${metrics.levelDistribution.level3} (${Math.round(metrics.levelDistribution.level3 / metrics.metrics.totalItems * 100) || 0}%)
-Level 2 (Beginning):  ${metrics.levelDistribution.level2} (${Math.round(metrics.levelDistribution.level2 / metrics.metrics.totalItems * 100) || 0}%)
-Level 1 (Not Started):${metrics.levelDistribution.level1} (${Math.round(metrics.levelDistribution.level1 / metrics.metrics.totalItems * 100) || 0}%)
+Level 5 (Secured):    ${String(metrics.levelDistribution.level5).padStart(2)} (${String(l5Pct).padStart(3)}%) ${generateAsciiBar(metrics.levelDistribution.level5, total)}
+Level 4 (Confident):  ${String(metrics.levelDistribution.level4).padStart(2)} (${String(l4Pct).padStart(3)}%) ${generateAsciiBar(metrics.levelDistribution.level4, total)}
+Level 3 (Developing): ${String(metrics.levelDistribution.level3).padStart(2)} (${String(l3Pct).padStart(3)}%) ${generateAsciiBar(metrics.levelDistribution.level3, total)}
+Level 2 (Beginning):  ${String(metrics.levelDistribution.level2).padStart(2)} (${String(l2Pct).padStart(3)}%) ${generateAsciiBar(metrics.levelDistribution.level2, total)}
+Level 1 (Not Started):${String(metrics.levelDistribution.level1).padStart(2)} (${String(l1Pct).padStart(3)}%) ${generateAsciiBar(metrics.levelDistribution.level1, total)}
 `;
 
     // Add Learning Qualities if available
