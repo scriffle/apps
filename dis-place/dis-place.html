@@ -285,6 +285,38 @@
       padding: 1rem;
     }
 
+    /* Preview mode indicator */
+    .preview-indicator {
+      position: fixed;
+      bottom: clamp(1rem, 3vmin, 2rem);
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 152, 0, 0.9);
+      color: #000;
+      padding: 0.5em 1.5em;
+      border-radius: 2rem;
+      font-size: clamp(0.8rem, 2vmin, 1.2rem);
+      font-weight: 500;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 0.75em;
+    }
+
+    .preview-indicator.visible {
+      opacity: 1;
+    }
+
+    .preview-indicator kbd {
+      background: rgba(0, 0, 0, 0.2);
+      padding: 0.2em 0.5em;
+      border-radius: 0.25rem;
+      font-family: inherit;
+      font-size: 0.85em;
+    }
+
     /* Smooth animations */
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
@@ -349,6 +381,11 @@
     </div>
   </main>
 
+  <div class="preview-indicator" id="preview-indicator">
+    <span id="preview-text">Previewing</span>
+    <kbd>Esc</kbd> to return
+  </div>
+
   <script>
     'use strict';
 
@@ -395,12 +432,26 @@
     ];
 
     // ============================================
+    // DEFAULT THEME
+    // ============================================
+    const DEFAULT_THEME = {
+      accent: '#4a90d9',
+      glow: 'rgba(74, 144, 217, 0.3)'
+    };
+
+    // ============================================
     // STATE
     // ============================================
     let appData = null;
     let currentUpcomingIndex = 0;
     let showingUpcoming = false;
     let lastRefreshDate = null;
+    let currentTheme = DEFAULT_THEME;
+
+    // Preview mode state
+    let previewMode = false;
+    let previewDate = null;
+    let previewPeriodIndex = 0;
 
     // ============================================
     // DOM ELEMENTS
@@ -427,7 +478,9 @@
       upcomingOverlay: document.getElementById('upcoming-overlay'),
       upcomingDescription: document.getElementById('upcoming-description'),
       upcomingDate: document.getElementById('upcoming-date'),
-      weatherDisplay: document.getElementById('weather-display')
+      weatherDisplay: document.getElementById('weather-display'),
+      previewIndicator: document.getElementById('preview-indicator'),
+      previewText: document.getElementById('preview-text')
     };
 
     // ============================================
@@ -477,6 +530,38 @@
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
+    }
+
+    // ============================================
+    // THEME FUNCTIONS
+    // ============================================
+    function getThemeForClass(className) {
+      if (!appData || !appData.classThemes || !className) {
+        return DEFAULT_THEME;
+      }
+      return appData.classThemes[className] || DEFAULT_THEME;
+    }
+
+    function applyTheme(theme) {
+      if (currentTheme.accent === theme.accent) return; // No change needed
+
+      currentTheme = theme;
+      document.documentElement.style.setProperty('--accent', theme.accent);
+      document.documentElement.style.setProperty('--accent-glow', theme.glow);
+      document.documentElement.style.setProperty('--progress-fill', `linear-gradient(90deg, ${theme.accent}, ${lightenColor(theme.accent, 20)})`);
+    }
+
+    function lightenColor(hex, percent) {
+      // Convert hex to RGB, lighten, convert back
+      const num = parseInt(hex.replace('#', ''), 16);
+      const r = Math.min(255, (num >> 16) + Math.round(255 * percent / 100));
+      const g = Math.min(255, ((num >> 8) & 0x00FF) + Math.round(255 * percent / 100));
+      const b = Math.min(255, (num & 0x0000FF) + Math.round(255 * percent / 100));
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+
+    function resetTheme() {
+      applyTheme(DEFAULT_THEME);
     }
 
     // ============================================
@@ -555,13 +640,38 @@
       return Math.min(100, Math.max(0, progress));
     }
 
-    function getTodayEvents() {
+    function getEventsForDate(dateStr) {
       if (!appData || !appData.days) return [];
 
-      const today = getDateString(new Date());
-      const dayData = appData.days.find(d => d.date === today);
-
+      const dayData = appData.days.find(d => d.date === dateStr);
       return dayData ? dayData.events : [];
+    }
+
+    function getTodayEvents() {
+      const today = getDateString(new Date());
+      return getEventsForDate(today);
+    }
+
+    function getEventForPeriodOnDate(period, dateStr) {
+      if (!period) return null;
+
+      const events = getEventsForDate(dateStr);
+
+      for (const event of events) {
+        if (event.period === period) {
+          return event;
+        }
+        if (event.period.includes('-')) {
+          const [start, end] = event.period.split('-');
+          const startNum = parseInt(start.replace('P', ''));
+          const endNum = parseInt(end.replace('P', ''));
+          const periodNum = parseInt(period.replace('P', ''));
+          if (periodNum >= startNum && periodNum <= endNum) {
+            return event;
+          }
+        }
+      }
+      return null;
     }
 
     function getEventForPeriod(period) {
@@ -640,6 +750,9 @@
     // DISPLAY UPDATE
     // ============================================
     function updateDisplay() {
+      // Don't update main display when in preview mode
+      if (previewMode) return;
+
       const now = new Date();
 
       // Update time
@@ -679,12 +792,17 @@
           elements.currentDisplay.classList.remove('empty-state', 'outside-hours');
           elements.classInfo.textContent = event.class;
           elements.activityDisplay.textContent = event.activity;
+
+          // Apply class-specific theme
+          const theme = getThemeForClass(event.class);
+          applyTheme(theme);
         } else {
           // No class scheduled (break or free period)
           elements.currentDisplay.classList.add('empty-state');
           elements.currentDisplay.classList.remove('outside-hours');
           elements.classInfo.textContent = '';
           elements.activityDisplay.textContent = '';
+          resetTheme();
         }
       } else {
         // Outside school hours
@@ -694,6 +812,7 @@
         elements.classInfo.textContent = '';
         elements.activityDisplay.textContent = '';
         elements.periodProgressSection.style.display = 'none';
+        resetTheme();
       }
     }
 
@@ -807,6 +926,154 @@
     }
 
     // ============================================
+    // PREVIEW MODE / KEYBOARD NAVIGATION
+    // ============================================
+    function enterPreviewMode() {
+      if (!previewMode) {
+        previewMode = true;
+        previewDate = new Date();
+        previewPeriodIndex = getCurrentPeriodIndex();
+        if (previewPeriodIndex < 0) previewPeriodIndex = 0;
+      }
+      updatePreviewIndicator();
+      updatePreviewDisplay();
+    }
+
+    function exitPreviewMode() {
+      previewMode = false;
+      previewDate = null;
+      previewPeriodIndex = 0;
+      elements.previewIndicator.classList.remove('visible');
+      updateDisplay();
+    }
+
+    function getCurrentPeriodIndex() {
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+      for (let i = 0; i < SCHEDULE.length; i++) {
+        const slot = SCHEDULE[i];
+        const startMinutes = timeToMinutes(slot.start);
+        const endMinutes = timeToMinutes(slot.end);
+        if (currentMinutes >= startMinutes && currentMinutes < endMinutes) {
+          return i;
+        }
+      }
+      return -1;
+    }
+
+    function navigatePeriod(direction) {
+      enterPreviewMode();
+
+      previewPeriodIndex += direction;
+
+      if (previewPeriodIndex >= SCHEDULE.length) {
+        // Move to next day, first period
+        previewDate.setDate(previewDate.getDate() + 1);
+        previewPeriodIndex = 0;
+      } else if (previewPeriodIndex < 0) {
+        // Move to previous day, last period
+        previewDate.setDate(previewDate.getDate() - 1);
+        previewPeriodIndex = SCHEDULE.length - 1;
+      }
+
+      updatePreviewIndicator();
+      updatePreviewDisplay();
+    }
+
+    function navigateDay(direction) {
+      enterPreviewMode();
+      previewDate.setDate(previewDate.getDate() + direction);
+      updatePreviewIndicator();
+      updatePreviewDisplay();
+    }
+
+    function navigateWeek(direction) {
+      enterPreviewMode();
+      previewDate.setDate(previewDate.getDate() + (direction * 7));
+      updatePreviewIndicator();
+      updatePreviewDisplay();
+    }
+
+    function updatePreviewIndicator() {
+      const dateStr = formatDateLong(previewDate);
+      const slot = SCHEDULE[previewPeriodIndex];
+      elements.previewText.textContent = `${dateStr} — ${slot.name}`;
+      elements.previewIndicator.classList.add('visible');
+    }
+
+    function updatePreviewDisplay() {
+      const slot = SCHEDULE[previewPeriodIndex];
+      const dateStr = getDateString(previewDate);
+
+      // Update date display
+      elements.dateText.textContent = formatDateLong(previewDate);
+
+      // Update Wurundjeri season
+      const season = getWurundjeriSeason(previewDate);
+      elements.seasonText.textContent = `${season.name} — ${season.meaning}`;
+
+      // Update year progress
+      const yearProgress = calculateYearProgress(previewDate);
+      elements.yearProgressFill.style.width = `${yearProgress}%`;
+      elements.yearProgressPercent.textContent = `${Math.round(yearProgress)}%`;
+
+      // Show period time in the time display
+      elements.timeDisplay.textContent = formatTime12HourShort(slot.start);
+
+      // Update period info
+      elements.periodName.textContent = slot.name;
+      elements.periodStartTime.textContent = formatTime12HourShort(slot.start);
+      elements.periodEndTime.textContent = formatTime12HourShort(slot.end);
+      elements.periodProgressFill.style.width = '0%';
+      elements.periodProgressSection.style.display = 'block';
+
+      // Check for event
+      const event = getEventForPeriodOnDate(slot.period, dateStr);
+
+      if (event) {
+        elements.currentDisplay.classList.remove('empty-state', 'outside-hours');
+        elements.classInfo.textContent = event.class;
+        elements.activityDisplay.textContent = event.activity;
+        const theme = getThemeForClass(event.class);
+        applyTheme(theme);
+      } else {
+        elements.currentDisplay.classList.add('empty-state');
+        elements.currentDisplay.classList.remove('outside-hours');
+        elements.classInfo.textContent = '';
+        elements.activityDisplay.textContent = '';
+        resetTheme();
+      }
+    }
+
+    function handleKeydown(event) {
+      // Ignore if modifier keys other than intended ones are pressed
+      const key = event.key;
+
+      if (key === 'Escape' && previewMode) {
+        exitPreviewMode();
+        event.preventDefault();
+        return;
+      }
+
+      if (key === 'ArrowLeft' || key === 'ArrowRight') {
+        event.preventDefault();
+        const direction = key === 'ArrowRight' ? 1 : -1;
+
+        if (event.ctrlKey || event.metaKey) {
+          // Ctrl/Cmd + Arrow: navigate weeks
+          navigateWeek(direction);
+        } else if (event.shiftKey) {
+          // Shift + Arrow: navigate days
+          navigateDay(direction);
+        } else {
+          // Plain Arrow: navigate periods
+          navigatePeriod(direction);
+        }
+      }
+    }
+
+    // ============================================
     // INITIALIZATION
     // ============================================
     function init() {
@@ -839,6 +1106,9 @@
       // Load weather (fails silently if unavailable)
       loadWeather();
       setInterval(loadWeather, WEATHER_CONFIG.refreshIntervalMs);
+
+      // Keyboard navigation
+      document.addEventListener('keydown', handleKeydown);
     }
 
     // Start the app
