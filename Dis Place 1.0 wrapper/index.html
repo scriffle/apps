@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Room Display</title>
+  <style>
+    :root {
+      --bg-primary: #1a1a2e;
+      --bg-secondary: #16213e;
+      --bg-card: #1f2940;
+      --text-primary: #f0f0f0;
+      --text-secondary: #a0a0b0;
+      --text-muted: #606070;
+      --accent: #4a90d9;
+      --accent-glow: rgba(74, 144, 217, 0.3);
+      --progress-bg: #2a2a4a;
+      --progress-fill: linear-gradient(90deg, #4a90d9, #64b5f6);
+      --success: #4caf50;
+      --warning: #ff9800;
+
+      --font-main: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      --transition-smooth: 0.5s ease-in-out;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font-main);
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      padding: clamp(1rem, 3vmin, 2rem);
+      gap: clamp(0.5rem, 2vmin, 1.5rem);
+    }
+
+    /* Header - Room name and date */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .room-name {
+      font-size: clamp(1.5rem, 5vmin, 3rem);
+      font-weight: 300;
+      letter-spacing: 0.05em;
+      color: var(--text-primary);
+    }
+
+    .date-display {
+      text-align: right;
+    }
+
+    .date-text {
+      font-size: clamp(1rem, 3vmin, 1.8rem);
+      font-weight: 300;
+      color: var(--text-secondary);
+    }
+
+    .season-text {
+      font-size: clamp(0.8rem, 2vmin, 1.2rem);
+      color: var(--accent);
+      margin-top: 0.25em;
+      font-style: italic;
+    }
+
+    /* Weather display - subtle, top right */
+    .weather-display {
+      font-size: clamp(0.7rem, 1.5vmin, 1rem);
+      color: var(--text-muted);
+      margin-top: 0.5em;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+
+    .weather-display.visible {
+      opacity: 1;
+    }
+
+    .weather-display span {
+      margin-left: 1em;
+    }
+
+    .weather-display span:first-child {
+      margin-left: 0;
+    }
+
+    /* Year progress bar */
+    .year-progress-section {
+      flex-shrink: 0;
+    }
+
+    .year-progress-label {
+      font-size: clamp(0.7rem, 1.5vmin, 1rem);
+      color: var(--text-muted);
+      margin-bottom: 0.5em;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .progress-bar {
+      height: clamp(0.5rem, 1.5vmin, 1rem);
+      background: var(--progress-bg);
+      border-radius: 1rem;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--progress-fill);
+      border-radius: 1rem;
+      transition: width 1s ease-out;
+    }
+
+    .progress-bar-large {
+      height: clamp(1rem, 3vmin, 2rem);
+    }
+
+    .progress-bar-large .progress-fill {
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    /* Main content area */
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      min-height: 0;
+      position: relative;
+    }
+
+    /* Current period display */
+    .current-display {
+      width: 100%;
+      max-width: 90%;
+      text-align: center;
+      transition: opacity var(--transition-smooth);
+    }
+
+    .current-display.fade-out {
+      opacity: 0;
+    }
+
+    .time-display {
+      font-size: clamp(3rem, 12vmin, 8rem);
+      font-weight: 200;
+      letter-spacing: 0.02em;
+      color: var(--text-primary);
+      line-height: 1;
+    }
+
+    .period-name {
+      font-size: clamp(1.2rem, 4vmin, 2.5rem);
+      color: var(--text-secondary);
+      margin-top: 0.5em;
+      font-weight: 300;
+    }
+
+    .class-info {
+      font-size: clamp(1.5rem, 5vmin, 3rem);
+      color: var(--accent);
+      margin-top: 0.75em;
+      font-weight: 400;
+    }
+
+    .activity-display {
+      font-size: clamp(2.5rem, 10vmin, 7rem);
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-top: 0.5em;
+      line-height: 1.1;
+      text-shadow: 0 0 40px var(--accent-glow);
+    }
+
+    /* Period progress section */
+    .period-progress-section {
+      width: 100%;
+      max-width: 80%;
+      margin-top: clamp(1rem, 4vmin, 3rem);
+    }
+
+    .period-progress-label {
+      font-size: clamp(0.8rem, 2vmin, 1.2rem);
+      color: var(--text-muted);
+      margin-bottom: 0.5em;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Upcoming events overlay */
+    .upcoming-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: var(--bg-primary);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--transition-smooth);
+      text-align: center;
+      padding: clamp(1rem, 3vmin, 2rem);
+    }
+
+    .upcoming-overlay.visible {
+      opacity: 1;
+    }
+
+    .upcoming-label {
+      font-size: clamp(1rem, 3vmin, 2rem);
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      margin-bottom: 1em;
+    }
+
+    .upcoming-description {
+      font-size: clamp(2rem, 8vmin, 5rem);
+      font-weight: 500;
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+
+    .upcoming-date {
+      font-size: clamp(1.2rem, 4vmin, 2.5rem);
+      color: var(--accent);
+      margin-top: 0.75em;
+      font-weight: 300;
+    }
+
+    /* Empty state - no class */
+    .empty-state .activity-display,
+    .empty-state .class-info {
+      display: none;
+    }
+
+    .empty-state .time-display {
+      font-size: clamp(4rem, 15vmin, 12rem);
+    }
+
+    .empty-state .period-name {
+      color: var(--text-muted);
+    }
+
+    /* Outside school hours */
+    .outside-hours .period-name {
+      color: var(--text-muted);
+    }
+
+    /* Loading state */
+    .loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      font-size: clamp(1.5rem, 4vmin, 2.5rem);
+      color: var(--text-muted);
+    }
+
+    /* Error state */
+    .error-message {
+      color: var(--warning);
+      font-size: clamp(1rem, 2.5vmin, 1.5rem);
+      text-align: center;
+      padding: 1rem;
+    }
+
+    /* Smooth animations */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* High contrast for projector readability */
+    @media (prefers-contrast: more) {
+      :root {
+        --text-primary: #ffffff;
+        --text-secondary: #cccccc;
+        --bg-primary: #000000;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="loading" id="loading">Loading...</div>
+
+  <header class="header" id="header" style="display: none;">
+    <h1 class="room-name" id="room-name">Room</h1>
+    <div class="date-display">
+      <div class="date-text" id="date-text"></div>
+      <div class="season-text" id="season-text"></div>
+      <div class="weather-display" id="weather-display"></div>
+    </div>
+  </header>
+
+  <section class="year-progress-section" id="year-progress-section" style="display: none;">
+    <div class="year-progress-label">
+      <span>School Year Progress</span>
+      <span id="year-progress-percent">0%</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="year-progress-fill" style="width: 0%;"></div>
+    </div>
+  </section>
+
+  <main class="main-content" id="main-content" style="display: none;">
+    <div class="current-display" id="current-display">
+      <div class="time-display" id="time-display">--:--</div>
+      <div class="period-name" id="period-name"></div>
+      <div class="class-info" id="class-info"></div>
+      <div class="activity-display" id="activity-display"></div>
+
+      <div class="period-progress-section" id="period-progress-section">
+        <div class="period-progress-label">
+          <span id="period-start-time"></span>
+          <span id="period-end-time"></span>
+        </div>
+        <div class="progress-bar progress-bar-large">
+          <div class="progress-fill" id="period-progress-fill" style="width: 0%;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="upcoming-overlay" id="upcoming-overlay">
+      <div class="upcoming-label">Upcoming</div>
+      <div class="upcoming-description" id="upcoming-description"></div>
+      <div class="upcoming-date" id="upcoming-date"></div>
+    </div>
+  </main>
+
+  <script>
+    'use strict';
+
+    // ============================================
+    // CONFIGURATION
+    // ============================================
+    const CONFIG = {
+      dataUrl: 'data.json',
+      refreshIntervalMs: 60 * 60 * 1000, // 1 hour
+      updateIntervalMs: 1000, // Update display every second
+      upcomingShowDurationMs: 10 * 1000, // 10 seconds
+      upcomingIntervalMs: 3 * 60 * 1000, // Every 3 minutes
+      morningRefreshHour: 8,
+      morningRefreshMinute: 15
+    };
+
+    // ============================================
+    // SCHEDULE DEFINITION
+    // ============================================
+    const SCHEDULE = [
+      { name: 'Morning Greeting', start: '08:20', end: '08:30', period: null },
+      { name: 'Period 1', start: '08:30', end: '09:20', period: 'P1' },
+      { name: 'Period 2', start: '09:20', end: '10:10', period: 'P2' },
+      { name: 'Recess', start: '10:10', end: '10:30', period: null },
+      { name: 'Period 3', start: '10:30', end: '11:20', period: 'P3' },
+      { name: 'Period 4', start: '11:20', end: '12:10', period: 'P4' },
+      { name: 'Period 12:10', start: '12:10', end: '12:50', period: 'P12:10' },
+      { name: 'Lunch', start: '12:50', end: '13:30', period: null },
+      { name: 'Period 5', start: '13:30', end: '14:20', period: 'P5' },
+      { name: 'Period 6', start: '14:20', end: '15:10', period: 'P6' }
+    ];
+
+    // ============================================
+    // WURUNDJERI SEASONS (Kulin Nation)
+    // ============================================
+    const WURUNDJERI_SEASONS = [
+      { name: 'Biderap', meaning: 'Dry Season', startMonth: 1, startDay: 1, endMonth: 2, endDay: 14 },
+      { name: 'Iuk', meaning: 'Eel Season', startMonth: 2, startDay: 15, endMonth: 3, endDay: 31 },
+      { name: 'Waring', meaning: 'Wombat Season', startMonth: 4, startDay: 1, endMonth: 4, endDay: 30 },
+      { name: 'Guling', meaning: 'Orchid Season', startMonth: 5, startDay: 1, endMonth: 7, endDay: 14 },
+      { name: 'Poorneet', meaning: 'Tadpole Season', startMonth: 7, startDay: 15, endMonth: 9, endDay: 14 },
+      { name: 'Buath Gurru', meaning: 'Grass Flowering Season', startMonth: 9, startDay: 15, endMonth: 11, endDay: 14 },
+      { name: 'Kangaroo Apple Season', meaning: 'Kangaroo Apple Season', startMonth: 11, startDay: 15, endMonth: 12, endDay: 31 }
+    ];
+
+    // ============================================
+    // STATE
+    // ============================================
+    let appData = null;
+    let currentUpcomingIndex = 0;
+    let showingUpcoming = false;
+    let lastRefreshDate = null;
+
+    // ============================================
+    // DOM ELEMENTS
+    // ============================================
+    const elements = {
+      loading: document.getElementById('loading'),
+      header: document.getElementById('header'),
+      roomName: document.getElementById('room-name'),
+      dateText: document.getElementById('date-text'),
+      seasonText: document.getElementById('season-text'),
+      yearProgressSection: document.getElementById('year-progress-section'),
+      yearProgressFill: document.getElementById('year-progress-fill'),
+      yearProgressPercent: document.getElementById('year-progress-percent'),
+      mainContent: document.getElementById('main-content'),
+      currentDisplay: document.getElementById('current-display'),
+      timeDisplay: document.getElementById('time-display'),
+      periodName: document.getElementById('period-name'),
+      classInfo: document.getElementById('class-info'),
+      activityDisplay: document.getElementById('activity-display'),
+      periodProgressSection: document.getElementById('period-progress-section'),
+      periodProgressFill: document.getElementById('period-progress-fill'),
+      periodStartTime: document.getElementById('period-start-time'),
+      periodEndTime: document.getElementById('period-end-time'),
+      upcomingOverlay: document.getElementById('upcoming-overlay'),
+      upcomingDescription: document.getElementById('upcoming-description'),
+      upcomingDate: document.getElementById('upcoming-date'),
+      weatherDisplay: document.getElementById('weather-display')
+    };
+
+    // ============================================
+    // UTILITY FUNCTIONS
+    // ============================================
+    function parseTime(timeStr) {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return { hours, minutes };
+    }
+
+    function timeToMinutes(timeStr) {
+      const { hours, minutes } = parseTime(timeStr);
+      return hours * 60 + minutes;
+    }
+
+    function formatTime12Hour(date) {
+      let hours = date.getHours();
+      const minutes = date.getMinutes();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      const minutesStr = minutes < 10 ? '0' + minutes : minutes;
+      return `${hours}:${minutesStr} ${ampm}`;
+    }
+
+    function formatTime12HourShort(timeStr) {
+      const { hours, minutes } = parseTime(timeStr);
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const hour12 = hours % 12 || 12;
+      const minutesStr = minutes < 10 ? '0' + minutes : minutes;
+      return `${hour12}:${minutesStr} ${ampm}`;
+    }
+
+    function formatDateLong(date) {
+      const options = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+      return date.toLocaleDateString('en-AU', options);
+    }
+
+    function formatDateShort(dateStr) {
+      const date = new Date(dateStr + 'T00:00:00');
+      const options = { weekday: 'short', day: 'numeric', month: 'short' };
+      return date.toLocaleDateString('en-AU', options);
+    }
+
+    function getDateString(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    // ============================================
+    // WURUNDJERI SEASON
+    // ============================================
+    function getWurundjeriSeason(date) {
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+
+      for (const season of WURUNDJERI_SEASONS) {
+        const afterStart = month > season.startMonth ||
+                          (month === season.startMonth && day >= season.startDay);
+        const beforeEnd = month < season.endMonth ||
+                         (month === season.endMonth && day <= season.endDay);
+
+        // Handle wrap-around for seasons spanning year end
+        if (season.startMonth <= season.endMonth) {
+          if (afterStart && beforeEnd) {
+            return season;
+          }
+        } else {
+          if (afterStart || beforeEnd) {
+            return season;
+          }
+        }
+      }
+
+      return WURUNDJERI_SEASONS[0]; // Default fallback
+    }
+
+    // ============================================
+    // YEAR PROGRESS
+    // ============================================
+    function calculateYearProgress(date) {
+      if (!appData || !appData.terms || appData.terms.length === 0) {
+        return 0;
+      }
+
+      const terms = appData.terms.sort((a, b) => new Date(a.start) - new Date(b.start));
+      const yearStart = new Date(terms[0].start + 'T00:00:00');
+      const yearEnd = new Date(terms[terms.length - 1].end + 'T23:59:59');
+
+      if (date < yearStart) return 0;
+      if (date > yearEnd) return 100;
+
+      const totalDuration = yearEnd - yearStart;
+      const elapsed = date - yearStart;
+
+      return Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
+    }
+
+    // ============================================
+    // SCHEDULE FUNCTIONS
+    // ============================================
+    function getCurrentScheduleSlot(date) {
+      const currentMinutes = date.getHours() * 60 + date.getMinutes();
+
+      for (const slot of SCHEDULE) {
+        const startMinutes = timeToMinutes(slot.start);
+        const endMinutes = timeToMinutes(slot.end);
+
+        if (currentMinutes >= startMinutes && currentMinutes < endMinutes) {
+          return slot;
+        }
+      }
+
+      return null;
+    }
+
+    function getSlotProgress(slot, date) {
+      const currentMinutes = date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60;
+      const startMinutes = timeToMinutes(slot.start);
+      const endMinutes = timeToMinutes(slot.end);
+
+      const progress = ((currentMinutes - startMinutes) / (endMinutes - startMinutes)) * 100;
+      return Math.min(100, Math.max(0, progress));
+    }
+
+    function getTodayEvents() {
+      if (!appData || !appData.days) return [];
+
+      const today = getDateString(new Date());
+      const dayData = appData.days.find(d => d.date === today);
+
+      return dayData ? dayData.events : [];
+    }
+
+    function getEventForPeriod(period) {
+      if (!period) return null;
+
+      const events = getTodayEvents();
+
+      for (const event of events) {
+        // Handle single periods
+        if (event.period === period) {
+          return event;
+        }
+
+        // Handle double periods (e.g., "P3-P4")
+        if (event.period.includes('-')) {
+          const [start, end] = event.period.split('-');
+          const startNum = parseInt(start.replace('P', ''));
+          const endNum = parseInt(end.replace('P', ''));
+          const periodNum = parseInt(period.replace('P', ''));
+
+          if (periodNum >= startNum && periodNum <= endNum) {
+            return event;
+          }
+        }
+      }
+
+      return null;
+    }
+
+    // ============================================
+    // UPCOMING EVENTS
+    // ============================================
+    function getUpcomingEvents() {
+      if (!appData || !appData.upcoming) return [];
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      return appData.upcoming
+        .filter(event => new Date(event.date + 'T00:00:00') >= today)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+    }
+
+    function showUpcomingEvent() {
+      const upcoming = getUpcomingEvents();
+      if (upcoming.length === 0) return;
+
+      const event = upcoming[currentUpcomingIndex % upcoming.length];
+
+      elements.upcomingDescription.textContent = event.description;
+      elements.upcomingDate.textContent = formatDateShort(event.date);
+
+      elements.currentDisplay.classList.add('fade-out');
+
+      setTimeout(() => {
+        elements.upcomingOverlay.classList.add('visible');
+        showingUpcoming = true;
+      }, 500);
+
+      setTimeout(() => {
+        hideUpcomingEvent();
+        currentUpcomingIndex++;
+      }, CONFIG.upcomingShowDurationMs);
+    }
+
+    function hideUpcomingEvent() {
+      elements.upcomingOverlay.classList.remove('visible');
+
+      setTimeout(() => {
+        elements.currentDisplay.classList.remove('fade-out');
+        showingUpcoming = false;
+      }, 500);
+    }
+
+    // ============================================
+    // DISPLAY UPDATE
+    // ============================================
+    function updateDisplay() {
+      const now = new Date();
+
+      // Update time
+      elements.timeDisplay.textContent = formatTime12Hour(now);
+
+      // Update date
+      elements.dateText.textContent = formatDateLong(now);
+
+      // Update Wurundjeri season
+      const season = getWurundjeriSeason(now);
+      elements.seasonText.textContent = `${season.name} — ${season.meaning}`;
+
+      // Update year progress
+      const yearProgress = calculateYearProgress(now);
+      elements.yearProgressFill.style.width = `${yearProgress}%`;
+      elements.yearProgressPercent.textContent = `${Math.round(yearProgress)}%`;
+
+      // Get current schedule slot
+      const currentSlot = getCurrentScheduleSlot(now);
+
+      if (currentSlot) {
+        // During school hours
+        elements.periodName.textContent = currentSlot.name;
+
+        // Update period progress
+        const slotProgress = getSlotProgress(currentSlot, now);
+        elements.periodProgressFill.style.width = `${slotProgress}%`;
+        elements.periodStartTime.textContent = formatTime12HourShort(currentSlot.start);
+        elements.periodEndTime.textContent = formatTime12HourShort(currentSlot.end);
+        elements.periodProgressSection.style.display = 'block';
+
+        // Check for event in this period
+        const event = getEventForPeriod(currentSlot.period);
+
+        if (event) {
+          // Class is scheduled
+          elements.currentDisplay.classList.remove('empty-state', 'outside-hours');
+          elements.classInfo.textContent = event.class;
+          elements.activityDisplay.textContent = event.activity;
+        } else {
+          // No class scheduled (break or free period)
+          elements.currentDisplay.classList.add('empty-state');
+          elements.currentDisplay.classList.remove('outside-hours');
+          elements.classInfo.textContent = '';
+          elements.activityDisplay.textContent = '';
+        }
+      } else {
+        // Outside school hours
+        elements.currentDisplay.classList.add('outside-hours');
+        elements.currentDisplay.classList.remove('empty-state');
+        elements.periodName.textContent = 'Outside School Hours';
+        elements.classInfo.textContent = '';
+        elements.activityDisplay.textContent = '';
+        elements.periodProgressSection.style.display = 'none';
+      }
+    }
+
+    // ============================================
+    // DATA LOADING
+    // ============================================
+    async function loadData() {
+      try {
+        const response = await fetch(CONFIG.dataUrl + '?t=' + Date.now());
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        appData = await response.json();
+
+        // Update room name
+        elements.roomName.textContent = appData.room || 'Room';
+
+        // Show main UI
+        elements.loading.style.display = 'none';
+        elements.header.style.display = 'flex';
+        elements.yearProgressSection.style.display = 'block';
+        elements.mainContent.style.display = 'flex';
+
+        lastRefreshDate = new Date();
+        console.log('Data loaded successfully at', lastRefreshDate.toLocaleTimeString());
+
+      } catch (error) {
+        console.error('Error loading data:', error);
+        elements.loading.innerHTML = `<div class="error-message">Unable to load data. Will retry...<br><small>${error.message}</small></div>`;
+
+        // Retry in 30 seconds
+        setTimeout(loadData, 30000);
+      }
+    }
+
+    function checkMorningRefresh() {
+      const now = new Date();
+
+      if (lastRefreshDate) {
+        const lastDate = lastRefreshDate.toDateString();
+        const todayDate = now.toDateString();
+
+        // If it's a new day and past the morning refresh time
+        if (lastDate !== todayDate &&
+            now.getHours() >= CONFIG.morningRefreshHour &&
+            now.getMinutes() >= CONFIG.morningRefreshMinute) {
+          console.log('Morning refresh triggered');
+          loadData();
+        }
+      }
+    }
+
+    // ============================================
+    // WEATHER (Open-Meteo API - Melbourne)
+    // ============================================
+    const WEATHER_CONFIG = {
+      // Melbourne coordinates
+      latitude: -37.8136,
+      longitude: 144.9631,
+      refreshIntervalMs: 30 * 60 * 1000 // 30 minutes
+    };
+
+    let weatherData = null;
+
+    async function loadWeather() {
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${WEATHER_CONFIG.latitude}&longitude=${WEATHER_CONFIG.longitude}&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset&current=temperature_2m,relative_humidity_2m,dew_point_2m&timezone=Australia%2FMelbourne&forecast_days=1`;
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Weather fetch failed');
+
+        weatherData = await response.json();
+        updateWeatherDisplay();
+      } catch (error) {
+        // Fail silently - weather is optional
+        console.log('Weather unavailable:', error.message);
+        elements.weatherDisplay.classList.remove('visible');
+      }
+    }
+
+    function updateWeatherDisplay() {
+      if (!weatherData) return;
+
+      try {
+        const current = weatherData.current;
+        const daily = weatherData.daily;
+
+        const temp = Math.round(current.temperature_2m);
+        const dewPoint = Math.round(current.dew_point_2m);
+        const min = Math.round(daily.temperature_2m_min[0]);
+        const max = Math.round(daily.temperature_2m_max[0]);
+
+        // Parse sunrise/sunset times
+        const sunrise = new Date(daily.sunrise[0]);
+        const sunset = new Date(daily.sunset[0]);
+        const sunriseStr = formatTime12Hour(sunrise).replace(' ', '');
+        const sunsetStr = formatTime12Hour(sunset).replace(' ', '');
+
+        elements.weatherDisplay.innerHTML =
+          `<span>${temp}°C</span>` +
+          `<span>${min}°/${max}°</span>` +
+          `<span>☀${sunriseStr}</span>` +
+          `<span>☾${sunsetStr}</span>` +
+          `<span>Dew ${dewPoint}°</span>`;
+
+        elements.weatherDisplay.classList.add('visible');
+      } catch (error) {
+        // Fail silently
+        console.log('Weather display error:', error.message);
+      }
+    }
+
+    // ============================================
+    // INITIALIZATION
+    // ============================================
+    function init() {
+      // Load data
+      loadData();
+
+      // Start update loop
+      setInterval(updateDisplay, CONFIG.updateIntervalMs);
+
+      // Schedule hourly refresh
+      setInterval(loadData, CONFIG.refreshIntervalMs);
+
+      // Check for morning refresh every minute
+      setInterval(checkMorningRefresh, 60000);
+
+      // Schedule upcoming events display
+      setInterval(() => {
+        if (!showingUpcoming && getUpcomingEvents().length > 0) {
+          showUpcomingEvent();
+        }
+      }, CONFIG.upcomingIntervalMs);
+
+      // Initial upcoming show after 30 seconds
+      setTimeout(() => {
+        if (getUpcomingEvents().length > 0) {
+          showUpcomingEvent();
+        }
+      }, 30000);
+
+      // Load weather (fails silently if unavailable)
+      loadWeather();
+      setInterval(loadWeather, WEATHER_CONFIG.refreshIntervalMs);
+    }
+
+    // Start the app
+    init();
+  </script>
+</body>
+</html>
