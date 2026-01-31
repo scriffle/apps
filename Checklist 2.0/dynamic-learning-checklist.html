@@ -5027,8 +5027,19 @@ body {
                             <input type="text" id="student-name-input" class="form-input" placeholder="Enter your name">
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="class-input">Your Classes</label>
-                            <input type="text" id="class-input" class="form-input" placeholder="e.g., VCE Biology U3, Year 7 English">
+                            <label class="form-label" for="class-input">Your Class</label>
+                            <select id="class-input" class="form-input">
+                                <option value="">-- Select your class --</option>
+                                <option value="12BioTSH">12BioTSH</option>
+                                <option value="12CheDMH">12CheDMH</option>
+                                <option value="12PhyJIM">12PhyJIM</option>
+                                <option value="12PhyEVA">12PhyEVA</option>
+                                <option value="11PhyJIM">11PhyJIM</option>
+                                <option value="10SciJIM">10SciJIM</option>
+                                <option value="10SciKLA">10SciKLA</option>
+                                <option value="10SciDMH">10SciDMH</option>
+                                <option value="8SciDMH">8SciDMH</option>
+                            </select>
                         </div>
                     </div>
                     
@@ -5478,8 +5489,19 @@ body {
                             <input type="text" id="welcome-name-input" class="welcome-form-input" placeholder="Enter your name">
                         </div>
                         <div class="welcome-form-group">
-                            <label class="welcome-form-label" for="welcome-class-input">Your classes</label>
-                            <input type="text" id="welcome-class-input" class="welcome-form-input" placeholder="e.g., VCE Biology U3, Year 7 English">
+                            <label class="welcome-form-label" for="welcome-class-input">Your class</label>
+                            <select id="welcome-class-input" class="welcome-form-input">
+                                <option value="">-- Select your class --</option>
+                                <option value="12BioTSH">12BioTSH</option>
+                                <option value="12CheDMH">12CheDMH</option>
+                                <option value="12PhyJIM">12PhyJIM</option>
+                                <option value="12PhyEVA">12PhyEVA</option>
+                                <option value="11PhyJIM">11PhyJIM</option>
+                                <option value="10SciJIM">10SciJIM</option>
+                                <option value="10SciKLA">10SciKLA</option>
+                                <option value="10SciDMH">10SciDMH</option>
+                                <option value="8SciDMH">8SciDMH</option>
+                            </select>
                         </div>
                     </div>
                     
@@ -5825,6 +5847,39 @@ function saveData() {
     } catch (e) {
         console.error('Save failed:', e);
         showToast('Failed to save changes', 'error');
+    }
+}
+
+// ============================================
+// GOOGLE SHEETS PUSH (Progress Reporting)
+// ============================================
+const PROGRESS_API_URL = 'https://script.google.com/macros/s/AKfycbyscvAfbJUR_t6p5W-u6A5SE_QvjntWt6ihg03Oc-uODwcP9WGjEOA2obh6rZ6OQG9G4g/exec';
+
+function pushProgressToServer(eventType, detail) {
+    const classCode = appState.student.class;
+    if (!classCode) return; // Don't push if no class selected
+
+    const payload = {
+        classCode: classCode,
+        studentId: appState.student.name || 'anonymous',
+        topicCode: appState.topic?.name || appState.currentTopicId || '',
+        eventType: eventType,
+        learningPointCode: detail.learningPointCode || '',
+        currentLevel: detail.currentLevel || '',
+        quizResults: detail.quizResults || {},
+        qualities: detail.qualities || {},
+        overallPercent: detail.overallPercent || 0
+    };
+
+    try {
+        fetch(PROGRESS_API_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).catch(err => console.warn('Progress push failed:', err));
+    } catch (e) {
+        console.warn('Progress push failed:', e);
     }
 }
 
@@ -9429,6 +9484,11 @@ function applyLevelChange(itemKey, level) {
         }
 
         saveData();
+        pushProgressToServer('level-change', {
+            learningPointCode: itemKey,
+            currentLevel: level,
+            overallPercent: calculateStats()?.overallPercentage || 0
+        });
         renderOverview();
         renderHistory();
     }
@@ -10282,6 +10342,13 @@ function processQuizResult(isCorrect, explanation) {
     // Record quiz result for Growth Character System
     recordQuizResult(currentQuiz.itemKey, currentQuiz.questionIndex, isCorrect);
 
+    // Push quiz result to Google Sheet
+    pushProgressToServer('quiz-result', {
+        learningPointCode: currentQuiz.itemKey,
+        currentLevel: currentQuiz.toLevel,
+        quizResults: { correct: isCorrect, questionIndex: currentQuiz.questionIndex }
+    });
+
     // Show result
     const resultEl = document.getElementById('quiz-result');
     resultEl.classList.remove('correct', 'incorrect');
@@ -10624,8 +10691,8 @@ function hideWelcomeDialog() {
     if (welcomeNameInput && welcomeNameInput.value.trim()) {
         appState.student.name = welcomeNameInput.value.trim();
     }
-    if (welcomeClassInput && welcomeClassInput.value.trim()) {
-        appState.student.class = welcomeClassInput.value.trim();
+    if (welcomeClassInput && welcomeClassInput.value) {
+        appState.student.class = welcomeClassInput.value;
     }
     
     // Sync with settings inputs
