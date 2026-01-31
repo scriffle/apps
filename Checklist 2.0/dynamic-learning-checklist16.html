@@ -9426,9 +9426,6 @@ async function startConsolidationPractice(itemKey, uuid) {
         return;
     }
 
-    // Normalize question from any schema variant to standard format
-    normalizeQuestion(randomQ.question);
-
     // Determine question type
     const questionType = randomQ.question.type || 'mc';
 
@@ -9458,7 +9455,6 @@ async function startConsolidationPractice(itemKey, uuid) {
     if (questionType === 'cloze') {
         renderClozeQuestion(randomQ.question);
     } else {
-        // MC and TF both render as multiple-choice style
         renderMCQuestion(randomQ.question);
     }
 
@@ -9515,13 +9511,10 @@ async function showQuiz(itemKey, fromLevel, toLevel) {
     }
     
     const { question, index } = questionData;
-
-    // Normalize question from any schema variant to standard format
-    normalizeQuestion(question);
-
+    
     // Determine question type (default to MC for backwards compatibility)
     const questionType = question.type || 'mc';
-
+    
     // Store current quiz data
     currentQuiz = {
         itemKey,
@@ -9534,20 +9527,20 @@ async function showQuiz(itemKey, fromLevel, toLevel) {
         clozeAnswers: {},
         answered: false
     };
-
+    
     // Update header UI
     document.getElementById('quiz-item-title').textContent = item.title;
     const emojis = getLevelEmojis();
     document.getElementById('quiz-from-level').innerHTML = getLevelIndicatorHtml(fromLevel, true);
     document.getElementById('quiz-to-level').innerHTML = getLevelIndicatorHtml(toLevel, true);
-
+    
     // Show streak info if required > 1
     const streakInfo = document.getElementById('quiz-streak-info');
     if (state.requiredCorrect > 1) {
         streakInfo.style.display = 'block';
-        document.getElementById('quiz-streak-text').textContent =
+        document.getElementById('quiz-streak-text').textContent = 
             `You need ${state.requiredCorrect} correct answer${state.requiredCorrect > 1 ? 's' : ''} to advance`;
-
+        
         // Render progress dots
         const progressContainer = document.getElementById('quiz-streak-progress');
         let dotsHtml = '';
@@ -9559,12 +9552,11 @@ async function showQuiz(itemKey, fromLevel, toLevel) {
     } else {
         streakInfo.style.display = 'none';
     }
-
+    
     // Render based on question type
     if (questionType === 'cloze') {
         renderClozeQuestion(question);
     } else {
-        // MC and TF both render as multiple-choice style
         renderMCQuestion(question);
     }
     
@@ -9614,229 +9606,6 @@ function shuffleArray(array) {
     return shuffled;
 }
 
-/**
- * Normalize a question object from any known schema variant into the standard schema.
- * Standard MC/TF: { type, question, correct, correctExplanation, distractors: [{answer, explanation}] }
- * Standard Cloze: { type, prompt, sentence, blanks: { id: {correct, correctExplanation, distractors} } }
- * Returns the normalized question (may mutate the original).
- */
-function normalizeQuestion(q) {
-    if (!q || typeof q !== 'object') return q;
-
-    // Normalize type to lowercase
-    if (q.type) {
-        q.type = q.type.toLowerCase();
-    } else {
-        q.type = 'mc';
-    }
-
-    // --- MC and TF normalization ---
-    if (q.type === 'mc' || q.type === 'tf') {
-
-        // Normalize question text: stem -> question
-        if (!q.question && q.stem) {
-            q.question = q.stem;
-        }
-        if (!q.question && q.statement) {
-            q.question = q.statement;
-        }
-
-        // Normalize correct answer: correctAnswer -> correct
-        if (q.correct === undefined && q.correctAnswer !== undefined) {
-            q.correct = q.correctAnswer;
-        }
-
-        // Schema: {options: [{text, correct: true/false, ...}], question}
-        // Options array with embedded correct flag
-        if (Array.isArray(q.options) && q.options.length > 0 && typeof q.options[0] === 'object' && 'correct' in q.options[0]) {
-            const correctOpt = q.options.find(o => o.correct === true);
-            if (correctOpt && q.correct === undefined) {
-                q.correct = correctOpt.text || correctOpt.answer || correctOpt.value || '';
-                q.correctExplanation = q.correctExplanation || correctOpt.explanation || '';
-            }
-            if (!Array.isArray(q.distractors) || q.distractors.length === 0) {
-                q.distractors = q.options
-                    .filter(o => !o.correct)
-                    .map(o => ({ answer: o.text || o.answer || o.value || '', explanation: o.explanation || '' }));
-            }
-        }
-
-        // Schema: {options: [string, ...], correctIndex: N, stem, bloom, feedback}
-        if (Array.isArray(q.options) && q.options.length > 0 && typeof q.options[0] === 'string' && q.correctIndex !== undefined) {
-            if (q.correct === undefined) {
-                q.correct = q.options[q.correctIndex] || q.options[0];
-                q.correctExplanation = q.correctExplanation || (q.feedback && q.feedback.correct) || '';
-            }
-            if (!Array.isArray(q.distractors) || q.distractors.length === 0) {
-                q.distractors = q.options
-                    .filter((_, i) => i !== q.correctIndex)
-                    .map(text => ({ answer: text, explanation: (q.feedback && q.feedback.incorrect) || '' }));
-            }
-        }
-
-        // Schema: {options: [string, ...], correct: "answer text", distractorExplanations}
-        if (Array.isArray(q.options) && q.options.length > 0 && typeof q.options[0] === 'string' && q.correct && (!Array.isArray(q.distractors) || q.distractors.length === 0)) {
-            const explanations = q.distractorExplanations || {};
-            q.distractors = q.options
-                .filter(text => text !== q.correct)
-                .map((text, i) => ({ answer: text, explanation: explanations[i] || explanations[text] || '' }));
-        }
-
-        // TF with boolean correct and explanation field
-        if (q.type === 'tf') {
-            if (typeof q.correct === 'boolean') {
-                q.correct = q.correct ? 'True' : 'False';
-            }
-            if (!q.correctExplanation && q.explanation) {
-                q.correctExplanation = q.explanation;
-            }
-            if (!q.correctExplanation && q.feedback) {
-                if (typeof q.feedback === 'string') {
-                    q.correctExplanation = q.feedback;
-                } else if (q.feedback.correct) {
-                    q.correctExplanation = q.feedback.correct;
-                }
-            }
-            // TF must have at least the opposite as a distractor
-            if (!Array.isArray(q.distractors) || q.distractors.length === 0) {
-                const opposite = q.correct === 'True' ? 'False' : 'True';
-                const wrongExplanation = (q.feedback && typeof q.feedback === 'object' && q.feedback.incorrect) || '';
-                q.distractors = [{ answer: opposite, explanation: wrongExplanation }];
-            }
-        }
-
-        // Final safety: ensure distractors is a valid array
-        if (!Array.isArray(q.distractors)) {
-            q.distractors = [];
-        }
-
-        // Ensure correct has a value
-        if (q.correct === undefined || q.correct === null) {
-            q.correct = '(no answer provided)';
-        }
-
-        // Ensure correctExplanation exists
-        if (!q.correctExplanation) {
-            q.correctExplanation = '';
-        }
-    }
-
-    // --- Cloze normalization ---
-    if (q.type === 'cloze') {
-
-        // Normalize prompt text
-        if (!q.prompt) {
-            q.prompt = q.stem || q.question || 'Complete the sentence:';
-        }
-
-        // Schema: {template, blanks} -> sentence = template
-        if (!q.sentence && q.template) {
-            q.sentence = q.template;
-        }
-
-        // Schema: {segments: [...], blanks: {...}} -> build sentence from segments
-        if (!q.sentence && Array.isArray(q.segments)) {
-            let built = '';
-            q.segments.forEach(seg => {
-                if (typeof seg === 'string') {
-                    built += seg;
-                } else if (seg.blank) {
-                    built += `{{blank:${seg.blank}}}`;
-                } else if (seg.blankId) {
-                    built += `{{blank:${seg.blankId}}}`;
-                }
-            });
-            q.sentence = built;
-        }
-
-        // Schema: {question: "text with {{c1::answer}} Anki-style", correct}
-        // Convert Anki-style cloze to standard blanks
-        if (!q.sentence && q.question && q.question.includes('{{c')) {
-            let blankCounter = 0;
-            const blanks = {};
-            q.sentence = q.question.replace(/\{\{c(\d+)::([^}]+)\}\}/g, (match, cNum, answer) => {
-                blankCounter++;
-                const id = String(blankCounter);
-                blanks[id] = {
-                    correct: answer,
-                    correctExplanation: q.correctExplanation || '',
-                    distractors: Array.isArray(q.distractors) ? q.distractors : []
-                };
-                return `{{blank:${id}}}`;
-            });
-            if (!q.blanks && Object.keys(blanks).length > 0) {
-                q.blanks = blanks;
-            }
-        }
-
-        // Schema: {question: "text with [[answer]]", correctAnswer, distractors}
-        if (!q.sentence && q.question && q.question.includes('[[')) {
-            let blankCounter = 0;
-            const blanks = {};
-            q.sentence = q.question.replace(/\[\[([^\]]+)\]\]/g, (match, answer) => {
-                blankCounter++;
-                const id = String(blankCounter);
-                blanks[id] = {
-                    correct: q.correctAnswer || answer,
-                    correctExplanation: q.correctExplanation || '',
-                    distractors: Array.isArray(q.distractors) ? q.distractors : []
-                };
-                return `{{blank:${id}}}`;
-            });
-            if (!q.blanks && Object.keys(blanks).length > 0) {
-                q.blanks = blanks;
-            }
-        }
-
-        // Schema: {prompt: "text with {{blank:1}}", correctAnswer, distractors} (no blanks object)
-        if (q.sentence && !q.blanks && q.correctAnswer) {
-            const blankMatches = q.sentence.match(/\{\{blank:([^}]+)\}\}/g);
-            if (blankMatches) {
-                q.blanks = {};
-                blankMatches.forEach(m => {
-                    const id = m.replace(/\{\{blank:|\}\}/g, '');
-                    q.blanks[id] = {
-                        correct: q.correctAnswer,
-                        correctExplanation: q.correctExplanation || '',
-                        distractors: Array.isArray(q.distractors) ? q.distractors : []
-                    };
-                });
-            }
-        }
-
-        // Normalize blanks that use correctIndex instead of correct
-        if (q.blanks && typeof q.blanks === 'object') {
-            Object.keys(q.blanks).forEach(id => {
-                const b = q.blanks[id];
-                if (b.correctIndex !== undefined && Array.isArray(b.options)) {
-                    b.correct = b.options[b.correctIndex] || '';
-                    if (!Array.isArray(b.distractors) || b.distractors.length === 0) {
-                        b.distractors = b.options
-                            .filter((_, i) => i !== b.correctIndex)
-                            .map(text => ({ answer: text, explanation: '' }));
-                    }
-                }
-                if (!b.correctExplanation) {
-                    b.correctExplanation = (b.feedback && b.feedback.correct) || '';
-                }
-                if (!Array.isArray(b.distractors)) {
-                    b.distractors = [];
-                }
-            });
-        }
-
-        // Final safety for cloze
-        if (!q.sentence) {
-            q.sentence = q.prompt || '(question text missing)';
-        }
-        if (!q.blanks || typeof q.blanks !== 'object') {
-            q.blanks = {};
-        }
-    }
-
-    return q;
-}
-
 // ============================================
 // MC QUESTION RENDERING
 // ============================================
@@ -9844,30 +9613,27 @@ function renderMCQuestion(question) {
     // Hide cloze, show MC
     document.getElementById('cloze-sentence').style.display = 'none';
     document.getElementById('quiz-options').style.display = 'flex';
-
+    
     // Set question text
-    document.getElementById('quiz-question-text').textContent = question.question || '(Question text missing)';
-
-    // Guard: ensure distractors is a usable array
-    const distractors = Array.isArray(question.distractors) ? question.distractors : [];
-
+    document.getElementById('quiz-question-text').textContent = question.question;
+    
     // Build options array
     const options = [
-        { text: question.correct || '(no answer)', isCorrect: true, explanation: question.correctExplanation || 'That is correct.' }
+        { text: question.correct, isCorrect: true, explanation: question.correctExplanation || 'That is correct.' }
     ];
-
-    distractors.forEach(d => {
+    
+    question.distractors.forEach(d => {
         if (typeof d === 'string') {
             options.push({ text: d, isCorrect: false, explanation: '' });
-        } else if (d && typeof d === 'object') {
-            options.push({ text: d.answer || d.text || d.value || '', isCorrect: false, explanation: d.explanation || '' });
+        } else {
+            options.push({ text: d.answer, isCorrect: false, explanation: d.explanation || '' });
         }
     });
-
+    
     // Shuffle options
     const shuffledOptions = shuffleArray(options);
     currentQuiz.options = shuffledOptions;
-
+    
     // Render options
     const optionsContainer = document.getElementById('quiz-options');
     optionsContainer.innerHTML = shuffledOptions.map((opt, i) => `
@@ -9876,7 +9642,7 @@ function renderMCQuestion(question) {
             <span class="quiz-option-text">${escapeHtml(opt.text)}</span>
         </button>
     `).join('');
-
+    
     // Add click listeners
     optionsContainer.querySelectorAll('.quiz-option').forEach(btn => {
         btn.addEventListener('click', () => selectMCOption(parseInt(btn.dataset.index)));
@@ -9903,81 +9669,67 @@ function renderClozeQuestion(question) {
     // Hide MC, show cloze
     document.getElementById('quiz-options').style.display = 'none';
     document.getElementById('cloze-sentence').style.display = 'block';
-
+    
     // Set prompt/question text
     document.getElementById('quiz-question-text').textContent = question.prompt || 'Complete the sentence:';
-
+    
     // Parse sentence and create dropdowns
-    const sentence = question.sentence || '(sentence missing)';
-    const blanks = question.blanks || {};
-
-    // Collect blank IDs from the sentence (use a fresh regex to avoid lastIndex issues)
-    const blankIds = [];
-    const idRegex = /\{\{blank:([^}]+)\}\}/g;
+    const sentence = question.sentence;
+    const blanks = question.blanks;
+    
+    // Replace {{blank:id}} with select elements
+    let html = escapeHtml(sentence);
+    
+    // Find all blank placeholders
+    const blankRegex = /\{\{blank:([^}]+)\}\}/g;
     let match;
-    while ((match = idRegex.exec(sentence)) !== null) {
+    const blankIds = [];
+    
+    while ((match = blankRegex.exec(sentence)) !== null) {
         blankIds.push(match[1]);
     }
-
+    
     // Store blank data for validation
     currentQuiz.blanks = blanks;
     currentQuiz.blankIds = blankIds;
     currentQuiz.clozeAnswers = {};
-
-    // Split the sentence on blank placeholders so we can escape text parts
-    // while inserting raw HTML for the <select> elements
-    const parts = sentence.split(/\{\{blank:[^}]+\}\}/);
-    let blankIndex = 0;
-    let html = '';
-
-    for (let p = 0; p < parts.length; p++) {
-        // Escape the plain-text segment
-        html += escapeHtml(parts[p]);
-
-        // Insert a <select> dropdown for the blank that follows this segment
-        if (blankIndex < blankIds.length) {
-            const blankId = blankIds[blankIndex];
-            const blankData = blanks[blankId];
-            blankIndex++;
-
-            if (!blankData) {
-                html += `<span class="cloze-blank">[?]</span>`;
-                continue;
+    
+    // Build HTML with dropdowns
+    html = sentence.replace(blankRegex, (match, blankId) => {
+        const blankData = blanks[blankId];
+        if (!blankData) return match; // Invalid blank reference
+        
+        // Build options: correct + distractors, shuffled
+        const options = [
+            { value: blankData.correct, isCorrect: true }
+        ];
+        
+        blankData.distractors.forEach(d => {
+            if (typeof d === 'string') {
+                options.push({ value: d, isCorrect: false });
+            } else {
+                options.push({ value: d.answer, isCorrect: false });
             }
-
-            // Build options: correct + distractors, shuffled
-            const distractors = Array.isArray(blankData.distractors) ? blankData.distractors : [];
-            const options = [
-                { value: blankData.correct || '', isCorrect: true }
-            ];
-
-            distractors.forEach(d => {
-                if (typeof d === 'string') {
-                    options.push({ value: d, isCorrect: false });
-                } else if (d && typeof d === 'object') {
-                    options.push({ value: d.answer || d.text || d.value || '', isCorrect: false });
-                }
-            });
-
-            const shuffledOptions = shuffleArray(options);
-
-            // Store shuffled options for later validation
-            currentQuiz[`blankOptions_${blankId}`] = shuffledOptions;
-
-            // Create select HTML
-            const optionsHtml = shuffledOptions.map(opt =>
-                `<option value="${escapeHtml(opt.value)}">${escapeHtml(opt.value)}</option>`
-            ).join('');
-
-            html += `<span class="cloze-blank"><select class="cloze-select" data-blank-id="${escapeHtml(blankId)}" aria-label="Blank ${escapeHtml(blankId)}">
-                <option value="">select</option>
-                ${optionsHtml}
-            </select></span>`;
-        }
-    }
-
+        });
+        
+        const shuffledOptions = shuffleArray(options);
+        
+        // Store shuffled options for later validation
+        currentQuiz[`blankOptions_${blankId}`] = shuffledOptions;
+        
+        // Create select HTML
+        const optionsHtml = shuffledOptions.map(opt => 
+            `<option value="${escapeHtml(opt.value)}">${escapeHtml(opt.value)}</option>`
+        ).join('');
+        
+        return `<span class="cloze-blank"><select class="cloze-select" data-blank-id="${blankId}" aria-label="Blank ${blankId}">
+            <option value="">select</option>
+            ${optionsHtml}
+        </select></span>`;
+    });
+    
     document.getElementById('cloze-sentence').innerHTML = html;
-
+    
     // Add change listeners to dropdowns
     document.querySelectorAll('.cloze-select').forEach(select => {
         select.addEventListener('change', () => onClozeSelectChange(select));
