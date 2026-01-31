@@ -4603,9 +4603,39 @@ body {
                 <div class="topic-current-display">
                     <span id="topic-current-name">No topic selected</span>
                 </div>
+                <div class="class-badge-container" id="class-badge-container" style="margin-left:auto;">
+                    <span class="class-badge" id="class-badge-display" title="Click to change class" style="cursor:pointer; padding: var(--space-1) var(--space-3); font-size: var(--text-xs); font-weight: 600; background: var(--color-primary-pale); color: var(--color-primary); border-radius: var(--radius-sm); border: 1px solid var(--color-primary); display:inline-block;">No class</span>
+                </div>
             </div>
         </div>
-        
+
+        <!-- Class Mismatch Modal -->
+        <div id="class-mismatch-overlay" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:10000; align-items:center; justify-content:center;">
+            <div style="background:var(--color-bg-card); border-radius:var(--radius-lg); padding:var(--space-6); max-width:420px; width:90%; box-shadow:var(--shadow-lg);">
+                <h3 style="margin-bottom:var(--space-3); color:var(--color-text);">Class Mismatch</h3>
+                <p id="class-mismatch-message" style="margin-bottom:var(--space-4); color:var(--color-text-secondary); font-size:var(--text-sm); line-height:1.5;"></p>
+                <div style="margin-bottom:var(--space-4);">
+                    <label style="font-size:var(--text-sm); font-weight:600; color:var(--color-text); display:block; margin-bottom:var(--space-2);">Select your class:</label>
+                    <select id="class-mismatch-select" class="form-input" style="width:100%; padding:var(--space-2) var(--space-3); font-size:var(--text-sm); border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-bg-card); color:var(--color-text);">
+                        <option value="">-- Select your class --</option>
+                        <option value="12BioTSH">12BioTSH</option>
+                        <option value="12CheDMH">12CheDMH</option>
+                        <option value="12PhyJIM">12PhyJIM</option>
+                        <option value="12PhyEVA">12PhyEVA</option>
+                        <option value="11PhyJIM">11PhyJIM</option>
+                        <option value="10SciJIM">10SciJIM</option>
+                        <option value="10SciKLA">10SciKLA</option>
+                        <option value="10SciDMH">10SciDMH</option>
+                        <option value="08SciDMH">08SciDMH</option>
+                    </select>
+                </div>
+                <div style="display:flex; gap:var(--space-3); justify-content:flex-end;">
+                    <button id="class-mismatch-dismiss" style="padding:var(--space-2) var(--space-4); font-size:var(--text-sm); border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-bg-card); color:var(--color-text); cursor:pointer;">Keep Current</button>
+                    <button id="class-mismatch-confirm" style="padding:var(--space-2) var(--space-4); font-size:var(--text-sm); border:none; border-radius:var(--radius-md); background:var(--color-primary); color:white; cursor:pointer; font-weight:600;">Update Class</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Sub Navigation (Tabs) -->
         <nav class="sub-nav" role="tablist" aria-label="Main sections">
             <div class="sub-nav-content">
@@ -5038,7 +5068,7 @@ body {
                                 <option value="10SciJIM">10SciJIM</option>
                                 <option value="10SciKLA">10SciKLA</option>
                                 <option value="10SciDMH">10SciDMH</option>
-                                <option value="8SciDMH">8SciDMH</option>
+                                <option value="08SciDMH">08SciDMH</option>
                             </select>
                         </div>
                     </div>
@@ -5500,7 +5530,7 @@ body {
                                 <option value="10SciJIM">10SciJIM</option>
                                 <option value="10SciKLA">10SciKLA</option>
                                 <option value="10SciDMH">10SciDMH</option>
-                                <option value="8SciDMH">8SciDMH</option>
+                                <option value="08SciDMH">08SciDMH</option>
                             </select>
                         </div>
                     </div>
@@ -5881,6 +5911,89 @@ function pushProgressToServer(eventType, detail) {
     } catch (e) {
         console.warn('Progress push failed:', e);
     }
+}
+
+// ============================================
+// CLASS CODE BADGE & MISMATCH DETECTION
+// ============================================
+function updateClassBadge() {
+    const badge = document.getElementById('class-badge-display');
+    if (!badge) return;
+    const code = appState.student.class;
+    badge.textContent = code || 'No class';
+    badge.style.background = code ? 'var(--color-primary-pale)' : 'var(--color-warning)';
+    badge.style.color = code ? 'var(--color-primary)' : 'white';
+    badge.style.borderColor = code ? 'var(--color-primary)' : 'var(--color-warning)';
+}
+
+function extractYearFromClassCode(classCode) {
+    // Class codes are nnSSSTTT, e.g. 10SciJIM, 08SciDMH, 12BioTSH
+    if (!classCode) return null;
+    const match = classCode.match(/^(\d{2})/);
+    return match ? parseInt(match[1]) : null;
+}
+
+function extractYearFromTopic() {
+    // Get year from selected year-level dropdown or from topic data
+    const yearDropdown = document.getElementById('year-level-dropdown');
+    if (yearDropdown && yearDropdown.value) {
+        // Values like "year7", "year10", "year7-8", "vce-unit1", "vce-unit3"
+        const val = yearDropdown.value;
+        const match = val.match(/year(\d+)/);
+        if (match) return parseInt(match[1]);
+        // VCE is year 11-12
+        if (val.startsWith('vce')) return 12;
+    }
+    return null;
+}
+
+function checkClassMismatch() {
+    const classCode = appState.student.class;
+    if (!classCode) {
+        // No class set at all — prompt to select
+        showClassMismatchModal('You haven\'t selected a class yet. Please choose your class so your progress is sent to the right teacher.');
+        return;
+    }
+
+    const classYear = extractYearFromClassCode(classCode);
+    const topicYear = extractYearFromTopic();
+
+    if (classYear !== null && topicYear !== null && classYear !== topicYear) {
+        showClassMismatchModal(
+            `Your current class (${classCode}) is for Year ${classYear}, but you've selected a Year ${topicYear} topic. Would you like to update your class?`
+        );
+    }
+}
+
+function showClassMismatchModal(message) {
+    const overlay = document.getElementById('class-mismatch-overlay');
+    const msgEl = document.getElementById('class-mismatch-message');
+    const selectEl = document.getElementById('class-mismatch-select');
+    if (!overlay || !msgEl || !selectEl) return;
+
+    msgEl.textContent = message;
+    selectEl.value = appState.student.class || '';
+    overlay.style.display = 'flex';
+}
+
+function hideClassMismatchModal() {
+    const overlay = document.getElementById('class-mismatch-overlay');
+    if (overlay) overlay.style.display = 'none';
+}
+
+function confirmClassMismatch() {
+    const selectEl = document.getElementById('class-mismatch-select');
+    const newClass = selectEl ? selectEl.value : '';
+    if (newClass) {
+        appState.student.class = newClass;
+        // Sync all class dropdowns
+        const settingsInput = document.getElementById('class-input');
+        if (settingsInput) settingsInput.value = newClass;
+        saveData();
+        updateClassBadge();
+        showToast(`Class updated to ${newClass}`, 'success');
+    }
+    hideClassMismatchModal();
 }
 
 function loadData() {
@@ -13828,9 +13941,28 @@ function setupEventListeners() {
     });
 
     // Dropdown changes
-    document.getElementById('year-level-dropdown')?.addEventListener('change', onYearLevelChange);
-    document.getElementById('subject-dropdown')?.addEventListener('change', onSubjectChange);
-    document.getElementById('topic-dropdown')?.addEventListener('change', onTopicChange);
+    document.getElementById('year-level-dropdown')?.addEventListener('change', (e) => {
+        onYearLevelChange(e);
+        checkClassMismatch();
+    });
+    document.getElementById('subject-dropdown')?.addEventListener('change', (e) => {
+        onSubjectChange(e);
+        checkClassMismatch();
+    });
+    document.getElementById('topic-dropdown')?.addEventListener('change', (e) => {
+        onTopicChange(e);
+        checkClassMismatch();
+    });
+
+    // Class badge & mismatch modal
+    document.getElementById('class-badge-display')?.addEventListener('click', () => {
+        showClassMismatchModal('Select your class for this topic:');
+    });
+    document.getElementById('class-mismatch-dismiss')?.addEventListener('click', hideClassMismatchModal);
+    document.getElementById('class-mismatch-confirm')?.addEventListener('click', confirmClassMismatch);
+    document.getElementById('class-mismatch-overlay')?.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) hideClassMismatchModal();
+    });
     
     // Topic refresh button
     document.getElementById('refresh-topics-btn')?.addEventListener('click', async (e) => {
@@ -13904,6 +14036,7 @@ function setupEventListeners() {
     document.getElementById('class-input')?.addEventListener('change', (e) => {
         appState.student.class = e.target.value;
         saveData();
+        updateClassBadge();
     });
     
     // Level preferences - display mode
@@ -14068,6 +14201,7 @@ async function init() {
     // Render everything
     renderAll();
     updateTopicCurrentDisplay();
+    updateClassBadge();
     
     // Check for first run or schedule selection tip
     const firstRunComplete = localStorage.getItem(FIRST_RUN_KEY);
