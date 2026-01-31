@@ -560,6 +560,17 @@ body {
     font-weight: 700;
 }
 
+/* Learning tab attention pulse — single glow when user is away from Learning Content */
+.nav-tab.pulse-glow {
+    animation: learningTabPulse 1s ease-in-out;
+}
+
+@keyframes learningTabPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(45, 157, 120, 0); }
+    50%  { box-shadow: 0 0 14px 4px rgba(45, 157, 120, 0.45); }
+    100% { box-shadow: 0 0 0 0 rgba(45, 157, 120, 0); }
+}
+
 /* ============================================
    MAIN CONTENT AREA
    ============================================ */
@@ -3330,6 +3341,40 @@ body {
     margin-bottom: var(--space-3);
 }
 
+/* Questions banner at top of email preview */
+.email-questions-banner {
+    padding: var(--space-3);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-3);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+}
+
+.email-questions-banner.has-questions {
+    background: rgba(45, 157, 120, 0.1);
+    border: 2px solid rgba(45, 157, 120, 0.35);
+}
+
+.email-questions-banner.no-questions {
+    background: rgba(234, 179, 8, 0.1);
+    border: 2px solid rgba(234, 179, 8, 0.35);
+}
+
+.email-questions-banner h4 {
+    margin: 0 0 var(--space-2) 0;
+    font-size: var(--text-sm);
+    font-weight: 700;
+}
+
+.email-questions-banner ol {
+    margin: 0;
+    padding-left: var(--space-4);
+}
+
+.email-questions-banner ol li {
+    margin-bottom: var(--space-1);
+}
+
 .email-preview-hint {
     padding: var(--space-2) var(--space-3);
     background: rgba(59, 130, 246, 0.1);
@@ -4848,7 +4893,7 @@ body {
                             <div class="export-option-icon">✉️</div>
                             <div class="export-option-content">
                                 <h3 class="export-option-title">Email Summary</h3>
-                                <p class="export-option-desc">Share a structured summary with your teacher</p>
+                                <p class="export-option-desc">Must include any questions for the teacher</p>
                             </div>
                             <div class="export-option-buttons">
                                 <button class="btn btn-ghost" id="email-preview-btn">Preview</button>
@@ -4921,6 +4966,9 @@ body {
                     <div class="email-subject-line">
                         <span class="email-subject-label">Subject:</span>
                         <span class="email-subject-text" id="email-subject-text">Learning Progress: Student - Topic - Date</span>
+                    </div>
+                    <div id="email-questions-banner">
+                        <!-- Dynamically populated: prominent questions summary -->
                     </div>
                     <div class="email-preview-content" id="email-preview-content">
                         <!-- Dynamically populated -->
@@ -7791,27 +7839,53 @@ async function loadQuestionsForItem(uuid) {
     if (questionsCache[uuid]) {
         return questionsCache[uuid];
     }
-    
+
     if (!appState.currentTopicPath) {
         return null;
     }
-    
+
     try {
         const questionUrl = `${appState.currentTopicPath}questions/q-${uuid}.json`;
         const response = await fetch(questionUrl);
-        
+
         if (!response.ok) {
-            // Questions don't exist - this is normal, not an error
+            // KNOWN ISSUE (Bug #4 — documented 2026-01-31):
+            // Negative caching: when a fetch returns a non-200 status (e.g. 404, 503),
+            // we cache null for this UUID. On subsequent calls, the cache check above
+            // returns null immediately — the student will never see questions for this
+            // item again during the session, even if the server recovers.
+            //
+            // For a genuine 404 (file doesn't exist) this is fine and avoids repeated
+            // failed fetches. But for transient errors (503 Service Unavailable, network
+            // hiccup, timeout), caching null is incorrect — the questions may become
+            // available later.
+            //
+            // FIX: Only cache null for 404 responses (file genuinely missing). For
+            // other HTTP errors (5xx, 429, etc.), do NOT cache — let the next call
+            // retry the fetch. Alternatively, cache with a short TTL (e.g. 30 seconds)
+            // for non-404 errors, or use a retry counter that allows N retries before
+            // giving up.
+            //
+            // Example fix:
+            //   if (response.status === 404) {
+            //       questionsCache[uuid] = null;  // genuinely missing, safe to cache
+            //   }
+            //   // else: don't cache, allow retry on next call
+            //
             console.log(`No questions for ${uuid} (HTTP ${response.status})`);
             questionsCache[uuid] = null;
             return null;
         }
-        
+
         const questionData = await response.json();
         questionsCache[uuid] = questionData;
         return questionData;
-        
+
     } catch (error) {
+        // KNOWN ISSUE (Bug #4 continued):
+        // Network errors (offline, DNS failure, CORS, timeout) also cache null,
+        // permanently blocking retry for this UUID within the session.
+        // Same fix applies: do not cache null on network errors, only on 404.
         console.log(`Could not load questions for ${uuid}:`, error.message);
         questionsCache[uuid] = null;
         return null;
@@ -9619,6 +9693,35 @@ function shuffleArray(array) {
  * Standard MC/TF: { type, question, correct, correctExplanation, distractors: [{answer, explanation}] }
  * Standard Cloze: { type, prompt, sentence, blanks: { id: {correct, correctExplanation, distractors} } }
  * Returns the normalized question (may mutate the original).
+ *
+ * CHANGE LOG (2026-01-31):
+ * Added to fix a crash where renderMCQuestion() would throw:
+ *   "Uncaught TypeError: Cannot read properties of undefined (reading 'forEach')"
+ * on question.distractors.forEach(). Root cause: question JSON files across the
+ * codebase use 11 different schema variants (generated by different prompt templates).
+ * Some use "correctAnswer" instead of "correct", "MC" instead of "mc", "stem" instead
+ * of "question", "options" with embedded correct flags, "correctIndex" integers,
+ * Anki-style {{c1::answer}} cloze syntax, [[answer]] bracket syntax, etc.
+ *
+ * This function is called in showQuiz() and startConsolidationPractice() BEFORE
+ * rendering, and maps all known variants to the standard schema so the renderers
+ * and validators only need to handle one format.
+ *
+ * Handles these known MC/TF schema variants:
+ *   1. {options: [{text, correct: true/false}], question}
+ *   2. {options: [string], correctIndex: N, stem, bloom, feedback}
+ *   3. {options: [string], correct: "text", distractorExplanations}
+ *   4. {correctAnswer: "text", distractors: [...]} (correctAnswer instead of correct)
+ *   5. {statement, correct: boolean, explanation} (TF with boolean)
+ *   6. {stem, correctAnswer, feedback: {correct, incorrect}, bloom} (TF alt)
+ *
+ * Handles these known Cloze schema variants:
+ *   7. {template, blanks} (template instead of sentence)
+ *   8. {segments: [...], blanks} (segments array instead of sentence string)
+ *   9. {question: "{{c1::answer}}", correct} (Anki-style cloze deletion)
+ *  10. {question: "[[answer]]", correctAnswer, distractors}
+ *  11. {prompt: "{{blank:1}}", correctAnswer, distractors} (no blanks object)
+ *  12. blanks with {correctIndex, options} instead of {correct, distractors}
  */
 function normalizeQuestion(q) {
     if (!q || typeof q !== 'object') return q;
@@ -9840,6 +9943,30 @@ function normalizeQuestion(q) {
 // ============================================
 // MC QUESTION RENDERING
 // ============================================
+/**
+ * Renders a multiple-choice or true/false question in the quiz modal.
+ * Also handles TF questions — they are rendered as MC with two options.
+ *
+ * CHANGE LOG (2026-01-31):
+ * Added defensive guards to prevent the crash:
+ *   "Uncaught TypeError: Cannot read properties of undefined (reading 'forEach')"
+ *   at question.distractors.forEach()
+ *
+ * The crash occurred intermittently because selectRandomQuestion() picks a random
+ * question from the pool — if one question in the array had missing/malformed
+ * fields (no distractors, wrong schema), the quiz would crash only when that
+ * specific question was randomly selected.
+ *
+ * Guards added:
+ *   - distractors: accessed via Array.isArray() check, defaults to []
+ *   - question.question: falls back to '(Question text missing)'
+ *   - question.correct: falls back to '(no answer)'
+ *   - distractor objects: checked for d.answer || d.text || d.value
+ *
+ * normalizeQuestion() (called upstream in showQuiz/startConsolidationPractice)
+ * should handle most schema variants, but these guards act as a safety net
+ * for any unexpected data shapes.
+ */
 function renderMCQuestion(question) {
     // Hide cloze, show MC
     document.getElementById('cloze-sentence').style.display = 'none';
@@ -9899,6 +10026,34 @@ function selectMCOption(index) {
 // ============================================
 // CLOZE QUESTION RENDERING
 // ============================================
+/**
+ * Renders a cloze (fill-in-the-blank) question in the quiz modal.
+ *
+ * CHANGE LOG (2026-01-31):
+ * Rewrote to fix Bug #1: the original code had a dead escapeHtml() call.
+ *
+ * Original code did:
+ *   let html = escapeHtml(sentence);                    // escaped version
+ *   html = sentence.replace(blankRegex, (match) => {    // OVERWRITES with raw sentence
+ *       ...
+ *   });
+ *
+ * The escaped version was immediately overwritten by .replace() on the RAW
+ * sentence, so surrounding text (outside {{blank:N}} markers) was injected
+ * into innerHTML without sanitization. If question text contained HTML-special
+ * characters (e.g. "if T < 100°C"), the browser would parse them as HTML tags.
+ *
+ * New approach: split the sentence on {{blank:N}} markers, escapeHtml() each
+ * plain-text segment individually, then insert raw <select> HTML between them.
+ * This ensures all user-visible text is escaped while the dropdown HTML is
+ * correctly rendered.
+ *
+ * Also fixed:
+ *   - Uses a separate regex instance for ID collection (avoids /g lastIndex
+ *     statefulness fragility between the exec loop and the split)
+ *   - Guards for missing blanks data and missing/non-array distractors
+ *   - blankId values escaped in data attributes
+ */
 function renderClozeQuestion(question) {
     // Hide MC, show cloze
     document.getElementById('quiz-options').style.display = 'none';
@@ -10258,12 +10413,30 @@ function processConsolidationResult(isCorrect, explanation) {
     }
 
     // Update consolidation counters
+    //
+    // KNOWN ISSUE (Bug #3 — documented 2026-01-31):
+    // qAttempted counts TOTAL submissions, not UNIQUE questions attempted.
+    // When a student re-practices after all questions have been seen (the fallback
+    // in startConsolidationPractice where unattemptedQuestions.length === 0),
+    // qAttempted continues to increment. The completion check below compares
+    // qAttempted >= qTotal, so a student could be marked "consolidated" by
+    // answering a small subset of questions repeatedly (e.g., 3 unique questions
+    // answered 4 times each = 12 attempts, which exceeds a qTotal of 10).
+    //
+    // FIX: Track unique question indices attempted (e.g., via a Set or array of
+    // globalIndex values in the consolidation object) and check that the count
+    // of unique attempts >= qTotal. Alternatively, use appState.quizStats[itemKey]
+    // which already tracks per-question attempts — count keys with attempts > 0
+    // and compare against qTotal.
+    //
     item.consolidation.qAttempted = (item.consolidation.qAttempted || 0) + 1;
     if (isCorrect) {
         item.consolidation.qCorrect = (item.consolidation.qCorrect || 0) + 1;
     }
 
     // Check if fully consolidated (all questions attempted)
+    // NOTE: See KNOWN ISSUE above — this comparison is against total submissions,
+    // not unique questions, so it can trigger prematurely.
     if (item.consolidation.qTotal > 0 && item.consolidation.qAttempted >= item.consolidation.qTotal) {
         item.consolidation.isConsolidated = true;
     }
@@ -11307,16 +11480,81 @@ function hideCheckinStartModal() {
 // ============================================
 // NAVIGATION
 // ============================================
+
+// Learning tab attention-pulse timers
+let _learningPulseInitialTimer = null;
+let _learningPulseIntervalTimer = null;
+let _learningPulseRandomTimer = null;
+
+/**
+ * Clear all learning-tab pulse timers and remove the glow class.
+ */
+function clearLearningPulseTimers() {
+    clearTimeout(_learningPulseInitialTimer);
+    clearInterval(_learningPulseIntervalTimer);
+    clearTimeout(_learningPulseRandomTimer);
+    _learningPulseInitialTimer = null;
+    _learningPulseIntervalTimer = null;
+    _learningPulseRandomTimer = null;
+    const tab = document.getElementById('learning-tab');
+    if (tab) tab.classList.remove('pulse-glow');
+}
+
+/**
+ * Fire a single 1-second glow pulse on the Learning Content tab.
+ */
+function fireLearningPulse() {
+    const tab = document.getElementById('learning-tab');
+    if (!tab) return;
+    // Remove class first (in case a previous pulse is still running)
+    tab.classList.remove('pulse-glow');
+    // Force reflow so re-adding the class restarts the animation
+    void tab.offsetWidth;
+    tab.classList.add('pulse-glow');
+    // Remove class after the 1s animation completes
+    setTimeout(() => tab.classList.remove('pulse-glow'), 1050);
+}
+
+/**
+ * Start the learning-tab pulse cycle:
+ *  – Wait 20 s after leaving the Learning Content tab.
+ *  – Then every 30 s, fire one pulse at a random offset (0–29 s).
+ */
+function startLearningPulseTimers() {
+    clearLearningPulseTimers();
+
+    _learningPulseInitialTimer = setTimeout(() => {
+        // First pulse immediately after the 20 s initial wait
+        fireLearningPulse();
+
+        // Then repeat: once per 30 s window at a random offset
+        _learningPulseIntervalTimer = setInterval(() => {
+            const randomDelay = Math.floor(Math.random() * 30000); // 0–29 999 ms
+            _learningPulseRandomTimer = setTimeout(fireLearningPulse, randomDelay);
+        }, 30000);
+    }, 20000);
+}
+
 function switchTab(tabId) {
     // Update tab buttons
     document.querySelectorAll('.nav-tab').forEach(tab => {
         tab.setAttribute('aria-selected', tab.id === `${tabId}-tab`);
     });
-    
+
     // Update panels
     document.querySelectorAll('.panel-content').forEach(panel => {
         panel.classList.toggle('active', panel.id === `${tabId}-panel`);
     });
+
+    // Learning-tab attention pulse: start when leaving, stop when returning
+    if (tabId === 'learning') {
+        clearLearningPulseTimers();
+    } else {
+        // Only start if not already running (switching between non-learning tabs)
+        if (!_learningPulseInitialTimer && !_learningPulseIntervalTimer) {
+            startLearningPulseTimers();
+        }
+    }
 }
 
 function navigateToLearningItem(itemKey) {
@@ -12405,6 +12643,28 @@ function showEmailPreview() {
 
     document.getElementById('email-subject-text').textContent = subjectLine;
     document.getElementById('email-preview-content').textContent = emailText;
+
+    // Build prominent questions banner at the top of the preview
+    const bannerEl = document.getElementById('email-questions-banner');
+    const questions = metrics.questions || [];
+    if (questions.length > 0) {
+        const listItems = questions.map(q => {
+            const qText = (typeof q === 'string') ? q : (q.text || '(empty question)');
+            return `<li>${escapeHtml(qText)}</li>`;
+        }).join('');
+        bannerEl.innerHTML = `
+            <div class="email-questions-banner has-questions">
+                <h4>Questions for my teacher (${questions.length})</h4>
+                <ol>${listItems}</ol>
+            </div>`;
+    } else {
+        bannerEl.innerHTML = `
+            <div class="email-questions-banner no-questions">
+                <h4>No questions for teacher</h4>
+                <p style="margin:0;">You haven't added any questions for your teacher yet. Go to the Goals tab to add questions before sending.</p>
+            </div>`;
+    }
+
     document.getElementById('email-preview-panel').style.display = 'block';
 
     // Scroll panel into view
@@ -12503,18 +12763,23 @@ Report Date: ${new Date().toISOString().split('T')[0]}
 Period: ${metrics.activityRange.firstDate || 'N/A'} to ${metrics.activityRange.lastDate || 'N/A'}
 `;
 
-    // Add Questions for Teacher (critical - at the top)
-    if (metrics.questions && metrics.questions.length > 0) {
-        text += `
+    // Questions for Teacher — always shown, prominently, at the top of the report
+    text += `
 ═══════════════════════════════════
-QUESTIONS FOR MY TEACHER
+  QUESTIONS FOR MY TEACHER
 ═══════════════════════════════════
 
 `;
+    if (metrics.questions && metrics.questions.length > 0) {
         metrics.questions.forEach((q, i) => {
-            text += `${i + 1}. ${q}\n`;
+            // q is an object {text, context, created, status} — use q.text
+            const qText = (typeof q === 'string') ? q : (q.text || '(empty question)');
+            text += `  ${i + 1}. ${qText}\n`;
         });
+    } else {
+        text += `  (No questions submitted for this report.)\n`;
     }
+    text += `\n═══════════════════════════════════\n`;
 
     // Add Learning Character narrative if available
     if (metrics.narrative) {
@@ -13740,6 +14005,9 @@ async function init() {
 
     // Initialize messages system
     await initMessages();
+
+    // Start learning-tab pulse since initial tab is Overview (not Learning Content)
+    startLearningPulseTimers();
 
     console.log('Initialization complete');
 }
