@@ -1305,7 +1305,38 @@ function migrateData(data) {
                 history: migrated.uprWeekFocus.history || []
             };
         }
-        
+
+        // Ensure CB data structures exist
+        if (!migrated.cbBiases) {
+            migrated.cbBiases = {};
+        }
+        if (!migrated.cbGlobalNotes) {
+            migrated.cbGlobalNotes = [];
+        }
+        if (!migrated.cbWeekFocus) {
+            migrated.cbWeekFocus = { biases: [], startDate: null, notes: {}, plans: {}, history: [] };
+        } else {
+            migrated.cbWeekFocus = {
+                biases: migrated.cbWeekFocus.biases || [],
+                startDate: migrated.cbWeekFocus.startDate || null,
+                notes: migrated.cbWeekFocus.notes || {},
+                plans: migrated.cbWeekFocus.plans || {},
+                history: migrated.cbWeekFocus.history || []
+            };
+        }
+
+        // Ensure all CB biases have proper structure
+        if (migrated.cbBiases) {
+            for (const id of Object.keys(migrated.cbBiases)) {
+                if (!migrated.cbBiases[id].notes) {
+                    migrated.cbBiases[id].notes = [];
+                }
+                if (!migrated.cbBiases[id].status) {
+                    migrated.cbBiases[id].status = 'not-yet';
+                }
+            }
+        }
+
         console.log(`Migrated data from version ${originalVersion} to version 2`);
     }
     
@@ -1354,10 +1385,14 @@ function checkStorageQuota() {
 function shouldShowBackupReminder() {
     if (!appState.lastExported) {
         // If never exported and has some data, suggest backup
-        const hasData = Object.keys(appState.techniques).some(id => 
-            appState.techniques[id].status !== 'not-yet' || 
+        const hasData = Object.keys(appState.techniques).some(id =>
+            appState.techniques[id].status !== 'not-yet' ||
             (appState.techniques[id].notes && appState.techniques[id].notes.length > 0)
-        ) || appState.globalNotes.length > 0;
+        ) || appState.globalNotes.length > 0
+          || Object.keys(appState.cbBiases).some(id =>
+            appState.cbBiases[id].status !== 'not-yet' ||
+            (appState.cbBiases[id].notes && appState.cbBiases[id].notes.length > 0)
+        ) || appState.cbGlobalNotes.length > 0;
         return hasData;
     }
     
@@ -2602,6 +2637,40 @@ function getAllUprNotes() {
     return notes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 }
 
+function getAllCbNotes() {
+    const notes = [];
+    appState.cbGlobalNotes.forEach(note => notes.push({ ...note, timestamp: note.date, source: 'CB Global' }));
+    Object.entries(appState.cbBiases).forEach(([id, data]) => {
+        const bias = Object.values(CB_DATA).flat().find(b => b.id === parseInt(id));
+        (data.notes || []).forEach(note => notes.push({ ...note, timestamp: note.date, source: bias ? bias.name : 'Unknown Bias' }));
+    });
+    return notes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+}
+
+function calculateCbStats() {
+    const counts = { often: 0, occasionally: 0, notSuccessful: 0, justLearning: 0, notYet: 0, notSuitable: 0, dontUse: 0, weekFocus: 0 };
+    let totalNotes = appState.cbGlobalNotes.length;
+
+    Object.values(appState.cbBiases).forEach(bias => {
+        switch (bias.status) {
+            case 'often': counts.often++; break;
+            case 'occasionally': counts.occasionally++; break;
+            case 'not-successful': counts.notSuccessful++; break;
+            case 'just-learning': counts.justLearning++; break;
+            case 'not-yet': counts.notYet++; break;
+            case 'not-suitable': counts.notSuitable++; break;
+            case 'dont-use': counts.dontUse++; break;
+            case 'use-this-week': counts.weekFocus++; break;
+        }
+        totalNotes += (bias.notes || []).length;
+    });
+
+    const aware = counts.often + counts.occasionally + counts.weekFocus;
+    const awarenessRate = Math.round((aware / TOTAL_CB_BIASES) * 100);
+
+    return { ...counts, totalNotes, awarenessRate };
+}
+
 // ========== PROFILE & NOTES ==========
 function renderProfile() {
     document.getElementById('teacher-name').value = appState.profile.name || '';
@@ -3199,7 +3268,7 @@ function exportData() {
         _exportMeta: {
             version: DATA_VERSION,
             exportedAt: new Date().toISOString(),
-            appName: 'TLAC and UPR Growth',
+            appName: 'TLAC, UPR & CB Growth',
             teacherName: appState.profile.name || 'Unknown'
         },
         data: appState
@@ -3217,7 +3286,7 @@ function exportData() {
     link.href = url;
     const teacherName = appState.profile.name ? appState.profile.name.replace(/\s+/g, '-').toLowerCase() : 'teacher';
     const date = new Date().toISOString().split('T')[0];
-    link.download = `tlac-growth-${teacherName}-${date}.json`;
+    link.download = `tlac-upr-cb-growth-${teacherName}-${date}.json`;
     link.click();
     URL.revokeObjectURL(url);
     
@@ -3293,10 +3362,14 @@ function importData(event) {
             const migratedData = migrateData(importedData);
             
             // Offer merge vs replace option if user has existing data
-            const hasExistingData = Object.keys(appState.techniques).some(id => 
-                appState.techniques[id].status !== 'not-yet' || 
+            const hasExistingData = Object.keys(appState.techniques).some(id =>
+                appState.techniques[id].status !== 'not-yet' ||
                 (appState.techniques[id].notes && appState.techniques[id].notes.length > 0)
-            ) || appState.globalNotes.length > 0;
+            ) || appState.globalNotes.length > 0
+              || Object.keys(appState.cbBiases).some(id =>
+                appState.cbBiases[id].status !== 'not-yet' ||
+                (appState.cbBiases[id].notes && appState.cbBiases[id].notes.length > 0)
+            ) || appState.cbGlobalNotes.length > 0;
             
             let mergeMode = 'replace';
             if (hasExistingData) {
@@ -3397,7 +3470,50 @@ function importData(event) {
                     }
                 }
                 merged.uprWeekFocus.history.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
-                
+
+                // Merge CB biases
+                for (const [id, importedBias] of Object.entries(migratedData.cbBiases || {})) {
+                    if (!merged.cbBiases[id]) {
+                        merged.cbBiases[id] = importedBias;
+                    } else {
+                        const statusPriority = { 'often': 5, 'occasionally': 4, 'use-this-week': 3, 'not-successful': 2, 'just-learning': 1, 'not-yet': 0, 'dont-use': 0, 'not-suitable': 0 };
+                        const existingPriority = statusPriority[merged.cbBiases[id].status] || 0;
+                        const importedPriority = statusPriority[importedBias.status] || 0;
+
+                        if (importedPriority > existingPriority) {
+                            merged.cbBiases[id].status = importedBias.status;
+                        }
+
+                        const existingDates = new Set((merged.cbBiases[id].notes || []).map(n => n.date));
+                        for (const note of (importedBias.notes || [])) {
+                            if (!existingDates.has(note.date)) {
+                                merged.cbBiases[id].notes.push(note);
+                            }
+                        }
+                        merged.cbBiases[id].notes.sort((a, b) => new Date(b.date) - new Date(a.date));
+                    }
+                }
+
+                // Merge CB global notes
+                const existingCbGlobalDates = new Set(merged.cbGlobalNotes.map(n => n.date));
+                for (const note of (migratedData.cbGlobalNotes || [])) {
+                    if (!existingCbGlobalDates.has(note.date)) {
+                        merged.cbGlobalNotes.push(note);
+                    }
+                }
+                merged.cbGlobalNotes.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                // Merge CB week focus history
+                const existingCbHistoryDates = new Set((merged.cbWeekFocus?.history || []).map(h => h.startDate));
+                for (const week of (migratedData.cbWeekFocus?.history || [])) {
+                    if (!existingCbHistoryDates.has(week.startDate)) {
+                        merged.cbWeekFocus.history.push(week);
+                    }
+                }
+                if (merged.cbWeekFocus?.history) {
+                    merged.cbWeekFocus.history.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
+                }
+
                 // Update profile only if imported has more data
                 if (migratedData.profile) {
                     for (const [key, value] of Object.entries(migratedData.profile)) {
@@ -3441,8 +3557,9 @@ function clearAllData() {
 function printReport() {
     const stats = calculateStats();
     const uprStats = calculateUprStats();
+    const cbStats = calculateCbStats();
     const now = new Date();
-    
+
     // Generate comprehensive report HTML
     let reportHtml = `
 <!DOCTYPE html>
@@ -3469,6 +3586,8 @@ function printReport() {
         .category-section { margin: 5mm 0; page-break-inside: avoid; }
         .category-title { background: #f0f0f0; padding: 2mm 3mm; font-weight: 600; margin-bottom: 2mm; border-left: 3px solid #8f4a35; }
         .category-title.upr { border-left-color: #5a8f7a; }
+        .category-title.cb { border-left-color: #5a7f8f; }
+        .progress-fill.cb { background: linear-gradient(90deg, #5a7f8f, #7a9faf); }
         .technique-item, .practice-item { padding: 2mm 0; border-bottom: 1px dotted #ddd; }
         .technique-item:last-child, .practice-item:last-child { border-bottom: none; }
         .item-header { display: flex; justify-content: space-between; align-items: baseline; }
@@ -3541,6 +3660,17 @@ function printReport() {
     <div class="progress-bar"><div class="progress-fill upr" style="width: ${uprStats.implementationRate}%"></div></div>
     <p style="text-align:center;font-size:9pt;color:#666;">UPR Implementation Rate: <strong>${uprStats.implementationRate}%</strong></p>
 
+    <h3>Cognitive Biases (${TOTAL_CB_BIASES} total)</h3>
+    <div class="stats-grid">
+        <div class="stat-box"><div class="stat-number">${cbStats.often}</div><div class="stat-label">Mastered</div></div>
+        <div class="stat-box"><div class="stat-number">${cbStats.occasionally}</div><div class="stat-label">Occasionally</div></div>
+        <div class="stat-box"><div class="stat-number">${cbStats.weekFocus}</div><div class="stat-label">This Week Focus</div></div>
+        <div class="stat-box"><div class="stat-number">${cbStats.notSuccessful}</div><div class="stat-label">Not Successful Yet</div></div>
+        <div class="stat-box"><div class="stat-number">${cbStats.notYet}</div><div class="stat-label">Not Yet Explored</div></div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill cb" style="width: ${cbStats.awarenessRate}%"></div></div>
+    <p style="text-align:center;font-size:9pt;color:#666;">CB Awareness Rate: <strong>${cbStats.awarenessRate}%</strong></p>
+
     <h2>🎯 Current Week Focus</h2>`;
     
     // TLAC Week Focus
@@ -3597,6 +3727,34 @@ function printReport() {
         reportHtml += `</ul></div>`;
     } else {
         reportHtml += `<p style="color:#666;font-style:italic;">No UPR practices selected for this week.</p>`;
+    }
+
+    // CB Week Focus
+    if (appState.cbWeekFocus.biases.length > 0) {
+        reportHtml += `
+    <div class="week-focus-section">
+        <div class="week-focus-title">Cognitive Biases This Week</div>
+        <div class="week-dates">Started: ${appState.cbWeekFocus.startDate ? new Date(appState.cbWeekFocus.startDate).toLocaleDateString() : 'N/A'}</div>
+        <ul>`;
+        appState.cbWeekFocus.biases.forEach(biasId => {
+            const bias = Object.values(CB_DATA).flat().find(b => b.id === parseInt(biasId));
+            if (bias) {
+                reportHtml += `<li><strong>${bias.name}</strong>`;
+                if (appState.cbWeekFocus.plans[biasId]) {
+                    reportHtml += `<br><em>Plan:</em> ${escapeHtml(appState.cbWeekFocus.plans[biasId])}`;
+                }
+                if (appState.cbWeekFocus.notes[biasId] && appState.cbWeekFocus.notes[biasId].length > 0) {
+                    reportHtml += `<br><em>Notes:</em>`;
+                    appState.cbWeekFocus.notes[biasId].forEach(note => {
+                        reportHtml += `<br>• ${escapeHtml(note.text)} <span class="note-date">(${new Date(note.date || note.timestamp).toLocaleDateString()})</span>`;
+                    });
+                }
+                reportHtml += `</li>`;
+            }
+        });
+        reportHtml += `</ul></div>`;
+    } else {
+        reportHtml += `<p style="color:#666;font-style:italic;">No cognitive biases selected for this week.</p>`;
     }
 
     // TLAC Techniques Detail
@@ -3669,9 +3827,41 @@ function printReport() {
         reportHtml += `</div>`;
     });
 
+    // CB Biases Detail
+    reportHtml += `<div class="page-break"></div><h2>🧠 Cognitive Biases - Complete Status</h2>`;
+
+    Object.entries(CB_DATA).forEach(([category, biases]) => {
+        reportHtml += `
+    <div class="category-section">
+        <div class="category-title cb">${escapeHtml(category.length > 60 ? category.substring(0, 60) + '...' : category)} (${biases.length} biases)</div>`;
+
+        biases.forEach(bias => {
+            const data = appState.cbBiases[bias.id] || { status: 'not-yet', notes: [] };
+            const statusLabels = { 'often': 'Mastered', 'occasionally': 'Occasionally', 'not-successful': 'Not Successful Yet', 'use-this-week': 'This Week', 'not-yet': 'Not Yet', 'just-learning': 'Just Learning', 'dont-use': "Don't Use", 'not-suitable': 'Not Suitable' };
+
+            reportHtml += `
+        <div class="technique-item">
+            <div class="item-header">
+                <span class="item-name">${bias.name}</span>
+                <span class="item-status status-${data.status}">${statusLabels[data.status] || data.status}</span>
+            </div>
+            <div class="item-desc">${escapeHtml(bias.description)}</div>`;
+
+            if (data.notes && data.notes.length > 0) {
+                reportHtml += `<div class="item-notes"><strong>Personal Notes:</strong>`;
+                data.notes.forEach(note => {
+                    reportHtml += `<div class="note-entry"><span class="note-date">${new Date(note.date).toLocaleDateString()}:</span> <span class="note-text">${escapeHtml(note.text)}</span></div>`;
+                });
+                reportHtml += `</div>`;
+            }
+            reportHtml += `</div>`;
+        });
+        reportHtml += `</div>`;
+    });
+
     // Global Notes
     reportHtml += `<div class="page-break"></div><h2>📝 Global Notes & Reflections</h2>`;
-    
+
     if (appState.globalNotes.length > 0) {
         reportHtml += `<h3>TLAC Global Notes</h3><div class="global-notes-section">`;
         appState.globalNotes.forEach(note => {
@@ -3692,8 +3882,18 @@ function printReport() {
         reportHtml += `<p style="color:#666;font-style:italic;">No UPR reflections recorded.</p>`;
     }
 
+    if (appState.cbGlobalNotes.length > 0) {
+        reportHtml += `<h3>CB Reflections</h3><div class="global-notes-section">`;
+        appState.cbGlobalNotes.forEach(note => {
+            reportHtml += `<div class="note-entry"><span class="note-date">${new Date(note.date).toLocaleDateString()}:</span> <span class="note-text">${escapeHtml(note.text)}</span></div>`;
+        });
+        reportHtml += `</div>`;
+    } else {
+        reportHtml += `<p style="color:#666;font-style:italic;">No CB reflections recorded.</p>`;
+    }
+
     // Week Focus History
-    if (appState.weekFocus.history.length > 0 || appState.uprWeekFocus.history.length > 0) {
+    if (appState.weekFocus.history.length > 0 || appState.uprWeekFocus.history.length > 0 || (appState.cbWeekFocus.history || []).length > 0) {
         reportHtml += `<h2>📅 Week Focus History</h2>`;
         
         if (appState.weekFocus.history.length > 0) {
@@ -3733,13 +3933,32 @@ function printReport() {
                 reportHtml += `</ul></div>`;
             });
         }
+
+        if ((appState.cbWeekFocus.history || []).length > 0) {
+            reportHtml += `<h3>CB Week History</h3>`;
+            appState.cbWeekFocus.history.slice().reverse().forEach(week => {
+                reportHtml += `<div class="week-focus-section">
+                    <div class="week-dates">${new Date(week.startDate).toLocaleDateString()} – ${new Date(week.endDate).toLocaleDateString()}</div>
+                    <ul>`;
+                (week.biases || []).forEach(biasId => {
+                    const bias = Object.values(CB_DATA).flat().find(b => b.id === parseInt(biasId));
+                    if (bias) {
+                        reportHtml += `<li>${bias.name}`;
+                        const noteCount = (week.notes[biasId] || []).length;
+                        if (noteCount > 0) reportHtml += ` (${noteCount} notes)`;
+                        reportHtml += `</li>`;
+                    }
+                });
+                reportHtml += `</ul></div>`;
+            });
+        }
     }
 
     reportHtml += `
     <div class="footer">
-        <p><strong>TLAC and UPR Growth</strong> - Professional Development Tracking for Teachers</p>
+        <p><strong>TLAC, UPR & CB Growth</strong> - Professional Development Tracking for Teachers</p>
         <p>Report generated on ${now.toLocaleDateString()} at ${now.toLocaleTimeString()}</p>
-        <p>TLAC: Teach Like a Champion by Doug Lemov | UPR: Unconditional Positive Regard</p>
+        <p>TLAC: Teach Like a Champion by Doug Lemov | UPR: Unconditional Positive Regard | CB: Cognitive Biases</p>
     </div>
 </body>
 </html>`;
@@ -3828,8 +4047,9 @@ function closeEmailModal() {
 function generateEmailBody(type = 'brief') {
     const stats = calculateStats();
     const uprStats = calculateUprStats();
+    const cbStats = calculateCbStats();
     const now = new Date();
-    
+
     let body = `PROFESSIONAL GROWTH REPORT
 ${type === 'brief' ? 'Weekly Summary' : 'Detailed Report'}
 Generated: ${now.toLocaleDateString()}
@@ -3848,6 +4068,7 @@ PROGRESS SNAPSHOT
 -----------------
 TLAC: ${stats.often} mastered, ${stats.occasionally} developing, ${stats.weekFocus} this week (${stats.implementationRate}% implementation)
 UPR: ${uprStats.often} mastered, ${uprStats.occasionally} developing, ${uprStats.weekFocus} this week (${uprStats.implementationRate}% implementation)
+CB: ${cbStats.often} mastered, ${cbStats.occasionally} developing, ${cbStats.weekFocus} this week (${cbStats.awarenessRate}% awareness)
 `;
 
     // Current week focus - always included
@@ -3883,15 +4104,31 @@ UPR: ${uprStats.often} mastered, ${uprStats.occasionally} developing, ${uprStats
         body += `\n\nNo UPR practices selected.`;
     }
 
+    if (appState.cbWeekFocus.biases.length > 0) {
+        body += `\n\nCognitive Biases:`;
+        appState.cbWeekFocus.biases.forEach(biasId => {
+            const bias = Object.values(CB_DATA).flat().find(b => b.id === parseInt(biasId));
+            if (bias) {
+                body += `\n• ${bias.name}`;
+                if (appState.cbWeekFocus.plans[biasId]) {
+                    body += ` — Plan: ${appState.cbWeekFocus.plans[biasId].substring(0, 100)}${appState.cbWeekFocus.plans[biasId].length > 100 ? '...' : ''}`;
+                }
+            }
+        });
+    } else {
+        body += `\n\nNo cognitive biases selected.`;
+    }
+
     // Detailed sections - only if detailed type requested
     if (type === 'detailed') {
-        // Mastered techniques/practices
+        // Mastered techniques/practices/biases
         const oftenTechniques = Object.entries(appState.techniques).filter(([id, data]) => data.status === 'often');
         const oftenPractices = Object.entries(appState.uprPractices).filter(([id, data]) => data.status === 'often');
-        
-        if (oftenTechniques.length > 0 || oftenPractices.length > 0) {
+        const oftenBiases = Object.entries(appState.cbBiases).filter(([id, data]) => data.status === 'often');
+
+        if (oftenTechniques.length > 0 || oftenPractices.length > 0 || oftenBiases.length > 0) {
             body += `\n\nMASTERED SKILLS\n---------------`;
-            
+
             if (oftenTechniques.length > 0) {
                 body += `\nTLAC (${oftenTechniques.length}): `;
                 body += oftenTechniques.map(([id]) => {
@@ -3899,7 +4136,7 @@ UPR: ${uprStats.often} mastered, ${uprStats.occasionally} developing, ${uprStats
                     return tech ? tech.name : '';
                 }).filter(Boolean).join(', ');
             }
-            
+
             if (oftenPractices.length > 0) {
                 body += `\nUPR (${oftenPractices.length}): `;
                 body += oftenPractices.map(([id]) => {
@@ -3907,13 +4144,21 @@ UPR: ${uprStats.often} mastered, ${uprStats.occasionally} developing, ${uprStats
                     return practice ? practice.name : '';
                 }).filter(Boolean).join(', ');
             }
+
+            if (oftenBiases.length > 0) {
+                body += `\nCB (${oftenBiases.length}): `;
+                body += oftenBiases.map(([id]) => {
+                    const bias = Object.values(CB_DATA).flat().find(b => b.id === parseInt(id));
+                    return bias ? bias.name : '';
+                }).filter(Boolean).join(', ');
+            }
         }
 
         // Recent notes - limit to 5 for email
-        const allNotes = getAllNotes().concat(getAllUprNotes())
+        const allNotes = getAllNotes().concat(getAllUprNotes()).concat(getAllCbNotes())
             .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
             .slice(0, 5);
-        
+
         if (allNotes.length > 0) {
             body += `\n\nRECENT REFLECTIONS\n------------------`;
             allNotes.forEach(note => {
@@ -3921,14 +4166,15 @@ UPR: ${uprStats.often} mastered, ${uprStats.occasionally} developing, ${uprStats
                 body += `\n\n[${new Date(note.timestamp).toLocaleDateString()}] ${note.source}:\n${truncatedText}`;
             });
         }
-        
+
         // Areas for growth
         const strugglingTech = Object.entries(appState.techniques).filter(([id, data]) => data.status === 'not-successful');
         const strugglingPractices = Object.entries(appState.uprPractices).filter(([id, data]) => data.status === 'not-successful');
-        
-        if (strugglingTech.length > 0 || strugglingPractices.length > 0) {
+        const strugglingBiases = Object.entries(appState.cbBiases).filter(([id, data]) => data.status === 'not-successful');
+
+        if (strugglingTech.length > 0 || strugglingPractices.length > 0 || strugglingBiases.length > 0) {
             body += `\n\nAREAS FOR GROWTH\n----------------`;
-            
+
             if (strugglingTech.length > 0) {
                 body += `\nTLAC: `;
                 body += strugglingTech.slice(0, 5).map(([id]) => {
@@ -3937,7 +4183,7 @@ UPR: ${uprStats.often} mastered, ${uprStats.occasionally} developing, ${uprStats
                 }).filter(Boolean).join(', ');
                 if (strugglingTech.length > 5) body += ` (+${strugglingTech.length - 5} more)`;
             }
-            
+
             if (strugglingPractices.length > 0) {
                 body += `\nUPR: `;
                 body += strugglingPractices.slice(0, 5).map(([id]) => {
@@ -3946,11 +4192,20 @@ UPR: ${uprStats.often} mastered, ${uprStats.occasionally} developing, ${uprStats
                 }).filter(Boolean).join(', ');
                 if (strugglingPractices.length > 5) body += ` (+${strugglingPractices.length - 5} more)`;
             }
+
+            if (strugglingBiases.length > 0) {
+                body += `\nCB: `;
+                body += strugglingBiases.slice(0, 5).map(([id]) => {
+                    const bias = Object.values(CB_DATA).flat().find(b => b.id === parseInt(id));
+                    return bias ? bias.name : '';
+                }).filter(Boolean).join(', ');
+                if (strugglingBiases.length > 5) body += ` (+${strugglingBiases.length - 5} more)`;
+            }
         }
     }
 
     // Footer
-    body += `\n\n—\nGenerated by TLAC & UPR Growth Tracker`;
+    body += `\n\n—\nGenerated by TLAC, UPR & CB Growth Tracker`;
 
     return body;
 }
