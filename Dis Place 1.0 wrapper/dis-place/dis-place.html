@@ -376,7 +376,7 @@
     </div>
 
     <div class="upcoming-overlay" id="upcoming-overlay">
-      <div class="upcoming-label">Upcoming</div>
+      <div class="upcoming-label" id="upcoming-label">Upcoming</div>
       <div class="upcoming-description" id="upcoming-description"></div>
       <div class="upcoming-date" id="upcoming-date"></div>
     </div>
@@ -400,7 +400,9 @@
       upcomingShowDurationMs: 10 * 1000, // 10 seconds
       upcomingIntervalMs: 3 * 60 * 1000, // Every 3 minutes
       morningRefreshHour: 8,
-      morningRefreshMinute: 15
+      morningRefreshMinute: 15,
+      quoteShowDurationMs: 12 * 1000, // 12 seconds
+      quoteIntervalMs: 20 * 60 * 1000, // Every 20 minutes (average)
     };
 
     // ============================================
@@ -484,6 +486,7 @@
       periodStartTime: document.getElementById('period-start-time'),
       periodEndTime: document.getElementById('period-end-time'),
       upcomingOverlay: document.getElementById('upcoming-overlay'),
+      upcomingLabel: document.getElementById('upcoming-label'),
       upcomingDescription: document.getElementById('upcoming-description'),
       upcomingDate: document.getElementById('upcoming-date'),
       weatherDisplay: document.getElementById('weather-display'),
@@ -724,11 +727,17 @@
     }
 
     function showUpcomingEvent() {
+      if (overlayBusy || previewMode) return;
+
       const upcoming = getUpcomingEvents();
       if (upcoming.length === 0) return;
 
+      overlayBusy = true;
+      showingUpcoming = true;
+
       const event = upcoming[currentUpcomingIndex % upcoming.length];
 
+      elements.upcomingLabel.textContent = 'Upcoming';
       elements.upcomingDescription.textContent = event.description;
       elements.upcomingDate.textContent = formatDateShort(event.date);
 
@@ -736,7 +745,6 @@
 
       setTimeout(() => {
         elements.upcomingOverlay.classList.add('visible');
-        showingUpcoming = true;
       }, 500);
 
       setTimeout(() => {
@@ -751,6 +759,167 @@
       setTimeout(() => {
         elements.currentDisplay.classList.remove('fade-out');
         showingUpcoming = false;
+        overlayBusy = false;
+      }, 500);
+    }
+
+    // ============================================
+    // QUOTES
+    // ============================================
+    const QUOTES = [
+      // Why we're here together
+      { text: "You are in this classroom because you can do things here you can't do on your own.", author: null },
+      { text: "The person who asks a question is a fool for a minute. The person who doesn't is a fool for a lifetime.", author: null },
+      { text: "Every expert was once a beginner.", author: null },
+      { text: "You don't have to be great to start, but you have to start to be great.", author: null },
+      { text: "The best way to predict your future is to create it.", author: null },
+
+      // Curiosity and wonder
+      { text: "Stay curious. The answers will come.", author: null },
+      { text: "The important thing is not to stop questioning.", author: "Albert Einstein" },
+      { text: "Somewhere, something incredible is waiting to be known.", author: "Carl Sagan" },
+      { text: "Wonder is the beginning of wisdom.", author: "Socrates" },
+      { text: "Look up at the stars and not down at your feet.", author: "Stephen Hawking" },
+      { text: "The universe is under no obligation to make sense to you.", author: "Neil deGrasse Tyson" },
+      { text: "Not all who wander are lost.", author: "J.R.R. Tolkien" },
+      { text: "The only true wisdom is in knowing you know nothing.", author: "Socrates" },
+
+      // Mistakes and growth
+      { text: "Mistakes are proof that you are trying.", author: null },
+      { text: "A smooth sea never made a skilled sailor.", author: null },
+      { text: "The only real mistake is the one from which we learn nothing.", author: "Henry Ford" },
+      { text: "Fall seven times, stand up eight.", author: null },
+      { text: "It's not about being perfect. It's about effort.", author: null },
+      { text: "You are allowed to be both a masterpiece and a work in progress.", author: null },
+      { text: "Be patient with yourself. Nothing in nature blooms all year.", author: null },
+      { text: "Confusion is the sweat of learning.", author: null },
+      { text: "If it doesn't challenge you, it doesn't change you.", author: null },
+
+      // Thinking and learning
+      { text: "Think for yourself. Not less than others, but differently.", author: null },
+      { text: "The mind is not a vessel to be filled, but a fire to be kindled.", author: "Plutarch" },
+      { text: "What we learn with pleasure we never forget.", author: "Alfred Mercier" },
+      { text: "Tell me and I forget. Teach me and I remember. Involve me and I learn.", author: "Benjamin Franklin" },
+      { text: "Learning is not attained by chance. It must be sought with ardour.", author: "Abigail Adams" },
+      { text: "Live as if you were to die tomorrow. Learn as if you were to live forever.", author: "Mahatma Gandhi" },
+      { text: "The capacity to learn is a gift; the ability to learn is a skill; the willingness to learn is a choice.", author: "Brian Herbert" },
+      { text: "Education is not the filling of a pail, but the lighting of a fire.", author: "W.B. Yeats" },
+
+      // Kindness and character
+      { text: "Be the reason someone smiles today.", author: null },
+      { text: "In a world where you can be anything, be kind.", author: null },
+      { text: "How you treat people says everything about you.", author: null },
+      { text: "Strong people lift others up.", author: null },
+      { text: "Your vibe attracts your tribe.", author: null },
+      { text: "Kindness is free. Sprinkle that stuff everywhere.", author: null },
+      { text: "The world needs who you were made to be.", author: null },
+
+      // Effort and perseverance
+      { text: "Hard work beats talent when talent doesn't work hard.", author: "Tim Notke" },
+      { text: "Small daily improvements over time lead to stunning results.", author: null },
+      { text: "You don't have to see the whole staircase. Just take the first step.", author: "Martin Luther King Jr." },
+      { text: "The secret of getting ahead is getting started.", author: "Mark Twain" },
+      { text: "Don't watch the clock; do what it does. Keep going.", author: "Sam Levenson" },
+      { text: "It always seems impossible until it's done.", author: "Nelson Mandela" },
+      { text: "Discipline is choosing between what you want now and what you want most.", author: "Abraham Lincoln" },
+      { text: "A year from now you will wish you had started today.", author: null },
+
+      // Science-flavoured
+      { text: "Science is a way of thinking much more than it is a body of knowledge.", author: "Carl Sagan" },
+      { text: "Nothing in life is to be feared, it is only to be understood.", author: "Marie Curie" },
+      { text: "We are all made of star stuff.", author: "Carl Sagan" },
+      { text: "Equipped with his five senses, man explores the universe around him and calls the adventure Science.", author: "Edwin Hubble" },
+      { text: "The good thing about science is that it's true whether or not you believe in it.", author: "Neil deGrasse Tyson" },
+      { text: "Research is what I'm doing when I don't know what I'm doing.", author: "Wernher von Braun" },
+      { text: "An experiment is a question which science poses to Nature.", author: "Max Planck" },
+
+      // Perspective
+      { text: "Everything you've ever wanted is on the other side of fear.", author: "George Addair" },
+      { text: "The best time to plant a tree was 20 years ago. The second best time is now.", author: null },
+      { text: "You miss 100% of the shots you don't take.", author: "Wayne Gretzky" },
+      { text: "What lies behind us and what lies before us are tiny matters compared to what lies within us.", author: "Ralph Waldo Emerson" },
+      { text: "Be yourself; everyone else is already taken.", author: "Oscar Wilde" },
+      { text: "Not everything that counts can be counted, and not everything that can be counted counts.", author: "William Bruce Cameron" },
+
+      // Quiet encouragement
+      { text: "You belong here.", author: null },
+      { text: "Your potential is enormous. Don't let anyone tell you otherwise.", author: null },
+      { text: "Progress, not perfection.", author: null },
+      { text: "Today is a good day to learn something new.", author: null },
+      { text: "You are more capable than you know.", author: null },
+      { text: "What you do today matters.", author: null },
+      { text: "Start where you are. Use what you have. Do what you can.", author: "Arthur Ashe" },
+      { text: "Believe you can and you're halfway there.", author: "Theodore Roosevelt" },
+      { text: "Your only limit is your mind.", author: null },
+      { text: "Done is better than perfect.", author: null },
+      { text: "The struggle you're in today is developing the strength you need for tomorrow.", author: null },
+
+      // Collaboration
+      { text: "Alone we can do so little; together we can do so much.", author: "Helen Keller" },
+      { text: "If you want to go fast, go alone. If you want to go far, go together.", author: null },
+      { text: "We rise by lifting others.", author: "Robert Ingersoll" },
+      { text: "None of us is as smart as all of us.", author: "Ken Blanchard" },
+      { text: "Great things are done by a series of small things brought together.", author: "Vincent van Gogh" },
+
+      // Courage
+      { text: "Courage is not the absence of fear, but the judgement that something else is more important.", author: "Ambrose Redmoon" },
+      { text: "Do one thing every day that scares you.", author: "Eleanor Roosevelt" },
+      { text: "The only way to do great work is to love what you do.", author: "Steve Jobs" },
+      { text: "Dream big. Start small. Act now.", author: null },
+      { text: "Your comfort zone is a beautiful place, but nothing ever grows there.", author: null },
+
+      // Wisdom
+      { text: "The more I read, the more I acquire, the more certain I am that I know nothing.", author: "Voltaire" },
+      { text: "In the middle of difficulty lies opportunity.", author: "Albert Einstein" },
+      { text: "We do not learn from experience. We learn from reflecting on experience.", author: "John Dewey" },
+      { text: "Knowing is not enough; we must apply. Willing is not enough; we must do.", author: "Johann Wolfgang von Goethe" },
+      { text: "Change is the end result of all true learning.", author: "Leo Buscaglia" },
+      { text: "The beautiful thing about learning is that nobody can take it away from you.", author: "B.B. King" },
+    ];
+
+    let currentQuoteIndex = 0;
+    let showingQuote = false;
+    let overlayBusy = false; // prevents upcoming and quote from colliding
+
+    // Shuffle quotes on load for variety
+    function shuffleQuotes() {
+      for (let i = QUOTES.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [QUOTES[i], QUOTES[j]] = [QUOTES[j], QUOTES[i]];
+      }
+    }
+    shuffleQuotes();
+
+    function showQuote() {
+      if (overlayBusy || previewMode) return;
+      overlayBusy = true;
+      showingQuote = true;
+
+      const quote = QUOTES[currentQuoteIndex % QUOTES.length];
+      currentQuoteIndex++;
+
+      elements.upcomingLabel.textContent = '';
+      elements.upcomingDescription.textContent = quote.text;
+      elements.upcomingDate.textContent = quote.author ? `— ${quote.author}` : '';
+
+      elements.currentDisplay.classList.add('fade-out');
+
+      setTimeout(() => {
+        elements.upcomingOverlay.classList.add('visible');
+      }, 500);
+
+      setTimeout(() => {
+        hideQuote();
+      }, CONFIG.quoteShowDurationMs);
+    }
+
+    function hideQuote() {
+      elements.upcomingOverlay.classList.remove('visible');
+
+      setTimeout(() => {
+        elements.currentDisplay.classList.remove('fade-out');
+        showingQuote = false;
+        overlayBusy = false;
       }, 500);
     }
 
@@ -1136,7 +1305,7 @@
 
       // Schedule upcoming events display
       setInterval(() => {
-        if (!showingUpcoming && getUpcomingEvents().length > 0) {
+        if (!overlayBusy && !previewMode && getUpcomingEvents().length > 0) {
           showUpcomingEvent();
         }
       }, CONFIG.upcomingIntervalMs);
@@ -1147,6 +1316,20 @@
           showUpcomingEvent();
         }
       }, 30000);
+
+      // Schedule quotes — random interval averaging ~20 minutes
+      function scheduleNextQuote() {
+        // Random delay: 15–25 minutes (±5 min around the 20 min average)
+        const jitter = (Math.random() - 0.5) * 10 * 60 * 1000;
+        const delay = CONFIG.quoteIntervalMs + jitter;
+        setTimeout(() => {
+          if (!overlayBusy && !previewMode) {
+            showQuote();
+          }
+          scheduleNextQuote();
+        }, delay);
+      }
+      scheduleNextQuote();
 
       // Load weather (fails silently if unavailable)
       loadWeather();
