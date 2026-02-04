@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dis Place Editor</title>
+  <style>
+    :root {
+      --bg-primary: #1a1a2e;
+      --bg-secondary: #16213e;
+      --bg-card: #1f2940;
+      --bg-input: #2a2a4a;
+      --text-primary: #f0f0f0;
+      --text-secondary: #a0a0b0;
+      --text-muted: #606070;
+      --accent: #4a90d9;
+      --accent-glow: rgba(74, 144, 217, 0.3);
+      --border-color: #3a3a5a;
+      --danger: #ef5350;
+      --success: #4caf50;
+      --warning: #ff9800;
+      --font-main: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      --sidebar-width: 200px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font-main);
+    }
+
+    body {
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: var(--sidebar-width);
+      min-width: var(--sidebar-width);
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      padding: 1rem 0;
+      height: 100vh;
+      position: sticky;
+      top: 0;
+    }
+
+    .sidebar h2 {
+      padding: 0 1rem 1rem;
+      font-size: 1.1rem;
+      font-weight: 300;
+      color: var(--text-secondary);
+      letter-spacing: 0.05em;
+    }
+
+    .sidebar a {
+      display: block;
+      padding: 0.6rem 1rem;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.9rem;
+      border-left: 3px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .sidebar a:hover {
+      color: var(--text-primary);
+      background: rgba(74, 144, 217, 0.1);
+    }
+
+    .sidebar a.active {
+      color: var(--accent);
+      border-left-color: var(--accent);
+      background: rgba(74, 144, 217, 0.1);
+    }
+
+    /* Main content */
+    .editor-main {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Sticky header */
+    .editor-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .editor-header h1 {
+      font-size: 1.2rem;
+      font-weight: 400;
+      white-space: nowrap;
+    }
+
+    .save-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .dirty-indicator {
+      font-size: 0.8rem;
+      color: var(--warning);
+      display: none;
+    }
+
+    .dirty-indicator.visible { display: inline; }
+
+    .editor-content {
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    /* Section styles */
+    section h2 {
+      font-size: 1.3rem;
+      font-weight: 300;
+      margin-bottom: 1rem;
+      color: var(--text-primary);
+      letter-spacing: 0.03em;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      border-radius: 0.5rem;
+      padding: 1rem;
+      border: 1px solid var(--border-color);
+    }
+
+    /* Form elements */
+    input[type="text"], input[type="date"], select, textarea {
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.35rem;
+      font-family: var(--font-main);
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+    }
+
+    input[type="color"] {
+      width: 40px;
+      height: 34px;
+      border: 1px solid var(--border-color);
+      border-radius: 0.35rem;
+      background: var(--bg-input);
+      cursor: pointer;
+      padding: 2px;
+    }
+
+    label {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    /* Buttons */
+    .btn {
+      padding: 0.45rem 0.9rem;
+      border: none;
+      border-radius: 0.35rem;
+      font-family: var(--font-main);
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover { background: #5a9fe9; }
+
+    .btn-secondary {
+      background: var(--bg-input);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      color: var(--text-primary);
+      border-color: var(--accent);
+    }
+
+    .btn-danger {
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid var(--danger);
+    }
+
+    .btn-danger:hover { background: rgba(239, 83, 80, 0.15); }
+
+    .btn-danger.confirming {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    .btn-add {
+      background: transparent;
+      color: var(--accent);
+      border: 1px dashed var(--accent);
+      padding: 0.5rem 1rem;
+      width: 100%;
+      margin-top: 0.5rem;
+    }
+
+    .btn-add:hover { background: rgba(74, 144, 217, 0.1); }
+
+    /* Row layouts */
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .row + .row { margin-top: 0.75rem; }
+
+    .row .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .row .field.grow { flex: 1; min-width: 150px; }
+
+    .row .field input, .row .field select {
+      width: 100%;
+    }
+
+    /* Theme rows */
+    .theme-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+    }
+
+    .theme-row + .theme-row {
+      border-top: 1px solid var(--border-color);
+    }
+
+    .theme-row .theme-name { flex: 1; min-width: 150px; }
+    .theme-row .color-swatch {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      border: 2px solid var(--border-color);
+    }
+
+    /* Term rows */
+    .term-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      flex-wrap: wrap;
+    }
+
+    .term-row + .term-row {
+      border-top: 1px solid var(--border-color);
+    }
+
+    .term-label {
+      font-weight: 500;
+      min-width: 60px;
+    }
+
+    /* Upcoming rows */
+    .upcoming-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+    }
+
+    .upcoming-row + .upcoming-row {
+      border-top: 1px solid var(--border-color);
+    }
+
+    .upcoming-row .upcoming-desc { flex: 1; min-width: 200px; }
+
+    /* Week navigation */
+    .week-nav {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .week-label {
+      font-size: 1rem;
+      color: var(--text-secondary);
+      min-width: 200px;
+    }
+
+    /* Week grid */
+    .week-grid {
+      display: grid;
+      grid-template-columns: 50px repeat(5, 1fr);
+      border: 1px solid var(--border-color);
+      border-radius: 0.5rem;
+      overflow: hidden;
+    }
+
+    .grid-header {
+      background: var(--bg-secondary);
+      padding: 0.5rem;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border-color);
+      font-weight: 500;
+    }
+
+    .grid-header.today {
+      color: var(--accent);
+      background: rgba(74, 144, 217, 0.1);
+    }
+
+    .grid-header.outside-term {
+      opacity: 0.4;
+    }
+
+    .grid-row-header {
+      background: var(--bg-secondary);
+      padding: 0.5rem;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-right: 1px solid var(--border-color);
+    }
+
+    .grid-cell {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      padding: 0.4rem;
+      min-height: 60px;
+      cursor: pointer;
+      transition: background 0.15s;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .grid-cell:hover { background: #263350; }
+
+    .grid-cell.today {
+      background: rgba(74, 144, 217, 0.08);
+    }
+
+    .grid-cell.today:hover {
+      background: rgba(74, 144, 217, 0.15);
+    }
+
+    .grid-cell.outside-term {
+      opacity: 0.35;
+      background: var(--bg-primary);
+    }
+
+    .grid-cell.empty .cell-add {
+      display: none;
+      width: 100%;
+      height: 100%;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 1.2rem;
+    }
+
+    .grid-cell.empty:hover .cell-add { display: flex; }
+
+    .cell-class {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .cell-activity {
+      font-size: 0.75rem;
+      color: var(--text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
+    .cell-accent-bar {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+    }
+
+    /* Edit modal overlay */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      width: 90%;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .modal h3 {
+      font-weight: 400;
+      font-size: 1.1rem;
+    }
+
+    .modal .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+
+    .modal .field select, .modal .field input {
+      width: 100%;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+
+    /* Toast */
+    .toast-container {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 300;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .toast {
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      border-left: 4px solid var(--accent);
+      padding: 0.75rem 1rem;
+      border-radius: 0.35rem;
+      font-size: 0.85rem;
+      opacity: 0;
+      transform: translateX(20px);
+      transition: all 0.3s;
+    }
+
+    .toast.visible {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .toast.toast-success { border-left-color: var(--success); }
+    .toast.toast-error { border-left-color: var(--danger); }
+
+    /* Loading */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 700px) {
+      .sidebar { display: none; }
+      .week-grid { grid-template-columns: 40px repeat(5, 1fr); }
+      .grid-cell { min-height: 48px; padding: 0.25rem; }
+      .cell-class { font-size: 0.6rem; }
+      .cell-activity { font-size: 0.65rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="sidebar">
+    <h2>Editor</h2>
+    <a href="#room-settings" class="active" data-section="room-settings">Room</a>
+    <a href="#class-themes" data-section="class-themes">Class Themes</a>
+    <a href="#terms" data-section="terms">Terms</a>
+    <a href="#schedule" data-section="schedule">Schedule</a>
+    <a href="#upcoming" data-section="upcoming">Upcoming</a>
+  </nav>
+
+  <div class="editor-main" id="editor-main">
+    <header class="editor-header">
+      <h1>Dis Place Editor</h1>
+      <div class="save-controls">
+        <span class="dirty-indicator" id="dirty-indicator">Unsaved changes</span>
+        <button class="btn btn-secondary" id="btn-reload">Reload</button>
+        <button class="btn btn-secondary" id="btn-copy">Copy JSON</button>
+        <button class="btn btn-primary" id="btn-download">Download JSON</button>
+      </div>
+    </header>
+
+    <div class="editor-content" id="editor-content">
+      <div class="loading" id="loading-msg">Loading data.json...</div>
+    </div>
+  </div>
+
+  <!-- Edit event modal -->
+  <div class="modal-overlay" id="event-modal">
+    <div class="modal">
+      <h3 id="modal-title">Edit Event</h3>
+      <div class="field">
+        <label>Period</label>
+        <select id="modal-period"></select>
+      </div>
+      <div class="field">
+        <label>Class</label>
+        <select id="modal-class"></select>
+      </div>
+      <div class="field">
+        <label>Activity</label>
+        <input type="text" id="modal-activity" placeholder="e.g. 1A.1 free-body diagrams" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-danger" id="modal-delete" style="margin-right:auto">Delete</button>
+        <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
+        <button class="btn btn-primary" id="modal-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toast-container"></div>
+
+<script>
+'use strict';
+
+// === STATE ===
+let appData = null;
+let dayMap = new Map();
+let isDirty = false;
+let currentWeekStart = null;
+let modalContext = null; // { dateStr, period, isNew }
+
+const PERIODS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6'];
+
+// === ELEMENTS ===
+const $ = id => document.getElementById(id);
+const editorContent = $('editor-content');
+const dirtyEl = $('dirty-indicator');
+
+// === INITIALIZATION ===
+async function init() {
+  try {
+    await loadData();
+    buildDayMap();
+    renderAll();
+    setupSidebar();
+    setupSaveControls();
+    setupBeforeUnload();
+  } catch (err) {
+    $('loading-msg').textContent = 'Failed to load data.json: ' + err.message;
+  }
+}
+
+async function loadData() {
+  const resp = await fetch('data.json?t=' + Date.now());
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  appData = await resp.json();
+}
+
+function buildDayMap() {
+  dayMap = new Map(appData.days.map(d => [d.date, d]));
+}
+
+function renderAll() {
+  editorContent.innerHTML = '';
+  renderRoomSettings();
+  renderThemes();
+  renderTerms();
+  renderSchedule();
+  renderUpcoming();
+}
+
+// === DIRTY STATE ===
+function markDirty() {
+  isDirty = true;
+  dirtyEl.classList.add('visible');
+}
+
+function markClean() {
+  isDirty = false;
+  dirtyEl.classList.remove('visible');
+}
+
+// === ROOM SETTINGS ===
+function renderRoomSettings() {
+  const section = document.createElement('section');
+  section.id = 'room-settings';
+  section.innerHTML = `
+    <h2>Room Settings</h2>
+    <div class="card">
+      <div class="row">
+        <div class="field grow">
+          <label>Room Name</label>
+          <input type="text" id="room-name-input" value="${esc(appData.room)}" />
+        </div>
+      </div>
+    </div>
+  `;
+  editorContent.appendChild(section);
+  section.querySelector('#room-name-input').addEventListener('input', e => {
+    appData.room = e.target.value;
+    markDirty();
+  });
+}
+
+// === CLASS THEMES ===
+function renderThemes() {
+  const existing = $('class-themes');
+  if (existing) existing.remove();
+
+  const section = document.createElement('section');
+  section.id = 'class-themes';
+
+  const entries = Object.entries(appData.classThemes);
+  let html = '<h2>Class Themes</h2><div class="card">';
+  entries.forEach(([name, theme], i) => {
+    html += `
+      <div class="theme-row" data-index="${i}">
+        <input type="text" class="theme-name" value="${esc(name)}" data-old-name="${esc(name)}" />
+        <input type="color" class="theme-accent" value="${theme.accent}" />
+        <div class="color-swatch" style="background:${theme.accent}"></div>
+        <button class="btn btn-danger btn-sm theme-delete">Remove</button>
+      </div>`;
+  });
+  html += '</div><button class="btn btn-add" id="add-theme">+ Add Class</button>';
+  section.innerHTML = html;
+  editorContent.appendChild(section);
+
+  // Listeners
+  section.querySelectorAll('.theme-name').forEach(input => {
+    input.addEventListener('change', e => {
+      const oldName = e.target.dataset.oldName;
+      const newName = e.target.value.trim();
+      if (!newName || newName === oldName) { e.target.value = oldName; return; }
+      if (appData.classThemes[newName]) {
+        showToast('Class name already exists', 'error');
+        e.target.value = oldName;
+        return;
+      }
+      const theme = appData.classThemes[oldName];
+      delete appData.classThemes[oldName];
+      appData.classThemes[newName] = theme;
+      const count = renameClassInEvents(oldName, newName);
+      e.target.dataset.oldName = newName;
+      markDirty();
+      if (count > 0) showToast(`Updated ${count} event(s) to "${newName}"`, 'success');
+    });
+  });
+
+  section.querySelectorAll('.theme-accent').forEach(input => {
+    input.addEventListener('input', e => {
+      const row = e.target.closest('.theme-row');
+      const name = row.querySelector('.theme-name').dataset.oldName;
+      const hex = e.target.value;
+      appData.classThemes[name].accent = hex;
+      appData.classThemes[name].glow = hexToRgba(hex, 0.3);
+      row.querySelector('.color-swatch').style.background = hex;
+      markDirty();
+    });
+  });
+
+  section.querySelectorAll('.theme-delete').forEach(btn => {
+    btn.addEventListener('click', e => {
+      if (!btn.classList.contains('confirming')) {
+        btn.classList.add('confirming');
+        btn.textContent = 'Confirm?';
+        setTimeout(() => { btn.classList.remove('confirming'); btn.textContent = 'Remove'; }, 3000);
+        return;
+      }
+      const row = btn.closest('.theme-row');
+      const name = row.querySelector('.theme-name').dataset.oldName;
+      delete appData.classThemes[name];
+      markDirty();
+      renderThemes();
+    });
+  });
+
+  $('add-theme').addEventListener('click', () => {
+    const name = 'New Class ' + (Object.keys(appData.classThemes).length + 1);
+    appData.classThemes[name] = { accent: '#4a90d9', glow: 'rgba(74, 144, 217, 0.3)' };
+    markDirty();
+    renderThemes();
+  });
+}
+
+// === TERMS ===
+function renderTerms() {
+  const existing = $('terms');
+  if (existing) existing.remove();
+
+  const section = document.createElement('section');
+  section.id = 'terms';
+
+  let html = '<h2>School Terms</h2><div class="card">';
+  appData.terms.forEach((t, i) => {
+    html += `
+      <div class="term-row" data-index="${i}">
+        <span class="term-label">Term ${t.term}</span>
+        <div class="field"><label>Start</label><input type="date" class="term-start" value="${t.start}" /></div>
+        <div class="field"><label>End</label><input type="date" class="term-end" value="${t.end}" /></div>
+        <button class="btn btn-danger term-delete">Remove</button>
+      </div>`;
+  });
+  html += '</div><button class="btn btn-add" id="add-term">+ Add Term</button>';
+  section.innerHTML = html;
+  editorContent.appendChild(section);
+
+  section.querySelectorAll('.term-start').forEach(input => {
+    input.addEventListener('change', e => {
+      const i = +e.target.closest('.term-row').dataset.index;
+      appData.terms[i].start = e.target.value;
+      markDirty();
+    });
+  });
+
+  section.querySelectorAll('.term-end').forEach(input => {
+    input.addEventListener('change', e => {
+      const i = +e.target.closest('.term-row').dataset.index;
+      appData.terms[i].end = e.target.value;
+      markDirty();
+    });
+  });
+
+  section.querySelectorAll('.term-delete').forEach(btn => {
+    btn.addEventListener('click', e => {
+      if (!btn.classList.contains('confirming')) {
+        btn.classList.add('confirming');
+        btn.textContent = 'Confirm?';
+        setTimeout(() => { btn.classList.remove('confirming'); btn.textContent = 'Remove'; }, 3000);
+        return;
+      }
+      const i = +btn.closest('.term-row').dataset.index;
+      appData.terms.splice(i, 1);
+      appData.terms.forEach((t, idx) => t.term = idx + 1);
+      markDirty();
+      renderTerms();
+    });
+  });
+
+  $('add-term').addEventListener('click', () => {
+    const num = appData.terms.length + 1;
+    appData.terms.push({ term: num, start: '', end: '' });
+    markDirty();
+    renderTerms();
+  });
+}
+
+// === SCHEDULE ===
+function renderSchedule() {
+  const section = document.createElement('section');
+  section.id = 'schedule';
+
+  const today = new Date();
+  currentWeekStart = getMonday(today);
+
+  section.innerHTML = `
+    <h2>Schedule</h2>
+    <div class="week-nav">
+      <button class="btn btn-secondary" id="prev-week">&larr; Prev</button>
+      <span class="week-label" id="week-label"></span>
+      <button class="btn btn-secondary" id="next-week">Next &rarr;</button>
+      <button class="btn btn-secondary" id="today-btn">Today</button>
+    </div>
+    <div class="week-grid" id="week-grid"></div>
+  `;
+  editorContent.appendChild(section);
+
+  $('prev-week').addEventListener('click', () => { currentWeekStart.setDate(currentWeekStart.getDate() - 7); renderWeek(); });
+  $('next-week').addEventListener('click', () => { currentWeekStart.setDate(currentWeekStart.getDate() + 7); renderWeek(); });
+  $('today-btn').addEventListener('click', () => { currentWeekStart = getMonday(new Date()); renderWeek(); });
+
+  setupModal();
+  renderWeek();
+}
+
+function renderWeek() {
+  const grid = $('week-grid');
+  const todayStr = toDateStr(new Date());
+
+  const days = [];
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(currentWeekStart);
+    d.setDate(d.getDate() + i);
+    days.push(d);
+  }
+
+  $('week-label').textContent = 'Week of ' + formatDateShort(currentWeekStart);
+
+  let html = '<div class="grid-header"></div>';
+  days.forEach(d => {
+    const ds = toDateStr(d);
+    const isToday = ds === todayStr;
+    const outsideTerm = !isInTerm(ds);
+    const classes = ['grid-header'];
+    if (isToday) classes.push('today');
+    if (outsideTerm) classes.push('outside-term');
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+    const dayIdx = (d.getDay() + 6) % 7; // Mon=0
+    html += `<div class="${classes.join(' ')}">${dayNames[dayIdx]}<br>${d.getDate()}/${d.getMonth() + 1}</div>`;
+  });
+
+  PERIODS.forEach(period => {
+    html += `<div class="grid-row-header">${period}</div>`;
+    days.forEach(d => {
+      const ds = toDateStr(d);
+      const isToday = ds === todayStr;
+      const outsideTerm = !isInTerm(ds);
+      const day = dayMap.get(ds);
+      const event = day ? day.events.find(e => e.period === period) : null;
+
+      const cellClasses = ['grid-cell'];
+      if (isToday) cellClasses.push('today');
+      if (outsideTerm) cellClasses.push('outside-term');
+      if (!event) cellClasses.push('empty');
+
+      let cellContent = '';
+      if (event) {
+        const theme = appData.classThemes[event.class];
+        const accentColor = theme ? theme.accent : 'var(--accent)';
+        cellContent = `
+          <div class="cell-accent-bar" style="background:${accentColor}"></div>
+          <div class="cell-class" style="color:${accentColor}">${esc(event.class)}</div>
+          <div class="cell-activity">${esc(event.activity)}</div>`;
+      } else {
+        cellContent = '<div class="cell-add">+</div>';
+      }
+
+      html += `<div class="${cellClasses.join(' ')}" data-date="${ds}" data-period="${period}">${cellContent}</div>`;
+    });
+  });
+
+  grid.innerHTML = html;
+
+  grid.querySelectorAll('.grid-cell').forEach(cell => {
+    cell.addEventListener('click', () => {
+      const dateStr = cell.dataset.date;
+      const period = cell.dataset.period;
+      openModal(dateStr, period);
+    });
+  });
+}
+
+// === EVENT MODAL ===
+function setupModal() {
+  $('modal-cancel').addEventListener('click', closeModal);
+  $('modal-save').addEventListener('click', saveModal);
+  $('modal-delete').addEventListener('click', deleteModalEvent);
+  $('event-modal').addEventListener('click', e => {
+    if (e.target === $('event-modal')) closeModal();
+  });
+  $('modal-activity').addEventListener('keydown', e => {
+    if (e.key === 'Enter') saveModal();
+  });
+}
+
+function openModal(dateStr, period) {
+  const day = dayMap.get(dateStr);
+  const event = day ? day.events.find(e => e.period === period) : null;
+  const isNew = !event;
+
+  modalContext = { dateStr, period, isNew };
+
+  $('modal-title').textContent = (isNew ? 'Add' : 'Edit') + ' Event — ' + formatDateShort(new Date(dateStr + 'T00:00:00')) + ' ' + period;
+
+  // Period dropdown
+  const periodSel = $('modal-period');
+  periodSel.innerHTML = PERIODS.map(p => `<option value="${p}" ${p === period ? 'selected' : ''}>${p}</option>`).join('');
+
+  // Class dropdown
+  const classSel = $('modal-class');
+  const classNames = Object.keys(appData.classThemes);
+  classSel.innerHTML = '<option value="">-- Select Class --</option>' +
+    classNames.map(c => `<option value="${esc(c)}" ${event && event.class === c ? 'selected' : ''}>${esc(c)}</option>`).join('');
+
+  $('modal-activity').value = event ? event.activity : '';
+  $('modal-delete').style.display = isNew ? 'none' : '';
+
+  // Reset delete button state
+  const delBtn = $('modal-delete');
+  delBtn.classList.remove('confirming');
+  delBtn.textContent = 'Delete';
+
+  $('event-modal').classList.add('open');
+  $('modal-activity').focus();
+}
+
+function closeModal() {
+  $('event-modal').classList.remove('open');
+  modalContext = null;
+}
+
+function saveModal() {
+  if (!modalContext) return;
+  const { dateStr } = modalContext;
+  const period = $('modal-period').value;
+  const cls = $('modal-class').value;
+  const activity = $('modal-activity').value.trim();
+
+  if (!cls) { showToast('Please select a class', 'error'); return; }
+  if (!activity) { showToast('Please enter an activity', 'error'); return; }
+
+  let day = dayMap.get(dateStr);
+  if (!day) {
+    day = { date: dateStr, events: [] };
+    appData.days.push(day);
+    appData.days.sort((a, b) => a.date.localeCompare(b.date));
+    buildDayMap();
+  }
+
+  // Remove old event at the original period if editing
+  if (!modalContext.isNew) {
+    const oldIdx = day.events.findIndex(e => e.period === modalContext.period);
+    if (oldIdx !== -1) day.events.splice(oldIdx, 1);
+  }
+
+  // Check if new period slot is already taken
+  const existing = day.events.findIndex(e => e.period === period);
+  if (existing !== -1) {
+    day.events[existing] = { period, class: cls, activity };
+  } else {
+    day.events.push({ period, class: cls, activity });
+    day.events.sort((a, b) => PERIODS.indexOf(a.period) - PERIODS.indexOf(b.period));
+  }
+
+  markDirty();
+  closeModal();
+  renderWeek();
+}
+
+function deleteModalEvent() {
+  const delBtn = $('modal-delete');
+  if (!delBtn.classList.contains('confirming')) {
+    delBtn.classList.add('confirming');
+    delBtn.textContent = 'Confirm Delete?';
+    return;
+  }
+
+  if (!modalContext) return;
+  const { dateStr, period } = modalContext;
+  const day = dayMap.get(dateStr);
+  if (day) {
+    const idx = day.events.findIndex(e => e.period === period);
+    if (idx !== -1) day.events.splice(idx, 1);
+    if (day.events.length === 0) {
+      const dayIdx = appData.days.indexOf(day);
+      if (dayIdx !== -1) appData.days.splice(dayIdx, 1);
+      buildDayMap();
+    }
+  }
+
+  markDirty();
+  closeModal();
+  renderWeek();
+}
+
+// === UPCOMING EVENTS ===
+function renderUpcoming() {
+  const existing = $('upcoming');
+  if (existing) existing.remove();
+
+  const section = document.createElement('section');
+  section.id = 'upcoming';
+
+  appData.upcoming.sort((a, b) => a.date.localeCompare(b.date));
+
+  let html = '<h2>Upcoming Events</h2><div class="card">';
+  appData.upcoming.forEach((ev, i) => {
+    html += `
+      <div class="upcoming-row" data-index="${i}">
+        <input type="date" class="upcoming-date" value="${ev.date}" />
+        <input type="text" class="upcoming-desc" value="${esc(ev.description)}" placeholder="Event description" />
+        <button class="btn btn-danger upcoming-delete">Remove</button>
+      </div>`;
+  });
+  if (appData.upcoming.length === 0) {
+    html += '<div style="padding:0.75rem 1rem;color:var(--text-muted)">No upcoming events</div>';
+  }
+  html += '</div><button class="btn btn-add" id="add-upcoming">+ Add Event</button>';
+  section.innerHTML = html;
+  editorContent.appendChild(section);
+
+  section.querySelectorAll('.upcoming-date').forEach(input => {
+    input.addEventListener('change', e => {
+      const i = +e.target.closest('.upcoming-row').dataset.index;
+      appData.upcoming[i].date = e.target.value;
+      markDirty();
+    });
+  });
+
+  section.querySelectorAll('.upcoming-desc').forEach(input => {
+    input.addEventListener('input', e => {
+      const i = +e.target.closest('.upcoming-row').dataset.index;
+      appData.upcoming[i].description = e.target.value;
+      markDirty();
+    });
+  });
+
+  section.querySelectorAll('.upcoming-delete').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!btn.classList.contains('confirming')) {
+        btn.classList.add('confirming');
+        btn.textContent = 'Confirm?';
+        setTimeout(() => { btn.classList.remove('confirming'); btn.textContent = 'Remove'; }, 3000);
+        return;
+      }
+      const i = +btn.closest('.upcoming-row').dataset.index;
+      appData.upcoming.splice(i, 1);
+      markDirty();
+      renderUpcoming();
+    });
+  });
+
+  $('add-upcoming').addEventListener('click', () => {
+    appData.upcoming.push({ date: '', description: '' });
+    markDirty();
+    renderUpcoming();
+  });
+}
+
+// === SAVE CONTROLS ===
+function setupSaveControls() {
+  $('btn-download').addEventListener('click', downloadJSON);
+  $('btn-copy').addEventListener('click', copyJSON);
+  $('btn-reload').addEventListener('click', reloadData);
+}
+
+function downloadJSON() {
+  const jsonStr = JSON.stringify(appData, null, 2);
+  const blob = new Blob([jsonStr + '\n'], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'data.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  markClean();
+  showToast('Downloaded data.json', 'success');
+}
+
+async function copyJSON() {
+  const jsonStr = JSON.stringify(appData, null, 2);
+  try {
+    await navigator.clipboard.writeText(jsonStr);
+    showToast('JSON copied to clipboard', 'success');
+    markClean();
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = jsonStr;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('JSON copied to clipboard', 'success');
+    markClean();
+  }
+}
+
+async function reloadData() {
+  if (isDirty && !confirm('You have unsaved changes. Reload from server?')) return;
+  try {
+    await loadData();
+    buildDayMap();
+    renderAll();
+    markClean();
+    showToast('Reloaded from server', 'success');
+  } catch (err) {
+    showToast('Reload failed: ' + err.message, 'error');
+  }
+}
+
+// === SIDEBAR ===
+function setupSidebar() {
+  const links = document.querySelectorAll('.sidebar a');
+  const main = $('editor-main');
+
+  links.forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const sectionId = link.dataset.section;
+      const target = $(sectionId);
+      if (target) target.scrollIntoView({ behavior: 'smooth' });
+      links.forEach(l => l.classList.remove('active'));
+      link.classList.add('active');
+    });
+  });
+
+  // Highlight active section on scroll
+  main.addEventListener('scroll', () => {
+    const sections = editorContent.querySelectorAll('section');
+    let current = '';
+    sections.forEach(s => {
+      const rect = s.getBoundingClientRect();
+      if (rect.top <= 150) current = s.id;
+    });
+    if (current) {
+      links.forEach(l => {
+        l.classList.toggle('active', l.dataset.section === current);
+      });
+    }
+  });
+}
+
+function setupBeforeUnload() {
+  window.addEventListener('beforeunload', e => {
+    if (isDirty) { e.preventDefault(); e.returnValue = ''; }
+  });
+}
+
+// === HELPERS ===
+function esc(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function renameClassInEvents(oldName, newName) {
+  let count = 0;
+  appData.days.forEach(day => {
+    day.events.forEach(ev => {
+      if (ev.class === oldName) { ev.class = newName; count++; }
+    });
+  });
+  return count;
+}
+
+function getMonday(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function toDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function formatDateShort(d) {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function isInTerm(dateStr) {
+  return appData.terms.some(t => t.start && t.end && dateStr >= t.start && dateStr <= t.end);
+}
+
+// === TOAST ===
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  $('toast-container').appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('visible'));
+  setTimeout(() => {
+    toast.classList.remove('visible');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+// === BOOT ===
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
