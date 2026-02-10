@@ -1,0 +1,1736 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="Interactive educational app exploring stellar classification (OBAFGKM) and spectroscopy">
+<meta name="theme-color" content="#0a0e27">
+<meta property="og:title" content="Colour of Stars">
+<meta property="og:description" content="Explore how a star's temperature determines its colour, and identify elements through spectroscopy">
+<title>Colour of Stars</title>
+<style>
+/* ===== RESET ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;scroll-behavior:smooth}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100dvh;overflow-x:hidden}
+img,canvas{display:block;max-width:100%}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none}
+ul,ol{list-style:none}
+a{color:inherit;text-decoration:none}
+
+/* ===== CSS CUSTOM PROPERTIES ===== */
+:root{
+  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;--space-6:32px;--space-7:48px;--space-8:64px;
+  --radius-sm:6px;--radius-md:10px;--radius-lg:16px;--radius-full:9999px;
+  --font-xs:0.75rem;--font-sm:0.875rem;--font-base:1rem;--font-lg:1.125rem;--font-xl:1.25rem;--font-2xl:1.5rem;--font-3xl:2rem;
+  --transition-fast:0.15s ease;--transition-base:0.3s ease;--transition-slow:0.5s ease;
+  --z-toast:1000;--z-settings:900;--z-overlay:800;
+  --header-h:56px;
+}
+
+/* Light theme */
+[data-theme="light"]{
+  --bg-primary:#f5f6fa;--bg-secondary:#ffffff;--bg-tertiary:#ebedf5;
+  --text-primary:#1a1d2e;--text-secondary:#4a4d5e;--text-tertiary:#7a7d8e;
+  --border-color:#d5d7e2;--border-hover:#b5b7c2;
+  --accent:#4a6cf7;--accent-hover:#3a5ce7;--accent-text:#ffffff;
+  --success:#22c55e;--warning:#f59e0b;--error:#ef4444;
+  --shadow-sm:0 1px 3px rgba(0,0,0,0.08);--shadow-md:0 4px 12px rgba(0,0,0,0.1);--shadow-lg:0 8px 24px rgba(0,0,0,0.12);
+  --toast-bg:#1a1d2e;--toast-text:#f5f6fa;
+}
+
+/* Dark theme */
+[data-theme="dark"]{
+  --bg-primary:#0f1129;--bg-secondary:#181b36;--bg-tertiary:#222544;
+  --text-primary:#e8e9f0;--text-secondary:#a8a9b8;--text-tertiary:#6a6b7a;
+  --border-color:#2a2d4a;--border-hover:#3a3d5a;
+  --accent:#6b8aff;--accent-hover:#8ba4ff;--accent-text:#0f1129;
+  --success:#34d67a;--warning:#fbbf24;--error:#f87171;
+  --shadow-sm:0 1px 3px rgba(0,0,0,0.3);--shadow-md:0 4px 12px rgba(0,0,0,0.4);--shadow-lg:0 8px 24px rgba(0,0,0,0.5);
+  --toast-bg:#e8e9f0;--toast-text:#0f1129;
+}
+
+/* ===== BASE LAYOUT ===== */
+body{
+  background:var(--bg-primary);color:var(--text-primary);
+  transition:background-color var(--transition-base),color var(--transition-base);
+  display:flex;flex-direction:column;min-height:100dvh;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* ===== SKIP LINK ===== */
+.skip-link{
+  position:absolute;top:-100%;left:var(--space-4);
+  background:var(--accent);color:var(--accent-text);
+  padding:var(--space-2) var(--space-4);border-radius:var(--radius-sm);
+  z-index:9999;font-weight:600;
+}
+.skip-link:focus{top:var(--space-2)}
+
+/* ===== HEADER ===== */
+.app-header{
+  height:var(--header-h);display:flex;align-items:center;justify-content:space-between;
+  padding-inline:var(--space-4);background:var(--bg-secondary);
+  border-bottom:1px solid var(--border-color);flex-shrink:0;
+  transition:background-color var(--transition-base),border-color var(--transition-base);
+}
+.app-title{font-size:var(--font-lg);font-weight:700;letter-spacing:-0.02em}
+.app-title span{color:var(--accent)}
+.header-controls{display:flex;align-items:center;gap:var(--space-2)}
+
+/* ===== ICON BUTTONS ===== */
+.icon-btn{
+  width:40px;height:40px;display:flex;align-items:center;justify-content:center;
+  border-radius:var(--radius-sm);color:var(--text-secondary);
+  transition:background var(--transition-fast),color var(--transition-fast);
+  position:relative;
+}
+.icon-btn:hover,.icon-btn:focus-visible{background:var(--bg-tertiary);color:var(--text-primary)}
+.icon-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.icon-btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ===== TAB NAV ===== */
+.tab-nav{
+  display:flex;background:var(--bg-secondary);border-bottom:1px solid var(--border-color);
+  flex-shrink:0;transition:background-color var(--transition-base),border-color var(--transition-base);
+}
+.tab-btn{
+  flex:1;padding:var(--space-3) var(--space-4);font-size:var(--font-sm);font-weight:600;
+  color:var(--text-tertiary);border-bottom:3px solid transparent;
+  transition:color var(--transition-fast),border-color var(--transition-fast),background var(--transition-fast);
+  text-align:center;min-height:48px;display:flex;align-items:center;justify-content:center;gap:var(--space-2);
+}
+.tab-btn:hover{color:var(--text-secondary);background:var(--bg-tertiary)}
+.tab-btn:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.tab-btn[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ===== MAIN CONTENT ===== */
+.main-content{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.tab-panel{display:none;flex:1;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+.tab-panel[aria-hidden="false"]{display:flex}
+
+/* ===== STAR EXPLORER TAB ===== */
+.star-viewer{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at center,#0a0e27 0%,#050714 70%,#020309 100%);
+  min-height:300px;position:relative;overflow:hidden;padding:var(--space-5);
+}
+.star-field{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.star-orb{
+  width:clamp(80px,25vmin,220px);height:clamp(80px,25vmin,220px);
+  border-radius:50%;position:relative;
+  transition:width var(--transition-slow),height var(--transition-slow),
+             background var(--transition-slow),box-shadow var(--transition-slow);
+  will-change:width,height,box-shadow;
+}
+@media (prefers-reduced-motion:no-preference){
+  .star-orb{animation:star-pulse 4s ease-in-out infinite}
+}
+@keyframes star-pulse{
+  0%,100%{transform:scale(1);filter:brightness(1)}
+  50%{transform:scale(1.02);filter:brightness(1.05)}
+}
+.star-label{
+  color:#c8cce8;font-size:var(--font-sm);margin-top:var(--space-4);text-align:center;
+  text-shadow:0 0 8px rgba(0,0,0,0.8);
+}
+.star-temp{font-size:var(--font-3xl);font-weight:700;color:#fff;text-shadow:0 0 12px rgba(100,150,255,0.3)}
+.star-class-label{font-size:var(--font-xl);font-weight:600;color:#a0a8d0;margin-top:var(--space-1)}
+.star-details{color:#8088b0;font-size:var(--font-sm);margin-top:var(--space-2);text-align:center;max-width:400px}
+.star-examples{color:#9098c0;font-style:italic;margin-top:var(--space-1)}
+
+/* ===== SLIDER CONTROLS ===== */
+.slider-container{
+  width:100%;max-width:600px;padding:var(--space-5) var(--space-4) var(--space-4);
+  background:var(--bg-secondary);border-top:1px solid var(--border-color);
+  transition:background-color var(--transition-base),border-color var(--transition-base);
+}
+.slider-track{position:relative;padding-bottom:var(--space-6)}
+.spectral-slider{
+  -webkit-appearance:none;appearance:none;width:100%;height:8px;
+  border-radius:var(--radius-full);outline:none;
+  background:linear-gradient(to right,#9bb0ff,#aabfff,#cad7ff,#f8f7ff,#fff4ea,#ffd2a1,#ffcc6f);
+  cursor:pointer;
+}
+.spectral-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:24px;height:24px;
+  border-radius:50%;background:#fff;border:3px solid var(--accent);
+  box-shadow:var(--shadow-md);cursor:grab;transition:transform var(--transition-fast);
+}
+.spectral-slider::-webkit-slider-thumb:active{cursor:grabbing;transform:scale(1.15)}
+.spectral-slider::-moz-range-thumb{
+  width:24px;height:24px;border-radius:50%;background:#fff;border:3px solid var(--accent);
+  box-shadow:var(--shadow-md);cursor:grab;
+}
+.spectral-slider:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:var(--radius-full)}
+.slider-labels{
+  display:flex;justify-content:space-between;margin-top:var(--space-3);
+  padding-inline:2px;user-select:none;
+}
+.slider-label{
+  font-size:var(--font-sm);font-weight:700;color:var(--text-secondary);
+  cursor:pointer;padding:var(--space-1) var(--space-2);border-radius:var(--radius-sm);
+  transition:color var(--transition-fast),background var(--transition-fast);
+  min-width:32px;text-align:center;
+}
+.slider-label:hover{color:var(--text-primary);background:var(--bg-tertiary)}
+.slider-label.active{color:var(--accent)}
+
+/* ===== COLOUR COMPARISON STRIP ===== */
+.colour-compare{
+  width:100%;max-width:600px;padding:var(--space-4);
+  background:var(--bg-secondary);border-top:1px solid var(--border-color);
+  transition:background-color var(--transition-base),border-color var(--transition-base);
+}
+.colour-compare-title{
+  font-size:var(--font-sm);font-weight:700;color:var(--text-secondary);text-align:center;
+  margin-bottom:var(--space-3);
+}
+.colour-bars{display:flex;flex-direction:column;gap:var(--space-3)}
+.colour-bar-row{display:flex;align-items:center;gap:var(--space-3)}
+.colour-bar-label{
+  font-size:var(--font-xs);font-weight:700;color:var(--text-secondary);
+  width:80px;flex-shrink:0;text-align:right;line-height:1.3;
+}
+.colour-bar{
+  flex:1;height:28px;border-radius:var(--radius-sm);position:relative;overflow:hidden;
+}
+.colour-bar-astro{
+  background:linear-gradient(to right,#9bb0ff,#aabfff,#cad7ff,#f8f7ff,#fff4ea,#ffd2a1,#ffcc6f);
+}
+.colour-bar-art{
+  background:linear-gradient(to right,#2563eb,#3b82f6,#60a5fa,#a3e635,#fbbf24,#f97316,#ef4444);
+}
+.colour-bar-ends{
+  display:flex;justify-content:space-between;align-items:center;
+  position:absolute;inset:0;padding-inline:var(--space-2);
+  font-size:10px;font-weight:700;pointer-events:none;
+}
+.colour-bar-astro .colour-bar-ends{color:#1a1a3a}
+.colour-bar-art .colour-bar-ends{color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.4)}
+.temp-arrow{
+  display:flex;align-items:center;justify-content:center;
+  font-size:var(--font-xs);color:var(--text-tertiary);gap:var(--space-1);margin-top:var(--space-1);
+}
+.temp-arrow svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2}
+
+/* ===== SPECTROSCOPY TAB ===== */
+.spectro-container{
+  flex:1;display:flex;flex-direction:column;gap:var(--space-4);
+  padding:var(--space-4);overflow-y:auto;
+}
+.spectro-section{
+  background:var(--bg-secondary);border-radius:var(--radius-md);
+  border:1px solid var(--border-color);overflow:hidden;
+  transition:background-color var(--transition-base),border-color var(--transition-base);
+}
+.spectro-header{
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--space-2);
+  padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--border-color);
+}
+.spectro-title{font-size:var(--font-base);font-weight:700}
+.spectro-selector{display:flex;flex-wrap:wrap;gap:var(--space-1)}
+.sel-btn{
+  padding:var(--space-1) var(--space-3);font-size:var(--font-sm);font-weight:600;
+  border-radius:var(--radius-full);border:1.5px solid var(--border-color);
+  color:var(--text-secondary);transition:all var(--transition-fast);min-height:36px;
+}
+.sel-btn:hover{border-color:var(--accent);color:var(--accent)}
+.sel-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sel-btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+.spectro-body{padding:var(--space-4)}
+.spectrum-wrap{position:relative}
+.spectrum-canvas{width:100%;height:80px;border-radius:var(--radius-sm);display:block}
+.wavelength-axis{
+  display:flex;justify-content:space-between;padding-inline:0;
+  margin-top:var(--space-1);font-size:var(--font-xs);color:var(--text-tertiary);user-select:none;
+}
+.line-labels{
+  position:relative;height:24px;margin-top:var(--space-1);font-size:10px;
+  color:var(--text-secondary);overflow:hidden;
+}
+.line-label{
+  position:absolute;transform:translateX(-50%);white-space:nowrap;
+  padding:1px 4px;border-radius:3px;background:var(--bg-tertiary);
+}
+.spectro-info{
+  margin-top:var(--space-3);font-size:var(--font-sm);color:var(--text-secondary);
+  padding:var(--space-3);background:var(--bg-tertiary);border-radius:var(--radius-sm);
+  line-height:1.6;
+}
+
+/* ===== COMPARISON MODE ===== */
+.compare-controls{
+  display:flex;align-items:center;gap:var(--space-3);
+  padding:var(--space-3) var(--space-4);background:var(--bg-tertiary);
+  border-radius:var(--radius-md);margin-bottom:var(--space-3);flex-wrap:wrap;
+}
+.compare-toggle{
+  display:flex;align-items:center;gap:var(--space-2);cursor:pointer;font-size:var(--font-sm);font-weight:600;
+}
+.toggle-switch{
+  width:44px;height:24px;border-radius:var(--radius-full);
+  background:var(--border-color);position:relative;transition:background var(--transition-fast);
+  flex-shrink:0;
+}
+.toggle-switch::after{
+  content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;
+  border-radius:50%;background:#fff;transition:transform var(--transition-fast);
+  box-shadow:var(--shadow-sm);
+}
+.toggle-switch[aria-checked="true"]{background:var(--accent)}
+.toggle-switch[aria-checked="true"]::after{transform:translateX(20px)}
+.toggle-switch:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.compare-hint{font-size:var(--font-xs);color:var(--text-tertiary);font-style:italic}
+
+/* ===== TOAST NOTIFICATIONS ===== */
+.toast-container{
+  position:fixed;bottom:var(--space-5);right:var(--space-5);
+  display:flex;flex-direction:column-reverse;gap:var(--space-2);
+  z-index:var(--z-toast);pointer-events:none;
+}
+.toast{
+  pointer-events:auto;background:var(--toast-bg);color:var(--toast-text);
+  padding:var(--space-3) var(--space-4);border-radius:var(--radius-md);
+  font-size:var(--font-sm);font-weight:500;box-shadow:var(--shadow-lg);
+  display:flex;align-items:center;gap:var(--space-3);
+  transform:translateX(120%);transition:transform var(--transition-base);
+  max-width:360px;
+}
+.toast.show{transform:translateX(0)}
+.toast-icon{flex-shrink:0;font-size:var(--font-lg)}
+.toast-dismiss{
+  margin-left:auto;opacity:0.6;cursor:pointer;padding:var(--space-1);
+  font-size:var(--font-lg);line-height:1;
+}
+.toast-dismiss:hover{opacity:1}
+
+/* ===== SETTINGS PANEL ===== */
+.settings-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:var(--z-overlay);
+  opacity:0;pointer-events:none;transition:opacity var(--transition-base);
+}
+.settings-overlay.open{opacity:1;pointer-events:auto}
+.settings-panel{
+  position:fixed;top:0;right:0;bottom:0;width:min(360px,85vw);
+  background:var(--bg-secondary);z-index:var(--z-settings);
+  transform:translateX(100%);transition:transform var(--transition-base);
+  display:flex;flex-direction:column;box-shadow:var(--shadow-lg);
+  border-left:1px solid var(--border-color);
+}
+.settings-panel.open{transform:translateX(0)}
+.settings-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:var(--space-4);border-bottom:1px solid var(--border-color);
+}
+.settings-header h2{font-size:var(--font-lg);font-weight:700}
+.settings-body{flex:1;overflow-y:auto;padding:var(--space-4)}
+.settings-group{margin-bottom:var(--space-5)}
+.settings-group-title{font-size:var(--font-sm);font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:var(--space-3)}
+.setting-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:var(--space-3) 0;border-bottom:1px solid var(--border-color);
+}
+.setting-row:last-child{border-bottom:none}
+.setting-label{font-size:var(--font-sm);font-weight:500}
+.setting-desc{font-size:var(--font-xs);color:var(--text-tertiary);margin-top:2px}
+
+/* ===== HELP OVERLAY ===== */
+.help-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:calc(var(--z-toast) + 1);
+  display:none;align-items:center;justify-content:center;padding:var(--space-4);
+}
+.help-overlay.open{display:flex}
+.help-card{
+  background:var(--bg-secondary);border-radius:var(--radius-lg);
+  padding:var(--space-5);max-width:480px;width:100%;max-height:80vh;overflow-y:auto;
+  box-shadow:var(--shadow-lg);
+}
+.help-card h2{font-size:var(--font-xl);font-weight:700;margin-bottom:var(--space-4)}
+.help-card h3{font-size:var(--font-base);font-weight:700;margin-top:var(--space-4);margin-bottom:var(--space-2);color:var(--accent)}
+.help-card dl{display:grid;grid-template-columns:auto 1fr;gap:var(--space-1) var(--space-3)}
+.help-card dt{font-family:monospace;font-size:var(--font-sm);background:var(--bg-tertiary);padding:2px 8px;border-radius:var(--radius-sm);font-weight:600;white-space:nowrap}
+.help-card dd{font-size:var(--font-sm);color:var(--text-secondary);padding:2px 0}
+
+/* ===== STATUS BAR ===== */
+.status-bar{
+  height:28px;display:flex;align-items:center;justify-content:space-between;
+  padding-inline:var(--space-4);font-size:var(--font-xs);color:var(--text-tertiary);
+  background:var(--bg-secondary);border-top:1px solid var(--border-color);flex-shrink:0;
+  transition:background-color var(--transition-base),border-color var(--transition-base);
+}
+.status-indicator{display:flex;align-items:center;gap:var(--space-1)}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--success)}
+.status-dot.offline{background:var(--error)}
+
+/* ===== SUPERNOVA ANIMATION ===== */
+.supernova-flash{
+  position:fixed;inset:0;background:#fff;z-index:9999;
+  opacity:0;pointer-events:none;
+}
+.supernova-flash.active{
+  animation:supernova-flash 2s ease-out forwards;
+}
+@keyframes supernova-flash{
+  0%{opacity:0}5%{opacity:1}100%{opacity:0}
+}
+.supernova-particle{
+  position:absolute;width:4px;height:4px;border-radius:50%;
+  pointer-events:none;
+}
+
+/* ===== RESPONSIVE ===== */
+@media(max-width:767px){
+  .toast-container{right:var(--space-3);left:var(--space-3);align-items:stretch}
+  .toast{max-width:none}
+  .spectro-header{flex-direction:column;align-items:flex-start}
+}
+@media(min-width:768px){
+  .spectro-panels{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4)}
+  .app-title{font-size:var(--font-xl)}
+}
+@media(min-width:1024px){
+  .slider-container{max-width:700px}
+}
+
+/* ===== PRINT ===== */
+@media print{
+  .app-header,.tab-nav,.slider-container,.settings-panel,.settings-overlay,
+  .toast-container,.status-bar,.help-overlay,.compare-controls,.spectro-selector,
+  .sel-btn,.icon-btn,.skip-link{display:none!important}
+  body{background:#fff;color:#000}
+  .tab-panel{display:flex!important;break-inside:avoid}
+  .star-viewer{min-height:200px;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .spectro-section{border:1px solid #ccc;break-inside:avoid}
+}
+
+/* ===== REDUCED MOTION ===== */
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:0.01ms!important;transition-duration:0.01ms!important}
+}
+</style>
+</head>
+<body data-theme="dark" data-version="1.0.0">
+
+<a href="#main" class="skip-link">Skip to main content</a>
+
+<!-- HEADER -->
+<header class="app-header">
+  <div class="app-title">Colour of <span>Stars</span></div>
+  <div class="header-controls">
+    <button class="icon-btn" id="btnHelp" aria-label="Keyboard shortcuts and help" title="Help (?)">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r="0.5" fill="currentColor" stroke="none"/></svg>
+    </button>
+    <button class="icon-btn" id="btnLang" aria-label="Switch to simple descriptions" title="Toggle technical/simple text">
+      <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h12"/></svg>
+    </button>
+    <button class="icon-btn" id="btnTheme" aria-label="Toggle theme" title="Toggle theme">
+      <svg viewBox="0 0 24 24" id="themeIcon"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+    </button>
+    <button class="icon-btn" id="btnSettings" aria-label="Open settings" title="Settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.32 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- TAB NAV -->
+<nav class="tab-nav" role="tablist" aria-label="Main navigation">
+  <button class="tab-btn" id="tabStar" role="tab" aria-selected="true" aria-controls="panelStar" tabindex="0">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    Star Explorer
+  </button>
+  <button class="tab-btn" id="tabSpectro" role="tab" aria-selected="false" aria-controls="panelSpectro" tabindex="-1">
+    <svg viewBox="0 0 24 24"><rect x="1" y="6" width="22" height="12" rx="2"/><line x1="6" y1="6" x2="6" y2="18" opacity="0.5"/><line x1="10" y1="6" x2="10" y2="18" opacity="0.5"/><line x1="14" y1="6" x2="14" y2="18" opacity="0.5"/><line x1="18" y1="6" x2="18" y2="18" opacity="0.5"/></svg>
+    Spectroscopy Lab
+  </button>
+</nav>
+
+<!-- MAIN CONTENT -->
+<main class="main-content" id="main">
+
+  <!-- STAR EXPLORER PANEL -->
+  <section class="tab-panel" id="panelStar" role="tabpanel" aria-labelledby="tabStar" aria-hidden="false">
+    <div class="star-viewer" id="starViewer">
+      <div class="star-field" id="starField" aria-hidden="true"></div>
+      <div class="star-orb" id="starOrb" role="img" aria-label="Star visualization"></div>
+      <div class="star-label">
+        <div class="star-temp" id="starTemp">5,800 K</div>
+        <div class="star-class-label" id="starClassLabel">Class G2 — Yellow</div>
+        <div class="star-details" id="starDetails">Ca II H&K lines dominate. Numerous neutral metal lines (Fe, Ca, Na). The G-band (CH molecular band) visible.</div>
+        <div class="star-examples" id="starExamples">e.g. Sun, Alpha Centauri A</div>
+      </div>
+    </div>
+    <div class="slider-container">
+      <div class="slider-track">
+        <label for="spectralSlider" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Spectral class slider</label>
+        <input type="range" id="spectralSlider" class="spectral-slider" min="0" max="600" value="400" step="1" aria-valuetext="Class G">
+      </div>
+      <div class="slider-labels" role="group" aria-label="Spectral class quick select">
+        <button class="slider-label" data-class="0" title="O-type: Hottest, blue">O</button>
+        <button class="slider-label" data-class="1" title="B-type: Blue-white">B</button>
+        <button class="slider-label" data-class="2" title="A-type: White">A</button>
+        <button class="slider-label" data-class="3" title="F-type: Yellow-white">F</button>
+        <button class="slider-label active" data-class="4" title="G-type: Yellow (like our Sun)">G</button>
+        <button class="slider-label" data-class="5" title="K-type: Orange">K</button>
+        <button class="slider-label" data-class="6" title="M-type: Red-orange, coolest">M</button>
+      </div>
+    </div>
+    <div class="colour-compare" aria-label="Comparison of astronomical and artistic colour-temperature associations">
+      <div class="colour-compare-title">Astronomy vs Art: Colour &amp; Temperature</div>
+      <div class="colour-bars">
+        <div class="colour-bar-row">
+          <span class="colour-bar-label">Astronomy<br>(real stars)</span>
+          <div class="colour-bar colour-bar-astro">
+            <div class="colour-bar-ends">
+              <span>HOT</span><span>COOL</span>
+            </div>
+          </div>
+        </div>
+        <div class="temp-arrow">
+          <span>50,000 K</span>
+          <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          <span>2,400 K</span>
+        </div>
+        <div class="colour-bar-row">
+          <span class="colour-bar-label">Art<br>(everyday feel)</span>
+          <div class="colour-bar colour-bar-art">
+            <div class="colour-bar-ends">
+              <span>COOL</span><span>WARM</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p style="font-size:var(--font-xs);color:var(--text-tertiary);text-align:center;margin-top:var(--space-3);line-height:1.5;max-width:500px;margin-inline:auto">
+        In astronomy, blue stars are the hottest (up to 50,000 K) and red-orange stars are the coolest (~2,400 K) — the opposite of everyday colour associations where reds and oranges feel "warm" and blues feel "cool".
+      </p>
+    </div>
+  </section>
+
+  <!-- SPECTROSCOPY PANEL -->
+  <section class="tab-panel" id="panelSpectro" role="tabpanel" aria-labelledby="tabSpectro" aria-hidden="true">
+    <div class="spectro-container">
+
+      <!-- Comparison Controls -->
+      <div class="compare-controls">
+        <label class="compare-toggle">
+          <span class="toggle-switch" id="compareToggle" role="switch" aria-checked="false" tabindex="0" aria-label="Toggle comparison overlay"></span>
+          <span>Compare Mode</span>
+        </label>
+        <span class="compare-hint">Overlay gas emission lines on the stellar spectrum to identify matching elements</span>
+      </div>
+
+      <div class="spectro-panels">
+        <!-- Stellar Absorption -->
+        <div class="spectro-section">
+          <div class="spectro-header">
+            <h2 class="spectro-title">Stellar Absorption Spectrum</h2>
+            <div class="spectro-selector" id="starSelector" role="group" aria-label="Select star spectral class">
+              <button class="sel-btn" aria-pressed="false" data-star="O">O</button>
+              <button class="sel-btn" aria-pressed="false" data-star="B">B</button>
+              <button class="sel-btn" aria-pressed="true" data-star="A">A</button>
+              <button class="sel-btn" aria-pressed="false" data-star="F">F</button>
+              <button class="sel-btn" aria-pressed="false" data-star="G">G</button>
+              <button class="sel-btn" aria-pressed="false" data-star="K">K</button>
+              <button class="sel-btn" aria-pressed="false" data-star="M">M</button>
+            </div>
+          </div>
+          <div class="spectro-body">
+            <div class="spectrum-wrap">
+              <canvas class="spectrum-canvas" id="absorptionCanvas" aria-label="Stellar absorption spectrum showing dark lines on a rainbow background"></canvas>
+              <div class="wavelength-axis"><span>380</span><span>420</span><span>460</span><span>500</span><span>540</span><span>580</span><span>620</span><span>660</span><span>700</span></div>
+              <div class="line-labels" id="absorptionLabels"></div>
+            </div>
+            <div class="spectro-info" id="absorptionInfo">
+              A-type stars (~7,500-10,000 K): Hydrogen Balmer lines are at maximum strength. This is the optimum temperature for producing visible hydrogen absorption lines.
+            </div>
+          </div>
+        </div>
+
+        <!-- Gas Emission -->
+        <div class="spectro-section">
+          <div class="spectro-header">
+            <h2 class="spectro-title">Gas Emission Spectrum</h2>
+            <div class="spectro-selector" id="gasSelector" role="group" aria-label="Select reference gas">
+              <button class="sel-btn" aria-pressed="true" data-gas="hydrogen">H</button>
+              <button class="sel-btn" aria-pressed="false" data-gas="helium">He</button>
+              <button class="sel-btn" aria-pressed="false" data-gas="sodium">Na</button>
+              <button class="sel-btn" aria-pressed="false" data-gas="calcium">Ca</button>
+              <button class="sel-btn" aria-pressed="false" data-gas="iron">Fe</button>
+              <button class="sel-btn" aria-pressed="false" data-gas="mercury">Hg</button>
+            </div>
+          </div>
+          <div class="spectro-body">
+            <div class="spectrum-wrap">
+              <canvas class="spectrum-canvas" id="emissionCanvas" aria-label="Gas emission spectrum showing bright coloured lines on a dark background"></canvas>
+              <div class="wavelength-axis"><span>380</span><span>420</span><span>460</span><span>500</span><span>540</span><span>580</span><span>620</span><span>660</span><span>700</span></div>
+              <div class="line-labels" id="emissionLabels"></div>
+            </div>
+            <div class="spectro-info" id="emissionInfo">
+              Hydrogen: The Balmer series produces visible emission lines at specific wavelengths. H-alpha (red, 656nm) is the strongest, followed by H-beta (cyan, 486nm), H-gamma (violet, 434nm), and H-delta (violet, 410nm).
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- STATUS BAR -->
+<footer class="status-bar" aria-live="polite">
+  <span class="status-indicator">
+    <span class="status-dot" id="statusDot" aria-hidden="true"></span>
+    <span id="statusText">Ready</span>
+  </span>
+  <span id="versionLabel">v1.0.0</span>
+</footer>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toastContainer" aria-live="polite" aria-relevant="additions"></div>
+
+<!-- SETTINGS PANEL -->
+<div class="settings-overlay" id="settingsOverlay"></div>
+<aside class="settings-panel" id="settingsPanel" aria-label="Settings" role="dialog" aria-modal="true">
+  <div class="settings-header">
+    <h2>Settings</h2>
+    <button class="icon-btn" id="btnCloseSettings" aria-label="Close settings">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="settings-body">
+    <div class="settings-group">
+      <div class="settings-group-title">Appearance</div>
+      <div class="setting-row">
+        <div><div class="setting-label">Theme</div><div class="setting-desc">Switch between light and dark mode</div></div>
+        <span class="toggle-switch" id="settingsThemeToggle" role="switch" aria-checked="true" tabindex="0" aria-label="Dark mode"></span>
+      </div>
+      <div class="setting-row">
+        <div><div class="setting-label">Description style</div><div class="setting-desc">Technical uses scientific terms; Standard uses everyday language</div></div>
+        <span class="toggle-switch" id="settingsTechToggle" role="switch" aria-checked="true" tabindex="0" aria-label="Technical descriptions"></span>
+      </div>
+    </div>
+    <div class="settings-group">
+      <div class="settings-group-title">Data</div>
+      <div class="setting-row">
+        <div><div class="setting-label">Export settings</div><div class="setting-desc">Download app state as JSON</div></div>
+        <button class="sel-btn" id="btnExport">Export</button>
+      </div>
+      <div class="setting-row">
+        <div><div class="setting-label">Import settings</div><div class="setting-desc">Restore from a JSON file</div></div>
+        <button class="sel-btn" id="btnImport">Import</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" aria-hidden="true">
+      </div>
+      <div class="setting-row">
+        <div><div class="setting-label">Reset to defaults</div><div class="setting-desc">Clear all saved data</div></div>
+        <button class="sel-btn" id="btnReset" style="color:var(--error);border-color:var(--error)">Reset</button>
+      </div>
+    </div>
+    <div class="settings-group">
+      <div class="settings-group-title">About</div>
+      <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:var(--space-2)">
+        <div class="setting-label">Colour of Stars v1.0.0</div>
+        <div class="setting-desc">An interactive educational app exploring stellar classification and spectroscopy. Star colours and spectral data are based on scientific references including Harre & Heller (2021) and NIST atomic spectra databases.</div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- HELP OVERLAY -->
+<div class="help-overlay" id="helpOverlay" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+  <div class="help-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-3)">
+      <h2>Keyboard Shortcuts</h2>
+      <button class="icon-btn" id="btnCloseHelp" aria-label="Close help">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <h3>Navigation</h3>
+    <dl>
+      <dt>1</dt><dd>Star Explorer tab</dd>
+      <dt>2</dt><dd>Spectroscopy Lab tab</dd>
+      <dt>?</dt><dd>Toggle this help panel</dd>
+      <dt>Esc</dt><dd>Close any open panel</dd>
+    </dl>
+    <h3>Star Explorer</h3>
+    <dl>
+      <dt>&#8592; / &#8594;</dt><dd>Adjust spectral class (when slider focused)</dd>
+      <dt>O B A F G K M</dt><dd>Jump to spectral class</dd>
+    </dl>
+    <h3>General</h3>
+    <dl>
+      <dt id="undoKey">Ctrl+Z</dt><dd>Undo</dd>
+      <dt id="redoKey">Ctrl+Y</dt><dd>Redo</dd>
+      <dt>T</dt><dd>Toggle theme</dd>
+      <dt>D</dt><dd>Toggle technical / simple descriptions</dd>
+    </dl>
+  </div>
+</div>
+
+<!-- SUPERNOVA FLASH -->
+<div class="supernova-flash" id="supernovaFlash" aria-hidden="true"></div>
+
+<script>
+'use strict';
+(function() {
+
+// ===== SCIENTIFIC DATA =====
+const SPECTRAL_CLASSES = Object.freeze([
+  { class:'O', tempRange:[30000,50000], color:[155,176,255], colorHex:'#9bb0ff', radius:17.8,
+    colorName:'Blue', stars:['Alnitak','Naos (Zeta Puppis)'],
+    features:'Ionized helium (He II) absorption dominates. Lines of highly ionised Si IV, O III, N III. Hydrogen Balmer lines present but weaker.',
+    featuresSimple:'These are the hottest stars. The extreme heat strips electrons from helium atoms, leaving strong helium fingerprints in the light. Hydrogen lines are visible but faint.' },
+  { class:'B', tempRange:[10000,30000], color:[170,191,255], colorHex:'#aabfff', radius:3.8,
+    colorName:'Blue-white', stars:['Rigel','Spica'],
+    features:'Neutral helium (He I) lines are strongest. Hydrogen Balmer lines strengthening. Weak ionised metal lines (Si II, O II, Mg II).',
+    featuresSimple:'Very hot blue-white stars. Helium fingerprints are strongest here. Hydrogen lines are getting more noticeable, and faint traces of metals start to show.' },
+  { class:'A', tempRange:[7500,10000], color:[202,215,255], colorHex:'#cad7ff', radius:1.7,
+    colorName:'White', stars:['Sirius','Vega'],
+    features:'Hydrogen Balmer lines at maximum strength. Ionised metal lines appear (Fe II, Mg II, Si II). Ca II H&K lines begin to appear.',
+    featuresSimple:'White stars at just the right temperature for hydrogen to leave its strongest fingerprint. This is where hydrogen lines are boldest. Calcium lines start to appear.' },
+  { class:'F', tempRange:[6000,7500], color:[248,247,255], colorHex:'#f8f7ff', radius:1.2,
+    colorName:'Yellow-white', stars:['Procyon','Polaris'],
+    features:'Hydrogen lines weaken. Ca II H&K lines strengthen significantly. Ionised metals (Fe II, Ti II) prominent. Neutral metal lines appear.',
+    featuresSimple:'Warm white stars. Hydrogen lines are fading while calcium lines grow much stronger. Metal fingerprints like iron and titanium become more visible.' },
+  { class:'G', tempRange:[5200,6000], color:[255,244,234], colorHex:'#fff4ea', radius:0.92,
+    colorName:'Yellow', stars:['Sun','Alpha Centauri A'],
+    features:'Ca II H&K lines are strongest features. Numerous neutral metal lines (Fe I, Ca I, Na I). The G-band (CH at ~430 nm) visible. Sodium D lines clear.',
+    featuresSimple:'Stars like our Sun. Calcium lines are now the strongest feature. Many different metals \u2014 iron, sodium, calcium \u2014 all leave clear fingerprints. A rich, complex spectrum.' },
+  { class:'K', tempRange:[3700,5200], color:[255,210,161], colorHex:'#ffd2a1', radius:0.72,
+    colorName:'Orange', stars:['Arcturus','Aldebaran'],
+    features:'Neutral metal lines (Fe I, Ca I, Na I, Ti I) dominate. Ca II still strong. Hydrogen very weak. Molecular bands (CH, CN) begin to appear.',
+    featuresSimple:'Cooler orange stars packed with metal fingerprints. Hydrogen has almost faded away. Simple molecules are starting to form and leave their own marks in the light.' },
+  { class:'M', tempRange:[2400,3700], color:[255,204,111], colorHex:'#ffcc6f', radius:0.3,
+    colorName:'Red-orange', stars:['Betelgeuse','Proxima Centauri'],
+    features:'Titanium oxide (TiO) molecular bands dominate the visible spectrum. All neutral metals present. Hydrogen essentially absent.',
+    featuresSimple:'The coolest stars. Cool enough for molecules like titanium oxide to form, which create broad dark bands across the spectrum. Hydrogen fingerprints have vanished entirely.' }
+]);
+
+// Fine color gradient for smooth interpolation
+const COLOR_STOPS = [
+  { pos:0,   rgb:[146,181,255] },  // O0
+  { pos:50,  rgb:[155,176,255] },  // O5
+  { pos:100, rgb:[162,184,255] },  // B0
+  { pos:150, rgb:[170,191,255] },  // B5
+  { pos:200, rgb:[191,211,255] },  // A0
+  { pos:250, rgb:[202,215,255] },  // A5
+  { pos:300, rgb:[228,229,255] },  // F0
+  { pos:350, rgb:[248,247,255] },  // F5
+  { pos:400, rgb:[255,246,238] },  // G0
+  { pos:450, rgb:[255,244,234] },  // G5
+  { pos:500, rgb:[255,228,196] },  // K0
+  { pos:550, rgb:[255,210,161] },  // K5
+  { pos:600, rgb:[255,204,111] },  // M5
+];
+
+const GAS_SPECTRA = Object.freeze({
+  hydrogen:{ name:'Hydrogen', symbol:'H', lines:[
+    {nm:656.3, name:'H\u03B1', intensity:1.0},
+    {nm:486.1, name:'H\u03B2', intensity:0.8},
+    {nm:434.0, name:'H\u03B3', intensity:0.6},
+    {nm:410.2, name:'H\u03B4', intensity:0.4}
+  ], info:'Hydrogen (Balmer series): The most fundamental element in the universe. The Balmer series arises from electron transitions to the n=2 energy level. H-alpha (red, 656nm) is the strongest visible line.',
+     infoSimple:'Hydrogen is the most common element in the universe and in stars. When heated, it glows at specific colours \u2014 a strong red line, a blue-green line, and fainter violet lines. Each line is like a fingerprint that says "hydrogen is here".'},
+  helium:{ name:'Helium', symbol:'He', lines:[
+    {nm:587.6, name:'D\u2083', intensity:1.0},
+    {nm:447.1, name:'', intensity:0.7},
+    {nm:471.3, name:'', intensity:0.4},
+    {nm:492.1, name:'', intensity:0.5},
+    {nm:501.5, name:'', intensity:0.5},
+    {nm:667.8, name:'', intensity:0.6},
+    {nm:706.5, name:'', intensity:0.4}
+  ], info:'Helium: First discovered in the solar spectrum before being found on Earth (hence its name, from Helios). The D\u2083 line at 587.6nm (yellow) is its most prominent visible emission.',
+     infoSimple:'Helium was first discovered in sunlight before anyone found it on Earth \u2014 it\u2019s named after Helios, the Greek sun god. Its brightest line is a distinctive yellow glow. It also produces lines in blue, green, and red.'},
+  sodium:{ name:'Sodium', symbol:'Na', lines:[
+    {nm:589.0, name:'D\u2082', intensity:1.0},
+    {nm:589.6, name:'D\u2081', intensity:0.9}
+  ], info:'Sodium: Produces the famous sodium doublet (D lines) at 589.0 and 589.6nm. These bright yellow lines are responsible for the colour of sodium street lamps and correspond to the Fraunhofer D lines in the solar spectrum.',
+     infoSimple:'Sodium produces a pair of very bright, closely-spaced yellow lines. This is the same yellow glow you see in older street lamps. These lines are easy to spot in stellar spectra and were among the first identified in sunlight.'},
+  calcium:{ name:'Calcium', symbol:'Ca', lines:[
+    {nm:393.4, name:'K', intensity:1.0},
+    {nm:396.8, name:'H', intensity:0.9},
+    {nm:422.7, name:'', intensity:0.6}
+  ], info:'Calcium: The Ca II H and K lines (393.4 and 396.8nm) in the violet are among the most important lines in stellar classification. They are the strongest features in solar-type (G) and later stellar spectra.',
+     infoSimple:'Calcium leaves two very strong violet lines (called H and K) that are among the most important in astronomy. In Sun-like and cooler stars, these calcium lines are the most prominent features in the entire spectrum.'},
+  iron:{ name:'Iron', symbol:'Fe', lines:[
+    {nm:404.6, name:'', intensity:0.7},
+    {nm:438.4, name:'', intensity:0.6},
+    {nm:466.8, name:'d', intensity:0.5},
+    {nm:516.7, name:'', intensity:1.0},
+    {nm:527.0, name:'', intensity:0.6},
+    {nm:532.8, name:'', intensity:0.5}
+  ], info:'Iron: Has a very dense forest of spectral lines, especially in the blue-green region. Iron lines account for roughly 30% of all absorption lines in the solar spectrum. The line at 466.8nm is the Fraunhofer d line.',
+     infoSimple:'Iron produces a huge number of spectral lines \u2014 so many that about a third of all the dark lines in sunlight come from iron alone. Its lines cluster in the blue-green part of the spectrum, creating a dense forest of fingerprints.'},
+  mercury:{ name:'Mercury', symbol:'Hg', lines:[
+    {nm:404.7, name:'', intensity:0.8},
+    {nm:435.8, name:'', intensity:1.0},
+    {nm:546.1, name:'', intensity:0.9},
+    {nm:577.0, name:'', intensity:0.7},
+    {nm:579.1, name:'', intensity:0.6}
+  ], info:'Mercury: Commonly used as a calibration source in laboratory spectroscopy. Its bright lines at 435.8nm (blue), 546.1nm (green), and the yellow doublet (577/579nm) are easily recognised reference standards.',
+     infoSimple:'Mercury produces a few very distinct, well-spaced lines \u2014 a bright blue, green, and yellow pair. Scientists use mercury lamps as a ruler to calibrate their instruments because these lines are so reliable and easy to identify.'}
+});
+
+// Absorption line strength matrix (0-5 scale) for each spectral class
+const ABSORPTION_MATRIX = Object.freeze({
+  // Hydrogen Balmer lines
+  H_alpha:  { nm:656.3, name:'H\u03B1',  strengths:{O:2,B:3,A:5,F:3,G:2,K:1,M:0} },
+  H_beta:   { nm:486.1, name:'H\u03B2',  strengths:{O:2,B:3,A:5,F:3,G:2,K:1,M:0} },
+  H_gamma:  { nm:434.0, name:'H\u03B3',  strengths:{O:2,B:3,A:5,F:3,G:2,K:1,M:0} },
+  H_delta:  { nm:410.2, name:'H\u03B4',  strengths:{O:1,B:2,A:4,F:2,G:1,K:0,M:0} },
+  // Helium
+  HeI_447:  { nm:447.1, name:'He I',  strengths:{O:3,B:5,A:1,F:0,G:0,K:0,M:0} },
+  HeI_588:  { nm:587.6, name:'He I',  strengths:{O:3,B:4,A:1,F:0,G:0,K:0,M:0} },
+  HeII_469: { nm:468.6, name:'He II', strengths:{O:5,B:0,A:0,F:0,G:0,K:0,M:0} },
+  // Calcium
+  CaII_K:   { nm:393.4, name:'Ca K',  strengths:{O:0,B:0,A:1,F:3,G:5,K:5,M:4} },
+  CaII_H:   { nm:396.8, name:'Ca H',  strengths:{O:0,B:0,A:1,F:3,G:5,K:5,M:4} },
+  CaI_423:  { nm:422.7, name:'Ca I',  strengths:{O:0,B:0,A:0,F:0,G:2,K:4,M:3} },
+  // Sodium
+  NaI_D2:   { nm:589.0, name:'Na D\u2082', strengths:{O:0,B:0,A:0,F:1,G:3,K:4,M:4} },
+  NaI_D1:   { nm:589.6, name:'Na D\u2081', strengths:{O:0,B:0,A:0,F:1,G:3,K:4,M:4} },
+  // Iron
+  FeI_517:  { nm:516.7, name:'Fe I',  strengths:{O:0,B:0,A:1,F:2,G:4,K:5,M:4} },
+  FeI_527:  { nm:527.0, name:'Fe I',  strengths:{O:0,B:0,A:0,F:1,G:3,K:4,M:3} },
+  FeI_467:  { nm:466.8, name:'Fe I',  strengths:{O:0,B:0,A:1,F:2,G:3,K:4,M:3} },
+  // TiO molecular bands (represented as multiple broad features)
+  TiO_505:  { nm:505.0, name:'TiO', strengths:{O:0,B:0,A:0,F:0,G:0,K:1,M:5}, broad:true },
+  TiO_545:  { nm:545.0, name:'TiO', strengths:{O:0,B:0,A:0,F:0,G:0,K:1,M:4}, broad:true },
+  TiO_620:  { nm:620.0, name:'TiO', strengths:{O:0,B:0,A:0,F:0,G:0,K:1,M:5}, broad:true },
+  TiO_670:  { nm:670.0, name:'TiO', strengths:{O:0,B:0,A:0,F:0,G:0,K:0,M:4}, broad:true },
+});
+
+// Star absorption info descriptions
+const ABSORPTION_INFO = Object.freeze({
+  O: 'O-type stars (>30,000 K): Ionised helium (He II) lines dominate. At these extreme temperatures, most atoms are highly ionised. Hydrogen Balmer lines are present but relatively weak.',
+  B: 'B-type stars (10,000\u201330,000 K): Neutral helium (He I) lines are at maximum strength. Hydrogen Balmer lines are growing stronger. No molecular bands at these temperatures.',
+  A: 'A-type stars (7,500\u201310,000 K): Hydrogen Balmer lines reach maximum strength \u2014 this is the optimum temperature for producing visible hydrogen absorption. Ionised metals begin to appear.',
+  F: 'F-type stars (6,000\u20137,500 K): Hydrogen lines weakening. Ca II H&K lines growing very strong. Ionised metals (Fe II, Ti II) prominent. The transition from hydrogen-dominated to metal-dominated spectra.',
+  G: 'G-type stars (5,200\u20136,000 K): Ca II H&K are the strongest features. A rich forest of neutral metal lines (Fe I, Ca I, Na I). The sodium D lines and the G-band (CH at ~430nm) are clearly visible. Our Sun is a G2 star.',
+  K: 'K-type stars (3,700\u20135,200 K): Neutral metal lines dominate completely. Hydrogen Balmer lines are very weak. Molecular bands (CH, CN) begin to appear. The spectrum is crowded with absorption features.',
+  M: 'M-type stars (2,400\u20133,700 K): Titanium oxide (TiO) molecular bands dominate, creating broad absorption troughs across the visible spectrum. This gives M-type spectra their distinctive "scalloped" appearance.'
+});
+
+const ABSORPTION_INFO_SIMPLE = Object.freeze({
+  O: 'The hottest stars (over 30,000\u00B0C). So hot that helium atoms lose their electrons, leaving strong helium fingerprints. Hydrogen lines are there but not very bold.',
+  B: 'Very hot blue-white stars (10,000\u201330,000\u00B0C). Helium fingerprints are at their strongest. Hydrogen is becoming more visible. Too hot for molecules to survive.',
+  A: 'White stars (7,500\u201310,000\u00B0C) at the perfect temperature for hydrogen to shine brightest. This is where hydrogen fingerprints are the strongest of any star type. The start of metal fingerprints appearing.',
+  F: 'Warm white stars (6,000\u20137,500\u00B0C). Hydrogen is fading while calcium grows much stronger. This is the transition zone where metals start to take over from hydrogen in the spectrum.',
+  G: 'Stars like our Sun (5,200\u20136,000\u00B0C). Calcium fingerprints are now the boldest feature. Lots of different metals show up \u2014 iron, sodium, calcium. A rich and complex pattern of dark lines.',
+  K: 'Cool orange stars (3,700\u20135,200\u00B0C). Metals dominate completely. Hydrogen has nearly vanished. The spectrum is packed with dark lines, and simple molecules are beginning to form.',
+  M: 'The coolest stars (2,400\u20133,700\u00B0C). Cool enough for molecules like titanium oxide to survive, creating broad dark bands across the rainbow. These wide bands give M-star spectra a distinctive wavy appearance.'
+});
+
+// ===== SPECTRUM CONSTANTS =====
+const SPECTRUM_MIN = 380;
+const SPECTRUM_MAX = 700;
+
+// ===== STATE MANAGEMENT =====
+const STORAGE_KEY = 'colour-of-stars-v1';
+const DEFAULT_STATE = {
+  activeTab: 'star',
+  sliderValue: 400,
+  spectroStar: 'A',
+  spectroGas: 'hydrogen',
+  compareMode: false,
+  technical: false, // true = technical descriptions, false = simple/accessible
+  theme: null, // null = use system preference
+};
+
+let state = loadState();
+let undoStack = [];
+let redoStack = [];
+const MAX_HISTORY = 100;
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      return { ...DEFAULT_STATE, ...saved };
+    }
+  } catch (e) { /* ignore */ }
+  return { ...DEFAULT_STATE };
+}
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) { /* storage full or disabled */ }
+}
+
+const debouncedSave = debounce(saveState, 500);
+
+function pushUndo() {
+  undoStack.push(JSON.stringify(state));
+  if (undoStack.length > MAX_HISTORY) undoStack.shift();
+  redoStack = [];
+}
+
+function undo() {
+  if (undoStack.length === 0) return;
+  redoStack.push(JSON.stringify(state));
+  state = JSON.parse(undoStack.pop());
+  applyFullState();
+  showToast('Undone', 'info');
+}
+
+function redo() {
+  if (redoStack.length === 0) return;
+  undoStack.push(JSON.stringify(state));
+  state = JSON.parse(redoStack.pop());
+  applyFullState();
+  showToast('Redone', 'info');
+}
+
+// ===== UTILITIES =====
+function debounce(fn, ms) {
+  let timer;
+  return function(...args) { clearTimeout(timer); timer = setTimeout(() => fn.apply(this, args), ms); };
+}
+
+function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function lerpColor(c1, c2, t) {
+  return [
+    Math.round(lerp(c1[0], c2[0], t)),
+    Math.round(lerp(c1[1], c2[1], t)),
+    Math.round(lerp(c1[2], c2[2], t))
+  ];
+}
+
+function formatNumber(n) { return n.toLocaleString('en-US'); }
+
+function isMac() { return /Mac|iPod|iPhone|iPad/.test(navigator.platform || navigator.userAgent); }
+
+// Wavelength (nm) to RGB conversion (Dan Bruton's algorithm)
+function wavelengthToRGB(nm) {
+  let r = 0, g = 0, b = 0;
+  if (nm >= 380 && nm < 440) {
+    r = -(nm - 440) / (440 - 380);
+    g = 0;
+    b = 1;
+  } else if (nm >= 440 && nm < 490) {
+    r = 0;
+    g = (nm - 440) / (490 - 440);
+    b = 1;
+  } else if (nm >= 490 && nm < 510) {
+    r = 0;
+    g = 1;
+    b = -(nm - 510) / (510 - 490);
+  } else if (nm >= 510 && nm < 580) {
+    r = (nm - 510) / (580 - 510);
+    g = 1;
+    b = 0;
+  } else if (nm >= 580 && nm < 645) {
+    r = 1;
+    g = -(nm - 645) / (645 - 580);
+    b = 0;
+  } else if (nm >= 645 && nm <= 700) {
+    r = 1;
+    g = 0;
+    b = 0;
+  }
+  // Intensity falloff at edges
+  let factor;
+  if (nm >= 380 && nm < 420) factor = 0.3 + 0.7 * (nm - 380) / (420 - 380);
+  else if (nm >= 420 && nm <= 700) factor = 1.0;
+  else if (nm > 700 && nm <= 780) factor = 0.3 + 0.7 * (780 - nm) / (780 - 700);
+  else factor = 0;
+  return [Math.round(r * factor * 255), Math.round(g * factor * 255), Math.round(b * factor * 255)];
+}
+
+// ===== DOM REFS =====
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
+
+const els = {
+  starOrb: $('#starOrb'),
+  starTemp: $('#starTemp'),
+  starClassLabel: $('#starClassLabel'),
+  starDetails: $('#starDetails'),
+  starExamples: $('#starExamples'),
+  spectralSlider: $('#spectralSlider'),
+  sliderLabels: $$('.slider-label'),
+  tabStar: $('#tabStar'),
+  tabSpectro: $('#tabSpectro'),
+  panelStar: $('#panelStar'),
+  panelSpectro: $('#panelSpectro'),
+  absorptionCanvas: $('#absorptionCanvas'),
+  emissionCanvas: $('#emissionCanvas'),
+  absorptionLabels: $('#absorptionLabels'),
+  emissionLabels: $('#emissionLabels'),
+  absorptionInfo: $('#absorptionInfo'),
+  emissionInfo: $('#emissionInfo'),
+  starSelector: $('#starSelector'),
+  gasSelector: $('#gasSelector'),
+  compareToggle: $('#compareToggle'),
+  toastContainer: $('#toastContainer'),
+  settingsOverlay: $('#settingsOverlay'),
+  settingsPanel: $('#settingsPanel'),
+  helpOverlay: $('#helpOverlay'),
+  statusDot: $('#statusDot'),
+  statusText: $('#statusText'),
+  starField: $('#starField'),
+  supernovaFlash: $('#supernovaFlash'),
+  settingsThemeToggle: $('#settingsThemeToggle'),
+  settingsTechToggle: $('#settingsTechToggle'),
+  btnLang: $('#btnLang'),
+};
+
+// ===== THEME =====
+function getSystemTheme() {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function applyTheme(theme) {
+  const resolved = theme || getSystemTheme();
+  document.body.setAttribute('data-theme', resolved);
+  const isDark = resolved === 'dark';
+  els.settingsThemeToggle.setAttribute('aria-checked', String(isDark));
+  document.querySelector('meta[name="theme-color"]').content = isDark ? '#0a0e27' : '#f5f6fa';
+}
+
+function toggleTheme() {
+  pushUndo();
+  const current = document.body.getAttribute('data-theme');
+  const next = current === 'dark' ? 'light' : 'dark';
+  state.theme = next;
+  applyTheme(next);
+  debouncedSave();
+  showToast(next === 'dark' ? 'Dark mode' : 'Light mode', 'info');
+}
+
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if (!state.theme) applyTheme(null);
+});
+
+// ===== TECHNICAL / SIMPLE TOGGLE =====
+function applyTechnicalMode() {
+  const isTech = state.technical;
+  els.settingsTechToggle.setAttribute('aria-checked', String(isTech));
+  els.btnLang.setAttribute('aria-label', isTech ? 'Switch to simple descriptions' : 'Switch to technical descriptions');
+  els.btnLang.title = isTech ? 'Using technical descriptions' : 'Using simple descriptions';
+  // Refresh visible text
+  updateStar(state.sliderValue);
+  if (state.activeTab === 'spectro') {
+    drawAbsorptionSpectrum();
+    drawEmissionSpectrum();
+  }
+}
+
+function toggleTechnical() {
+  pushUndo();
+  state.technical = !state.technical;
+  applyTechnicalMode();
+  debouncedSave();
+  showToast(state.technical ? 'Technical descriptions' : 'Simple descriptions', 'info');
+}
+
+// ===== TABS =====
+function switchTab(tab) {
+  if (state.activeTab === tab) return;
+  pushUndo();
+  state.activeTab = tab;
+  const isStar = tab === 'star';
+  els.tabStar.setAttribute('aria-selected', String(isStar));
+  els.tabStar.tabIndex = isStar ? 0 : -1;
+  els.tabSpectro.setAttribute('aria-selected', String(!isStar));
+  els.tabSpectro.tabIndex = isStar ? -1 : 0;
+  els.panelStar.setAttribute('aria-hidden', String(!isStar));
+  els.panelSpectro.setAttribute('aria-hidden', String(isStar));
+  if (!isStar) {
+    requestAnimationFrame(() => {
+      drawAbsorptionSpectrum();
+      drawEmissionSpectrum();
+    });
+  }
+  debouncedSave();
+}
+
+// ===== STAR EXPLORER =====
+function getInterpolatedData(sliderVal) {
+  const v = clamp(sliderVal, 0, 600);
+  const classIndex = Math.min(Math.floor(v / (600 / 7)), 6);
+  const nextIndex = Math.min(classIndex + 1, 6);
+  const classStart = classIndex * (600 / 7);
+  const classEnd = (classIndex + 1) * (600 / 7);
+  const t = clamp((v - classStart) / (classEnd - classStart), 0, 1);
+
+  const sc = SPECTRAL_CLASSES[classIndex];
+  const sn = SPECTRAL_CLASSES[nextIndex];
+
+  // Color from fine gradient
+  let color;
+  for (let i = 0; i < COLOR_STOPS.length - 1; i++) {
+    if (v >= COLOR_STOPS[i].pos && v <= COLOR_STOPS[i + 1].pos) {
+      const ct = (v - COLOR_STOPS[i].pos) / (COLOR_STOPS[i + 1].pos - COLOR_STOPS[i].pos);
+      color = lerpColor(COLOR_STOPS[i].rgb, COLOR_STOPS[i + 1].rgb, ct);
+      break;
+    }
+  }
+  if (!color) color = COLOR_STOPS[COLOR_STOPS.length - 1].rgb;
+
+  // Temperature
+  const temp = Math.round(lerp(sc.tempRange[1], sc.tempRange[0], t));
+
+  // Radius (log scale)
+  const logR = lerp(Math.log(sc.radius), Math.log(sn.radius), t);
+  const radius = Math.exp(logR);
+
+  // Subtype number (0-9 within class)
+  const subtype = Math.round(t * 9);
+
+  return {
+    classIndex, class: sc.class, subtype, temp, color, radius,
+    colorName: sc.colorName, stars: sc.stars,
+    features: sc.features, featuresSimple: sc.featuresSimple,
+    fullLabel: `Class ${sc.class}${subtype} \u2014 ${sc.colorName}`
+  };
+}
+
+function updateStar(sliderVal) {
+  const data = getInterpolatedData(sliderVal);
+  const [r, g, b] = data.color;
+  const colorStr = `rgb(${r},${g},${b})`;
+
+  // Star orb sizing (log scale mapped to CSS)
+  const minSize = 60;
+  const maxSize = 220;
+  const logMin = Math.log(0.3);
+  const logMax = Math.log(17.8);
+  const sizeT = (Math.log(data.radius) - logMin) / (logMax - logMin);
+  const size = lerp(minSize, maxSize, sizeT);
+  const vminSize = `clamp(${Math.round(size * 0.5)}px, ${Math.round(size * 0.12)}vmin, ${Math.round(size)}px)`;
+
+  els.starOrb.style.width = vminSize;
+  els.starOrb.style.height = vminSize;
+  // Stars are self-luminous — no directional lighting, just a uniform bright core fading to colour at limb
+  els.starOrb.style.background = `radial-gradient(circle at center, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.6) 15%, rgba(${r},${g},${b},0.95) 50%, rgba(${r},${g},${b},0.5) 75%, transparent 100%)`;
+  els.starOrb.style.boxShadow = `
+    0 0 ${Math.round(size * 0.3)}px ${Math.round(size * 0.1)}px rgba(${r},${g},${b},0.6),
+    0 0 ${Math.round(size * 0.6)}px ${Math.round(size * 0.2)}px rgba(${r},${g},${b},0.3),
+    0 0 ${Math.round(size * 1.0)}px ${Math.round(size * 0.4)}px rgba(${r},${g},${b},0.15)
+  `;
+
+  els.starOrb.setAttribute('aria-label', `${data.fullLabel} star at ${formatNumber(data.temp)} Kelvin`);
+  els.starTemp.textContent = `${formatNumber(data.temp)} K`;
+  els.starClassLabel.textContent = data.fullLabel;
+  els.starDetails.textContent = state.technical ? data.features : data.featuresSimple;
+  els.starExamples.textContent = `e.g. ${data.stars.join(', ')}`;
+
+  // Update slider label highlights
+  els.sliderLabels.forEach((el, i) => {
+    el.classList.toggle('active', i === data.classIndex);
+  });
+
+  els.spectralSlider.setAttribute('aria-valuetext', data.fullLabel);
+}
+
+// ===== BACKGROUND STARS =====
+function createStarField() {
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < 80; i++) {
+    const s = document.createElement('div');
+    const size = Math.random() * 2 + 1;
+    s.style.cssText = `position:absolute;width:${size}px;height:${size}px;border-radius:50%;background:rgba(200,210,255,${Math.random() * 0.6 + 0.2});top:${Math.random() * 100}%;left:${Math.random() * 100}%;`;
+    frag.appendChild(s);
+  }
+  els.starField.appendChild(frag);
+}
+
+// ===== SPECTROSCOPY CANVAS RENDERING =====
+function nmToX(nm, canvasWidth) {
+  return ((nm - SPECTRUM_MIN) / (SPECTRUM_MAX - SPECTRUM_MIN)) * canvasWidth;
+}
+
+function drawRainbowGradient(ctx, w, h) {
+  for (let x = 0; x < w; x++) {
+    const nm = SPECTRUM_MIN + (x / w) * (SPECTRUM_MAX - SPECTRUM_MIN);
+    const [r, g, b] = wavelengthToRGB(nm);
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fillRect(x, 0, 1, h);
+  }
+}
+
+function drawAbsorptionSpectrum() {
+  const canvas = els.absorptionCanvas;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.round(rect.width);
+  const h = 80;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  // Draw rainbow background
+  drawRainbowGradient(ctx, w, h);
+
+  const starClass = state.spectroStar;
+
+  // Draw absorption lines
+  const lineData = [];
+  for (const [key, line] of Object.entries(ABSORPTION_MATRIX)) {
+    const strength = line.strengths[starClass] || 0;
+    if (strength === 0) continue;
+    const x = nmToX(line.nm, w);
+    const alpha = (strength / 5) * 0.85;
+
+    if (line.broad) {
+      // TiO molecular bands are broad
+      ctx.fillStyle = `rgba(0,0,0,${alpha * 0.6})`;
+      ctx.fillRect(x - 15, 0, 30, h);
+    } else {
+      const lineWidth = 2 + strength * 0.4;
+      ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+      ctx.fillRect(x - lineWidth / 2, 0, lineWidth, h);
+    }
+    if (line.name && strength >= 2) {
+      lineData.push({ nm: line.nm, name: line.name, x });
+    }
+  }
+
+  // Comparison overlay
+  if (state.compareMode) {
+    const gas = GAS_SPECTRA[state.spectroGas];
+    if (gas) {
+      gas.lines.forEach(line => {
+        const x = nmToX(line.nm, w);
+        const [r, g, b] = wavelengthToRGB(line.nm);
+        ctx.strokeStyle = `rgba(${r},${g},${b},0.9)`;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Arrow marker at top
+        ctx.fillStyle = `rgba(${r},${g},${b},0.9)`;
+        ctx.beginPath();
+        ctx.moveTo(x - 4, 0);
+        ctx.lineTo(x + 4, 0);
+        ctx.lineTo(x, 6);
+        ctx.fill();
+      });
+    }
+  }
+
+  // Update line labels
+  updateLineLabels(els.absorptionLabels, lineData, w);
+
+  // Update info text
+  els.absorptionInfo.textContent = state.technical ? ABSORPTION_INFO[starClass] : ABSORPTION_INFO_SIMPLE[starClass];
+
+  // Update ARIA
+  const visibleLines = lineData.map(l => l.name).filter(Boolean).join(', ');
+  canvas.setAttribute('aria-label', `${starClass}-type stellar absorption spectrum. Visible lines: ${visibleLines || 'none prominent'}`);
+}
+
+function drawEmissionSpectrum() {
+  const canvas = els.emissionCanvas;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.round(rect.width);
+  const h = 80;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  // Dark background
+  ctx.fillStyle = '#111';
+  ctx.fillRect(0, 0, w, h);
+
+  const gas = GAS_SPECTRA[state.spectroGas];
+  if (!gas) return;
+
+  const lineData = [];
+  gas.lines.forEach(line => {
+    const x = nmToX(line.nm, w);
+    const [r, g, b] = wavelengthToRGB(line.nm);
+    const intensity = line.intensity;
+
+    // Glow effect
+    const glowW = 8 * intensity;
+    const grd = ctx.createLinearGradient(x - glowW, 0, x + glowW, 0);
+    grd.addColorStop(0, 'transparent');
+    grd.addColorStop(0.3, `rgba(${r},${g},${b},${intensity * 0.2})`);
+    grd.addColorStop(0.5, `rgba(${r},${g},${b},${intensity * 0.8})`);
+    grd.addColorStop(0.7, `rgba(${r},${g},${b},${intensity * 0.2})`);
+    grd.addColorStop(1, 'transparent');
+    ctx.fillStyle = grd;
+    ctx.fillRect(x - glowW, 0, glowW * 2, h);
+
+    // Core line
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fillRect(x - 1, 0, 2, h);
+
+    if (line.name) {
+      lineData.push({ nm: line.nm, name: line.name, x });
+    }
+  });
+
+  updateLineLabels(els.emissionLabels, lineData, w);
+  els.emissionInfo.textContent = state.technical ? gas.info : gas.infoSimple;
+
+  const visibleLines = gas.lines.map(l => `${l.name || ''} ${Math.round(l.nm)}nm`).join(', ');
+  canvas.setAttribute('aria-label', `${gas.name} emission spectrum. Lines at: ${visibleLines}`);
+}
+
+function updateLineLabels(container, lineData, canvasWidth) {
+  container.innerHTML = '';
+  lineData.forEach(line => {
+    if (!line.name) return;
+    const pct = ((line.nm - SPECTRUM_MIN) / (SPECTRUM_MAX - SPECTRUM_MIN)) * 100;
+    const label = document.createElement('span');
+    label.className = 'line-label';
+    label.style.left = pct + '%';
+    label.textContent = line.name;
+    container.appendChild(label);
+  });
+}
+
+// ===== TOAST SYSTEM =====
+let toastCount = 0;
+function showToast(message, type) {
+  if (toastCount >= 3) return; // max 3 visible
+  toastCount++;
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.setAttribute('role', 'status');
+  const icons = { info: '\u2139\uFE0F', success: '\u2705', warning: '\u26A0\uFE0F', error: '\u274C' };
+  toast.innerHTML = `<span class="toast-icon">${icons[type] || icons.info}</span><span>${message}</span><button class="toast-dismiss" aria-label="Dismiss">\u00D7</button>`;
+  els.toastContainer.appendChild(toast);
+  requestAnimationFrame(() => { requestAnimationFrame(() => { toast.classList.add('show'); }); });
+
+  const dismiss = () => {
+    toast.classList.remove('show');
+    setTimeout(() => { toast.remove(); toastCount--; }, 300);
+  };
+  toast.querySelector('.toast-dismiss').addEventListener('click', dismiss);
+  setTimeout(dismiss, 4000);
+}
+
+// ===== SETTINGS PANEL =====
+function openSettings() {
+  els.settingsOverlay.classList.add('open');
+  els.settingsPanel.classList.add('open');
+  els.settingsPanel.querySelector('button').focus();
+}
+
+function closeSettings() {
+  els.settingsOverlay.classList.remove('open');
+  els.settingsPanel.classList.remove('open');
+  $('#btnSettings').focus();
+}
+
+// ===== HELP OVERLAY =====
+function openHelp() {
+  els.helpOverlay.classList.add('open');
+  const mod = isMac() ? '\u2318' : 'Ctrl';
+  $('#undoKey').textContent = mod + '+Z';
+  $('#redoKey').textContent = mod + '+Y';
+  $('#btnCloseHelp').focus();
+}
+
+function closeHelp() {
+  els.helpOverlay.classList.remove('open');
+  $('#btnHelp').focus();
+}
+
+// ===== EASTER EGG: KONAMI CODE =====
+const KONAMI = [38,38,40,40,37,39,37,39,66,65];
+let konamiPos = 0;
+
+function checkKonami(keyCode) {
+  if (keyCode === KONAMI[konamiPos]) {
+    konamiPos++;
+    if (konamiPos === KONAMI.length) {
+      konamiPos = 0;
+      triggerSupernova();
+    }
+  } else {
+    konamiPos = 0;
+  }
+}
+
+function triggerSupernova() {
+  // EASTER EGG: Supernova animation
+  const orb = els.starOrb;
+  const flash = els.supernovaFlash;
+
+  // Expand the star rapidly
+  orb.style.transition = 'all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)';
+  orb.style.width = '80vmin';
+  orb.style.height = '80vmin';
+  orb.style.boxShadow = '0 0 200px 100px rgba(255,255,255,0.8)';
+  orb.style.background = 'radial-gradient(circle, #fff 0%, #ffd700 40%, #ff4500 70%, transparent 100%)';
+
+  setTimeout(() => {
+    // Flash
+    flash.classList.add('active');
+    // Create particles
+    const viewer = $('#starViewer');
+    const vRect = viewer.getBoundingClientRect();
+    const cx = vRect.width / 2;
+    const cy = vRect.height / 2;
+    for (let i = 0; i < 30; i++) {
+      const p = document.createElement('div');
+      p.className = 'supernova-particle';
+      const angle = (Math.PI * 2 * i) / 30;
+      const dist = 100 + Math.random() * 200;
+      const hue = Math.random() * 60 + 20;
+      p.style.cssText = `left:${cx}px;top:${cy}px;background:hsl(${hue},100%,70%);width:${3 + Math.random() * 4}px;height:${3 + Math.random() * 4}px;transition:all 1.5s ease-out;opacity:1;`;
+      viewer.appendChild(p);
+      requestAnimationFrame(() => {
+        p.style.left = (cx + Math.cos(angle) * dist) + 'px';
+        p.style.top = (cy + Math.sin(angle) * dist) + 'px';
+        p.style.opacity = '0';
+      });
+      setTimeout(() => p.remove(), 1800);
+    }
+  }, 600);
+
+  setTimeout(() => {
+    flash.classList.remove('active');
+    // Reset star
+    orb.style.transition = 'all 0.8s ease';
+    updateStar(state.sliderValue);
+    showToast('Supernova! The star has gone nova and reformed.', 'success');
+  }, 2500);
+}
+
+// ===== EXPORT / IMPORT =====
+function exportState() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'colour-of-stars-settings.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Settings exported', 'success');
+}
+
+function importState() {
+  const input = $('#importFile');
+  input.click();
+  input.onchange = () => {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const imported = JSON.parse(e.target.result);
+        pushUndo();
+        state = { ...DEFAULT_STATE, ...imported };
+        applyFullState();
+        saveState();
+        showToast('Settings imported', 'success');
+      } catch (err) {
+        showToast('Invalid file format', 'error');
+      }
+    };
+    reader.readAsText(file);
+    input.value = '';
+  };
+}
+
+function resetState() {
+  // Two-click pattern: first click shows confirmation
+  const btn = $('#btnReset');
+  if (btn.dataset.confirm) {
+    pushUndo();
+    state = { ...DEFAULT_STATE };
+    try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
+    applyFullState();
+    showToast('Reset to defaults', 'info');
+    delete btn.dataset.confirm;
+    btn.textContent = 'Reset';
+    return;
+  }
+  btn.dataset.confirm = '1';
+  btn.textContent = 'Confirm?';
+  setTimeout(() => { delete btn.dataset.confirm; btn.textContent = 'Reset'; }, 3000);
+}
+
+// ===== APPLY FULL STATE =====
+function applyFullState() {
+  applyTheme(state.theme);
+  applyTechnicalMode();
+  switchTab(state.activeTab);
+  els.spectralSlider.value = state.sliderValue;
+  updateStar(state.sliderValue);
+
+  // Spectro selectors
+  els.starSelector.querySelectorAll('.sel-btn').forEach(btn => {
+    btn.setAttribute('aria-pressed', btn.dataset.star === state.spectroStar ? 'true' : 'false');
+  });
+  els.gasSelector.querySelectorAll('.sel-btn').forEach(btn => {
+    btn.setAttribute('aria-pressed', btn.dataset.gas === state.spectroGas ? 'true' : 'false');
+  });
+  els.compareToggle.setAttribute('aria-checked', String(state.compareMode));
+
+  if (state.activeTab === 'spectro') {
+    requestAnimationFrame(() => {
+      drawAbsorptionSpectrum();
+      drawEmissionSpectrum();
+    });
+  }
+}
+
+// ===== ONLINE/OFFLINE STATUS =====
+function updateOnlineStatus() {
+  const online = navigator.onLine;
+  els.statusDot.classList.toggle('offline', !online);
+  els.statusText.textContent = online ? 'Ready' : 'Offline';
+}
+
+// ===== SERVICE WORKER =====
+function registerSW() {
+  if (!('serviceWorker' in navigator)) return;
+  const swCode = `
+    const CACHE = 'colour-of-stars-v1';
+    self.addEventListener('install', e => {
+      e.waitUntil(caches.open(CACHE).then(c => c.addAll(['/'])));
+      self.skipWaiting();
+    });
+    self.addEventListener('activate', e => {
+      e.waitUntil(caches.keys().then(names => Promise.all(names.filter(n => n !== CACHE).map(n => caches.delete(n)))));
+      self.clients.claim();
+    });
+    self.addEventListener('fetch', e => {
+      e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).catch(() => new Response('Offline'))));
+    });
+  `;
+  try {
+    const blob = new Blob([swCode], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    navigator.serviceWorker.register(url).catch(() => {});
+  } catch (e) { /* SW not supported or blocked */ }
+}
+
+// ===== EVENT BINDINGS =====
+function init() {
+  createStarField();
+  applyTheme(state.theme);
+  applyTechnicalMode();
+
+  // Set initial star
+  updateStar(state.sliderValue);
+
+  // Apply active tab
+  if (state.activeTab !== 'star') {
+    switchTab(state.activeTab);
+  }
+
+  // Spectro selectors initial state
+  els.starSelector.querySelectorAll('.sel-btn').forEach(btn => {
+    btn.setAttribute('aria-pressed', btn.dataset.star === state.spectroStar ? 'true' : 'false');
+  });
+  els.gasSelector.querySelectorAll('.sel-btn').forEach(btn => {
+    btn.setAttribute('aria-pressed', btn.dataset.gas === state.spectroGas ? 'true' : 'false');
+  });
+  els.compareToggle.setAttribute('aria-checked', String(state.compareMode));
+
+  // Tab switching
+  els.tabStar.addEventListener('click', () => switchTab('star'));
+  els.tabSpectro.addEventListener('click', () => switchTab('spectro'));
+
+  // Tab keyboard nav
+  [els.tabStar, els.tabSpectro].forEach(tab => {
+    tab.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const other = tab === els.tabStar ? els.tabSpectro : els.tabStar;
+        other.click();
+        other.focus();
+      }
+    });
+  });
+
+  // Slider
+  els.spectralSlider.addEventListener('input', (e) => {
+    state.sliderValue = parseInt(e.target.value);
+    updateStar(state.sliderValue);
+    debouncedSave();
+  });
+  els.spectralSlider.addEventListener('mousedown', () => pushUndo());
+  els.spectralSlider.addEventListener('touchstart', () => pushUndo(), { passive: true });
+
+  // Slider labels (quick jump)
+  els.sliderLabels.forEach(label => {
+    label.addEventListener('click', () => {
+      pushUndo();
+      const idx = parseInt(label.dataset.class);
+      const midpoint = Math.round((idx + 0.5) * (600 / 7));
+      state.sliderValue = clamp(midpoint, 0, 600);
+      els.spectralSlider.value = state.sliderValue;
+      updateStar(state.sliderValue);
+      debouncedSave();
+    });
+  });
+
+  // Star class selector (spectroscopy)
+  els.starSelector.addEventListener('click', (e) => {
+    const btn = e.target.closest('.sel-btn');
+    if (!btn) return;
+    pushUndo();
+    state.spectroStar = btn.dataset.star;
+    els.starSelector.querySelectorAll('.sel-btn').forEach(b => b.setAttribute('aria-pressed', 'false'));
+    btn.setAttribute('aria-pressed', 'true');
+    drawAbsorptionSpectrum();
+    debouncedSave();
+  });
+
+  // Gas selector
+  els.gasSelector.addEventListener('click', (e) => {
+    const btn = e.target.closest('.sel-btn');
+    if (!btn) return;
+    pushUndo();
+    state.spectroGas = btn.dataset.gas;
+    els.gasSelector.querySelectorAll('.sel-btn').forEach(b => b.setAttribute('aria-pressed', 'false'));
+    btn.setAttribute('aria-pressed', 'true');
+    drawEmissionSpectrum();
+    if (state.compareMode) drawAbsorptionSpectrum();
+    debouncedSave();
+  });
+
+  // Compare toggle
+  function toggleCompare() {
+    pushUndo();
+    state.compareMode = !state.compareMode;
+    els.compareToggle.setAttribute('aria-checked', String(state.compareMode));
+    drawAbsorptionSpectrum();
+    debouncedSave();
+    showToast(state.compareMode ? 'Comparison overlay on' : 'Comparison overlay off', 'info');
+  }
+  els.compareToggle.addEventListener('click', toggleCompare);
+  els.compareToggle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCompare(); }
+  });
+
+  // Theme
+  $('#btnTheme').addEventListener('click', toggleTheme);
+  els.settingsThemeToggle.addEventListener('click', toggleTheme);
+  els.settingsThemeToggle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleTheme(); }
+  });
+
+  // Technical/Simple toggle
+  els.btnLang.addEventListener('click', toggleTechnical);
+  els.settingsTechToggle.addEventListener('click', toggleTechnical);
+  els.settingsTechToggle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleTechnical(); }
+  });
+
+  // Settings
+  $('#btnSettings').addEventListener('click', openSettings);
+  $('#btnCloseSettings').addEventListener('click', closeSettings);
+  els.settingsOverlay.addEventListener('click', closeSettings);
+
+  // Help
+  $('#btnHelp').addEventListener('click', openHelp);
+  $('#btnCloseHelp').addEventListener('click', closeHelp);
+  els.helpOverlay.addEventListener('click', (e) => { if (e.target === els.helpOverlay) closeHelp(); });
+
+  // Export / Import / Reset
+  $('#btnExport').addEventListener('click', exportState);
+  $('#btnImport').addEventListener('click', importState);
+  $('#btnReset').addEventListener('click', resetState);
+
+  // Global keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    // Konami code
+    checkKonami(e.keyCode);
+
+    // Don't trigger shortcuts when typing in inputs
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+    const mod = isMac() ? e.metaKey : e.ctrlKey;
+
+    if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
+      e.preventDefault();
+      els.helpOverlay.classList.contains('open') ? closeHelp() : openHelp();
+    } else if (e.key === 'Escape') {
+      if (els.helpOverlay.classList.contains('open')) closeHelp();
+      else if (els.settingsPanel.classList.contains('open')) closeSettings();
+    } else if (e.key === '1') {
+      switchTab('star');
+    } else if (e.key === '2') {
+      switchTab('spectro');
+    } else if (e.key === 't' || e.key === 'T') {
+      toggleTheme();
+    } else if (e.key === 'd' || e.key === 'D') {
+      toggleTechnical();
+    } else if (mod && e.key === 'z') {
+      e.preventDefault();
+      undo();
+    } else if (mod && e.key === 'y') {
+      e.preventDefault();
+      redo();
+    } else if (state.activeTab === 'star') {
+      // Quick jump keys for spectral classes
+      const classKeys = { o: 0, b: 1, a: 2, f: 3, g: 4, k: 5, m: 6 };
+      const idx = classKeys[e.key.toLowerCase()];
+      if (idx !== undefined && !mod) {
+        pushUndo();
+        const midpoint = Math.round((idx + 0.5) * (600 / 7));
+        state.sliderValue = clamp(midpoint, 0, 600);
+        els.spectralSlider.value = state.sliderValue;
+        updateStar(state.sliderValue);
+        debouncedSave();
+      }
+    }
+  });
+
+  // Resize handler for canvas
+  const handleResize = debounce(() => {
+    if (state.activeTab === 'spectro') {
+      drawAbsorptionSpectrum();
+      drawEmissionSpectrum();
+    }
+  }, 200);
+  window.addEventListener('resize', handleResize);
+
+  // Save on unload
+  window.addEventListener('beforeunload', saveState);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveState(); });
+
+  // Online/offline
+  window.addEventListener('online', updateOnlineStatus);
+  window.addEventListener('offline', updateOnlineStatus);
+  updateOnlineStatus();
+
+  // Register service worker
+  registerSW();
+
+  // Initial draw if spectro tab is active
+  if (state.activeTab === 'spectro') {
+    requestAnimationFrame(() => {
+      drawAbsorptionSpectrum();
+      drawEmissionSpectrum();
+    });
+  }
+}
+
+// Start the app
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+
+})();
+</script>
+</body>
+</html>

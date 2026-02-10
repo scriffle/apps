@@ -1,0 +1,1953 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="dark" data-version="1.0.0">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="Interactive simulation showing how mass warps space to cause gravity — Year 10 Physics">
+<meta name="theme-color" content="#0a0e27">
+<title>Gravity Warps Space — Interactive Physics Simulation</title>
+<meta property="og:title" content="Gravity Warps Space — Interactive Simulation">
+<meta property="og:description" content="Explore how mass bends spacetime to create gravity with an interactive 3D simulation.">
+<style>
+/* ============================================
+   CSS RESET & CUSTOM PROPERTIES
+   ============================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* Spacing scale */
+  --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem;
+  --space-4: 1rem; --space-5: 1.5rem; --space-6: 2rem;
+  --space-7: 3rem; --space-8: 4rem;
+  /* Font scale */
+  --font-xs: clamp(0.7rem, 1.5vw, 0.75rem);
+  --font-sm: clamp(0.8rem, 1.8vw, 0.875rem);
+  --font-md: clamp(0.9rem, 2vw, 1rem);
+  --font-lg: clamp(1.1rem, 2.5vw, 1.25rem);
+  --font-xl: clamp(1.3rem, 3vw, 1.5rem);
+  --font-2xl: clamp(1.6rem, 4vw, 2rem);
+  --font-3xl: clamp(2rem, 5vw, 2.5rem);
+  /* Timing */
+  --transition-fast: 0.15s ease;
+  --transition-med: 0.3s ease;
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Radius */
+  --radius-sm: 6px; --radius-md: 10px; --radius-lg: 16px; --radius-xl: 24px;
+}
+
+/* Dark theme (default) */
+[data-theme="dark"] {
+  --bg-primary: #0a0e27;
+  --bg-secondary: #111638;
+  --bg-tertiary: #1a1f4a;
+  --bg-surface: #1e2452;
+  --bg-hover: #252b5e;
+  --text-primary: #e8eaf6;
+  --text-secondary: #b0b8d6;
+  --text-muted: #7882a8;
+  --accent: #6c63ff;
+  --accent-hover: #8078ff;
+  --accent-glow: rgba(108, 99, 255, 0.3);
+  --accent2: #ff6584;
+  --accent2-glow: rgba(255, 101, 132, 0.3);
+  --accent3: #43e8d8;
+  --border: rgba(108, 99, 255, 0.2);
+  --border-strong: rgba(108, 99, 255, 0.4);
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  --shadow-lg: 0 8px 40px rgba(0,0,0,0.5);
+  --grid-color: rgba(108, 99, 255, 0.25);
+  --grid-warp-color: rgba(255, 101, 132, 0.5);
+  --mass-color-1: #6c63ff;
+  --mass-color-2: #ff6584;
+  --trail-color-1: rgba(108, 99, 255, 0.4);
+  --trail-color-2: rgba(255, 101, 132, 0.4);
+  --canvas-bg: #060920;
+}
+
+/* Light theme */
+[data-theme="light"] {
+  --bg-primary: #f0f2ff;
+  --bg-secondary: #e4e7ff;
+  --bg-tertiary: #d6daff;
+  --bg-surface: #ffffff;
+  --bg-hover: #eceeff;
+  --text-primary: #1a1a2e;
+  --text-secondary: #4a4a6a;
+  --text-muted: #8888aa;
+  --accent: #5046e5;
+  --accent-hover: #6358ff;
+  --accent-glow: rgba(80, 70, 229, 0.2);
+  --accent2: #e5467a;
+  --accent2-glow: rgba(229, 70, 122, 0.2);
+  --accent3: #10b8a8;
+  --border: rgba(80, 70, 229, 0.15);
+  --border-strong: rgba(80, 70, 229, 0.3);
+  --shadow: 0 4px 24px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
+  --grid-color: rgba(80, 70, 229, 0.2);
+  --grid-warp-color: rgba(229, 70, 122, 0.4);
+  --mass-color-1: #5046e5;
+  --mass-color-2: #e5467a;
+  --trail-color-1: rgba(80, 70, 229, 0.3);
+  --trail-color-2: rgba(229, 70, 122, 0.3);
+  --canvas-bg: #f8f9ff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
+html {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+  font-size: 16px;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  height: 100%;
+}
+
+body {
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+}
+
+/* Skip link */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: var(--space-4);
+  background: var(--accent);
+  color: #fff;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  z-index: 9999;
+  font-weight: 600;
+  text-decoration: none;
+}
+.skip-link:focus { top: var(--space-2); }
+
+/* ============================================
+   HEADER
+   ============================================ */
+header {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-2) var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  z-index: 100;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.header-title h1 {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  white-space: nowrap;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: var(--font-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-height: 36px;
+  min-width: 36px;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.btn:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+.btn:active { transform: scale(0.97); }
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn-icon { padding: var(--space-2); }
+
+/* View toggle group */
+.toggle-group {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.toggle-group .btn {
+  border: none;
+  border-radius: 0;
+  border-right: 1px solid var(--border);
+}
+.toggle-group .btn:last-child { border-right: none; }
+
+/* Theme toggle */
+.theme-toggle {
+  width: 36px; height: 36px;
+  font-size: 1.1rem;
+  padding: 0;
+}
+
+/* ============================================
+   MAIN LAYOUT
+   ============================================ */
+main {
+  display: grid;
+  grid-template-columns: 1fr;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Canvas container */
+.canvas-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--canvas-bg);
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+/* Simulation info overlay */
+.sim-overlay {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+  z-index: 10;
+}
+.sim-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+  white-space: nowrap;
+}
+.sim-badge .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent3);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* FPS counter */
+.fps-counter {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  z-index: 10;
+}
+
+/* ============================================
+   CONTROL PANEL (Bottom drawer)
+   ============================================ */
+.control-panel {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  z-index: 50;
+  transition: transform var(--transition-med);
+  max-height: 55vh;
+  display: flex;
+  flex-direction: column;
+}
+.control-panel.collapsed {
+  transform: translateY(calc(100% - 40px));
+}
+
+.panel-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2);
+  cursor: pointer;
+  gap: var(--space-3);
+  flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.panel-handle:hover { background: var(--bg-hover); }
+.handle-bar {
+  width: 40px; height: 4px;
+  background: var(--text-muted);
+  border-radius: 2px;
+}
+.panel-handle-label {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.panel-content {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 var(--space-4) var(--space-4);
+  flex: 1;
+}
+
+/* Tabs within panel */
+.panel-tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: 0 var(--space-4) var(--space-3);
+  flex-shrink: 0;
+}
+.panel-tab {
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all var(--transition-fast);
+  font-weight: 500;
+}
+.panel-tab:hover { color: var(--text-secondary); }
+.panel-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.panel-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Controls grid */
+.controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-4);
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.control-group label {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+.control-group .value-display {
+  font-size: var(--font-xs);
+  color: var(--accent);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  float: right;
+}
+
+/* Sliders */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px; height: 18px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: grab;
+  border: 2px solid var(--bg-secondary);
+  box-shadow: 0 0 8px var(--accent-glow);
+  transition: transform var(--transition-fast);
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+input[type="range"]::-webkit-slider-thumb:active {
+  cursor: grabbing;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 18px; height: 18px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: grab;
+  border: 2px solid var(--bg-secondary);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+input[type="range"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+/* Checkboxes */
+.checkbox-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+.checkbox-wrap input[type="checkbox"] {
+  width: 18px; height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ============================================
+   INFO PANEL (Side drawer)
+   ============================================ */
+.info-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: min(400px, 90vw);
+  height: 100%;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border);
+  z-index: 60;
+  transform: translateX(100%);
+  transition: transform var(--transition-med);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-lg);
+}
+.info-panel.open { transform: translateX(0); }
+
+.info-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.info-header h2 {
+  font-size: var(--font-lg);
+  font-weight: 600;
+}
+
+.info-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-4);
+}
+
+.info-section {
+  margin-bottom: var(--space-5);
+}
+.info-section h3 {
+  font-size: var(--font-md);
+  font-weight: 600;
+  margin-bottom: var(--space-3);
+  color: var(--accent);
+}
+.info-section p, .info-section li {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin-bottom: var(--space-2);
+}
+.info-section ul {
+  padding-left: var(--space-5);
+}
+.info-section .highlight {
+  background: var(--accent-glow);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent);
+  margin: var(--space-3) 0;
+}
+.info-section .highlight p {
+  margin: 0;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.analogy-card {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin: var(--space-3) 0;
+}
+.analogy-card .emoji {
+  font-size: 1.5rem;
+  margin-bottom: var(--space-2);
+  display: block;
+}
+
+/* Formula display */
+.formula {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin: var(--space-3) 0;
+  font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+  font-size: var(--font-md);
+  color: var(--accent);
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+/* ============================================
+   TOAST NOTIFICATIONS
+   ============================================ */
+.toast-container {
+  position: fixed;
+  bottom: var(--space-5);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: center;
+  pointer-events: none;
+}
+.toast {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-lg);
+  pointer-events: auto;
+  animation: toastIn 0.3s var(--spring) forwards;
+  max-width: 90vw;
+}
+.toast.removing {
+  animation: toastOut 0.2s ease forwards;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes toastOut {
+  to { opacity: 0; transform: translateY(-10px) scale(0.95); }
+}
+
+/* ============================================
+   KEYBOARD HELP OVERLAY
+   ============================================ */
+.kbd-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 9999;
+  display: none;
+  place-items: center;
+  backdrop-filter: blur(4px);
+}
+.kbd-overlay.open { display: grid; }
+.kbd-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  max-width: 500px;
+  width: 90vw;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.kbd-card h2 {
+  font-size: var(--font-xl);
+  margin-bottom: var(--space-4);
+}
+.kbd-row {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-sm);
+}
+.kbd-row:last-child { border-bottom: none; }
+kbd {
+  display: inline-block;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: var(--font-xs);
+  color: var(--text-primary);
+  min-width: 24px;
+  text-align: center;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 600px) {
+  header { padding: var(--space-2) var(--space-3); }
+  .header-title h1 { font-size: var(--font-md); }
+  .controls-grid { grid-template-columns: 1fr; }
+  .sim-overlay { top: var(--space-2); left: var(--space-2); }
+}
+
+@media (min-width: 900px) {
+  .controls-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* Print */
+@media print {
+  header, .control-panel, .sim-overlay, .fps-counter { display: none !important; }
+  .canvas-wrap { break-inside: avoid; }
+}
+
+/* Scroll shadows */
+.panel-content {
+  background:
+    linear-gradient(var(--bg-secondary) 30%, transparent),
+    linear-gradient(transparent, var(--bg-secondary) 70%) 0 100%,
+    radial-gradient(farthest-side at 50% 0, rgba(0,0,0,.15), transparent),
+    radial-gradient(farthest-side at 50% 100%, rgba(0,0,0,.15), transparent) 0 100%;
+  background-repeat: no-repeat;
+  background-size: 100% 40px, 100% 40px, 100% 12px, 100% 12px;
+  background-attachment: local, local, scroll, scroll;
+}
+</style>
+</head>
+<body>
+<a href="#main-canvas" class="skip-link">Skip to simulation</a>
+
+<!-- ============================================
+     HEADER
+     ============================================ -->
+<header role="banner">
+  <div class="header-title">
+    <h1>Gravity Warps Space</h1>
+  </div>
+  <div class="header-controls">
+    <button class="btn" id="btn-info" aria-label="Learn about gravity" title="Learn about gravity">?</button>
+    <button class="btn" id="btn-reset" aria-label="Reset simulation" title="Reset">Reset</button>
+    <button class="btn btn-icon theme-toggle" id="btn-theme" aria-label="Toggle theme" title="Toggle light/dark theme">
+      <span class="theme-icon">&#9790;</span>
+    </button>
+    <button class="btn btn-icon" id="btn-keys" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">
+      <span>&#9000;</span>
+    </button>
+  </div>
+</header>
+
+<!-- ============================================
+     MAIN SIMULATION
+     ============================================ -->
+<main id="main-content">
+  <div class="canvas-wrap" id="canvas-wrap">
+    <canvas id="main-canvas" tabindex="0" aria-label="Gravity simulation canvas — interactive"></canvas>
+    <div class="sim-overlay" aria-live="polite">
+      <div class="sim-badge" id="badge-view"><span class="dot"></span> <span id="view-label">3D Space View</span></div>
+      <div class="sim-badge" id="badge-state"><span id="state-label">Running</span></div>
+    </div>
+    <div class="fps-counter" id="fps-display" aria-hidden="true">60 fps</div>
+  </div>
+
+  <!-- CONTROL PANEL -->
+  <div class="control-panel" id="control-panel" role="region" aria-label="Simulation controls">
+    <div class="panel-handle" id="panel-toggle" role="button" tabindex="0" aria-expanded="true" aria-controls="panel-body" aria-label="Toggle control panel">
+      <span class="handle-bar"></span>
+      <span class="panel-handle-label">Controls</span>
+      <span class="handle-bar"></span>
+    </div>
+    <div class="panel-tabs" role="tablist" aria-label="Control sections">
+      <button class="panel-tab active" role="tab" aria-selected="true" data-tab="masses" id="ctrl-tab-masses">Masses</button>
+      <button class="panel-tab" role="tab" aria-selected="false" data-tab="simulation" id="ctrl-tab-sim">Simulation</button>
+      <button class="panel-tab" role="tab" aria-selected="false" data-tab="display" id="ctrl-tab-display">Display</button>
+    </div>
+    <div class="panel-content" id="panel-body">
+      <!-- Masses tab -->
+      <div class="tab-panel active" id="tab-masses" role="tabpanel" aria-labelledby="ctrl-tab-masses">
+        <div class="controls-grid">
+          <div class="control-group">
+            <label for="mass1-slider">Mass 1 (Blue) <span class="value-display" id="mass1-val">5.0</span></label>
+            <input type="range" id="mass1-slider" min="0.5" max="20" step="0.1" value="5" aria-describedby="mass1-val">
+          </div>
+          <div class="control-group">
+            <label for="mass2-slider">Mass 2 (Pink) <span class="value-display" id="mass2-val">3.0</span></label>
+            <input type="range" id="mass2-slider" min="0.5" max="20" step="0.1" value="3" aria-describedby="mass2-val">
+          </div>
+          <div class="control-group">
+            <label for="distance-slider">Orbital Distance <span class="value-display" id="dist-val">150</span></label>
+            <input type="range" id="distance-slider" min="60" max="300" step="5" value="150" aria-describedby="dist-val">
+          </div>
+        </div>
+      </div>
+      <!-- Simulation tab -->
+      <div class="tab-panel" id="tab-simulation" role="tabpanel" aria-labelledby="ctrl-tab-sim">
+        <div class="controls-grid">
+          <div class="control-group">
+            <label for="speed-slider">Time Speed <span class="value-display" id="speed-val">1.0x</span></label>
+            <input type="range" id="speed-slider" min="0.1" max="5" step="0.1" value="1" aria-describedby="speed-val">
+          </div>
+          <div class="control-group">
+            <label for="g-slider">Gravitational Constant <span class="value-display" id="g-val">1.0</span></label>
+            <input type="range" id="g-slider" min="0.1" max="5" step="0.1" value="1" aria-describedby="g-val">
+          </div>
+          <div class="control-group" style="justify-content: center; gap: var(--space-3);">
+            <label class="checkbox-wrap">
+              <input type="checkbox" id="chk-trails" checked> Show Trails
+            </label>
+            <label class="checkbox-wrap">
+              <input type="checkbox" id="chk-pause"> Pause
+            </label>
+          </div>
+        </div>
+      </div>
+      <!-- Display tab -->
+      <div class="tab-panel" id="tab-display" role="tabpanel" aria-labelledby="ctrl-tab-display">
+        <div class="controls-grid">
+          <div class="control-group">
+            <label for="grid-density-slider">Grid Density <span class="value-display" id="grid-val">25</span></label>
+            <input type="range" id="grid-density-slider" min="10" max="50" step="1" value="25" aria-describedby="grid-val">
+          </div>
+          <div class="control-group">
+            <label for="warp-slider">Warp Intensity <span class="value-display" id="warp-val">1.0</span></label>
+            <input type="range" id="warp-slider" min="0.2" max="3" step="0.1" value="1" aria-describedby="warp-val">
+          </div>
+          <div class="control-group" style="justify-content: center; gap: var(--space-3);">
+            <label class="checkbox-wrap">
+              <input type="checkbox" id="chk-vectors"> Force Vectors
+            </label>
+            <label class="checkbox-wrap">
+              <input type="checkbox" id="chk-labels" checked> Labels
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INFO PANEL -->
+  <aside class="info-panel" id="info-panel" role="complementary" aria-label="Learn about gravity">
+    <div class="info-header">
+      <h2>How Mass Warps Space</h2>
+      <button class="btn btn-icon" id="btn-close-info" aria-label="Close info panel">&times;</button>
+    </div>
+    <!-- Standard / Technical toggle -->
+    <div style="padding: 0 var(--space-4); padding-bottom: var(--space-2); flex-shrink: 0;">
+      <div class="toggle-group" role="tablist" aria-label="Explanation level" style="width: 100%;">
+        <button class="btn active" role="tab" aria-selected="true" data-info-level="standard" id="info-tab-standard" style="flex:1;">Standard</button>
+        <button class="btn" role="tab" aria-selected="false" data-info-level="technical" id="info-tab-technical" style="flex:1;">Technical</button>
+      </div>
+    </div>
+    <div class="info-body">
+
+      <!-- ========== STANDARD (simple, accessible — default) ========== -->
+      <div id="info-standard">
+        <div class="info-section">
+          <h3>What Is Gravity?</h3>
+          <p>Gravity is what keeps your feet on the ground and the Moon going around the Earth. But it's not really a "pull" — it's something stranger and cooler.</p>
+          <div class="highlight">
+            <p>Heavy things bend the space around them. Other things moving nearby follow that bend. That's gravity!</p>
+          </div>
+          <p>This idea comes from Albert Einstein, and scientists have tested it many times — it works.</p>
+        </div>
+
+        <div class="info-section">
+          <h3>Think of a Trampoline</h3>
+          <div class="analogy-card">
+            <span class="emoji" aria-hidden="true">&#127934;</span>
+            <p>Put a heavy ball on a trampoline — it makes a dip. Now roll a small ball near it. The small ball rolls toward the heavy one, because the surface is bent.</p>
+            <p style="margin-top: var(--space-2);"><strong>Space does the same thing.</strong> The Sun bends space around it, and Earth rolls along that curve — that's an orbit!</p>
+          </div>
+        </div>
+
+        <div class="info-section">
+          <h3>The Important Bits</h3>
+          <ul>
+            <li><strong>You need two things</strong> — one thing bends space, the other follows the bend. On its own, a bend doesn't do anything.</li>
+            <li><strong>Heavier = more bending</strong> — the Sun bends space a lot more than a tennis ball.</li>
+            <li><strong>Gravity only pulls, never pushes</strong> — things always fall toward each other, never away.</li>
+            <li><strong>Closer = much stronger</strong> — move twice as far away and gravity drops to a quarter of what it was.</li>
+            <li><strong>Orbits are just falling in a curve</strong> — the Moon is always falling toward Earth, but it moves sideways fast enough to keep missing!</li>
+          </ul>
+        </div>
+
+        <div class="info-section">
+          <h3>What's on Screen</h3>
+          <p>You're looking at a 3D box made of lines. The lines get pulled inward near heavy objects. This shows that space bends in every direction, not just down.</p>
+          <p>You can drag the background to rotate the view and see the warping from different angles.</p>
+        </div>
+
+        <div class="info-section">
+          <h3>Things to Try</h3>
+          <ul>
+            <li>Make one mass really big — see how the grid bends way more on that side.</li>
+            <li>Move them close together — the bending adds up!</li>
+            <li>Make both masses the same — they orbit right around their middle point.</li>
+            <li>Rotate the cube to see the warping from different angles.</li>
+            <li>Click and drag a mass to throw it around!</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ========== TECHNICAL (current detailed terms) ========== -->
+      <div id="info-technical" style="display: none;">
+        <div class="info-section">
+          <h3>What Is Gravity?</h3>
+          <p>In everyday life, we think of gravity as a force pulling things down to Earth. And it is! But to truly understand gravity across the universe, we need a deeper idea.</p>
+          <div class="highlight">
+            <p>Mass warps the fabric of space itself. Objects follow curved paths through this warped space — and that's what we experience as gravity.</p>
+          </div>
+          <p>This was first described by Albert Einstein in his theory of <strong>General Relativity</strong> (1915), and it remains one of the most well-tested theories in physics.</p>
+        </div>
+
+        <div class="info-section">
+          <h3>The Trampoline Analogy</h3>
+          <div class="analogy-card">
+            <span class="emoji" aria-hidden="true">&#127934;</span>
+            <p>Imagine placing a bowling ball on a stretched trampoline. It creates a dip. Now roll a marble nearby — it curves toward the bowling ball, not because of a "pull" but because the surface itself is bent.</p>
+            <p style="margin-top: var(--space-2);"><strong>Space works the same way.</strong> Massive objects curve the space around them, and other objects follow those curves.</p>
+          </div>
+        </div>
+
+        <div class="info-section">
+          <h3>Key Concepts</h3>
+          <ul>
+            <li><strong>Two masses are needed</strong> — a warped space only has a gravitational effect when there's another mass to follow the curve.</li>
+            <li><strong>More mass = more warping</strong> — heavier objects bend space more, creating stronger "gravity."</li>
+            <li><strong>Gravity is always attractive</strong> — curved space only pulls objects together, never pushes them apart. There is no repulsive gravity.</li>
+            <li><strong>Objects "fall" along curves</strong> — planets orbit because they follow the curved space created by stars.</li>
+            <li><strong>Gravity acts "downward"</strong> — objects always fall toward the mass that warps space, which we perceive as "down."</li>
+          </ul>
+        </div>
+
+        <div class="info-section">
+          <h3>Newton's Law of Universal Gravitation</h3>
+          <p>While Einstein explained <em>why</em> gravity works, Newton's equation still describes <em>how strong</em> it is:</p>
+          <div class="formula" aria-label="F equals G times m1 times m2 divided by r squared">
+            F = G &middot; m<sub>1</sub> &middot; m<sub>2</sub> / r&sup2;
+          </div>
+          <p><strong>F</strong> = gravitational force (Newtons)<br>
+          <strong>G</strong> = gravitational constant (6.674 &times; 10<sup>-11</sup> N&middot;m&sup2;/kg&sup2;)<br>
+          <strong>m<sub>1</sub>, m<sub>2</sub></strong> = the two masses (kg)<br>
+          <strong>r</strong> = distance between their centres (m)</p>
+          <p>This is an inverse-square law: double the mass, double the force. But double the distance, and the force drops to a quarter.</p>
+        </div>
+
+        <div class="info-section">
+          <h3>What You're Seeing</h3>
+          <p>A volumetric wireframe lattice is warped in three dimensions around each mass via inverse-square displacement. This demonstrates that spacetime curvature is omnidirectional, not merely "downward."</p>
+          <p>Drag the background to rotate the cube and observe the warping from different perspectives.</p>
+        </div>
+
+        <div class="info-section">
+          <h3>Experiments</h3>
+          <ul>
+            <li>Maximise one mass — observe asymmetric spacetime curvature.</li>
+            <li>Reduce orbital distance — observe combined gravitational wells.</li>
+            <li>Equalise masses — the barycentre (centre of mass) lies at the geometric midpoint.</li>
+            <li>Rotate the cube — observe how spatial warping appears from different angles.</li>
+            <li>Drag a mass to perturb the orbit and observe the resulting trajectory.</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </aside>
+</main>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+<!-- Keyboard shortcuts overlay -->
+<div class="kbd-overlay" id="kbd-overlay" role="dialog" aria-label="Keyboard shortcuts" aria-modal="true">
+  <div class="kbd-card">
+    <h2>Keyboard Shortcuts</h2>
+    <div class="kbd-row"><span>Toggle play/pause</span> <kbd>Space</kbd></div>
+    <div class="kbd-row"><span>Reset simulation</span> <kbd>R</kbd></div>
+    <div class="kbd-row"><span>Toggle info panel</span> <kbd>I</kbd></div>
+    <div class="kbd-row"><span>Toggle controls</span> <kbd>C</kbd></div>
+    <div class="kbd-row"><span>Toggle theme</span> <kbd>T</kbd></div>
+    <div class="kbd-row"><span>Show shortcuts</span> <kbd>?</kbd></div>
+    <div class="kbd-row"><span>Speed up</span> <kbd>+</kbd></div>
+    <div class="kbd-row"><span>Slow down</span> <kbd>-</kbd></div>
+    <div class="kbd-row"><span>Close overlay</span> <kbd>Esc</kbd></div>
+    <br>
+    <button class="btn" id="btn-close-kbd">Close</button>
+  </div>
+</div>
+
+<!-- ============================================
+     JAVASCRIPT
+     ============================================ -->
+<script>
+'use strict';
+
+/* ============================================
+   STATE
+   ============================================ */
+const state = {
+  view: 'cube3d',
+  paused: true,
+  mass1: 5,
+  mass2: 3,
+  orbitalDistance: 150,
+  timeSpeed: 1,
+  G: 1,
+  showTrails: true,
+  showVectors: false,
+  showLabels: true,
+  gridDensity: 25,
+  warpIntensity: 1,
+  theme: 'dark',
+  panelOpen: true,
+  infoOpen: false,
+};
+
+/* Physics bodies */
+let body1 = { x: 0, y: 0, vx: 0, vy: 0, mass: 5, trail: [] };
+let body2 = { x: 0, y: 0, vx: 0, vy: 0, mass: 3, trail: [] };
+let angle3d = { theta: 0.5, phi: 0.6 }; // 3D view angles
+let dragTarget = null;
+let isDragging = false;
+let hoverTarget = null; // which body the cursor is over (null, body1, or body2)
+let mouseCanvas = { x: 0, y: 0 };
+let reorientTarget = null; // { theta, phi } — smooth rotation target when dragging a mass
+
+/* Canvas */
+const canvas = document.getElementById('main-canvas');
+const ctx = canvas.getContext('2d');
+let W, H, cx, cy;
+let animId;
+let lastTime = 0;
+let fpsFrames = 0;
+let fpsTime = 0;
+let fpsDisplay = 60;
+
+// EASTER EGG: Konami code
+let konamiBuffer = [];
+const konamiCode = [38,38,40,40,37,39,37,39,66,65];
+let easterEggActive = false;
+
+/* ============================================
+   INITIALIZATION
+   ============================================ */
+function init() {
+  loadState();
+  resize();
+  initBodies();
+  bindEvents();
+  syncUIFromState();
+  requestAnimationFrame(loop);
+  showToast('Drag the masses to interact!');
+}
+
+function resize() {
+  const wrap = document.getElementById('canvas-wrap');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = wrap.clientWidth;
+  H = wrap.clientHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cx = W / 2;
+  cy = H / 2;
+}
+
+function initBodies() {
+  const d = state.orbitalDistance;
+  const totalMass = state.mass1 + state.mass2;
+  // Place at centre of mass
+  const r1 = d * state.mass2 / totalMass;
+  const r2 = d * state.mass1 / totalMass;
+  body1.mass = state.mass1;
+  body2.mass = state.mass2;
+  body1.x = -r1; body1.y = 0;
+  body2.x = r2; body2.y = 0;
+  // Circular orbit velocities
+  const v1 = Math.sqrt(state.G * 200 * state.mass2 * r1 / (d * d)) || 0.01;
+  const v2 = Math.sqrt(state.G * 200 * state.mass1 * r2 / (d * d)) || 0.01;
+  body1.vx = 0; body1.vy = -v1;
+  body2.vx = 0; body2.vy = v2;
+  body1.trail = [];
+  body2.trail = [];
+}
+
+/* ============================================
+   PHYSICS
+   ============================================ */
+function stepPhysics(dt) {
+  if (state.paused || isDragging) return;
+  const steps = 4; // sub-stepping for stability
+  const subDt = dt / steps;
+  for (let s = 0; s < steps; s++) {
+    const dx = body2.x - body1.x;
+    const dy = body2.y - body1.y;
+    const distSq = dx * dx + dy * dy;
+    const dist = Math.sqrt(distSq);
+    const minDist = (massRadius(body1.mass) + massRadius(body2.mass)) * 0.4;
+    if (dist < minDist) continue; // prevent collapse
+    const force = state.G * 200 * body1.mass * body2.mass / distSq;
+    const fx = force * dx / dist;
+    const fy = force * dy / dist;
+    body1.vx += fx / body1.mass * subDt;
+    body1.vy += fy / body1.mass * subDt;
+    body2.vx -= fx / body2.mass * subDt;
+    body2.vy -= fy / body2.mass * subDt;
+    body1.x += body1.vx * subDt;
+    body1.y += body1.vy * subDt;
+    body2.x += body2.vx * subDt;
+    body2.y += body2.vy * subDt;
+  }
+  // Keep centre of mass at origin
+  const cmx = (body1.x * body1.mass + body2.x * body2.mass) / (body1.mass + body2.mass);
+  const cmy = (body1.y * body1.mass + body2.y * body2.mass) / (body1.mass + body2.mass);
+  body1.x -= cmx; body1.y -= cmy;
+  body2.x -= cmx; body2.y -= cmy;
+  // Trails
+  if (state.showTrails) {
+    body1.trail.push({ x: body1.x, y: body1.y });
+    body2.trail.push({ x: body2.x, y: body2.y });
+    const maxTrail = 300;
+    if (body1.trail.length > maxTrail) body1.trail.shift();
+    if (body2.trail.length > maxTrail) body2.trail.shift();
+  }
+}
+
+function massRadius(m) {
+  return 8 + m * 2.2;
+}
+
+function drawArrow(x1, y1, x2, y2, color) {
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const headLen = 8;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.lineTo(x2 - headLen * Math.cos(angle - 0.5), y2 - headLen * Math.sin(angle - 0.5));
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - headLen * Math.cos(angle + 0.5), y2 - headLen * Math.sin(angle + 0.5));
+  ctx.stroke();
+}
+
+/* ============================================
+   RENDERING — 3D CUBE MESH VIEW
+   ============================================ */
+
+// Cache CSS reads per frame to avoid repeated getComputedStyle calls
+let cssCache3D = {};
+function cacheCSSVars3D() {
+  const s = getComputedStyle(document.documentElement);
+  cssCache3D = {
+    canvasBg: s.getPropertyValue('--canvas-bg').trim(),
+    gridColor: s.getPropertyValue('--grid-color').trim(),
+    warpColor: s.getPropertyValue('--grid-warp-color').trim(),
+    trailColor1: s.getPropertyValue('--trail-color-1').trim(),
+    trailColor2: s.getPropertyValue('--trail-color-2').trim(),
+    massColor1: s.getPropertyValue('--mass-color-1').trim(),
+    massColor2: s.getPropertyValue('--mass-color-2').trim(),
+    textSecondary: s.getPropertyValue('--text-secondary').trim(),
+    textMuted: s.getPropertyValue('--text-muted').trim(),
+    accent3: s.getPropertyValue('--accent3').trim(),
+  };
+}
+
+function drawCube3D() {
+  cacheCSSVars3D();
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = cssCache3D.canvasBg;
+  ctx.fillRect(0, 0, W, H);
+
+  // --- Cube sizing: large enough that masses always stay well inside ---
+  // Use max orbital distance + generous padding, with a minimum based on viewport
+  const minCubeHalf = Math.min(W, H) * 0.32;
+  const cubeHalf = Math.max(minCubeHalf, state.orbitalDistance * 1.6);
+
+  // Cap grid for 3D volume: N^3 vertices, so keep N reasonable for performance
+  // gridDensity 10-50 maps to gridN 6-16
+  const gridN = Math.max(6, Math.min(16, Math.floor(state.gridDensity * 0.35)));
+  const step = (cubeHalf * 2) / gridN;
+  const warp = state.warpIntensity;
+
+  // --- 3D rotation (Y-axis then X-axis) ---
+  const ct = Math.cos(angle3d.theta);
+  const st = Math.sin(angle3d.theta);
+  const cp = Math.cos(angle3d.phi);
+  const sp = Math.sin(angle3d.phi);
+
+  function rotate3D(x, y, z) {
+    const x1 = x * ct + z * st;
+    const z1 = -x * st + z * ct;
+    const y1 = y * cp - z1 * sp;
+    const z2 = y * sp + z1 * cp;
+    return { x: x1, y: y1, z: z2 };
+  }
+
+  // Perspective projection
+  const perspective = cubeHalf * 4.5;
+  function project3D(x, y, z) {
+    const r = rotate3D(x, y, z);
+    const s = perspective / (perspective + r.z + cubeHalf * 1.5);
+    return { x: cx + r.x * s, y: cy + r.y * s, z: r.z, scale: s };
+  }
+
+  // --- Warp function: inverse-square displacement toward each mass ---
+  // Each grid vertex is displaced INWARD (toward the mass centre)
+  // proportional to mass / distance².
+  //
+  // Scaling: we want noticeable but not extreme warping.
+  // At the cube corner (dist ≈ cubeHalf*1.73), displacement should be
+  // roughly 5-8% of cubeHalf for a default mass of 5.
+  // warpK = 0.025 * cubeHalf³ gives: 5 * 0.025 * cubeHalf³ / (3*cubeHalf²) ≈ 0.04*cubeHalf
+  const warpK = warp * 0.025 * cubeHalf * cubeHalf * cubeHalf;
+  const minDist = step * 0.3; // small floor — just prevents division by zero
+  function warpVertex(gx, gy, gz) {
+    let wx = 0, wy = 0, wz = 0;
+    for (let bi = 0; bi < 2; bi++) {
+      const b = bi === 0 ? body1 : body2;
+      const dx = b.x - gx;
+      const dy = b.y - gy;
+      const dz = 0 - gz;
+      const distSq = dx * dx + dy * dy + dz * dz;
+      const dist = Math.sqrt(distSq);
+      const safeDist = Math.max(dist, minDist);
+      const safeDistSq = safeDist * safeDist;
+      // Inverse-square displacement
+      const magnitude = b.mass * warpK / safeDistSq;
+      // Soft cap: smoothly limit displacement to half the distance to the mass.
+      // Uses x/(1+x) curve so there's no hard cutoff — just a gradual taper.
+      const halfDist = dist * 0.5;
+      const ratio = magnitude / (halfDist + 0.01);
+      const softMag = halfDist * ratio / (1 + ratio);
+      if (dist > 0.01) {
+        wx += (dx / dist) * softMag;
+        wy += (dy / dist) * softMag;
+        wz += (dz / dist) * softMag;
+      }
+    }
+    return { x: gx + wx, y: gy + wy, z: gz + wz };
+  }
+
+  // --- Draw trails first (behind everything) ---
+  if (state.showTrails) {
+    draw3DTrail(body1.trail, cssCache3D.trailColor1, project3D);
+    draw3DTrail(body2.trail, cssCache3D.trailColor2, project3D);
+  }
+
+  // --- Build full 3D volume lattice ---
+  // We create a (gridN+1)^3 array of warped+projected vertices,
+  // then draw line segments along all three axes through the entire volume.
+  // This gives the full internal wireframe so you can see warping inside the cube.
+  const S = cubeHalf;
+  const N1 = gridN + 1;
+
+  // Pre-compute all warped+projected vertices as flat array: index = ix + iy*N1 + iz*N1*N1
+  const allPts = new Array(N1 * N1 * N1);
+  for (let iz = 0; iz < N1; iz++) {
+    const gz = -S + iz * step;
+    const izOff = iz * N1 * N1;
+    for (let iy = 0; iy < N1; iy++) {
+      const gy = -S + iy * step;
+      const iyOff = iy * N1;
+      for (let ix = 0; ix < N1; ix++) {
+        const gx = -S + ix * step;
+        const w = warpVertex(gx, gy, gz);
+        allPts[ix + iyOff + izOff] = project3D(w.x, w.y, w.z);
+      }
+    }
+  }
+
+  // Collect all line segments with depth + warp info for painter's sort
+  // Estimate: 3 * gridN * N1 * N1 segments
+  const segCount = 3 * gridN * N1 * N1;
+  // Use typed arrays for better perf
+  const segX1 = new Float32Array(segCount);
+  const segY1 = new Float32Array(segCount);
+  const segX2 = new Float32Array(segCount);
+  const segY2 = new Float32Array(segCount);
+  const segZ  = new Float32Array(segCount);
+  const segT  = new Float32Array(segCount); // warp color interpolant
+  const segEdge = new Uint8Array(segCount); // 1 = on cube surface edge
+  let si = 0;
+
+  // Helper: is this index on the cube boundary?
+  function isEdge(ia, ib, ic) {
+    return ia === 0 || ia === gridN || ib === 0 || ib === gridN || ic === 0 || ic === gridN;
+  }
+
+  // X-direction lines: for each (iy, iz), draw segments along ix
+  for (let iz = 0; iz < N1; iz++) {
+    const izOff = iz * N1 * N1;
+    for (let iy = 0; iy < N1; iy++) {
+      const iyOff = iy * N1;
+      for (let ix = 0; ix < gridN; ix++) {
+        const p0 = allPts[ix + iyOff + izOff];
+        const p1 = allPts[ix + 1 + iyOff + izOff];
+        segX1[si] = p0.x; segY1[si] = p0.y;
+        segX2[si] = p1.x; segY2[si] = p1.y;
+        segZ[si] = (p0.z + p1.z) * 0.5;
+        // Warp amount: use distance between warped midpoint and original midpoint
+        const midGx = -S + (ix + 0.5) * step;
+        const midGy = -S + iy * step;
+        const midGz = -S + iz * step;
+        const wm = warpVertex(midGx, midGy, midGz);
+        const disp = Math.sqrt((wm.x - midGx) ** 2 + (wm.y - midGy) ** 2 + (wm.z - midGz) ** 2);
+        segT[si] = Math.min(disp / (cubeHalf * 0.3), 1);
+        segEdge[si] = isEdge(iy, iz, ix) ? 1 : 0;
+        si++;
+      }
+    }
+  }
+
+  // Y-direction lines: for each (ix, iz), draw segments along iy
+  for (let iz = 0; iz < N1; iz++) {
+    const izOff = iz * N1 * N1;
+    for (let ix = 0; ix < N1; ix++) {
+      for (let iy = 0; iy < gridN; iy++) {
+        const p0 = allPts[ix + iy * N1 + izOff];
+        const p1 = allPts[ix + (iy + 1) * N1 + izOff];
+        segX1[si] = p0.x; segY1[si] = p0.y;
+        segX2[si] = p1.x; segY2[si] = p1.y;
+        segZ[si] = (p0.z + p1.z) * 0.5;
+        const midGx = -S + ix * step;
+        const midGy = -S + (iy + 0.5) * step;
+        const midGz = -S + iz * step;
+        const wm = warpVertex(midGx, midGy, midGz);
+        const disp = Math.sqrt((wm.x - midGx) ** 2 + (wm.y - midGy) ** 2 + (wm.z - midGz) ** 2);
+        segT[si] = Math.min(disp / (cubeHalf * 0.3), 1);
+        segEdge[si] = isEdge(ix, iz, iy) ? 1 : 0;
+        si++;
+      }
+    }
+  }
+
+  // Z-direction lines: for each (ix, iy), draw segments along iz
+  for (let iy = 0; iy < N1; iy++) {
+    const iyOff = iy * N1;
+    for (let ix = 0; ix < N1; ix++) {
+      for (let iz = 0; iz < gridN; iz++) {
+        const p0 = allPts[ix + iyOff + iz * N1 * N1];
+        const p1 = allPts[ix + iyOff + (iz + 1) * N1 * N1];
+        segX1[si] = p0.x; segY1[si] = p0.y;
+        segX2[si] = p1.x; segY2[si] = p1.y;
+        segZ[si] = (p0.z + p1.z) * 0.5;
+        const midGx = -S + ix * step;
+        const midGy = -S + iy * step;
+        const midGz = -S + (iz + 0.5) * step;
+        const wm = warpVertex(midGx, midGy, midGz);
+        const disp = Math.sqrt((wm.x - midGx) ** 2 + (wm.y - midGy) ** 2 + (wm.z - midGz) ** 2);
+        segT[si] = Math.min(disp / (cubeHalf * 0.3), 1);
+        segEdge[si] = isEdge(ix, iy, iz) ? 1 : 0;
+        si++;
+      }
+    }
+  }
+
+  const totalSegs = si;
+
+  // --- Painter's sort: draw far segments first ---
+  // Build index array and sort by z
+  const sortIdx = new Uint32Array(totalSegs);
+  for (let i = 0; i < totalSegs; i++) sortIdx[i] = i;
+  sortIdx.sort((a, b) => segZ[a] - segZ[b]);
+
+  const gridColor = cssCache3D.gridColor;
+  const warpColor = cssCache3D.warpColor;
+  const depthRange = cubeHalf * 2;
+  const invDepthRange2 = 1 / (depthRange * 2);
+
+  // Batch draw: group consecutive segments with similar properties
+  for (let k = 0; k < totalSegs; k++) {
+    const idx = sortIdx[k];
+    const depthNorm = (segZ[idx] + depthRange) * invDepthRange2; // 0=far, 1=near
+    // Surface edges are brighter and thicker; internal wires are thinner and more transparent
+    const onEdge = segEdge[idx];
+    const baseAlpha = onEdge ? 0.25 : 0.1;
+    const alphaRange = onEdge ? 0.65 : 0.4;
+    const alpha = baseAlpha + depthNorm * alphaRange;
+    const baseWidth = onEdge ? 0.9 : 0.5;
+
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = lerpColor(gridColor, warpColor, segT[idx]);
+    ctx.lineWidth = baseWidth + depthNorm * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(segX1[idx], segY1[idx]);
+    ctx.lineTo(segX2[idx], segY2[idx]);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // --- Draw masses ---
+  draw3DMass(body1, cssCache3D.massColor1, 'Mass 1', project3D);
+  draw3DMass(body2, cssCache3D.massColor2, 'Mass 2', project3D);
+
+  // --- Force vectors ---
+  if (state.showVectors) {
+    drawForceVectors3D(project3D);
+  }
+
+  // --- Rotation hint ---
+  ctx.fillStyle = cssCache3D.textMuted;
+  ctx.font = '500 10px -apple-system, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('Drag background to rotate view', W - 12, H - 12);
+}
+
+function draw3DTrail(trail, color, projFn) {
+  if (trail.length < 2) return;
+  ctx.beginPath();
+  for (let i = 0; i < trail.length; i++) {
+    const p = projFn(trail[i].x, trail[i].y, 0);
+    if (i === 0) ctx.moveTo(p.x, p.y);
+    else ctx.lineTo(p.x, p.y);
+  }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function draw3DMass(body, color, label, projFn) {
+  const p = projFn(body.x, body.y, 0);
+  const r = massRadius(body.mass) * p.scale;
+  const active = hoverTarget === body || dragTarget === body;
+
+  // Glow
+  const glow = ctx.createRadialGradient(p.x, p.y, r * 0.3, p.x, p.y, r * 3);
+  glow.addColorStop(0, color + '60');
+  glow.addColorStop(1, color + '00');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, r * 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Body
+  const grad = ctx.createRadialGradient(p.x - r * 0.3, p.y - r * 0.3, r * 0.1, p.x, p.y, r);
+  grad.addColorStop(0, lightenColor(color, active ? 80 : 40));
+  grad.addColorStop(1, color);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // White outline when cursor intersects the mass
+  if (active) {
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r + 4 * p.scale, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  if (state.showLabels) {
+    ctx.fillStyle = cssCache3D.textSecondary;
+    ctx.font = '600 11px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(label + ' (' + body.mass.toFixed(1) + ')', p.x, p.y - r - 10);
+  }
+}
+
+function drawForceVectors3D(projFn) {
+  const dx = body2.x - body1.x;
+  const dy = body2.y - body1.y;
+  const dist = Math.sqrt(dx * dx + dy * dy) + 1;
+  const force = state.G * 200 * body1.mass * body2.mass / (dist * dist);
+  const scale = Math.min(force * 0.3, 60);
+  const nx = dx / dist;
+  const ny = dy / dist;
+  const c = cssCache3D.accent3;
+
+  const p1 = projFn(body1.x, body1.y, 0);
+  const p1e = projFn(body1.x + nx * scale, body1.y + ny * scale, 0);
+  const p2 = projFn(body2.x, body2.y, 0);
+  const p2e = projFn(body2.x - nx * scale, body2.y - ny * scale, 0);
+
+  drawArrow(p1.x, p1.y, p1e.x, p1e.y, c);
+  drawArrow(p2.x, p2.y, p2e.x, p2e.y, c);
+}
+
+/* ============================================
+   COLOR HELPERS
+   ============================================ */
+function lerpColor(c1, c2, t) {
+  // Simple RGBA lerp for CSS colors
+  const parse = (c) => {
+    if (c.startsWith('#')) {
+      const hex = c.slice(1);
+      if (hex.length === 3) return [parseInt(hex[0]+hex[0],16), parseInt(hex[1]+hex[1],16), parseInt(hex[2]+hex[2],16), 1];
+      return [parseInt(hex.slice(0,2),16), parseInt(hex.slice(2,4),16), parseInt(hex.slice(4,6),16), hex.length>6? parseInt(hex.slice(6,8),16)/255:1];
+    }
+    const m = c.match(/[\d.]+/g);
+    if (!m) return [128,128,128,1];
+    return [+m[0], +m[1], +m[2], m[3] !== undefined ? +m[3] : 1];
+  };
+  const a = parse(c1), b = parse(c2);
+  const r = Math.round(a[0]+(b[0]-a[0])*t);
+  const g = Math.round(a[1]+(b[1]-a[1])*t);
+  const bl = Math.round(a[2]+(b[2]-a[2])*t);
+  const al = a[3]+(b[3]-a[3])*t;
+  return `rgba(${r},${g},${bl},${al.toFixed(2)})`;
+}
+
+function lightenColor(hex, amount) {
+  const num = parseInt(hex.replace('#',''), 16);
+  let r = (num >> 16) + amount;
+  let g = ((num >> 8) & 0xff) + amount;
+  let b = (num & 0xff) + amount;
+  r = Math.min(255, Math.max(0, r));
+  g = Math.min(255, Math.max(0, g));
+  b = Math.min(255, Math.max(0, b));
+  return `rgb(${r},${g},${b})`;
+}
+
+/* ============================================
+   ANIMATION LOOP
+   ============================================ */
+function loop(timestamp) {
+  animId = requestAnimationFrame(loop);
+
+  // FPS
+  fpsFrames++;
+  if (timestamp - fpsTime >= 1000) {
+    fpsDisplay = fpsFrames;
+    document.getElementById('fps-display').textContent = fpsDisplay + ' fps';
+    fpsFrames = 0;
+    fpsTime = timestamp;
+  }
+
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.05) * state.timeSpeed;
+  lastTime = timestamp;
+
+  stepPhysics(dt);
+
+  // Smooth reorientation when dragging a mass
+  if (reorientTarget) {
+    const lerpSpeed = 0.08;
+    angle3d.theta += (reorientTarget.theta - angle3d.theta) * lerpSpeed;
+    angle3d.phi += (reorientTarget.phi - angle3d.phi) * lerpSpeed;
+    if (Math.abs(angle3d.theta - reorientTarget.theta) < 0.005 &&
+        Math.abs(angle3d.phi - reorientTarget.phi) < 0.005) {
+      angle3d.theta = reorientTarget.theta;
+      angle3d.phi = reorientTarget.phi;
+      if (!isDragging || dragTarget === 'rotate') reorientTarget = null;
+    }
+  } else if (!isDragging && !state.paused) {
+    angle3d.theta += 0.001 * state.timeSpeed;
+  }
+  drawCube3D();
+
+  // Easter egg
+  if (easterEggActive) {
+    drawEasterEgg();
+  }
+}
+
+/* ============================================
+   INTERACTION — Mouse & Touch
+   ============================================ */
+function getCanvasPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return { x: clientX - rect.left, y: clientY - rect.top };
+}
+
+function screenToWorld(sx, sy) {
+  // Inverse-project screen coords back to the XY plane (z=0)
+  // using current rotation angles and perspective
+  const minCubeHalf = Math.min(W, H) * 0.32;
+  const cubeHalf = Math.max(minCubeHalf, state.orbitalDistance * 1.6);
+  const perspective = cubeHalf * 4.5;
+  const ct = Math.cos(angle3d.theta), st = Math.sin(angle3d.theta);
+  const cp = Math.cos(angle3d.phi), sp = Math.sin(angle3d.phi);
+  // At z_world=0, the perspective scale for a point at the rotated z is approximate.
+  // Use the average scale of the two masses as a reasonable estimate.
+  const avgScale = (() => {
+    const s1 = massScreenPos(body1);
+    const s2 = massScreenPos(body2);
+    return ((s1.scale || 1) + (s2.scale || 1)) * 0.5;
+  })();
+  // Unproject screen to rotated space
+  const rx = (sx - cx) / avgScale;
+  const ry = (sy - cy) / avgScale;
+  // Inverse rotate: undo X-axis rotation (phi), then Y-axis rotation (theta)
+  // Assume rz ≈ 0 in rotated space for the XY plane
+  const rz = 0;
+  const y1 = ry * cp + rz * sp;
+  const z1 = -ry * sp + rz * cp;
+  const wx = rx * ct - z1 * st;
+  const wy = y1;
+  return { x: wx, y: wy };
+}
+
+// Project a mass to screen coords for the current view
+function massScreenPos(body) {
+  // Full rotation + perspective projection to screen coords
+  const ct = Math.cos(angle3d.theta), st = Math.sin(angle3d.theta);
+  const cp = Math.cos(angle3d.phi), sp = Math.sin(angle3d.phi);
+  const bx = body.x, by = body.y, bz = 0;
+  const x1 = bx * ct + bz * st;
+  const z1 = -bx * st + bz * ct;
+  const y1 = by * cp - z1 * sp;
+  const z2 = by * sp + z1 * cp;
+  const minCubeHalf = Math.min(W, H) * 0.32;
+  const cubeHalf = Math.max(minCubeHalf, state.orbitalDistance * 1.6);
+  const perspective = cubeHalf * 4.5;
+  const s = perspective / (perspective + z2 + cubeHalf * 1.5);
+  return { x: cx + x1 * s, y: cy + y1 * s, scale: s };
+}
+
+function hitTest(sx, sy) {
+  // Test against projected screen positions of each mass
+  const s1 = massScreenPos(body1);
+  const s2 = massScreenPos(body2);
+  const r1 = massRadius(body1.mass) * (s1.scale || 1) + 8; // generous hit area
+  const r2 = massRadius(body2.mass) * (s2.scale || 1) + 8;
+  const d1 = Math.sqrt((sx - s1.x) ** 2 + (sy - s1.y) ** 2);
+  const d2 = Math.sqrt((sx - s2.x) ** 2 + (sy - s2.y) ** 2);
+  // Pick closest if both are in range
+  if (d1 < r1 && d2 < r2) return d1 < d2 ? body1 : body2;
+  if (d1 < r1) return body1;
+  if (d2 < r2) return body2;
+  return null;
+}
+
+function onPointerDown(e) {
+  const pos = getCanvasPos(e);
+  mouseCanvas.x = pos.x;
+  mouseCanvas.y = pos.y;
+  const hit = hitTest(pos.x, pos.y);
+  if (hit) {
+    dragTarget = hit;
+    isDragging = true;
+    canvas.style.cursor = 'grabbing';
+    // Smoothly reorient to face-on so drag maps intuitively
+    const twoPi = Math.PI * 2;
+    const currentTheta = angle3d.theta;
+    const targetTheta = Math.round(currentTheta / twoPi) * twoPi;
+    reorientTarget = { theta: targetTheta, phi: 0 };
+  } else {
+    dragTarget = 'rotate';
+    isDragging = true;
+    canvas.style.cursor = 'grabbing';
+    reorientTarget = null;
+  }
+}
+
+function onPointerMove(e) {
+  const pos = getCanvasPos(e);
+  if (!isDragging) {
+    hoverTarget = hitTest(pos.x, pos.y);
+    canvas.style.cursor = hoverTarget ? 'grab' : 'move';
+    return;
+  }
+
+  if (dragTarget === 'rotate') {
+    const dx = (pos.x - mouseCanvas.x) * 0.005;
+    const dy = (pos.y - mouseCanvas.y) * 0.005;
+    angle3d.theta += dx;
+    angle3d.phi = Math.max(-1.2, Math.min(1.2, angle3d.phi + dy));
+  } else if (dragTarget) {
+    const w = screenToWorld(pos.x, pos.y);
+    const oldX = dragTarget.x;
+    const oldY = dragTarget.y;
+    dragTarget.x = w.x;
+    dragTarget.y = w.y;
+    // Give velocity based on drag movement
+    dragTarget.vx = (w.x - oldX) * 2;
+    dragTarget.vy = (w.y - oldY) * 2;
+  }
+  mouseCanvas.x = pos.x;
+  mouseCanvas.y = pos.y;
+}
+
+function onPointerUp() {
+  isDragging = false;
+  dragTarget = null;
+  reorientTarget = null;
+  canvas.style.cursor = hoverTarget ? 'grab' : 'move';
+}
+
+/* ============================================
+   EVENTS
+   ============================================ */
+function bindEvents() {
+  // Resize
+  window.addEventListener('resize', debounce(resize, 100));
+
+  // Canvas interactions
+  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('pointermove', onPointerMove);
+  canvas.addEventListener('pointerup', onPointerUp);
+  canvas.addEventListener('pointerleave', onPointerUp);
+
+  // Panel tabs
+  document.querySelectorAll('.panel-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const target = tab.dataset.tab;
+      document.querySelectorAll('.panel-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === target);
+        t.setAttribute('aria-selected', t.dataset.tab === target);
+      });
+      document.querySelectorAll('.tab-panel').forEach(p => {
+        p.classList.toggle('active', p.id === 'tab-' + target);
+      });
+    });
+  });
+
+  // Panel toggle
+  const panelToggle = document.getElementById('panel-toggle');
+  const controlPanel = document.getElementById('control-panel');
+  panelToggle.addEventListener('click', () => {
+    state.panelOpen = !state.panelOpen;
+    controlPanel.classList.toggle('collapsed', !state.panelOpen);
+    panelToggle.setAttribute('aria-expanded', state.panelOpen);
+    saveState();
+  });
+  panelToggle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); panelToggle.click(); }
+  });
+
+  // Sliders
+  const sliderBindings = [
+    { id: 'mass1-slider', key: 'mass1', display: 'mass1-val', format: v => v.toFixed(1), cb: () => { body1.mass = state.mass1; } },
+    { id: 'mass2-slider', key: 'mass2', display: 'mass2-val', format: v => v.toFixed(1), cb: () => { body2.mass = state.mass2; } },
+    { id: 'distance-slider', key: 'orbitalDistance', display: 'dist-val', format: v => Math.round(v), cb: () => initBodies() },
+    { id: 'speed-slider', key: 'timeSpeed', display: 'speed-val', format: v => v.toFixed(1) + 'x' },
+    { id: 'g-slider', key: 'G', display: 'g-val', format: v => v.toFixed(1) },
+    { id: 'grid-density-slider', key: 'gridDensity', display: 'grid-val', format: v => Math.round(v) },
+    { id: 'warp-slider', key: 'warpIntensity', display: 'warp-val', format: v => v.toFixed(1) },
+  ];
+
+  sliderBindings.forEach(({ id, key, display, format, cb }) => {
+    const el = document.getElementById(id);
+    el.addEventListener('input', () => {
+      state[key] = parseFloat(el.value);
+      document.getElementById(display).textContent = format(state[key]);
+      if (cb) cb();
+      saveState();
+    });
+  });
+
+  // Checkboxes
+  document.getElementById('chk-trails').addEventListener('change', (e) => {
+    state.showTrails = e.target.checked;
+    if (!state.showTrails) { body1.trail = []; body2.trail = []; }
+    saveState();
+  });
+  document.getElementById('chk-pause').addEventListener('change', (e) => {
+    state.paused = e.target.checked;
+    document.getElementById('state-label').textContent = state.paused ? 'Paused' : 'Running';
+    saveState();
+  });
+  document.getElementById('chk-vectors').addEventListener('change', (e) => {
+    state.showVectors = e.target.checked;
+    saveState();
+  });
+  document.getElementById('chk-labels').addEventListener('change', (e) => {
+    state.showLabels = e.target.checked;
+    saveState();
+  });
+
+  // Theme toggle
+  document.getElementById('btn-theme').addEventListener('click', toggleTheme);
+
+  // Info panel
+  document.getElementById('btn-info').addEventListener('click', () => {
+    state.infoOpen = !state.infoOpen;
+    document.getElementById('info-panel').classList.toggle('open', state.infoOpen);
+  });
+  document.getElementById('btn-close-info').addEventListener('click', () => {
+    state.infoOpen = false;
+    document.getElementById('info-panel').classList.remove('open');
+  });
+
+  // Info level toggle (Standard / Technical)
+  document.querySelectorAll('[data-info-level]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const level = btn.dataset.infoLevel;
+      document.querySelectorAll('[data-info-level]').forEach(b => {
+        b.classList.toggle('active', b.dataset.infoLevel === level);
+        b.setAttribute('aria-selected', b.dataset.infoLevel === level);
+      });
+      document.getElementById('info-standard').style.display = level === 'standard' ? '' : 'none';
+      document.getElementById('info-technical').style.display = level === 'technical' ? '' : 'none';
+    });
+  });
+
+  // Reset
+  document.getElementById('btn-reset').addEventListener('click', resetSimulation);
+
+  // Keyboard shortcuts
+  document.getElementById('btn-keys').addEventListener('click', () => {
+    document.getElementById('kbd-overlay').classList.toggle('open');
+  });
+  document.getElementById('btn-close-kbd').addEventListener('click', () => {
+    document.getElementById('kbd-overlay').classList.remove('open');
+  });
+
+  // Global keyboard
+  document.addEventListener('keydown', handleKeyDown);
+}
+
+function handleKeyDown(e) {
+  // Konami code
+  konamiBuffer.push(e.keyCode);
+  if (konamiBuffer.length > konamiCode.length) konamiBuffer.shift();
+  if (konamiBuffer.length === konamiCode.length && konamiBuffer.every((v, i) => v === konamiCode[i])) {
+    easterEggActive = !easterEggActive;
+    showToast(easterEggActive ? 'Warp drive activated!' : 'Warp drive deactivated.');
+    konamiBuffer = [];
+    return;
+  }
+
+  // Don't handle if typing in input
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+  const kbdOverlay = document.getElementById('kbd-overlay');
+  const infoPanel = document.getElementById('info-panel');
+
+  switch (e.key) {
+    case ' ':
+      e.preventDefault();
+      state.paused = !state.paused;
+      document.getElementById('chk-pause').checked = state.paused;
+      document.getElementById('state-label').textContent = state.paused ? 'Paused' : 'Running';
+      showToast(state.paused ? 'Paused' : 'Playing');
+      break;
+    case 'r': case 'R':
+      resetSimulation();
+      break;
+    case 'i': case 'I':
+      state.infoOpen = !state.infoOpen;
+      infoPanel.classList.toggle('open', state.infoOpen);
+      break;
+    case 'c': case 'C':
+      document.getElementById('panel-toggle').click();
+      break;
+    case 't': case 'T':
+      toggleTheme();
+      break;
+    case '?':
+      kbdOverlay.classList.toggle('open');
+      break;
+    case 'Escape':
+      kbdOverlay.classList.remove('open');
+      if (state.infoOpen) { state.infoOpen = false; infoPanel.classList.remove('open'); }
+      break;
+    case '+': case '=':
+      state.timeSpeed = Math.min(5, state.timeSpeed + 0.2);
+      document.getElementById('speed-slider').value = state.timeSpeed;
+      document.getElementById('speed-val').textContent = state.timeSpeed.toFixed(1) + 'x';
+      break;
+    case '-': case '_':
+      state.timeSpeed = Math.max(0.1, state.timeSpeed - 0.2);
+      document.getElementById('speed-slider').value = state.timeSpeed;
+      document.getElementById('speed-val').textContent = state.timeSpeed.toFixed(1) + 'x';
+      break;
+  }
+  saveState();
+}
+
+/* ============================================
+   HELPERS
+   ============================================ */
+function resetSimulation() {
+  initBodies();
+  angle3d = { theta: 0.5, phi: 0.6 };
+  showToast('Simulation reset');
+}
+
+function toggleTheme() {
+  state.theme = state.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', state.theme);
+  document.querySelector('.theme-icon').innerHTML = state.theme === 'dark' ? '&#9790;' : '&#9728;';
+  saveState();
+}
+
+function showToast(msg) {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = msg;
+  container.appendChild(toast);
+  // Max 3
+  while (container.children.length > 3) {
+    container.removeChild(container.firstChild);
+  }
+  setTimeout(() => {
+    toast.classList.add('removing');
+    setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 200);
+  }, 3000);
+}
+
+function debounce(fn, ms) {
+  let timer;
+  return function(...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), ms);
+  };
+}
+
+function syncUIFromState() {
+  document.getElementById('mass1-slider').value = state.mass1;
+  document.getElementById('mass1-val').textContent = state.mass1.toFixed(1);
+  document.getElementById('mass2-slider').value = state.mass2;
+  document.getElementById('mass2-val').textContent = state.mass2.toFixed(1);
+  document.getElementById('distance-slider').value = state.orbitalDistance;
+  document.getElementById('dist-val').textContent = Math.round(state.orbitalDistance);
+  document.getElementById('speed-slider').value = state.timeSpeed;
+  document.getElementById('speed-val').textContent = state.timeSpeed.toFixed(1) + 'x';
+  document.getElementById('g-slider').value = state.G;
+  document.getElementById('g-val').textContent = state.G.toFixed(1);
+  document.getElementById('grid-density-slider').value = state.gridDensity;
+  document.getElementById('grid-val').textContent = Math.round(state.gridDensity);
+  document.getElementById('warp-slider').value = state.warpIntensity;
+  document.getElementById('warp-val').textContent = state.warpIntensity.toFixed(1);
+  document.getElementById('chk-trails').checked = state.showTrails;
+  document.getElementById('chk-pause').checked = state.paused;
+  document.getElementById('chk-vectors').checked = state.showVectors;
+  document.getElementById('chk-labels').checked = state.showLabels;
+  document.getElementById('state-label').textContent = state.paused ? 'Paused' : 'Running';
+  document.documentElement.setAttribute('data-theme', state.theme);
+  document.querySelector('.theme-icon').innerHTML = state.theme === 'dark' ? '&#9790;' : '&#9728;';
+
+  const controlPanel = document.getElementById('control-panel');
+  controlPanel.classList.toggle('collapsed', !state.panelOpen);
+  document.getElementById('panel-toggle').setAttribute('aria-expanded', state.panelOpen);
+}
+
+/* ============================================
+   PERSISTENCE
+   ============================================ */
+function saveState() {
+  try {
+    localStorage.setItem('gravity-warp-state', JSON.stringify({
+      mass1: state.mass1,
+      mass2: state.mass2,
+      orbitalDistance: state.orbitalDistance,
+      timeSpeed: state.timeSpeed,
+      G: state.G,
+      showTrails: state.showTrails,
+      showVectors: state.showVectors,
+      showLabels: state.showLabels,
+      gridDensity: state.gridDensity,
+      warpIntensity: state.warpIntensity,
+      theme: state.theme,
+      panelOpen: state.panelOpen,
+    }));
+  } catch (e) { /* storage full or disabled */ }
+}
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem('gravity-warp-state');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      Object.assign(state, parsed);
+    }
+  } catch (e) { /* corrupt or disabled */ }
+}
+
+/* ============================================
+   EASTER EGG: Star warp effect
+   ============================================ */
+// EASTER EGG: Konami code activates a star warp background
+const stars = [];
+function drawEasterEgg() {
+  if (stars.length === 0) {
+    for (let i = 0; i < 100; i++) {
+      stars.push({
+        x: (Math.random() - 0.5) * W * 2,
+        y: (Math.random() - 0.5) * H * 2,
+        z: Math.random() * 1000
+      });
+    }
+  }
+  stars.forEach(s => {
+    s.z -= 10 * state.timeSpeed;
+    if (s.z < 1) { s.z = 1000; s.x = (Math.random() - 0.5) * W * 2; s.y = (Math.random() - 0.5) * H * 2; }
+    const sx = cx + s.x / s.z * 200;
+    const sy = cy + s.y / s.z * 200;
+    const r = Math.max(0.5, (1 - s.z / 1000) * 3);
+    ctx.fillStyle = `rgba(255,255,255,${1 - s.z / 1000})`;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+/* ============================================
+   START
+   ============================================ */
+init();
+</script>
+</body>
+</html>

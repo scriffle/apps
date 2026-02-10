@@ -1,0 +1,2669 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto" data-version="1.0.0">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="Interactive simulation of hydrostatic equilibrium in stars — learn how gravity and radiation pressure balance to keep stars stable.">
+<meta property="og:title" content="Hydrostatic Equilibrium Simulator">
+<meta property="og:description" content="Interactive star simulation for Year 10 physics — explore the balance between gravity and radiation pressure.">
+<title>Hydrostatic Equilibrium — Star Simulator</title>
+<style>
+/* ===== RESET ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ===== CSS CUSTOM PROPERTIES ===== */
+:root {
+  --color-bg: #f0f2f5;
+  --color-bg-card: #ffffff;
+  --color-bg-header: rgba(255,255,255,0.92);
+  --color-text: #1a1a2e;
+  --color-text-secondary: #4a4a6a;
+  --color-text-muted: #8890a0;
+  --color-border: #dde0e6;
+  --color-accent: #e67e22;
+  --color-accent-hover: #d35400;
+  --color-gravity: #6c7bff;
+  --color-gravity-bg: rgba(108,123,255,0.12);
+  --color-radiation: #ff9f43;
+  --color-radiation-bg: rgba(255,159,67,0.12);
+  --color-success: #27ae60;
+  --color-danger: #e74c3c;
+  --color-warning: #f39c12;
+  --color-canvas-bg: #0a0a1a;
+  --color-panel-bg: var(--color-bg-card);
+  --color-overlay: rgba(0,0,0,0.5);
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --font-size-xs: clamp(0.65rem, 0.6rem + 0.25vw, 0.75rem);
+  --font-size-sm: clamp(0.75rem, 0.7rem + 0.25vw, 0.85rem);
+  --font-size-base: clamp(0.85rem, 0.8rem + 0.25vw, 0.95rem);
+  --font-size-lg: clamp(1rem, 0.95rem + 0.25vw, 1.15rem);
+  --font-size-xl: clamp(1.15rem, 1.05rem + 0.5vw, 1.4rem);
+
+  --radius: 6px;
+  --radius-lg: 10px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.12);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.18);
+
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
+  --header-h: 40px;
+  --status-h: 28px;
+}
+
+/* ===== DARK THEME ===== */
+[data-theme="dark"] {
+  --color-bg: #0d1117;
+  --color-bg-card: #161b22;
+  --color-bg-header: rgba(22,27,34,0.92);
+  --color-text: #e6edf3;
+  --color-text-secondary: #8b949e;
+  --color-text-muted: #6e7681;
+  --color-border: #30363d;
+  --color-panel-bg: #161b22;
+  --color-overlay: rgba(0,0,0,0.7);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+}
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] {
+    --color-bg: #0d1117;
+    --color-bg-card: #161b22;
+    --color-bg-header: rgba(22,27,34,0.92);
+    --color-text: #e6edf3;
+    --color-text-secondary: #8b949e;
+    --color-text-muted: #6e7681;
+    --color-border: #30363d;
+    --color-panel-bg: #161b22;
+    --color-overlay: rgba(0,0,0,0.7);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+  }
+}
+
+/* ===== REDUCED MOTION ===== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===== BASE ===== */
+html { height: 100%; }
+body {
+  font-family: var(--font);
+  font-size: var(--font-size-base);
+  color: var(--color-text);
+  background: var(--color-bg);
+  line-height: 1.4;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== SKIP LINK ===== */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: var(--space-2);
+  background: var(--color-accent);
+  color: #fff;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius);
+  z-index: 9999;
+  font-size: var(--font-size-sm);
+  text-decoration: none;
+}
+.skip-link:focus {
+  top: var(--space-1);
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ===== HEADER ===== */
+.app-header {
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-inline: var(--space-3);
+  background: var(--color-bg-header);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+  z-index: 50;
+}
+.app-title {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* ===== ICON BUTTONS ===== */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  min-width: 44px;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 1.1rem;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  position: relative;
+}
+.icon-btn:hover { background: var(--color-border); color: var(--color-text); }
+.icon-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.icon-btn[aria-pressed="true"] { color: var(--color-accent); }
+.icon-btn .btn-tooltip {
+  position: absolute;
+  bottom: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-text);
+  color: var(--color-bg);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+.icon-btn:hover .btn-tooltip { opacity: 1; }
+
+/* ===== MAIN LAYOUT ===== */
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: var(--space-2);
+  gap: var(--space-2);
+}
+@media (min-width: 768px) {
+  .app-main {
+    flex-direction: row;
+    padding: var(--space-3);
+    gap: var(--space-3);
+  }
+}
+
+/* ===== CANVAS AREA ===== */
+.canvas-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-canvas-bg);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+#star-canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+}
+@media (max-width: 767px) {
+  .canvas-wrap {
+    max-height: 50vh;
+    flex-shrink: 0;
+  }
+}
+
+/* ===== CONTROLS PANEL ===== */
+.controls-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (min-width: 768px) {
+  .controls-panel {
+    width: clamp(260px, 35%, 380px);
+    max-height: 100%;
+  }
+}
+@media (max-width: 767px) {
+  .controls-panel {
+    flex: 0 1 auto;
+    min-height: 0;
+  }
+}
+
+/* ===== STATUS BAR ===== */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-bg-card);
+  border-radius: var(--radius);
+  font-size: var(--font-size-sm);
+  height: var(--status-h);
+  flex-shrink: 0;
+  border: 1px solid var(--color-border);
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+.status-label { color: var(--color-text-muted); }
+.status-value { font-weight: 600; font-variant-numeric: tabular-nums; }
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 99px;
+  font-weight: 600;
+  font-size: var(--font-size-xs);
+}
+.status-indicator[data-state="stable"] { background: rgba(39,174,96,0.15); color: var(--color-success); }
+.status-indicator[data-state="expanding"] { background: rgba(243,156,18,0.15); color: var(--color-warning); }
+.status-indicator[data-state="contracting"] { background: rgba(243,156,18,0.15); color: var(--color-warning); }
+.status-indicator[data-state="collapsing"] { background: rgba(231,76,60,0.15); color: var(--color-danger); }
+.status-indicator[data-state="expanding-critical"] { background: rgba(231,76,60,0.15); color: var(--color-danger); }
+.status-indicator[data-state="collapsed"] { background: rgba(231,76,60,0.15); color: var(--color-danger); }
+.status-indicator[data-state="exploded"] { background: rgba(231,76,60,0.15); color: var(--color-danger); }
+
+/* ===== SLIDER GROUPS ===== */
+.slider-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+}
+.slider-group {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+.slider-label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.slider-label .label-icon {
+  font-size: 1rem;
+  width: 1.2em;
+  text-align: center;
+}
+.slider-output {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 2.5em;
+  text-align: right;
+}
+.slider-desc {
+  grid-column: 1 / -1;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-top: -4px;
+}
+
+/* ===== RANGE SLIDER STYLING ===== */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+  background: var(--color-border);
+}
+input[type="range"]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 4px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-fast);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.2); }
+input[type="range"]:hover::-moz-range-thumb { transform: scale(1.2); }
+
+#gravity-slider::-webkit-slider-thumb { background: var(--color-gravity); }
+#gravity-slider::-moz-range-thumb { background: var(--color-gravity); }
+#radiation-slider::-webkit-slider-thumb { background: var(--color-radiation); }
+#radiation-slider::-moz-range-thumb { background: var(--color-radiation); }
+
+/* ===== PRESETS ===== */
+.presets-section {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+}
+.presets-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-1);
+}
+.preset-row {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+.preset-btn {
+  padding: 4px 10px;
+  min-height: 32px;
+  min-width: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 99px;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+.preset-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: rgba(230,126,34,0.08);
+}
+.preset-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.preset-btn[aria-pressed="true"] {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+.preset-btn .preset-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+/* ===== INFO CARD ===== */
+.info-card {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+.info-card summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+}
+.info-card summary::-webkit-details-marker { display: none; }
+.info-card summary::before {
+  content: '▸';
+  transition: transform var(--transition-fast);
+  display: inline-block;
+}
+.info-card[open] summary::before { transform: rotate(90deg); }
+.info-card .info-content {
+  padding-top: var(--space-2);
+}
+
+/* ===== RESET BUTTON ===== */
+.reset-btn {
+  padding: 4px 12px;
+  min-height: 32px;
+  min-width: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.reset-btn:hover { border-color: var(--color-danger); color: var(--color-danger); }
+.reset-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+/* ===== PHYSICS PANEL ===== */
+.physics-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(400px, 90vw);
+  height: 100dvh;
+  background: var(--color-panel-bg);
+  border-left: 1px solid var(--color-border);
+  transform: translateX(100%);
+  transition: transform var(--transition-normal);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-lg);
+}
+.physics-panel.open { transform: translateX(0); }
+.physics-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.physics-panel-header h2 {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+}
+.physics-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.physics-section h3 {
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  margin-bottom: var(--space-2);
+  color: var(--color-text);
+}
+.equation-block {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-base);
+  text-align: center;
+  margin-bottom: var(--space-2);
+}
+.equation-block var { font-style: italic; }
+.physics-explanation {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+.live-values {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-1) var(--space-3);
+}
+.live-value-item {
+  display: flex;
+  flex-direction: column;
+}
+.live-value-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.live-value-num {
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.physics-panel-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--color-overlay);
+  z-index: 199;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-normal);
+}
+.physics-panel-backdrop.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (max-width: 767px) {
+  .physics-panel {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 75dvh;
+    transform: translateY(100%);
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+  .physics-panel.open { transform: translateY(0); }
+}
+
+/* ===== TOUR OVERLAY ===== */
+.tour-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  pointer-events: none;
+}
+.tour-overlay.active { pointer-events: auto; }
+.tour-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  transition: clip-path var(--transition-normal);
+  opacity: 0;
+  pointer-events: none;
+}
+.tour-overlay.active .tour-backdrop {
+  opacity: 1;
+  pointer-events: auto;
+}
+.tour-tooltip {
+  position: absolute;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  max-width: 340px;
+  box-shadow: var(--shadow-lg);
+  z-index: 301;
+  display: none;
+}
+.tour-tooltip.visible { display: block; }
+.tour-tooltip-title {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  margin-bottom: var(--space-1);
+}
+.tour-tooltip-body {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin-bottom: var(--space-3);
+}
+.tour-tooltip-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.tour-step-indicator {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+.tour-btn {
+  padding: 6px 14px;
+  min-height: 36px;
+  min-width: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.tour-btn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+.tour-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.tour-btn-primary {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+.tour-btn-primary:hover { background: var(--color-accent-hover); color: #fff; }
+.tour-btn-skip {
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  min-height: 44px;
+  min-width: 44px;
+  cursor: pointer;
+}
+.tour-btn-skip:hover { color: var(--color-text); }
+.tour-btn-skip:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+/* ===== TOUR WELCOME BANNER ===== */
+.tour-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius);
+}
+.tour-banner-text {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+.tour-banner .tour-btn { flex-shrink: 0; }
+.tour-banner-dismiss {
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== TOAST ===== */
+.toast-container {
+  position: fixed;
+  bottom: var(--space-3);
+  right: var(--space-3);
+  z-index: 500;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+@media (max-width: 767px) {
+  .toast-container {
+    left: var(--space-3);
+    right: var(--space-3);
+    bottom: var(--space-2);
+  }
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  font-size: var(--font-size-sm);
+  pointer-events: auto;
+  animation: toastIn 0.25s ease;
+}
+.toast.removing { animation: toastOut 0.2s ease forwards; }
+.toast-icon { font-size: 1rem; flex-shrink: 0; }
+.toast-msg { flex: 1; }
+.toast-close {
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 1rem;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+@keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes toastOut { from { opacity: 1; } to { opacity: 0; transform: translateY(10px); } }
+
+/* ===== KEYBOARD SHORTCUTS OVERLAY ===== */
+.shortcuts-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-overlay);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-normal);
+}
+.shortcuts-overlay.visible { opacity: 1; pointer-events: auto; }
+.shortcuts-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  max-width: 400px;
+  width: 90vw;
+  box-shadow: var(--shadow-lg);
+}
+.shortcuts-card h2 {
+  font-size: var(--font-size-lg);
+  margin-bottom: var(--space-3);
+}
+.shortcuts-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--font-size-sm);
+}
+.shortcut-key {
+  display: inline-block;
+  padding: 1px 6px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  text-align: center;
+  min-width: 24px;
+}
+
+/* ===== LANGUAGE TOGGLE ===== */
+.lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 99px;
+  background: var(--color-bg);
+  padding: 2px;
+  cursor: pointer;
+  font-family: var(--font);
+  min-height: 30px;
+}
+.lang-toggle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.lang-option {
+  padding: 2px 10px;
+  border-radius: 99px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  transition: all var(--transition-fast);
+  line-height: 1.4;
+}
+.lang-option.lang-active {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+/* ===== SCREEN READER ONLY ===== */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ===== FOCUS VISIBLE ===== */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ===== PRINT ===== */
+@media print {
+  .app-header, .controls-panel, .physics-panel, .tour-overlay,
+  .toast-container, .shortcuts-overlay, .physics-panel-backdrop { display: none !important; }
+  body { overflow: visible; height: auto; }
+  .app-main { display: block; }
+  .canvas-wrap { max-height: none; }
+}
+</style>
+</head>
+<body>
+
+<a href="#main-content" class="skip-link">Skip to main content</a>
+
+<!-- HEADER -->
+<header class="app-header" role="banner">
+  <h1 class="app-title">Hydrostatic Equilibrium</h1>
+  <div class="header-actions">
+    <button class="lang-toggle" id="lang-toggle" aria-label="Switch to technical language" title="Toggle language mode">
+      <span class="lang-option lang-active" id="lang-simple">Standard</span>
+      <span class="lang-option" id="lang-technical">Technical</span>
+    </button>
+    <button class="icon-btn" id="tour-btn" aria-label="Start guided tour" title="Guided tour">
+      ?
+      <span class="btn-tooltip">Tour</span>
+    </button>
+    <button class="icon-btn" id="physics-toggle" aria-label="Toggle physics panel" aria-pressed="false" title="Physics details">
+      <span aria-hidden="true">&#x1D453;</span>
+      <span class="btn-tooltip">Physics</span>
+    </button>
+    <button class="icon-btn" id="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme">
+      <span id="theme-icon" aria-hidden="true">&#9790;</span>
+      <span class="btn-tooltip">Theme</span>
+    </button>
+    <button class="icon-btn" id="shortcuts-btn" aria-label="Keyboard shortcuts" title="Shortcuts (?)">
+      &#9000;
+      <span class="btn-tooltip">Keys</span>
+    </button>
+  </div>
+</header>
+
+<!-- MAIN CONTENT -->
+<main class="app-main" id="main-content" role="main">
+
+  <!-- CANVAS -->
+  <section class="canvas-wrap" aria-label="Star Simulation">
+    <canvas id="star-canvas" role="img" aria-label="Star simulation showing hydrostatic equilibrium" tabindex="0"></canvas>
+  </section>
+
+  <!-- CONTROLS -->
+  <section class="controls-panel" aria-label="Simulation Controls">
+
+    <!-- Tour welcome banner (shown on first visit) -->
+    <div class="tour-banner" id="tour-banner" role="region" aria-label="Welcome" style="display:none;">
+      <span class="tour-banner-text">Welcome! Want a guided tour?</span>
+      <button class="tour-btn tour-btn-primary" id="tour-start-btn">Start Tour</button>
+      <button class="tour-banner-dismiss" id="tour-dismiss-btn" aria-label="Dismiss">&times;</button>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar" role="status" aria-live="polite" aria-atomic="true">
+      <span class="status-item">
+        <span class="status-indicator" id="status-indicator" data-state="stable">
+          <span class="status-dot" aria-hidden="true">&#9679;</span>
+          <span id="status-text">Equilibrium</span>
+        </span>
+      </span>
+      <span class="status-item">
+        <span class="status-label">Temp</span>
+        <span class="status-value" id="status-temp">5,778 K</span>
+      </span>
+      <span class="status-item">
+        <span class="status-label">Radius</span>
+        <span class="status-value" id="status-radius">1.00 R&#x2609;</span>
+      </span>
+    </div>
+
+    <!-- Sliders -->
+    <div class="slider-section" role="group" aria-label="Force controls">
+      <div class="slider-group">
+        <label class="slider-label" for="gravity-slider" id="gravity-label">
+          <span class="label-icon" aria-hidden="true" style="color:var(--color-gravity);">&#x2B07;</span>
+          Gravity
+        </label>
+        <input type="range" id="gravity-slider" min="0" max="200" value="100" step="1"
+               aria-labelledby="gravity-label" aria-valuemin="0" aria-valuemax="200" aria-valuenow="100"
+               aria-valuetext="Gravity: 1.0 solar units">
+        <output class="slider-output" for="gravity-slider" id="gravity-output" style="color:var(--color-gravity);">1.0</output>
+      </div>
+      <div class="slider-group">
+        <label class="slider-label" for="radiation-slider" id="radiation-label">
+          <span class="label-icon" aria-hidden="true" style="color:var(--color-radiation);">&#x2B06;</span>
+          Radiation
+        </label>
+        <input type="range" id="radiation-slider" min="0" max="200" value="100" step="1"
+               aria-labelledby="radiation-label" aria-valuemin="0" aria-valuemax="200" aria-valuenow="100"
+               aria-valuetext="Radiation pressure: 1.0 solar units">
+        <output class="slider-output" for="radiation-slider" id="radiation-output" style="color:var(--color-radiation);">1.0</output>
+      </div>
+      <p class="slider-desc">Adjust the balance between inward gravity and outward radiation pressure.</p>
+    </div>
+
+    <!-- Presets -->
+    <div class="presets-section">
+      <div class="presets-label">Scenarios</div>
+      <div class="preset-row" role="group" aria-label="Preset star scenarios">
+        <button class="preset-btn" data-preset="balanced" aria-pressed="true">
+          <span class="preset-dot" style="background:#f1c40f;" aria-hidden="true"></span>Balanced
+        </button>
+        <button class="preset-btn" data-preset="red-giant" aria-pressed="false">
+          <span class="preset-dot" style="background:#e74c3c;" aria-hidden="true"></span>Red Giant
+        </button>
+        <button class="preset-btn" data-preset="white-dwarf" aria-pressed="false">
+          <span class="preset-dot" style="background:#ecf0f1;" aria-hidden="true"></span>White Dwarf
+        </button>
+        <button class="preset-btn" data-preset="dying" aria-pressed="false">
+          <span class="preset-dot" style="background:#8e44ad;" aria-hidden="true"></span>Dying Star
+        </button>
+        <button class="preset-btn" data-preset="supernova" aria-pressed="false">
+          <span class="preset-dot" style="background:#3498db;" aria-hidden="true"></span>Supernova
+        </button>
+      </div>
+    </div>
+
+    <!-- Info card -->
+    <details class="info-card">
+      <summary>What is hydrostatic equilibrium?</summary>
+      <div class="info-content">
+        <p>Stars are a balancing act. <strong>Fusion</strong> in the core releases enormous energy, creating heat and <strong>radiation pressure</strong> that pushes outward. Meanwhile, <strong>gravity</strong> pulls all the star's material inward.</p>
+        <p style="margin-top:var(--space-2);">In a stable star, these two forces balance perfectly. This balance is called <strong>hydrostatic equilibrium</strong>. If either force wins, the star either collapses or explodes.</p>
+      </div>
+    </details>
+
+    <!-- Reset -->
+    <div style="display:flex; justify-content:flex-end;">
+      <button class="reset-btn" id="reset-btn" aria-label="Reset simulation to balanced star">&#x21BB; Reset</button>
+    </div>
+
+  </section>
+</main>
+
+<!-- PHYSICS PANEL -->
+<div class="physics-panel-backdrop" id="physics-backdrop"></div>
+<aside class="physics-panel" id="physics-panel" aria-label="Technical Physics Details" aria-hidden="true" inert>
+  <div class="physics-panel-header">
+    <h2>Physics Details</h2>
+    <button class="icon-btn" id="physics-close" aria-label="Close physics panel">&times;</button>
+  </div>
+  <div class="physics-panel-body">
+
+    <section class="physics-section">
+      <h3>Hydrostatic Equilibrium</h3>
+      <div class="equation-block" role="math" aria-label="d P over d r equals negative G times M of r times rho of r over r squared">
+        <var>dP</var>/<var>dr</var> = &minus;<var>G</var> &middot; <var>M</var>(<var>r</var>) &middot; <var>&rho;</var>(<var>r</var>) / <var>r</var><sup>2</sup>
+      </div>
+      <p class="physics-explanation">The pressure gradient at radius <var>r</var> inside the star exactly balances the gravitational force per unit volume. When these are equal at every point, the star is in hydrostatic equilibrium.</p>
+    </section>
+
+    <section class="physics-section">
+      <h3>The Two Forces</h3>
+      <div class="equation-block" role="math" aria-label="F gravity equals negative G times M times m over r squared">
+        <var>F</var><sub>gravity</sub> = &minus;<var>G</var> &middot; <var>M</var> &middot; <var>m</var> / <var>r</var><sup>2</sup>
+      </div>
+      <div class="equation-block" role="math" aria-label="F pressure equals negative d P over d r times area">
+        <var>F</var><sub>pressure</sub> = &minus;(<var>dP</var>/<var>dr</var>) &middot; <var>A</var>
+      </div>
+      <p class="physics-explanation"><strong>Gravity</strong> pulls material inward toward the core. <strong>Radiation pressure</strong> from fusion energy pushes material outward. In the Sun, these forces balance at about 15 million Kelvin in the core.</p>
+    </section>
+
+    <section class="physics-section">
+      <h3>Current Star Values</h3>
+      <div class="live-values">
+        <div class="live-value-item">
+          <span class="live-value-label">Mass</span>
+          <span class="live-value-num" id="phys-mass">1.00 M&#x2609;</span>
+        </div>
+        <div class="live-value-item">
+          <span class="live-value-label">Luminosity</span>
+          <span class="live-value-num" id="phys-luminosity">1.00 L&#x2609;</span>
+        </div>
+        <div class="live-value-item">
+          <span class="live-value-label">Surface Temp</span>
+          <span class="live-value-num" id="phys-temp">5,778 K</span>
+        </div>
+        <div class="live-value-item">
+          <span class="live-value-label">Radius</span>
+          <span class="live-value-num" id="phys-radius">1.00 R&#x2609;</span>
+        </div>
+        <div class="live-value-item">
+          <span class="live-value-label">Core Temp</span>
+          <span class="live-value-num" id="phys-core-temp">~15 MK</span>
+        </div>
+        <div class="live-value-item">
+          <span class="live-value-label">Status</span>
+          <span class="live-value-num" id="phys-status">Equilibrium</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="physics-section">
+      <h3>Reference Values (Our Sun)</h3>
+      <div class="live-values">
+        <div class="live-value-item">
+          <span class="live-value-label">Mass</span>
+          <span class="live-value-num">1.989 &times; 10<sup>30</sup> kg</span>
+        </div>
+        <div class="live-value-item">
+          <span class="live-value-label">Luminosity</span>
+          <span class="live-value-num">3.828 &times; 10<sup>26</sup> W</span>
+        </div>
+        <div class="live-value-item">
+          <span class="live-value-label">Surface Temp</span>
+          <span class="live-value-num">5,778 K</span>
+        </div>
+        <div class="live-value-item">
+          <span class="live-value-label">Radius</span>
+          <span class="live-value-num">6.957 &times; 10<sup>8</sup> m</span>
+        </div>
+        <div class="live-value-item">
+          <span class="live-value-label">G (const)</span>
+          <span class="live-value-num">6.674 &times; 10<sup>&minus;11</sup></span>
+        </div>
+        <div class="live-value-item">
+          <span class="live-value-label">Core Temp</span>
+          <span class="live-value-num">~15.7 MK</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="physics-section">
+      <h3>Energy Transport</h3>
+      <p class="physics-explanation">Energy from fusion travels outward through two zones:</p>
+      <p class="physics-explanation" style="margin-top:var(--space-1);"><strong>Radiation zone</strong> (inner): Energy moves as photons bouncing between particles. A single photon can take thousands of years to cross this zone.</p>
+      <p class="physics-explanation" style="margin-top:var(--space-1);"><strong>Convection zone</strong> (outer): Hot plasma rises, cools at the surface, and sinks back down &mdash; like boiling water in a pot.</p>
+    </section>
+
+  </div>
+</aside>
+
+<!-- TOUR OVERLAY -->
+<div class="tour-overlay" id="tour-overlay">
+  <div class="tour-backdrop" id="tour-backdrop"></div>
+  <div class="tour-tooltip" id="tour-tooltip" role="dialog" aria-label="Guided tour step" tabindex="-1">
+    <div class="tour-tooltip-title" id="tour-title"></div>
+    <div class="tour-tooltip-body" id="tour-body"></div>
+    <div class="tour-tooltip-nav">
+      <button class="tour-btn-skip" id="tour-skip-btn">Skip tour</button>
+      <span class="tour-step-indicator" id="tour-step-text"></span>
+      <div style="display:flex;gap:var(--space-1);">
+        <button class="tour-btn" id="tour-back-btn">Back</button>
+        <button class="tour-btn tour-btn-primary" id="tour-next-btn">Next</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- KEYBOARD SHORTCUTS OVERLAY -->
+<div class="shortcuts-overlay" id="shortcuts-overlay" role="dialog" aria-label="Keyboard shortcuts">
+  <div class="shortcuts-card">
+    <h2>Keyboard Shortcuts</h2>
+    <div class="shortcuts-list">
+      <span class="shortcut-key">P</span><span>Toggle physics panel</span>
+      <span class="shortcut-key">T</span><span>Start guided tour</span>
+      <span class="shortcut-key">R</span><span>Reset simulation</span>
+      <span class="shortcut-key">D</span><span>Toggle dark/light mode</span>
+      <span class="shortcut-key">L</span><span>Toggle standard/technical language</span>
+      <span class="shortcut-key">1-5</span><span>Select preset scenario</span>
+      <span class="shortcut-key">?</span><span>Show this overlay</span>
+      <span class="shortcut-key">Esc</span><span>Close panel/overlay</span>
+    </div>
+    <div style="margin-top:var(--space-3);text-align:right;">
+      <button class="tour-btn" id="shortcuts-close-btn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+<!-- ARIA LIVE REGIONS -->
+<div id="aria-live" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+<div id="aria-assertive" aria-live="assertive" aria-atomic="true" class="sr-only"></div>
+
+<!-- FOOTER -->
+<footer class="sr-only" role="contentinfo">
+  <p>Hydrostatic Equilibrium Simulator v1.0 &mdash; An educational tool for Year 10 Physics.</p>
+</footer>
+
+<script>
+'use strict';
+(function() {
+
+/* ================================================================
+   CONFIG
+   ================================================================ */
+const CONFIG = Object.freeze({
+  PARTICLE_COUNT: 50,
+  STAR_MIN_RADIUS: 0.03,
+  STAR_MAX_RADIUS: 0.47,
+  EQUILIBRIUM_THRESHOLD: 0.08,
+  LERP_SPEED: 2.5,
+  COLLAPSE_THRESHOLD: 0.05,
+  EXPLODE_THRESHOLD: 0.46,
+  DEBOUNCE_MS: 500,
+  TOAST_DURATION: 4000,
+  STORAGE_KEY: 'hydrostaticEq_v1',
+  BG_STAR_COUNT: 80,
+  ARROW_COUNT: 6,
+});
+
+const PRESETS = {
+  'balanced':    { gravity: 1.0, radiation: 1.0, label: 'Balanced Star' },
+  'red-giant':   { gravity: 0.5, radiation: 1.5, label: 'Red Giant' },
+  'white-dwarf': { gravity: 1.8, radiation: 0.3, label: 'White Dwarf' },
+  'dying':       { gravity: 1.5, radiation: 0.2, label: 'Dying Star' },
+  'supernova':   { gravity: 0.3, radiation: 2.0, label: 'Supernova' },
+};
+
+/* ================================================================
+   STATE
+   ================================================================ */
+const state = {
+  gravity: 1.0,
+  radiation: 1.0,
+  starRadius: 0.22,
+  targetRadius: 0.22,
+  starState: 'stable',
+  temperature: 5778,
+  luminosity: 1.0,
+  mass: 1.0,
+  coreTemp: 15.7,
+  solarRadii: 1.0,
+  theme: 'auto',
+  lang: 'simple', // 'simple' or 'technical'
+  reducedMotion: false,
+  physicsPanelOpen: false,
+  tourCompleted: false,
+  tourActive: false,
+  tourStep: 0,
+  activePreset: 'balanced',
+  animId: null,
+  lastTime: 0,
+  particles: [],
+  bgStars: [],
+  // Animation state for extreme events
+  extremeAnim: null, // { type: 'collapse'|'explode', progress: 0 }
+  // Konami
+  konamiBuffer: [],
+  discoMode: false,
+  discoTimer: 0,
+};
+
+/* ================================================================
+   EVENT BUS
+   ================================================================ */
+const Bus = {
+  _l: {},
+  on(e, fn) { (this._l[e] = this._l[e] || []).push(fn); },
+  emit(e, d) { (this._l[e] || []).forEach(fn => fn(d)); },
+};
+
+/* ================================================================
+   UTILITY
+   ================================================================ */
+function $(sel) { return document.querySelector(sel); }
+function $$(sel) { return document.querySelectorAll(sel); }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function lerp(a, b, t) { return a + (b - a) * t; }
+function formatNum(n, d) { return n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }); }
+
+function debounce(fn, ms) {
+  let t;
+  return function() { clearTimeout(t); t = setTimeout(fn, ms); };
+}
+
+/* ================================================================
+   STORAGE
+   ================================================================ */
+const Storage = {
+  save() {
+    try {
+      localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify({
+        v: 1,
+        gravity: state.gravity,
+        radiation: state.radiation,
+        theme: state.theme,
+        lang: state.lang,
+        tourCompleted: state.tourCompleted,
+        activePreset: state.activePreset,
+      }));
+    } catch(e) { /* quota exceeded or unavailable */ }
+  },
+  load() {
+    try {
+      const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      if (d.v !== 1) return null;
+      return d;
+    } catch(e) { return null; }
+  },
+};
+const debouncedSave = debounce(() => Storage.save(), CONFIG.DEBOUNCE_MS);
+
+/* ================================================================
+   THEME
+   ================================================================ */
+const Theme = {
+  init() {
+    this.applyTheme(state.theme);
+    const q = window.matchMedia('(prefers-color-scheme: dark)');
+    q.addEventListener('change', () => { if (state.theme === 'auto') this.applyTheme('auto'); });
+    $('#theme-toggle').addEventListener('click', () => this.toggle());
+  },
+  toggle() {
+    const isDark = this.isDark();
+    state.theme = isDark ? 'light' : 'dark';
+    this.applyTheme(state.theme);
+    debouncedSave();
+    Toast.show(isDark ? 'Light mode' : 'Dark mode');
+  },
+  applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    const icon = $('#theme-icon');
+    if (icon) icon.textContent = this.isDark() ? '\u2600' : '\u263E';
+  },
+  isDark() {
+    if (state.theme === 'dark') return true;
+    if (state.theme === 'light') return false;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  },
+};
+
+/* ================================================================
+   LANGUAGE MODE
+   ================================================================ */
+const LANG = {
+  // Status bar states
+  status: {
+    stable:              { simple: '\u2713 Balanced',          technical: '\u2713 Equilibrium' },
+    expanding:           { simple: '\u2197 Getting bigger',    technical: '\u2197 Expanding' },
+    contracting:         { simple: '\u2198 Getting smaller',   technical: '\u2198 Contracting' },
+    collapsing:          { simple: '\u26A0 Collapsing!',       technical: '\u26A0 Collapsing!' },
+    'expanding-critical':{ simple: '\u26A0 Exploding!',        technical: '\u26A0 Exploding!' },
+    collapsed:           { simple: '\u2716 Collapsed',         technical: '\u2716 Collapsed' },
+    exploded:            { simple: '\u2716 Black Hole',        technical: '\u2716 Black Hole' },
+  },
+  // Physics panel state names
+  physStatus: {
+    stable: { simple: 'Balanced', technical: 'Equilibrium' },
+    expanding: { simple: 'Getting bigger', technical: 'Expanding' },
+    contracting: { simple: 'Getting smaller', technical: 'Contracting' },
+    collapsing: { simple: 'Collapsing', technical: 'Collapsing' },
+    'expanding-critical': { simple: 'Exploding', technical: 'Exploding' },
+    collapsed: { simple: 'Collapsed', technical: 'Collapsed' },
+    exploded: { simple: 'Black Hole', technical: 'Black Hole' },
+  },
+  // Slider labels
+  gravityLabel:    { simple: 'Gravity',          technical: 'Gravity' },
+  radiationLabel:  { simple: 'Outward push',     technical: 'Radiation' },
+  sliderDesc:      { simple: 'Change how hard gravity pulls in and how hard energy pushes out.',
+                     technical: 'Adjust the balance between inward gravity and outward radiation pressure.' },
+  gravityUnit:     { simple: '',                  technical: ' solar units' },
+  // Slider ARIA
+  gravityAria:     { simple: 'Gravity: ',         technical: 'Gravity: ' },
+  radiationAria:   { simple: 'Outward push: ',    technical: 'Radiation pressure: ' },
+  // Status labels
+  tempLabel:       { simple: 'Heat',              technical: 'Temp' },
+  radiusLabel:     { simple: 'Size',              technical: 'Radius' },
+  // Preset names
+  presets: {
+    balanced:      { simple: 'Balanced',          technical: 'Balanced' },
+    'red-giant':   { simple: 'Big & Cool',        technical: 'Red Giant' },
+    'white-dwarf': { simple: 'Small & Hot',       technical: 'White Dwarf' },
+    dying:         { simple: 'Running Out',       technical: 'Dying Star' },
+    supernova:     { simple: 'Explosion!',        technical: 'Supernova' },
+  },
+  // Presets section label
+  presetsLabel:    { simple: 'Try these',          technical: 'Scenarios' },
+  // Info card
+  infoTitle:       { simple: 'How do stars stay stable?',
+                     technical: 'What is hydrostatic equilibrium?' },
+  infoBody:        { simple: '<p>Stars are a balancing act. The star\'s core is like a giant furnace that creates a huge <strong>outward push</strong>. At the same time, <strong>gravity</strong> tries to squash everything inward.</p><p style="margin-top:var(--space-2);">When these two forces are <strong>equal</strong>, the star stays the same size \u2014 it\'s balanced! If one force wins, the star either shrinks or blows apart.</p>',
+                     technical: '<p>Stars are a balancing act. <strong>Fusion</strong> in the core releases enormous energy, creating heat and <strong>radiation pressure</strong> that pushes outward. Meanwhile, <strong>gravity</strong> pulls all the star\'s material inward.</p><p style="margin-top:var(--space-2);">In a stable star, these two forces balance perfectly. This balance is called <strong>hydrostatic equilibrium</strong>. If either force wins, the star either collapses or explodes.</p>' },
+  // App title
+  appTitle:        { simple: 'Star Balance',      technical: 'Hydrostatic Equilibrium' },
+  // Canvas label
+  canvasLabel:     { simple: 'Star simulation showing the balance between gravity and outward push',
+                     technical: 'Star simulation showing hydrostatic equilibrium' },
+  // ARIA state descriptions
+  ariaState: {
+    stable:              { simple: 'The star is balanced \u2014 gravity and outward push are equal.',
+                           technical: 'The star is in hydrostatic equilibrium.' },
+    expanding:           { simple: 'The star is getting bigger because the outward push is stronger.',
+                           technical: 'The star is expanding as radiation pressure dominates.' },
+    contracting:         { simple: 'The star is getting smaller because gravity is stronger.',
+                           technical: 'The star is contracting as gravity dominates.' },
+    collapsing:          { simple: 'The star is collapsing because gravity is far too strong!',
+                           technical: 'The star is collapsing under gravity!' },
+    'expanding-critical':{ simple: 'The star is blowing apart!',
+                           technical: 'The star is exploding in a supernova!' },
+    collapsed:           { simple: 'The star has collapsed.',
+                           technical: 'The star has collapsed.' },
+    exploded:            { simple: 'The star has exploded and left behind a black hole.',
+                           technical: 'The star has exploded and formed a black hole.' },
+  },
+  // ARIA slider descriptions
+  ariaGravity:     { simple: 'Gravity',           technical: 'Gravity' },
+  ariaRadiation:   { simple: 'Outward push',      technical: 'Radiation' },
+  ariaUnit:        { simple: '',                   technical: ' solar units' },
+};
+
+function txt(key) {
+  const entry = typeof key === 'object' ? key : LANG[key];
+  if (!entry) return '';
+  return entry[state.lang] || entry.simple || '';
+}
+
+const Lang = {
+  init() {
+    $('#lang-toggle').addEventListener('click', () => this.toggle());
+    this.apply();
+  },
+
+  toggle() {
+    state.lang = state.lang === 'simple' ? 'technical' : 'simple';
+    this.apply();
+    debouncedSave();
+    Toast.show(state.lang === 'simple' ? 'Standard language' : 'Technical language');
+  },
+
+  apply() {
+    const isSimple = state.lang === 'simple';
+    $('#lang-simple').classList.toggle('lang-active', isSimple);
+    $('#lang-technical').classList.toggle('lang-active', !isSimple);
+    $('#lang-toggle').setAttribute('aria-label',
+      isSimple ? 'Switch to technical language' : 'Switch to standard language');
+
+    // App title
+    $('.app-title').textContent = txt('appTitle');
+
+    // Slider labels
+    $('#gravity-label').innerHTML = '<span class="label-icon" aria-hidden="true" style="color:var(--color-gravity);">\u2B07</span> ' + txt('gravityLabel');
+    $('#radiation-label').innerHTML = '<span class="label-icon" aria-hidden="true" style="color:var(--color-radiation);">\u2B06</span> ' + txt('radiationLabel');
+    $('.slider-desc').textContent = txt('sliderDesc');
+
+    // Status labels
+    const statusLabels = $$('.status-label');
+    if (statusLabels[0]) statusLabels[0].textContent = txt('tempLabel');
+    if (statusLabels[1]) statusLabels[1].textContent = txt('radiusLabel');
+
+    // Preset buttons
+    $$('.preset-btn').forEach(btn => {
+      const key = btn.dataset.preset;
+      if (LANG.presets[key]) {
+        const dot = btn.querySelector('.preset-dot');
+        const dotHTML = dot ? dot.outerHTML : '';
+        btn.innerHTML = dotHTML + txt(LANG.presets[key]);
+      }
+    });
+
+    // Presets section label
+    const presetsLabel = $('.presets-label');
+    if (presetsLabel) presetsLabel.textContent = txt('presetsLabel');
+
+    // Info card
+    const infoSummary = $('.info-card summary');
+    if (infoSummary) {
+      infoSummary.innerHTML = '<span style="display:inline-block;transition:transform var(--transition-fast);">\u25B8</span> ' + txt('infoTitle');
+    }
+    const infoContent = $('.info-content');
+    if (infoContent) infoContent.innerHTML = txt('infoBody');
+
+    // Canvas static label
+    $('#star-canvas').setAttribute('aria-label', txt('canvasLabel'));
+
+    // Update slider ARIA text
+    this.updateSliderAria();
+  },
+
+  updateSliderAria() {
+    const gSlider = $('#gravity-slider');
+    const rSlider = $('#radiation-slider');
+    if (gSlider) {
+      gSlider.setAttribute('aria-valuetext',
+        txt('ariaGravity') + ': ' + state.gravity.toFixed(1) + txt('ariaUnit'));
+    }
+    if (rSlider) {
+      rSlider.setAttribute('aria-valuetext',
+        txt('ariaRadiation') + ': ' + state.radiation.toFixed(1) + txt('ariaUnit'));
+    }
+  },
+};
+
+/* ================================================================
+   TOAST
+   ================================================================ */
+const Toast = {
+  container: null,
+  init() { this.container = $('#toast-container'); },
+  show(msg, type) {
+    type = type || 'info';
+    const icons = { info: '\u2139\uFE0F', success: '\u2705', warn: '\u26A0\uFE0F', error: '\u274C' };
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.setAttribute('role', 'status');
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'toast-icon';
+    iconSpan.setAttribute('aria-hidden', 'true');
+    iconSpan.textContent = icons[type] || icons.info;
+    const msgSpan = document.createElement('span');
+    msgSpan.className = 'toast-msg';
+    msgSpan.textContent = msg;
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'toast-close';
+    closeBtn.setAttribute('aria-label', 'Dismiss');
+    closeBtn.textContent = '\u00D7';
+    closeBtn.addEventListener('click', () => this.remove(el));
+    el.appendChild(iconSpan);
+    el.appendChild(msgSpan);
+    el.appendChild(closeBtn);
+    this.container.appendChild(el);
+    // Limit to 3
+    while (this.container.children.length > 3) {
+      this.container.removeChild(this.container.firstChild);
+    }
+    setTimeout(() => this.remove(el), CONFIG.TOAST_DURATION);
+  },
+  remove(el) {
+    if (!el.parentNode) return;
+    el.classList.add('removing');
+    setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 200);
+  },
+};
+
+/* ================================================================
+   A11Y
+   ================================================================ */
+const A11y = {
+  liveEl: null,
+  init() { this.liveEl = $('#aria-live'); },
+  announce(msg) {
+    this.liveEl.textContent = '';
+    requestAnimationFrame(() => { this.liveEl.textContent = msg; });
+  },
+  updateCanvas() {
+    const desc = 'Star simulation. ' + this.descState() +
+      ' ' + txt('ariaGravity') + ': ' + state.gravity.toFixed(1) + txt('ariaUnit') + '.' +
+      ' ' + txt('ariaRadiation') + ': ' + state.radiation.toFixed(1) + txt('ariaUnit') + '.' +
+      ' Temperature: ' + Math.round(state.temperature) + ' Kelvin.' +
+      ' Radius: ' + state.solarRadii.toFixed(2) + ' solar radii.';
+    $('#star-canvas').setAttribute('aria-label', desc);
+  },
+  descState() {
+    const entry = LANG.ariaState[state.starState] || LANG.ariaState.stable;
+    return txt(entry);
+  },
+};
+
+/* ================================================================
+   PHYSICS ENGINE
+   ================================================================ */
+const Physics = {
+  recalculate() {
+    const g = state.gravity;
+    const r = state.radiation;
+
+    // Target radius: larger when radiation dominates, smaller when gravity dominates
+    if (g < 0.02) {
+      state.targetRadius = CONFIG.STAR_MAX_RADIUS * 1.3;
+    } else if (r < 0.02) {
+      state.targetRadius = CONFIG.STAR_MIN_RADIUS * 0.3;
+    } else {
+      const ratio = r / g;
+      state.targetRadius = clamp(0.22 * Math.pow(ratio, 0.7), CONFIG.STAR_MIN_RADIUS, CONFIG.STAR_MAX_RADIUS);
+    }
+
+    // Solar radii for display
+    state.solarRadii = state.targetRadius / 0.22;
+
+    // Luminosity: scales with radiation (fusion output)
+    state.luminosity = Math.pow(r, 1.5);
+
+    // Surface temperature: depends on how concentrated the energy is
+    // High gravity + low radiation = compact hot remnant (white dwarf)
+    // Low gravity + high radiation = bloated cool giant (red giant)
+    // T scales with gravity (compression → heat) and inversely with radius
+    // This gives the correct stellar phenomenology:
+    //   White dwarf: high g, low r → small, very hot
+    //   Red giant: low g, high r → large, cool
+    //   Balanced: → Sun-like ~5778K
+    const compactness = (g + 0.1) / (state.solarRadii + 0.1);
+    state.temperature = clamp(5778 * Math.pow(compactness, 0.55), 2500, 40000);
+
+    // Core temperature estimate
+    state.coreTemp = 15.7 * (g + 0.1) * (r + 0.1);
+
+    // Mass estimate (simplified)
+    state.mass = 0.5 + g * 0.75;
+  },
+
+  updateState(dt) {
+    // Lerp star radius toward target
+    const diff = state.targetRadius - state.starRadius;
+    state.starRadius += diff * Math.min(CONFIG.LERP_SPEED * dt, 0.95);
+
+    // Determine state
+    const balance = Math.abs(state.gravity - state.radiation);
+    const ratio = state.radiation / (state.gravity + 0.001);
+
+    if (state.extremeAnim) {
+      // Extreme animation in progress
+      const speed = state.extremeAnim.type === 'explode' ? 0.5 : 0.8;
+      state.extremeAnim.progress += dt * speed;
+      if (state.extremeAnim.progress >= 1.0) {
+        state.starState = state.extremeAnim.type === 'collapse' ? 'collapsed' : 'exploded';
+        state.extremeAnim = null;
+      }
+      return;
+    }
+
+    if (state.starState === 'collapsed' || state.starState === 'exploded') return;
+
+    if (state.starRadius < CONFIG.COLLAPSE_THRESHOLD && ratio < 0.3) {
+      state.starState = 'collapsing';
+      state.extremeAnim = { type: 'collapse', progress: 0 };
+      A11y.announce('The star is collapsing under its own gravity!');
+    } else if (state.starRadius > CONFIG.EXPLODE_THRESHOLD && ratio > 3) {
+      state.starState = 'expanding-critical';
+      state.extremeAnim = { type: 'explode', progress: 0 };
+      A11y.announce('The star is exploding in a supernova!');
+    } else if (balance < CONFIG.EQUILIBRIUM_THRESHOLD) {
+      state.starState = 'stable';
+    } else if (ratio > 1) {
+      state.starState = 'expanding';
+    } else {
+      state.starState = 'contracting';
+    }
+  },
+};
+
+/* ================================================================
+   PARTICLE SYSTEM
+   ================================================================ */
+const Particles = {
+  init() {
+    state.particles = [];
+    for (let i = 0; i < CONFIG.PARTICLE_COUNT; i++) {
+      state.particles.push(this.create());
+    }
+  },
+  create() {
+    const angle = Math.random() * Math.PI * 2;
+    return {
+      angle,
+      r: state.starRadius * 0.2 * Math.random(),
+      speed: 0.015 + Math.random() * 0.04,
+      size: 0.8 + Math.random() * 1.5,
+      life: 0.5 + Math.random() * 0.5,
+      maxLife: 1,
+    };
+  },
+  update(dt) {
+    for (const p of state.particles) {
+      p.r += p.speed * state.radiation * dt * 60;
+      p.life -= 0.006 * dt * 60;
+      if (p.life <= 0 || p.r > 0.55) {
+        Object.assign(p, this.create());
+      }
+    }
+  },
+  draw(ctx, cx, cy, scale) {
+    for (const p of state.particles) {
+      const x = cx + Math.cos(p.angle) * p.r * scale;
+      const y = cy + Math.sin(p.angle) * p.r * scale;
+      const alpha = clamp(p.life * 0.7, 0, 1);
+      ctx.beginPath();
+      ctx.arc(x, y, p.size, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 240, 200, ' + alpha + ')';
+      ctx.fill();
+    }
+  },
+};
+
+/* ================================================================
+   CANVAS RENDERER
+   ================================================================ */
+const Renderer = {
+  canvas: null,
+  ctx: null,
+  w: 0,
+  h: 0,
+  dpr: 1,
+
+  init() {
+    this.canvas = $('#star-canvas');
+    this.ctx = this.canvas.getContext('2d');
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.resize();
+    new ResizeObserver(() => this.resize()).observe(this.canvas.parentElement);
+    this.initBgStars();
+  },
+
+  resize() {
+    const parent = this.canvas.parentElement;
+    const rect = parent.getBoundingClientRect();
+    const size = Math.min(rect.width, rect.height);
+    this.w = size;
+    this.h = size;
+    this.canvas.width = Math.round(size * this.dpr);
+    this.canvas.height = Math.round(size * this.dpr);
+    this.canvas.style.width = size + 'px';
+    this.canvas.style.height = size + 'px';
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+  },
+
+  initBgStars() {
+    state.bgStars = [];
+    for (let i = 0; i < CONFIG.BG_STAR_COUNT; i++) {
+      state.bgStars.push({
+        x: Math.random(),
+        y: Math.random(),
+        size: 0.3 + Math.random() * 1.2,
+        alpha: 0.3 + Math.random() * 0.7,
+        twinkleSpeed: 0.5 + Math.random() * 2,
+        twinklePhase: Math.random() * Math.PI * 2,
+      });
+    }
+  },
+
+  clear() {
+    this.ctx.clearRect(0, 0, this.w, this.h);
+  },
+
+  drawBackground(time) {
+    const ctx = this.ctx;
+    ctx.fillStyle = '#060612';
+    ctx.fillRect(0, 0, this.w, this.h);
+
+    for (const s of state.bgStars) {
+      let alpha = s.alpha;
+      if (!state.reducedMotion) {
+        alpha *= 0.5 + 0.5 * Math.sin(time * s.twinkleSpeed + s.twinklePhase);
+      }
+      ctx.beginPath();
+      ctx.arc(s.x * this.w, s.y * this.h, s.size, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(200, 210, 255, ' + clamp(alpha, 0, 1) + ')';
+      ctx.fill();
+    }
+  },
+
+  tempToColor(t) {
+    // Simplified blackbody approximation
+    let r, g, b;
+    if (t < 3500) {
+      r = 255; g = 80 + (t - 2500) * 0.06; b = 30;
+    } else if (t < 5000) {
+      const f = (t - 3500) / 1500;
+      r = 255; g = lerp(140, 210, f); b = lerp(50, 140, f);
+    } else if (t < 6500) {
+      const f = (t - 5000) / 1500;
+      r = lerp(255, 245, f); g = lerp(210, 240, f); b = lerp(140, 230, f);
+    } else if (t < 10000) {
+      const f = (t - 6500) / 3500;
+      r = lerp(245, 190, f); g = lerp(240, 210, f); b = 255;
+    } else {
+      const f = clamp((t - 10000) / 20000, 0, 1);
+      r = lerp(190, 140, f); g = lerp(210, 170, f); b = 255;
+    }
+    return { r: Math.round(clamp(r, 0, 255)), g: Math.round(clamp(g, 0, 255)), b: Math.round(clamp(b, 0, 255)) };
+  },
+
+  drawStar(time) {
+    const ctx = this.ctx;
+    const cx = this.w / 2;
+    const cy = this.h / 2;
+    const maxR = this.w / 2;
+    let starPx = state.starRadius * maxR * 2;
+
+    // Handle extreme animations
+    if (state.extremeAnim) {
+      const p = state.extremeAnim.progress;
+      if (state.extremeAnim.type === 'collapse') {
+        starPx *= (1 - p * 0.9);
+      } else {
+        starPx *= (1 + p * 3);
+      }
+    }
+    if (state.starState === 'collapsed') { starPx = 4; }
+    if (state.starState === 'exploded') { starPx = 0; }
+
+    const col = this.tempToColor(state.temperature);
+    const colStr = 'rgb(' + col.r + ',' + col.g + ',' + col.b + ')';
+    const colDim = 'rgb(' + Math.round(col.r * 0.4) + ',' + Math.round(col.g * 0.4) + ',' + Math.round(col.b * 0.4) + ')';
+
+    // Disco mode color override
+    let discoHue = 0;
+    if (state.discoMode && !state.reducedMotion) {
+      discoHue = (time * 200) % 360;
+    }
+
+    if (starPx < 1 && state.starState === 'exploded') {
+      // Draw explosion remnant particles
+      this.drawExplosionRemnant(ctx, cx, cy, maxR, time);
+      return;
+    }
+
+    // Corona / outer glow
+    if (starPx > 2) {
+      const glowR = starPx * 2.5;
+      const glow = ctx.createRadialGradient(cx, cy, starPx * 0.5, cx, cy, glowR);
+      if (state.discoMode && !state.reducedMotion) {
+        glow.addColorStop(0, 'hsla(' + discoHue + ', 100%, 70%, 0.25)');
+        glow.addColorStop(0.5, 'hsla(' + ((discoHue + 60) % 360) + ', 100%, 50%, 0.08)');
+      } else {
+        glow.addColorStop(0, 'rgba(' + col.r + ',' + col.g + ',' + col.b + ', 0.25)');
+        glow.addColorStop(0.5, 'rgba(' + col.r + ',' + col.g + ',' + col.b + ', 0.06)');
+      }
+      glow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.beginPath();
+      ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
+      ctx.fillStyle = glow;
+      ctx.fill();
+    }
+
+    // Photosphere
+    if (starPx > 1) {
+      const photoGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, starPx);
+      if (state.discoMode && !state.reducedMotion) {
+        photoGrad.addColorStop(0, 'hsl(' + discoHue + ', 100%, 90%)');
+        photoGrad.addColorStop(0.7, 'hsl(' + ((discoHue + 120) % 360) + ', 100%, 60%)');
+        photoGrad.addColorStop(1, 'hsl(' + ((discoHue + 240) % 360) + ', 80%, 30%)');
+      } else {
+        photoGrad.addColorStop(0, 'rgb(' + Math.min(255, col.r + 40) + ',' + Math.min(255, col.g + 40) + ',' + Math.min(255, col.b + 20) + ')');
+        photoGrad.addColorStop(0.7, colStr);
+        photoGrad.addColorStop(1, colDim);
+      }
+      ctx.beginPath();
+      ctx.arc(cx, cy, starPx, 0, Math.PI * 2);
+      ctx.fillStyle = photoGrad;
+      ctx.fill();
+    }
+
+    // Convection zone texture
+    if (starPx > 20 && !state.reducedMotion) {
+      const convR = starPx * 0.85;
+      const cells = 8;
+      ctx.save();
+      ctx.globalAlpha = 0.1;
+      for (let i = 0; i < cells; i++) {
+        const a = (i / cells) * Math.PI * 2 + time * 0.3;
+        const d = convR * 0.4;
+        const x = cx + Math.cos(a) * d;
+        const y = cy + Math.sin(a) * d;
+        ctx.beginPath();
+        ctx.arc(x, y, convR * 0.25, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // Radiation zone
+    if (starPx > 10) {
+      const radR = starPx * 0.5;
+      const pulse = state.reducedMotion ? 1 : (0.95 + 0.05 * Math.sin(time * 3));
+      const radGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radR * pulse);
+      radGrad.addColorStop(0, 'rgba(255,255,240,0.6)');
+      radGrad.addColorStop(1, 'rgba(255,255,220,0.0)');
+      ctx.beginPath();
+      ctx.arc(cx, cy, radR * pulse, 0, Math.PI * 2);
+      ctx.fillStyle = radGrad;
+      ctx.fill();
+    }
+
+    // Core
+    if (starPx > 5) {
+      const coreR = starPx * 0.15;
+      const corePulse = state.reducedMotion ? 1 : (0.9 + 0.1 * Math.sin(time * 5));
+      const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * corePulse);
+      coreGrad.addColorStop(0, 'rgba(255,255,255,0.95)');
+      coreGrad.addColorStop(0.5, 'rgba(255,255,220,0.6)');
+      coreGrad.addColorStop(1, 'rgba(255,255,200,0.0)');
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR * corePulse, 0, Math.PI * 2);
+      ctx.fillStyle = coreGrad;
+      ctx.fill();
+    }
+
+    // Collapse flash
+    if (state.extremeAnim && state.extremeAnim.type === 'collapse') {
+      const p = state.extremeAnim.progress;
+      if (p > 0.7) {
+        const flash = (p - 0.7) / 0.3;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,' + (flash * 0.8) + ')';
+        ctx.fill();
+      }
+    }
+  },
+
+  drawExplosionRemnant(ctx, cx, cy, maxR, time) {
+    // Expanding shockwave ring
+    const ringR = maxR * 0.8;
+    ctx.beginPath();
+    ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 200, 100, 0.15)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Scattered particles
+    for (let i = 0; i < 30; i++) {
+      const angle = (i / 30) * Math.PI * 2;
+      const dist = maxR * (0.3 + 0.5 * Math.sin(i * 1.7));
+      const x = cx + Math.cos(angle) * dist;
+      const y = cy + Math.sin(angle) * dist;
+      const alpha = 0.2 + 0.1 * Math.sin(time * 2 + i);
+      ctx.beginPath();
+      ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 180, 100, ' + alpha + ')';
+      ctx.fill();
+    }
+  },
+
+  drawForceArrows(time) {
+    if (state.starState === 'collapsed' || state.starState === 'exploded') return;
+
+    const ctx = this.ctx;
+    const cx = this.w / 2;
+    const cy = this.h / 2;
+    const maxR = this.w / 2;
+    let starPx = state.starRadius * maxR * 2;
+
+    if (state.extremeAnim) {
+      const p = state.extremeAnim.progress;
+      if (state.extremeAnim.type === 'collapse') starPx *= (1 - p * 0.9);
+      else starPx *= (1 + p * 3);
+    }
+
+    const arrowOffset = starPx + 10;
+    const n = CONFIG.ARROW_COUNT;
+
+    const pulse = state.reducedMotion ? 1 : (0.9 + 0.1 * Math.sin(time * 2));
+
+    for (let i = 0; i < n; i++) {
+      // Gravity arrows (inward) — blue
+      const gAngle = (i / n) * Math.PI * 2;
+      const gLen = (15 + state.gravity * 30) * pulse;
+      if (state.gravity > 0.05) {
+        this.drawArrow(ctx, cx, cy, gAngle, arrowOffset + gLen, arrowOffset, 'rgba(108,123,255,0.8)', 2.5);
+      }
+
+      // Radiation arrows (outward) — orange, offset by half step
+      const rAngle = gAngle + Math.PI / n;
+      const rLen = (15 + state.radiation * 30) * pulse;
+      if (state.radiation > 0.05) {
+        this.drawArrow(ctx, cx, cy, rAngle, arrowOffset, arrowOffset + rLen, 'rgba(255,159,67,0.8)', 2.5);
+      }
+    }
+
+    // Equilibrium ring when balanced
+    if (state.starState === 'stable' && !state.extremeAnim) {
+      const ringPulse = state.reducedMotion ? 1 : (0.95 + 0.05 * Math.sin(time * 1.5));
+      ctx.beginPath();
+      ctx.arc(cx, cy, (arrowOffset - 2) * ringPulse, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(39, 174, 96, 0.4)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  },
+
+  drawArrow(ctx, cx, cy, angle, rStart, rEnd, color, width) {
+    const sx = cx + Math.cos(angle) * rStart;
+    const sy = cy + Math.sin(angle) * rStart;
+    const ex = cx + Math.cos(angle) * rEnd;
+    const ey = cy + Math.sin(angle) * rEnd;
+
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.stroke();
+
+    // Arrowhead
+    const headLen = 7;
+    const headAngle = Math.atan2(ey - sy, ex - sx);
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex - headLen * Math.cos(headAngle - 0.4), ey - headLen * Math.sin(headAngle - 0.4));
+    ctx.lineTo(ex - headLen * Math.cos(headAngle + 0.4), ey - headLen * Math.sin(headAngle + 0.4));
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+  },
+
+  drawParticles(time) {
+    if (state.starState === 'collapsed' || state.starState === 'exploded') return;
+    const cx = this.w / 2;
+    const cy = this.h / 2;
+    const scale = this.w;
+    Particles.draw(this.ctx, cx, cy, scale);
+  },
+
+  drawSupernovaFlash() {
+    if (!state.extremeAnim || state.extremeAnim.type !== 'explode') return;
+    const ctx = this.ctx;
+    const p = state.extremeAnim.progress;
+    // Flash: rapid ramp to full blinding white, then slow fade
+    let flashAlpha = 0;
+    if (p < 0.1) {
+      flashAlpha = p / 0.1; // fast ramp up
+    } else if (p < 0.3) {
+      flashAlpha = 1.0; // hold full white
+    } else if (p < 0.7) {
+      flashAlpha = 1.0 - (p - 0.3) / 0.4; // fade out
+    }
+    if (flashAlpha > 0) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(255, 255, 255, ' + (flashAlpha * 0.97) + ')';
+      ctx.fillRect(0, 0, this.w, this.h);
+      ctx.restore();
+    }
+  },
+
+  drawBlackHoleLabel() {
+    if (state.starState !== 'exploded') return;
+    const ctx = this.ctx;
+    const cx = this.w / 2;
+    const cy = this.h / 2;
+
+    // Small black circle with faint accretion glow
+    const bhRadius = 6;
+    ctx.beginPath();
+    ctx.arc(cx, cy, bhRadius, 0, Math.PI * 2);
+    ctx.fillStyle = '#000';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(100, 140, 255, 0.3)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // "Black Hole" label
+    const fontSize = Math.max(14, this.w * 0.04);
+    ctx.font = '600 ' + fontSize + 'px ' + getComputedStyle(document.body).fontFamily;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('Black Hole', cx, cy + bhRadius + 10);
+  },
+};
+
+/* ================================================================
+   UI CONTROLLER
+   ================================================================ */
+const UI = {
+  gravSlider: null,
+  radSlider: null,
+  gravOutput: null,
+  radOutput: null,
+  tweenId: null,
+
+  init() {
+    this.gravSlider = $('#gravity-slider');
+    this.radSlider = $('#radiation-slider');
+    this.gravOutput = $('#gravity-output');
+    this.radOutput = $('#radiation-output');
+
+    this.gravSlider.addEventListener('input', (e) => this.onSlider('gravity', e));
+    this.radSlider.addEventListener('input', (e) => this.onSlider('radiation', e));
+
+    // Presets
+    $$('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => this.applyPreset(btn.dataset.preset));
+    });
+
+    // Reset
+    $('#reset-btn').addEventListener('click', () => this.reset());
+
+    // Sync UI to state
+    this.syncToState();
+  },
+
+  onSlider(which, e) {
+    const val = e.target.value / 100;
+    state[which === 'gravity' ? 'gravity' : 'radiation'] = val;
+    this.updateSliderDisplay(which, val);
+    Physics.recalculate();
+    this.clearExtreme();
+    this.updateActivePreset(null);
+    debouncedSave();
+  },
+
+  updateSliderDisplay(which, val) {
+    const output = which === 'gravity' ? this.gravOutput : this.radOutput;
+    const slider = which === 'gravity' ? this.gravSlider : this.radSlider;
+    output.textContent = val.toFixed(1);
+    slider.setAttribute('aria-valuenow', Math.round(val * 100));
+    const ariaLabel = which === 'gravity' ? txt('ariaGravity') : txt('ariaRadiation');
+    slider.setAttribute('aria-valuetext', ariaLabel + ': ' + val.toFixed(1) + txt('ariaUnit'));
+  },
+
+  applyPreset(name) {
+    const p = PRESETS[name];
+    if (!p) return;
+
+    this.clearExtreme();
+    this.updateActivePreset(name);
+
+    // Animate sliders over 500ms
+    const startG = state.gravity;
+    const startR = state.radiation;
+    const targetG = p.gravity;
+    const targetR = p.radiation;
+    const duration = 500;
+    const start = performance.now();
+
+    if (this.tweenId) cancelAnimationFrame(this.tweenId);
+
+    const animate = (now) => {
+      const t = Math.min((now - start) / duration, 1);
+      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; // easeInOutQuad
+
+      state.gravity = lerp(startG, targetG, ease);
+      state.radiation = lerp(startR, targetR, ease);
+
+      this.gravSlider.value = Math.round(state.gravity * 100);
+      this.radSlider.value = Math.round(state.radiation * 100);
+      this.updateSliderDisplay('gravity', state.gravity);
+      this.updateSliderDisplay('radiation', state.radiation);
+      Physics.recalculate();
+
+      if (t < 1) {
+        this.tweenId = requestAnimationFrame(animate);
+      } else {
+        this.tweenId = null;
+        debouncedSave();
+        A11y.announce('Preset applied: ' + p.label);
+      }
+    };
+    this.tweenId = requestAnimationFrame(animate);
+  },
+
+  updateActivePreset(name) {
+    state.activePreset = name;
+    $$('.preset-btn').forEach(btn => {
+      btn.setAttribute('aria-pressed', btn.dataset.preset === name ? 'true' : 'false');
+    });
+  },
+
+  clearExtreme() {
+    state.extremeAnim = null;
+    if (state.starState === 'collapsed' || state.starState === 'exploded') {
+      state.starState = 'stable';
+      state.starRadius = state.targetRadius;
+    }
+  },
+
+  reset() {
+    this.applyPreset('balanced');
+    Toast.show('Simulation reset');
+  },
+
+  syncToState() {
+    this.gravSlider.value = Math.round(state.gravity * 100);
+    this.radSlider.value = Math.round(state.radiation * 100);
+    this.updateSliderDisplay('gravity', state.gravity);
+    this.updateSliderDisplay('radiation', state.radiation);
+    this.updateActivePreset(state.activePreset);
+    Physics.recalculate();
+  },
+
+  updateStatus() {
+    const indicator = $('#status-indicator');
+    const textEl = $('#status-text');
+    const tempEl = $('#status-temp');
+    const radiusEl = $('#status-radius');
+
+    const s = state.starState;
+    const statusEntry = LANG.status[s] || LANG.status.stable;
+    textEl.textContent = txt(statusEntry);
+    indicator.dataset.state = s;
+    tempEl.textContent = formatNum(Math.round(state.temperature), 0) + ' K';
+    radiusEl.textContent = state.solarRadii.toFixed(2) + ' R\u2609';
+  },
+
+  updatePhysicsPanel() {
+    if (!state.physicsPanelOpen) return;
+    $('#phys-mass').textContent = state.mass.toFixed(2) + ' M\u2609';
+    $('#phys-luminosity').textContent = state.luminosity.toFixed(2) + ' L\u2609';
+    $('#phys-temp').textContent = formatNum(Math.round(state.temperature), 0) + ' K';
+    $('#phys-radius').textContent = state.solarRadii.toFixed(2) + ' R\u2609';
+    $('#phys-core-temp').textContent = '~' + state.coreTemp.toFixed(1) + ' MK';
+    const physEntry = LANG.physStatus[state.starState] || LANG.physStatus.stable;
+    $('#phys-status').textContent = txt(physEntry);
+  },
+};
+
+/* ================================================================
+   PHYSICS PANEL
+   ================================================================ */
+const PhysicsPanel = {
+  panel: null,
+  backdrop: null,
+  lastFocus: null,
+
+  init() {
+    this.panel = $('#physics-panel');
+    this.backdrop = $('#physics-backdrop');
+
+    $('#physics-toggle').addEventListener('click', () => this.toggle());
+    $('#physics-close').addEventListener('click', () => this.close());
+    this.backdrop.addEventListener('click', () => this.close());
+  },
+
+  toggle() {
+    state.physicsPanelOpen ? this.close() : this.open();
+  },
+
+  open() {
+    state.physicsPanelOpen = true;
+    this.lastFocus = document.activeElement;
+    this.panel.classList.add('open');
+    this.panel.setAttribute('aria-hidden', 'false');
+    this.panel.removeAttribute('inert');
+    this.backdrop.classList.add('visible');
+    $('#physics-toggle').setAttribute('aria-pressed', 'true');
+    $('#physics-close').focus();
+    UI.updatePhysicsPanel();
+
+    // Trap focus
+    this.panel.addEventListener('keydown', this._trapFocus);
+  },
+
+  close() {
+    state.physicsPanelOpen = false;
+    this.panel.classList.remove('open');
+    this.panel.setAttribute('aria-hidden', 'true');
+    this.panel.setAttribute('inert', '');
+    this.backdrop.classList.remove('visible');
+    $('#physics-toggle').setAttribute('aria-pressed', 'false');
+    if (this.lastFocus) this.lastFocus.focus();
+    this.panel.removeEventListener('keydown', this._trapFocus);
+  },
+
+  _trapFocus(e) {
+    if (e.key !== 'Tab') return;
+    const panel = $('#physics-panel');
+    const focusable = panel.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+    } else {
+      if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  },
+};
+
+/* ================================================================
+   TOUR MANAGER
+   ================================================================ */
+const Tour = {
+  steps: [
+    {
+      target: '.canvas-wrap',
+      title: 'Meet Your Star',
+      body: 'This is a star in hydrostatic equilibrium. Two powerful forces are perfectly balanced, keeping it stable.',
+    },
+    {
+      target: '.canvas-wrap',
+      title: 'Two Forces at War',
+      body: 'The orange arrows show radiation pressure pushing outward from fusion. The blue arrows show gravity pulling everything inward.',
+    },
+    {
+      target: '#gravity-slider',
+      title: 'Control Gravity',
+      body: 'Drag this slider to change gravity strength. Try increasing it \u2014 watch the star shrink!',
+    },
+    {
+      target: '#radiation-slider',
+      title: 'Control Fusion',
+      body: 'This controls how much energy the core produces. More fusion = more outward pressure.',
+    },
+    {
+      target: '.slider-section',
+      title: 'Finding Balance',
+      body: 'When gravity and radiation are equal, the star is in hydrostatic equilibrium. This is why most stars stay stable for billions of years.',
+    },
+    {
+      target: '[data-preset="dying"]',
+      title: 'What If Gravity Wins?',
+      body: 'Click "Dying Star" to see what happens when a star runs out of fuel and gravity takes over.',
+    },
+    {
+      target: '[data-preset="supernova"]',
+      title: 'What If Radiation Wins?',
+      body: 'Click "Supernova" to see what happens when radiation pressure overwhelms gravity.',
+    },
+    {
+      target: '#physics-toggle',
+      title: 'Go Deeper',
+      body: 'Want the real equations? Open the Physics panel to see the mathematics behind the simulation.',
+    },
+    {
+      target: null,
+      title: 'You\'re Ready!',
+      body: 'You now understand hydrostatic equilibrium. Explore freely, or try different presets to see stellar fates!',
+    },
+  ],
+
+  overlay: null,
+  backdrop: null,
+  tooltip: null,
+
+  init() {
+    this.overlay = $('#tour-overlay');
+    this.backdrop = $('#tour-backdrop');
+    this.tooltip = $('#tour-tooltip');
+
+    $('#tour-btn').addEventListener('click', () => this.start());
+    $('#tour-start-btn').addEventListener('click', () => { this.hideBanner(); this.start(); });
+    $('#tour-dismiss-btn').addEventListener('click', () => this.hideBanner());
+    $('#tour-next-btn').addEventListener('click', () => this.next());
+    $('#tour-back-btn').addEventListener('click', () => this.back());
+    $('#tour-skip-btn').addEventListener('click', () => this.skip());
+  },
+
+  showBanner() {
+    $('#tour-banner').style.display = 'flex';
+  },
+
+  hideBanner() {
+    $('#tour-banner').style.display = 'none';
+  },
+
+  start() {
+    this.hideBanner();
+    state.tourActive = true;
+    state.tourStep = 0;
+    this.overlay.classList.add('active');
+    this.showStep(0);
+    A11y.announce('Guided tour started. Step 1 of ' + this.steps.length + '.');
+  },
+
+  showStep(idx) {
+    const step = this.steps[idx];
+    state.tourStep = idx;
+
+    // Update tooltip content
+    $('#tour-title').textContent = step.title;
+    $('#tour-body').textContent = step.body;
+    $('#tour-step-text').textContent = (idx + 1) + ' / ' + this.steps.length;
+    $('#tour-back-btn').style.display = idx === 0 ? 'none' : '';
+    $('#tour-next-btn').textContent = idx === this.steps.length - 1 ? 'Finish' : 'Next';
+
+    this.tooltip.classList.add('visible');
+
+    // Position tooltip near target
+    if (step.target) {
+      const targetEl = $(step.target);
+      if (targetEl) {
+        const rect = targetEl.getBoundingClientRect();
+        // Highlight cutout
+        const pad = 6;
+        // Create cutout so the target element shows through the dark backdrop
+        this.backdrop.style.clipPath = this.createCutoutClipPath(rect, pad);
+
+        // Position tooltip
+        this.positionTooltip(rect);
+      }
+    } else {
+      // No target — center tooltip
+      this.backdrop.style.clipPath = '';
+      this.tooltip.style.left = '50%';
+      this.tooltip.style.top = '50%';
+      this.tooltip.style.transform = 'translate(-50%, -50%)';
+    }
+
+    this.tooltip.focus();
+  },
+
+  createCutoutClipPath(rect, pad) {
+    const t = Math.max(0, rect.top - pad);
+    const l = Math.max(0, rect.left - pad);
+    const b = rect.bottom + pad;
+    const r = rect.right + pad;
+    // Polygon that covers the full viewport with a rectangular hole
+    return 'polygon(0% 0%, 0% 100%, ' +
+      l + 'px 100%, ' + l + 'px ' + t + 'px, ' +
+      r + 'px ' + t + 'px, ' + r + 'px ' + b + 'px, ' +
+      l + 'px ' + b + 'px, ' + l + 'px 100%, 100% 100%, 100% 0%)';
+  },
+
+  positionTooltip(targetRect) {
+    const tt = this.tooltip;
+    tt.style.transform = '';
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // Try below the target
+    let top = targetRect.bottom + 12;
+    let left = targetRect.left + targetRect.width / 2 - 170;
+
+    if (top + 200 > vh) {
+      top = targetRect.top - 200;
+    }
+    left = clamp(left, 8, vw - 348);
+    top = clamp(top, 8, vh - 200);
+
+    tt.style.left = left + 'px';
+    tt.style.top = top + 'px';
+  },
+
+  next() {
+    if (state.tourStep < this.steps.length - 1) {
+      this.showStep(state.tourStep + 1);
+    } else {
+      this.complete();
+    }
+  },
+
+  back() {
+    if (state.tourStep > 0) {
+      this.showStep(state.tourStep - 1);
+    }
+  },
+
+  skip() {
+    this.complete();
+    Toast.show('Tour skipped. Press T to restart anytime.');
+  },
+
+  complete() {
+    state.tourActive = false;
+    state.tourCompleted = true;
+    this.overlay.classList.remove('active');
+    this.tooltip.classList.remove('visible');
+    this.backdrop.style.clipPath = '';
+    A11y.announce('Guided tour complete. Free exploration mode.');
+    debouncedSave();
+  },
+};
+
+/* ================================================================
+   KEYBOARD MANAGER
+   ================================================================ */
+const Keys = {
+  init() {
+    document.addEventListener('keydown', (e) => this.handle(e));
+
+    $('#shortcuts-btn').addEventListener('click', () => this.toggleShortcuts());
+    $('#shortcuts-close-btn').addEventListener('click', () => this.hideShortcuts());
+    this.initShortcutsBackdropClose();
+  },
+
+  handle(e) {
+    // Don't intercept when typing in inputs
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+      if (e.key === 'Escape') {
+        e.target.blur();
+        return;
+      }
+      return;
+    }
+
+    // Tour active — let tour handle navigation
+    if (state.tourActive) {
+      if (e.key === 'Escape') { Tour.skip(); return; }
+      if (e.key === 'ArrowRight' || e.key === 'Enter') { Tour.next(); return; }
+      if (e.key === 'ArrowLeft') { Tour.back(); return; }
+      return;
+    }
+
+    // Konami code detection
+    this.checkKonami(e.key);
+
+    switch (e.key) {
+      case 'Escape':
+        this.closeTopmost();
+        break;
+      case 'p':
+      case 'P':
+        e.preventDefault();
+        PhysicsPanel.toggle();
+        break;
+      case 't':
+      case 'T':
+        e.preventDefault();
+        Tour.start();
+        break;
+      case 'r':
+      case 'R':
+        e.preventDefault();
+        UI.reset();
+        break;
+      case 'd':
+      case 'D':
+        e.preventDefault();
+        Theme.toggle();
+        break;
+      case '?':
+        e.preventDefault();
+        this.toggleShortcuts();
+        break;
+      case 'l':
+      case 'L':
+        e.preventDefault();
+        Lang.toggle();
+        break;
+      case '1': UI.applyPreset('balanced'); break;
+      case '2': UI.applyPreset('red-giant'); break;
+      case '3': UI.applyPreset('white-dwarf'); break;
+      case '4': UI.applyPreset('dying'); break;
+      case '5': UI.applyPreset('supernova'); break;
+    }
+  },
+
+  closeTopmost() {
+    if ($('#shortcuts-overlay').classList.contains('visible')) {
+      this.hideShortcuts();
+    } else if (state.physicsPanelOpen) {
+      PhysicsPanel.close();
+    }
+  },
+
+  toggleShortcuts() {
+    const overlay = $('#shortcuts-overlay');
+    const vis = overlay.classList.contains('visible');
+    if (vis) {
+      this.hideShortcuts();
+    } else {
+      overlay.classList.add('visible');
+      $('#shortcuts-close-btn').focus();
+    }
+  },
+
+  hideShortcuts() {
+    $('#shortcuts-overlay').classList.remove('visible');
+  },
+
+  initShortcutsBackdropClose() {
+    $('#shortcuts-overlay').addEventListener('click', (e) => {
+      if (e.target === $('#shortcuts-overlay')) {
+        this.hideShortcuts();
+      }
+    });
+  },
+
+  // EASTER EGG: Konami code
+  konamiSequence: ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'],
+
+  checkKonami(key) {
+    const seq = this.konamiSequence;
+    state.konamiBuffer.push(key);
+    if (state.konamiBuffer.length > seq.length) {
+      state.konamiBuffer.shift();
+    }
+    if (state.konamiBuffer.length === seq.length) {
+      let match = true;
+      for (let i = 0; i < seq.length; i++) {
+        if (state.konamiBuffer[i] !== seq[i]) { match = false; break; }
+      }
+      if (match) {
+        state.konamiBuffer = [];
+        this.activateDisco();
+      }
+    }
+  },
+
+  activateDisco() {
+    // EASTER EGG: Stellar disco mode
+    state.discoMode = true;
+    state.discoTimer = 5;
+    Toast.show('Stellar Disco Mode activated! Stars are truly amazing.', 'success');
+    A11y.announce('Easter egg found! Disco mode activated for 5 seconds.');
+  },
+};
+
+/* ================================================================
+   ANIMATION LOOP
+   ================================================================ */
+function animLoop(timestamp) {
+  const dt = Math.min((timestamp - state.lastTime) / 1000, 0.05);
+  state.lastTime = timestamp;
+
+  // Disco timer
+  if (state.discoMode) {
+    state.discoTimer -= dt;
+    if (state.discoTimer <= 0) {
+      state.discoMode = false;
+    }
+  }
+
+  if (!state.reducedMotion) {
+    Physics.updateState(dt);
+    Particles.update(dt);
+  } else {
+    // Instant state updates for reduced motion
+    state.starRadius = state.targetRadius;
+    Physics.updateState(0);
+  }
+
+  const time = timestamp / 1000;
+
+  Renderer.clear();
+  Renderer.drawBackground(time);
+  Renderer.drawStar(time);
+  if (!state.reducedMotion) {
+    Renderer.drawParticles(time);
+  }
+  Renderer.drawForceArrows(time);
+  Renderer.drawSupernovaFlash();
+  Renderer.drawBlackHoleLabel();
+
+  UI.updateStatus();
+  UI.updatePhysicsPanel();
+
+  // Update canvas ARIA (throttled to ~once per second)
+  if (!state._ariaTimer) state._ariaTimer = 0;
+  state._ariaTimer += dt;
+  if (state._ariaTimer >= 1.0) {
+    state._ariaTimer = 0;
+    A11y.updateCanvas();
+  }
+
+  state.animId = requestAnimationFrame(animLoop);
+}
+
+/* ================================================================
+   APP INIT
+   ================================================================ */
+const App = {
+  init() {
+    // Detect reduced motion
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    state.reducedMotion = motionQuery.matches;
+    motionQuery.addEventListener('change', (e) => { state.reducedMotion = e.matches; });
+
+    // Load saved state
+    const saved = Storage.load();
+    if (saved) {
+      state.gravity = saved.gravity != null ? saved.gravity : 1.0;
+      state.radiation = saved.radiation != null ? saved.radiation : 1.0;
+      state.theme = saved.theme || 'auto';
+      state.lang = saved.lang || 'simple';
+      state.tourCompleted = saved.tourCompleted || false;
+      state.activePreset = saved.activePreset || null;
+    }
+
+    // Init subsystems
+    Theme.init();
+    Lang.init();
+    Toast.init();
+    A11y.init();
+    Renderer.init();
+    Particles.init();
+    UI.init();
+    PhysicsPanel.init();
+    Tour.init();
+    Keys.init();
+
+    Physics.recalculate();
+    state.starRadius = state.targetRadius;
+    // Ensure we never reload into a dead-end state
+    state.starState = 'stable';
+    state.extremeAnim = null;
+
+    // Start animation
+    state.lastTime = performance.now();
+    state.animId = requestAnimationFrame(animLoop);
+
+    // Show tour banner for first-time visitors
+    if (!state.tourCompleted && !saved) {
+      setTimeout(() => Tour.showBanner(), 800);
+    }
+
+    // Lifecycle
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        cancelAnimationFrame(state.animId);
+        Storage.save();
+      } else {
+        state.lastTime = performance.now();
+        state.animId = requestAnimationFrame(animLoop);
+      }
+    });
+    window.addEventListener('beforeunload', () => Storage.save());
+  },
+};
+
+// Launch
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => App.init());
+} else {
+  App.init();
+}
+
+})();
+</script>
+</body>
+</html>
