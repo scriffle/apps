@@ -1,0 +1,1551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banked Circular Motion — VCE Physics Interactive</title>
+<meta name="description" content="Interactive banked circular motion simulator for VCE Physics. Explore design speed, normal force, friction, and centripetal force on a banked track.">
+<style>
+:root {
+  --bg: #f5f5f7;
+  --bg-panel: #ffffff;
+  --bg-canvas: #fafafa;
+  --text: #1d1d1f;
+  --text-muted: #6e6e73;
+  --border: #d2d2d7;
+  --accent: #0071e3;
+  --accent-hover: #0077ed;
+  --slider-track: #d2d2d7;
+  --slider-thumb: #0071e3;
+  --badge-bg: #e8f5e9;
+  --badge-text: #2e7d32;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,0.1);
+  --radius: 12px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --color-weight: #3478f6;
+  --color-normal: #30d158;
+  --color-friction: #ff9500;
+  --color-centripetal: #af52de;
+  --color-friction-slow: #ff3b30;
+  --color-tension: #30d158;
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  color-scheme: light dark;
+}
+
+[data-theme="dark"] {
+  --bg: #1c1c1e;
+  --bg-panel: #2c2c2e;
+  --bg-canvas: #1c1c1e;
+  --text: #f5f5f7;
+  --text-muted: #98989d;
+  --border: #48484a;
+  --slider-track: #48484a;
+  --badge-bg: #1b3a1d;
+  --badge-text: #4ade80;
+  --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+a:focus-visible, button:focus-visible, input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: var(--space-4);
+  background: var(--accent);
+  color: #fff;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  z-index: 1000;
+  text-decoration: none;
+  font-weight: 600;
+}
+.skip-link:focus {
+  top: var(--space-4);
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  flex-shrink: 0;
+}
+
+header h1 {
+  font-size: clamp(0.85rem, 2.2vw, 1.1rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.theme-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px var(--space-2);
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  transition: background 0.15s;
+}
+.theme-toggle:hover {
+  background: var(--border);
+}
+
+main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 860px) {
+  main {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(300px, 1fr) auto;
+    overflow: auto;
+  }
+}
+
+.canvas-panel {
+  position: relative;
+  background: var(--bg-canvas);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#diagram {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.controls-panel {
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  padding: var(--space-3) var(--space-4);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+@media (max-width: 860px) {
+  .controls-panel {
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+}
+
+.section-title {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.slider-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.slider-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.slider-value {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.slider-container {
+  position: relative;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--slider-track);
+  outline: none;
+  cursor: pointer;
+  margin: 2px 0;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--slider-thumb);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--slider-thumb);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  cursor: pointer;
+}
+
+.design-speed-marker {
+  position: absolute;
+  bottom: -12px;
+  transform: translateX(-50%);
+  font-size: 0.6rem;
+  color: var(--badge-text);
+  font-weight: 700;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.result-card {
+  background: var(--bg);
+  border-radius: 8px;
+  padding: var(--space-2) var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid var(--border);
+}
+
+.result-card.full-width {
+  grid-column: 1 / -1;
+}
+
+.result-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.result-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.result-value {
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.result-unit {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.friction-direction {
+  font-size: 0.68rem;
+  font-weight: 600;
+  margin-top: 0;
+}
+
+.friction-direction.down-slope {
+  color: var(--color-friction);
+}
+.friction-direction.up-slope {
+  color: var(--color-friction-slow);
+}
+.friction-direction.none {
+  color: var(--badge-text);
+}
+
+.design-speed-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--badge-bg);
+  color: var(--badge-text);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-top: 1px;
+  transition: opacity 0.2s;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2);
+  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+.legend-line {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.equations-section {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.equations-section .eq-active {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+.mode-toggle-label {
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s;
+  white-space: nowrap;
+}
+.mode-toggle-label.active {
+  color: var(--text);
+  font-weight: 700;
+}
+.mode-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: var(--slider-track);
+  border-radius: 10px;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.mode-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  transition: transform 0.2s;
+}
+.mode-switch[aria-checked="true"] {
+  background: var(--accent);
+}
+.mode-switch[aria-checked="true"]::after {
+  transform: translateX(16px);
+}
+
+footer {
+  text-align: center;
+  padding: 2px;
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+</style>
+</head>
+<body>
+<a href="#controls" class="skip-link">Skip to controls</a>
+
+<header>
+  <h1 id="pageTitle">Banked Circular Motion</h1>
+  <div style="display:flex;align-items:center;gap:var(--space-4);">
+    <div class="mode-toggle">
+      <span class="mode-toggle-label active" id="labelBanked">Banked Track</span>
+      <button class="mode-switch" id="modeSwitch" role="switch" aria-checked="false" aria-label="Toggle between banked track and conical pendulum"></button>
+      <span class="mode-toggle-label" id="labelPendulum">Conical Pendulum</span>
+    </div>
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+      <span id="themeIcon">🌙</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <div class="canvas-panel">
+    <canvas id="diagram" aria-label="Force diagram showing a vehicle on a banked track with force vectors"></canvas>
+  </div>
+
+  <div class="controls-panel" id="controls">
+    <div>
+      <div class="section-title">Parameters</div>
+      <div class="slider-group">
+
+        <div class="slider-row">
+          <label class="slider-label" for="sliderAngle">
+            <span id="labelAngle">Bank Angle (θ)</span>
+            <span class="slider-value" id="valAngle">30°</span>
+          </label>
+          <div class="slider-container">
+            <input type="range" id="sliderAngle" min="5" max="60" step="1" value="30" aria-describedby="valAngle">
+          </div>
+        </div>
+
+        <div class="slider-row">
+          <label class="slider-label" for="sliderRadius">
+            <span id="labelRadius">Radius (r)</span>
+            <span class="slider-value" id="valRadius">100 m</span>
+          </label>
+          <div class="slider-container">
+            <input type="range" id="sliderRadius" min="10" max="500" step="5" value="100" aria-describedby="valRadius">
+          </div>
+        </div>
+
+        <div class="slider-row">
+          <label class="slider-label" for="sliderMass">
+            <span>Mass (m)</span>
+            <span class="slider-value" id="valMass">1000 kg</span>
+          </label>
+          <div class="slider-container">
+            <input type="range" id="sliderMass" min="500" max="3000" step="50" value="1000" aria-describedby="valMass">
+          </div>
+        </div>
+
+        <div class="slider-row">
+          <label class="slider-label" for="sliderSpeed">
+            <span>Speed (v)</span>
+            <span class="slider-value" id="valSpeed">23.8 m/s</span>
+          </label>
+          <div class="slider-container" id="speedSliderContainer">
+            <input type="range" id="sliderSpeed" min="0" max="50" step="0.5" value="23.8" aria-describedby="valSpeed">
+            <div class="design-speed-marker" id="designSpeedMarker">▲ v₀</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Calculated Forces</div>
+      <div class="results-grid">
+
+        <div class="result-card" id="designSpeedCard">
+          <span class="result-label"><span class="result-dot" style="background:var(--badge-text)"></span> <span id="labelDesignSpeed">Design Speed</span></span>
+          <span class="result-value" id="resDesignSpeed">23.8 <span class="result-unit">m/s</span></span>
+        </div>
+
+        <div class="result-card" id="radiusCard" style="display:none;">
+          <span class="result-label"><span class="result-dot" style="background:var(--text-muted)"></span> Radius (r)</span>
+          <span class="result-value" id="resRadius">0 <span class="result-unit">m</span></span>
+        </div>
+
+        <div class="result-card">
+          <span class="result-label"><span class="result-dot" style="background:var(--color-centripetal)"></span> Centripetal (Fc)</span>
+          <span class="result-value" id="resFc">5660 <span class="result-unit">N</span></span>
+        </div>
+
+        <div class="result-card">
+          <span class="result-label"><span class="result-dot" style="background:var(--color-weight)"></span> Weight (mg)</span>
+          <span class="result-value" id="resWeight">9800 <span class="result-unit">N</span></span>
+        </div>
+
+        <div class="result-card">
+          <span class="result-label"><span class="result-dot" id="normalDot" style="background:var(--color-normal)"></span> <span id="labelNormal">Normal (N)</span></span>
+          <span class="result-value" id="resNormal">11320 <span class="result-unit">N</span></span>
+        </div>
+
+        <div class="result-card full-width" id="frictionCard">
+          <span class="result-label"><span class="result-dot" id="frictionDot" style="background:var(--color-friction)"></span> Friction (f)</span>
+          <span class="result-value" id="resFriction">0 <span class="result-unit">N</span></span>
+          <span class="friction-direction none" id="frictionDir">At design speed — no friction needed</span>
+          <div class="design-speed-badge" id="designBadge">✓ Design Speed</div>
+        </div>
+
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Force Legend</div>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-line" style="background:var(--color-weight)"></span> Weight (mg)</div>
+        <div class="legend-item" id="legendNormal"><span class="legend-line" style="background:var(--color-normal)"></span> <span id="legendNormalText">Normal (N)</span></div>
+        <div class="legend-item" id="legendFriction"><span class="legend-line" style="background:var(--color-friction)"></span> Friction (f)</div>
+        <div class="legend-item"><span class="legend-line" style="background:var(--color-centripetal);border-style:dashed;border-width:1.5px;border-color:var(--color-centripetal);height:0;"></span> Centripetal (Fc)</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Active Equations</div>
+      <div class="equations-section" id="equationsBox" aria-live="polite">
+        <div class="eq-active">v₀ = √(r g tan θ)</div>
+        <div class="eq-active">N cos θ = mg</div>
+        <div class="eq-active">N sin θ = mv²/r</div>
+        <div>f = m cos θ (v²/r − g tan θ)</div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer>VCE Physics — Banked Circular Motion Interactive</footer>
+
+<script>
+'use strict';
+
+const G = 9.8;
+
+// DOM refs
+const canvas = document.getElementById('diagram');
+const ctx = canvas.getContext('2d');
+
+const sliderAngle = document.getElementById('sliderAngle');
+const sliderRadius = document.getElementById('sliderRadius');
+const sliderMass = document.getElementById('sliderMass');
+const sliderSpeed = document.getElementById('sliderSpeed');
+
+const valAngle = document.getElementById('valAngle');
+const valRadius = document.getElementById('valRadius');
+const valMass = document.getElementById('valMass');
+const valSpeed = document.getElementById('valSpeed');
+
+const resDesignSpeed = document.getElementById('resDesignSpeed');
+const resFc = document.getElementById('resFc');
+const resWeight = document.getElementById('resWeight');
+const resNormal = document.getElementById('resNormal');
+const resFriction = document.getElementById('resFriction');
+const frictionDir = document.getElementById('frictionDir');
+const frictionDot = document.getElementById('frictionDot');
+const designBadge = document.getElementById('designBadge');
+const designSpeedMarker = document.getElementById('designSpeedMarker');
+const speedSliderContainer = document.getElementById('speedSliderContainer');
+const equationsBox = document.getElementById('equationsBox');
+
+// Theme
+const themeToggle = document.getElementById('themeToggle');
+const themeIcon = document.getElementById('themeIcon');
+let darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+  themeIcon.textContent = darkMode ? '☀️' : '🌙';
+}
+applyTheme();
+
+themeToggle.addEventListener('click', () => {
+  darkMode = !darkMode;
+  applyTheme();
+  draw();
+});
+
+// Mode: 'banked' or 'pendulum'
+let mode = 'banked';
+const modeSwitch = document.getElementById('modeSwitch');
+const labelBanked = document.getElementById('labelBanked');
+const labelPendulum = document.getElementById('labelPendulum');
+const pageTitle = document.getElementById('pageTitle');
+const labelAngle = document.getElementById('labelAngle');
+const labelNormal = document.getElementById('labelNormal');
+const normalDot = document.getElementById('normalDot');
+const frictionCard = document.getElementById('frictionCard');
+const legendFriction = document.getElementById('legendFriction');
+const legendNormalText = document.getElementById('legendNormalText');
+const designSpeedCard = document.getElementById('designSpeedCard');
+const labelDesignSpeed = document.getElementById('labelDesignSpeed');
+const radiusCard = document.getElementById('radiusCard');
+const resRadius = document.getElementById('resRadius');
+const labelRadius = document.getElementById('labelRadius');
+
+// Store separate defaults for each mode so we can restore when switching
+const bankedDefaults = { radius: 100, mass: 1000, speed: null }; // speed=null means design speed
+const pendulumDefaults = { stringLength: 1.0, mass: 0.5, speed: 2.0 };
+
+function setMode(newMode) {
+  mode = newMode;
+  const isPendulum = mode === 'pendulum';
+  modeSwitch.setAttribute('aria-checked', isPendulum);
+  labelBanked.classList.toggle('active', !isPendulum);
+  labelPendulum.classList.toggle('active', isPendulum);
+  pageTitle.textContent = isPendulum ? 'Conical Pendulum' : 'Banked Circular Motion';
+
+  // Update labels
+  labelAngle.textContent = isPendulum ? 'String Angle (θ)' : 'Bank Angle (θ)';
+  labelNormal.textContent = isPendulum ? 'Tension (T)' : 'Normal (N)';
+  legendNormalText.textContent = isPendulum ? 'Tension (T)' : 'Normal (N)';
+  labelDesignSpeed.textContent = isPendulum ? 'Speed' : 'Design Speed';
+
+  // Show/hide friction
+  frictionCard.style.display = isPendulum ? 'none' : '';
+  legendFriction.style.display = isPendulum ? 'none' : '';
+
+  // Show/hide computed radius card (pendulum only — radius is computed from L and θ)
+  radiusCard.style.display = isPendulum ? '' : 'none';
+  // Show/hide design speed card (banked only — pendulum has no "design speed" concept)
+  designSpeedCard.style.display = isPendulum ? 'none' : '';
+
+  // In pendulum mode, angle is determined by speed and L — disable angle slider
+  sliderAngle.disabled = isPendulum;
+  sliderAngle.style.opacity = isPendulum ? '0.4' : '1';
+  sliderSpeed.disabled = false;
+  sliderSpeed.style.opacity = '1';
+  designSpeedMarker.style.display = isPendulum ? 'none' : '';
+
+  // Swap radius slider ↔ string length slider
+  if (isPendulum) {
+    // Save banked values
+    bankedDefaults.radius = parseFloat(sliderRadius.value);
+    bankedDefaults.mass = parseFloat(sliderMass.value);
+
+    // Radius slider → String Length slider
+    labelRadius.textContent = 'String Length (L)';
+    sliderRadius.min = '0.3';
+    sliderRadius.max = '4';
+    sliderRadius.step = '0.01';
+    sliderRadius.value = pendulumDefaults.stringLength;
+
+    // Mass slider → smaller range
+    sliderMass.min = '0.01';
+    sliderMass.max = '5';
+    sliderMass.step = '0.01';
+    sliderMass.value = pendulumDefaults.mass;
+
+    state.stringLength = pendulumDefaults.stringLength;
+    state.m = pendulumDefaults.mass;
+    state.v = pendulumDefaults.speed;
+    sliderSpeed.value = state.v.toFixed(1);
+
+    updateSpeedSliderRange();
+    computePendulum();
+    sliderAngle.value = Math.round(state.theta);
+  } else {
+    // Save pendulum values
+    pendulumDefaults.stringLength = parseFloat(sliderRadius.value);
+    pendulumDefaults.mass = parseFloat(sliderMass.value);
+    pendulumDefaults.speed = parseFloat(sliderSpeed.value);
+
+    // String Length slider → Radius slider
+    labelRadius.textContent = 'Radius (r)';
+    sliderRadius.min = '10';
+    sliderRadius.max = '500';
+    sliderRadius.step = '5';
+    sliderRadius.value = bankedDefaults.radius;
+
+    // Mass slider → larger range
+    sliderMass.min = '500';
+    sliderMass.max = '3000';
+    sliderMass.step = '50';
+    sliderMass.value = bankedDefaults.mass;
+
+    sliderAngle.disabled = false;
+    sliderAngle.style.opacity = '1';
+
+    state.r = bankedDefaults.radius;
+    state.m = bankedDefaults.mass;
+    onAngleOrRadiusChange();
+  }
+
+  updateUI();
+  draw();
+}
+
+modeSwitch.addEventListener('click', () => {
+  setMode(mode === 'banked' ? 'pendulum' : 'banked');
+});
+
+// Physics state
+let state = {
+  theta: 30,
+  r: 100,
+  m: 1000,
+  v: 0,
+  designSpeed: 0,
+  friction: 0,
+  normal: 0, // also used as tension in pendulum mode
+  weight: 0,
+  fc: 0,
+  stringLength: 0, // pendulum only
+};
+
+function computeDesignSpeed(thetaDeg, r) {
+  const theta = thetaDeg * Math.PI / 180;
+  return Math.sqrt(r * G * Math.tan(theta));
+}
+
+function compute() {
+  const theta = state.theta * Math.PI / 180;
+  state.designSpeed = computeDesignSpeed(state.theta, state.r);
+  state.weight = state.m * G;
+  state.fc = state.m * state.v * state.v / state.r;
+
+  // f = m cos(θ)(v²/r − g tan(θ))
+  state.friction = state.m * Math.cos(theta) * (state.v * state.v / state.r - G * Math.tan(theta));
+
+  // N = (mg + f sin(θ)) / cos(θ)
+  state.normal = (state.weight + state.friction * Math.sin(theta)) / Math.cos(theta);
+}
+
+function computePendulum() {
+  // Conical pendulum: given v and L (string length), θ is determined
+  // T cos θ = mg,  T sin θ = mv²/r,  r = L sin θ
+  // Combining: g tan θ = v²/r = v²/(L sin θ)
+  // → gL sin²θ / cos θ = v²
+  // Let u = cos θ: gL(1 - u²)/u = v²  →  gLu² + v²u - gL = 0
+  // Quadratic: u = (-v² + √(v⁴ + 4g²L²)) / (2gL)
+
+  const L = state.stringLength;
+  const v = state.v;
+  state.weight = state.m * G;
+
+  const v2 = v * v;
+  const gL = G * L;
+  const discriminant = v2 * v2 + 4 * G * G * L * L;
+  const cosTheta = (-v2 + Math.sqrt(discriminant)) / (2 * gL);
+
+  // Clamp cos θ to valid range (cos 60° to cos 5°)
+  const clampedCos = Math.max(Math.cos(60 * Math.PI / 180), Math.min(Math.cos(5 * Math.PI / 180), cosTheta));
+  const thetaRad = Math.acos(clampedCos);
+  state.theta = thetaRad * 180 / Math.PI;
+
+  const theta = thetaRad;
+  state.r = L * Math.sin(theta);
+  state.designSpeed = state.v; // always at "design speed" for pendulum
+  state.fc = (state.r > 0.001) ? state.m * v2 / state.r : 0;
+  state.normal = state.weight / Math.cos(theta); // T = mg / cos θ
+  state.friction = 0;
+}
+
+function formatForce(n) {
+  const abs = Math.abs(n);
+  if (abs >= 10000) return Math.round(n).toLocaleString();
+  if (abs >= 1000) return n.toFixed(0);
+  if (abs >= 100) return n.toFixed(1);
+  if (abs >= 10) return n.toFixed(1);
+  return n.toFixed(2);
+}
+
+function updateUI() {
+  // In pendulum mode, angle is computed (show 1 decimal); in banked mode it's an integer from slider
+  if (mode === 'pendulum') {
+    valAngle.textContent = state.theta.toFixed(1) + '°';
+  } else {
+    valAngle.textContent = state.theta + '°';
+  }
+  if (mode === 'pendulum') {
+    valRadius.textContent = state.stringLength.toFixed(2) + ' m';
+    valMass.textContent = state.m.toFixed(2) + ' kg';
+    valSpeed.textContent = state.v.toFixed(2) + ' m/s';
+  } else {
+    valRadius.textContent = state.r + ' m';
+    valMass.textContent = state.m + ' kg';
+    valSpeed.textContent = state.v.toFixed(1) + ' m/s';
+  }
+
+  const isPendulum = mode === 'pendulum';
+  const forceLabel = isPendulum ? 'T' : 'N';
+
+  resDesignSpeed.innerHTML = state.designSpeed.toFixed(1) + ' <span class="result-unit">m/s</span>';
+  resFc.innerHTML = formatForce(state.fc) + ' <span class="result-unit">N</span>';
+  resWeight.innerHTML = formatForce(state.weight) + ' <span class="result-unit">N</span>';
+  resNormal.innerHTML = formatForce(state.normal) + ' <span class="result-unit">N</span>';
+
+  if (isPendulum) {
+    resRadius.innerHTML = state.r.toFixed(3) + ' <span class="result-unit">m</span>';
+    equationsBox.innerHTML = `
+      <div class="eq-active">r = L sin θ = ${state.r.toFixed(3)} m</div>
+      <div class="eq-active">T cos θ = mg</div>
+      <div class="eq-active">T sin θ = mv²/r = Fc</div>
+      <div class="eq-active">θ = ${state.theta.toFixed(1)}° (from v and L)</div>
+    `;
+  } else {
+    resFriction.innerHTML = formatForce(Math.abs(state.friction)) + ' <span class="result-unit">N</span>';
+
+    const atDesign = Math.abs(state.v - state.designSpeed) < 0.3;
+
+    if (atDesign) {
+      frictionDir.textContent = 'At design speed — no friction needed';
+      frictionDir.className = 'friction-direction none';
+      frictionDot.style.background = 'var(--badge-text)';
+      designBadge.style.display = 'inline-flex';
+    } else if (state.friction > 0) {
+      frictionDir.textContent = '↓ Down the slope (v > design speed)';
+      frictionDir.className = 'friction-direction down-slope';
+      frictionDot.style.background = 'var(--color-friction)';
+      designBadge.style.display = 'none';
+    } else {
+      frictionDir.textContent = '↑ Up the slope (v < design speed)';
+      frictionDir.className = 'friction-direction up-slope';
+      frictionDot.style.background = 'var(--color-friction-slow)';
+      designBadge.style.display = 'none';
+    }
+
+    const eqHTML = atDesign ? `
+      <div class="eq-active">v₀ = √(r g tan θ) = ${state.designSpeed.toFixed(1)} m/s</div>
+      <div class="eq-active">N cos θ = mg</div>
+      <div class="eq-active">N sin θ = mv²/r = Fc</div>
+      <div>f = 0 (at design speed)</div>
+    ` : `
+      <div>v₀ = √(r g tan θ) = ${state.designSpeed.toFixed(1)} m/s</div>
+      <div class="eq-active">N cos θ − f sin θ = mg</div>
+      <div class="eq-active">N sin θ + f cos θ = mv²/r</div>
+      <div class="eq-active">f = m cos θ (v²/r − g tan θ) = ${formatForce(state.friction)} N</div>
+    `;
+    equationsBox.innerHTML = eqHTML;
+
+    // Position design speed marker on speed slider
+    const maxV = parseFloat(sliderSpeed.max);
+    const pct = (state.designSpeed / maxV) * 100;
+    designSpeedMarker.style.left = `calc(${pct}% + ${(0.5 - pct/100) * 20}px)`;
+    designSpeedMarker.style.display = (state.designSpeed <= maxV) ? 'block' : 'none';
+  }
+}
+
+function updateSpeedSliderRange() {
+  let maxV, minV;
+  if (mode === 'pendulum') {
+    // For string length L, v² = gL sin²θ / cos θ
+    // Max speed at θ = 60°: v = √(gL sin²60° / cos60°)
+    const L = state.stringLength;
+    const maxTheta = 60 * Math.PI / 180;
+    const minTheta = 5 * Math.PI / 180;
+    maxV = Math.sqrt(G * L * Math.sin(maxTheta) * Math.sin(maxTheta) / Math.cos(maxTheta)) * 1.05;
+    minV = Math.sqrt(G * L * Math.sin(minTheta) * Math.sin(minTheta) / Math.cos(minTheta));
+    sliderSpeed.min = minV.toFixed(2);
+    sliderSpeed.step = '0.01';
+  } else {
+    const ds = computeDesignSpeed(state.theta, state.r);
+    maxV = Math.max(ds * 2, 20);
+    minV = 0;
+    sliderSpeed.min = '0';
+    sliderSpeed.step = '0.5';
+  }
+  sliderSpeed.max = maxV.toFixed(1);
+
+  // Clamp current speed
+  const curMin = parseFloat(sliderSpeed.min);
+  const curMax = parseFloat(sliderSpeed.max);
+  if (state.v > curMax) {
+    state.v = curMax;
+    sliderSpeed.value = curMax.toFixed(2);
+  }
+  if (state.v < curMin) {
+    state.v = curMin;
+    sliderSpeed.value = curMin.toFixed(2);
+  }
+}
+
+// Canvas drawing
+function resizeCanvas() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function getColors() {
+  const style = getComputedStyle(document.documentElement);
+  return {
+    bg: style.getPropertyValue('--bg-canvas').trim(),
+    text: style.getPropertyValue('--text').trim(),
+    muted: style.getPropertyValue('--text-muted').trim(),
+    border: style.getPropertyValue('--border').trim(),
+    weight: style.getPropertyValue('--color-weight').trim(),
+    normal: style.getPropertyValue('--color-normal').trim(),
+    friction: style.getPropertyValue('--color-friction').trim(),
+    frictionSlow: style.getPropertyValue('--color-friction-slow').trim(),
+    centripetal: style.getPropertyValue('--color-centripetal').trim(),
+    accent: style.getPropertyValue('--accent').trim(),
+  };
+}
+
+function drawArrow(x0, y0, x1, y1, color, lineWidth, dashed) {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const len = Math.sqrt(dx*dx + dy*dy);
+  if (len < 2) return;
+
+  const headLen = Math.min(12, len * 0.3);
+  const angle = Math.atan2(dy, dx);
+
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  if (dashed) ctx.setLineDash([6, 4]);
+
+  // Line
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1 - headLen * Math.cos(angle) * 0.5, y1 - headLen * Math.sin(angle) * 0.5);
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+
+  // Arrowhead
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x1 - headLen * Math.cos(angle - 0.35), y1 - headLen * Math.sin(angle - 0.35));
+  ctx.lineTo(x1 - headLen * Math.cos(angle + 0.35), y1 - headLen * Math.sin(angle + 0.35));
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawLabel(text, x, y, color, align, fontSize) {
+  ctx.save();
+  ctx.font = `600 ${fontSize || 13}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  ctx.fillStyle = color;
+  ctx.textAlign = align || 'left';
+  ctx.textBaseline = 'middle';
+
+  // Background for readability
+  const metrics = ctx.measureText(text);
+  const pad = 3;
+  const bgX = align === 'right' ? x - metrics.width - pad : align === 'center' ? x - metrics.width/2 - pad : x - pad;
+  const bgColor = darkMode ? 'rgba(28,28,30,0.8)' : 'rgba(250,250,250,0.85)';
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(bgX, y - 9, metrics.width + pad*2, 18);
+
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+function drawPendulum(w, h, c) {
+  const theta = state.theta * Math.PI / 180;
+
+  // Pivot point at top-centre
+  const pivotX = w * 0.42;
+  const pivotY = h * 0.1;
+
+  // String length in pixels — scale to fit
+  const maxStringPx = Math.min(w * 0.4, h * 0.65);
+  const stringPx = maxStringPx;
+
+  // Bob position: offset from pivot by string at angle θ from vertical
+  const bobX = pivotX + stringPx * Math.sin(theta);
+  const bobY = pivotY + stringPx * Math.cos(theta);
+  const bobR = 14;
+
+  // Vertical dashed line from pivot
+  ctx.save();
+  ctx.strokeStyle = c.muted;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(pivotX, pivotY);
+  ctx.lineTo(pivotX, bobY + 30);
+  ctx.stroke();
+  ctx.restore();
+
+  // Angle arc at pivot
+  const arcR = Math.min(35, stringPx * 0.18);
+  ctx.save();
+  ctx.strokeStyle = c.text;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  // Arc from straight down (π/2) toward the string direction
+  // String direction from pivot in screen coords: angle = π/2 - θ from +x axis
+  // Actually: straight down = π/2 (in canvas angle from +x). String goes at π/2 - θ? No:
+  // String direction vector: (sin θ, cos θ) from pivot. Angle from +x = atan2(cos θ, sin θ) = π/2 - θ
+  const straightDown = Math.PI / 2;
+  const stringAngle = Math.atan2(bobY - pivotY, bobX - pivotX); // angle of string from +x
+  ctx.arc(pivotX, pivotY, arcR, stringAngle, straightDown, false);
+  ctx.stroke();
+  // θ label
+  const midA = (stringAngle + straightDown) / 2;
+  ctx.font = '700 13px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillStyle = c.text;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const thetaDisplay = (mode === 'pendulum') ? state.theta.toFixed(1) : state.theta;
+  ctx.fillText('θ = ' + thetaDisplay + '°', pivotX + arcR * 1.6 * Math.cos(midA), pivotY + arcR * 1.6 * Math.sin(midA));
+  ctx.restore();
+
+  // Draw string
+  ctx.save();
+  ctx.strokeStyle = darkMode ? '#aaa' : '#444';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(pivotX, pivotY);
+  ctx.lineTo(bobX, bobY);
+  ctx.stroke();
+  ctx.restore();
+
+  // Draw pivot mount (small filled circle)
+  ctx.save();
+  ctx.fillStyle = darkMode ? '#888' : '#555';
+  ctx.beginPath();
+  ctx.arc(pivotX, pivotY, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Draw bob
+  ctx.save();
+  ctx.fillStyle = darkMode ? '#5ac8fa' : '#007aff';
+  ctx.strokeStyle = darkMode ? '#70d7ff' : '#005ec4';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(bobX, bobY, bobR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  // Horizontal radius line (dashed) from below pivot to bob
+  ctx.save();
+  ctx.strokeStyle = c.muted;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(pivotX, bobY);
+  ctx.lineTo(bobX, bobY);
+  ctx.stroke();
+  ctx.restore();
+
+  // "r" label on the horizontal radius
+  ctx.save();
+  ctx.font = '600 11px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillStyle = c.muted;
+  ctx.textAlign = 'center';
+  ctx.fillText('r = ' + state.r.toFixed(2) + ' m', (pivotX + bobX) / 2, bobY + 14);
+  ctx.restore();
+
+  // "L" label on the string
+  const lLabelX = (pivotX + bobX) / 2 - 14;
+  const lLabelY = (pivotY + bobY) / 2 - 8;
+  ctx.save();
+  ctx.font = '600 11px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillStyle = c.muted;
+  ctx.textAlign = 'right';
+  ctx.fillText('L = ' + state.stringLength.toFixed(2) + ' m', lLabelX, lLabelY);
+  ctx.restore();
+
+  // ================================================================
+  // FORCE VECTORS from bob centre — same triangle math as banked
+  // ================================================================
+  // T (tension) replaces N — direction is along string toward pivot = (-sin θ, -cos θ) in screen
+  // mg straight down = (0, +mg)
+  // Fc horizontal toward centre (left) = (-Fc, 0)
+  // Equilibrium: T cos θ = mg, T sin θ = Fc
+
+  const fOx = bobX;
+  const fOy = bobY;
+
+  const arrowRefLen = Math.min(w, h) * 0.22;
+  const biggestForce = Math.max(state.weight, state.normal, state.fc, 1);
+  const maxAllowedLen = Math.min(w, h) * 0.35;
+  const S = Math.min(arrowRefLen / Math.max(state.weight, 1), maxAllowedLen / biggestForce);
+
+  // Weight: mg straight down
+  const mgPx = state.weight * S;
+  drawArrow(fOx, fOy, fOx, fOy + mgPx, c.weight, 3, false);
+  drawLabel(`mg = ${formatForce(state.weight)} N`, fOx + 10, fOy + mgPx * 0.6, c.weight, 'left');
+
+  // Tension: toward pivot, direction (-sin θ, -cos θ)
+  const tPxX = state.normal * S * (-Math.sin(theta));
+  const tPxY = state.normal * S * (-Math.cos(theta));
+  drawArrow(fOx, fOy, fOx + tPxX, fOy + tPxY, c.normal, 3, false);
+  drawLabel(`T = ${formatForce(state.normal)} N`,
+    fOx + tPxX * 0.55 - 10, fOy + tPxY * 0.55, c.normal, 'right');
+
+  // Centripetal: horizontal toward centre (left)
+  const fcPx = state.fc * S;
+  if (state.fc > 1) {
+    drawArrow(fOx, fOy, fOx - fcPx, fOy, c.centripetal, 2.5, true);
+    drawLabel(`Fc = ${formatForce(state.fc)} N`,
+      fOx - fcPx * 0.5, fOy - 18, c.centripetal, 'center');
+  }
+
+  // Component decomposition: T resolved into vertical & horizontal
+  const tTipX = fOx + tPxX;
+  const tTipY = fOy + tPxY;
+  ctx.save();
+  ctx.setLineDash([3, 3]);
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.45;
+  ctx.strokeStyle = c.normal;
+  ctx.beginPath();
+  ctx.moveTo(tTipX, tTipY);
+  ctx.lineTo(tTipX, fOy);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(fOx, fOy);
+  ctx.lineTo(tTipX, fOy);
+  ctx.stroke();
+  ctx.restore();
+
+  // "Centre" label
+  ctx.save();
+  ctx.font = '500 11px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillStyle = c.muted;
+  ctx.textAlign = 'center';
+  ctx.fillText('← Centre of circle', fOx - fcPx - 15, fOy + 14);
+  ctx.restore();
+}
+
+function draw() {
+  const w = canvas.width / (window.devicePixelRatio || 1);
+  const h = canvas.height / (window.devicePixelRatio || 1);
+  const c = getColors();
+
+  ctx.clearRect(0, 0, w, h);
+
+  if (mode === 'pendulum') {
+    drawPendulum(w, h, c);
+    return;
+  }
+
+  const theta = state.theta * Math.PI / 180;
+  const atDesign = Math.abs(state.v - state.designSpeed) < 0.3;
+
+  // ================================================================
+  // GEOMETRY: Bank surface drawn at the TRUE physics angle θ
+  // ================================================================
+  const diagramCx = w * 0.42;
+  const diagramCy = h * 0.55;
+  const bankLen = Math.min(w * 0.55, h * 0.45);
+
+  // Bank line from lower-left (inside/centre) to upper-right (outside)
+  // The screen angle of the bank = -theta (negative because y-axis is inverted)
+  const bankScreenAngle = -theta; // exact match to physics θ
+  const halfLen = bankLen / 2;
+  const bankX0 = diagramCx - halfLen * Math.cos(theta);
+  const bankY0 = diagramCy + halfLen * Math.sin(theta);
+  const bankX1 = diagramCx + halfLen * Math.cos(theta);
+  const bankY1 = diagramCy - halfLen * Math.sin(theta);
+
+  // Draw ground/earth fill below bank
+  ctx.save();
+  ctx.fillStyle = darkMode ? 'rgba(60,60,60,0.25)' : 'rgba(180,180,180,0.2)';
+  ctx.beginPath();
+  ctx.moveTo(bankX0, bankY0);
+  ctx.lineTo(bankX1, bankY1);
+  ctx.lineTo(bankX1, bankY0 + 50);
+  ctx.lineTo(bankX0, bankY0 + 50);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // Draw road surface (thick)
+  ctx.save();
+  ctx.strokeStyle = darkMode ? '#888' : '#666';
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(bankX0, bankY0);
+  ctx.lineTo(bankX1, bankY1);
+  ctx.stroke();
+  ctx.restore();
+
+  // Horizontal reference line from bottom of bank
+  ctx.save();
+  ctx.strokeStyle = c.muted;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(bankX0, bankY0);
+  ctx.lineTo(bankX0 + 65, bankY0);
+  ctx.stroke();
+  ctx.restore();
+
+  // Draw angle arc at bottom-left of bank
+  const arcR = Math.min(40, bankLen * 0.15);
+  ctx.save();
+  ctx.strokeStyle = c.text;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  // Arc from 0 (horizontal right) to bankScreenAngle (up and to the right)
+  ctx.arc(bankX0, bankY0, arcR, 0, bankScreenAngle, true);
+  ctx.stroke();
+  // θ label at midpoint of arc
+  const midArc = bankScreenAngle / 2;
+  ctx.font = '700 13px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillStyle = c.text;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('θ = ' + state.theta + '°', bankX0 + arcR * 1.6 * Math.cos(midArc), bankY0 + arcR * 1.6 * Math.sin(midArc));
+  ctx.restore();
+
+  // "Centre of circle" label on the left
+  ctx.save();
+  ctx.font = `500 11px -apple-system, BlinkMacSystemFont, sans-serif`;
+  ctx.fillStyle = c.muted;
+  ctx.textAlign = 'center';
+  ctx.fillText('← Centre of circle', bankX0 + 5, bankY0 + 28);
+  ctx.restore();
+
+  // ================================================================
+  // CAR on the bank surface
+  // ================================================================
+  const t = 0.42;
+  const carX = bankX0 + t * (bankX1 - bankX0);
+  const carY = bankY0 + t * (bankY1 - bankY0);
+  const carW = 44;
+  const carH = 22;
+
+  ctx.save();
+  ctx.translate(carX, carY);
+  ctx.rotate(bankScreenAngle);
+  // Car body
+  ctx.fillStyle = darkMode ? '#5ac8fa' : '#007aff';
+  ctx.strokeStyle = darkMode ? '#70d7ff' : '#005ec4';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(-carW/2, -carH - 2, carW, carH, 5);
+  ctx.fill();
+  ctx.stroke();
+  // Roof
+  ctx.fillStyle = darkMode ? '#4ab8ea' : '#0066dd';
+  ctx.beginPath();
+  ctx.roundRect(-carW/4, -carH - 12, carW/2, 12, [4, 4, 0, 0]);
+  ctx.fill();
+  // Wheels
+  ctx.fillStyle = darkMode ? '#bbb' : '#333';
+  ctx.beginPath();
+  ctx.arc(-carW * 0.3, -1, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(carW * 0.3, -1, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // ================================================================
+  // FORCE VECTORS — computed from physics θ directly, not from visual bankAngle
+  // ================================================================
+  // All direction vectors use the physics angle θ in screen coordinates.
+  //
+  // Screen coords: +x = right, +y = down
+  // Bank surface direction (up-slope, toward outer edge): (cos θ, -sin θ)
+  // Normal to bank (away from surface, pointing "up" from road): (-sin θ, -cos θ)
+  // Down-slope (toward centre): (-cos θ, +sin θ)
+  //
+  // Physics equilibrium (our sign convention: f>0 means down-slope):
+  //   Horizontal: N sin θ + f cos θ = Fc = mv²/r      (toward centre)
+  //   Vertical:   N cos θ - f sin θ = mg               (upward)
+  //
+  // These forces must form a closed polygon:
+  //   mg (down) + N (perpendicular to bank, up-left) + f (along bank) = Fc (horizontal left)
+  // Equivalently: N + f + mg = net force, and net_vertical = 0, net_horizontal = Fc
+
+  // Force origin = car centre (offset from surface along normal)
+  const carOffset = carH / 2 + 6;
+  const fOx = carX + (-Math.sin(theta)) * carOffset;
+  const fOy = carY + (-Math.cos(theta)) * carOffset;
+
+  // Pixel scale: one scale factor for all forces so ratios are exact
+  const arrowRefLen = Math.min(w, h) * 0.22;
+  const biggestForce = Math.max(state.weight, state.normal, Math.abs(state.friction), state.fc, 1);
+  const maxAllowedLen = Math.min(w, h) * 0.38;
+  const S = Math.min(arrowRefLen / Math.max(state.weight, 1), maxAllowedLen / biggestForce);
+
+  // --- Pixel endpoints computed directly from force magnitudes and θ ---
+
+  // Weight: mg straight down → (0, +mg)
+  const mgPx = state.weight * S;
+
+  // Normal: magnitude N, direction (-sin θ, -cos θ) in screen coords
+  const nPxX = state.normal * S * (-Math.sin(theta));
+  const nPxY = state.normal * S * (-Math.cos(theta));
+
+  // Friction: magnitude |f|, direction depends on sign
+  // f > 0: down-slope = (-cos θ, +sin θ)
+  // f < 0: up-slope = (+cos θ, -sin θ)
+  // Using signed f directly with down-slope direction:
+  const fPxX = state.friction * S * (-Math.cos(theta));
+  const fPxY = state.friction * S * (Math.sin(theta));
+
+  // Centripetal: Fc horizontal toward centre = (-Fc, 0)
+  const fcPx = state.fc * S;
+
+  // VERIFICATION: N + f + mg should give net = (horizontal Fc toward centre, 0 vertical)
+  // net_x = nPxX + fPxX + 0  should equal  -fcPx
+  // net_y = nPxY + fPxY + mgPx  should equal  0
+
+  // 1) Weight (mg) — straight down (blue)
+  drawArrow(fOx, fOy, fOx, fOy + mgPx, c.weight, 3, false);
+  drawLabel(`mg = ${formatForce(state.weight)} N`, fOx + 10, fOy + mgPx * 0.6, c.weight, 'left');
+
+  // 2) Normal force (N) — perpendicular to bank, away from surface (green)
+  drawArrow(fOx, fOy, fOx + nPxX, fOy + nPxY, c.normal, 3, false);
+  drawLabel(`N = ${formatForce(state.normal)} N`,
+    fOx + nPxX * 0.55 - 10, fOy + nPxY * 0.55, c.normal, 'right');
+
+  // 3) Friction along bank surface (orange/red)
+  if (!atDesign && Math.abs(state.friction) > 1) {
+    const frictionColor = state.friction > 0 ? c.friction : c.frictionSlow;
+    const fLabel = state.friction > 0 ? 'f (down slope)' : 'f (up slope)';
+
+    drawArrow(fOx, fOy, fOx + fPxX, fOy + fPxY, frictionColor, 3, false);
+
+    const labelSide = state.friction > 0 ? 'right' : 'left';
+    const labelOffX = state.friction > 0 ? -10 : 10;
+    drawLabel(`${fLabel} = ${formatForce(Math.abs(state.friction))} N`,
+      fOx + fPxX * 0.5 + labelOffX, fOy + fPxY * 0.5 + 18,
+      frictionColor, labelSide);
+  }
+
+  // 4) Net centripetal force — dashed, horizontal toward centre (purple)
+  if (state.fc > 1) {
+    drawArrow(fOx, fOy, fOx - fcPx, fOy, c.centripetal, 2.5, true);
+    drawLabel(`Fc = ${formatForce(state.fc)} N`,
+      fOx - fcPx * 0.5, fOy - 18, c.centripetal, 'center');
+  }
+
+  // 5) Component decomposition: dashed lines showing N resolved into vertical & horizontal
+  const nTipX = fOx + nPxX;
+  const nTipY = fOy + nPxY;
+  ctx.save();
+  ctx.setLineDash([3, 3]);
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.45;
+  ctx.strokeStyle = c.normal;
+  // Vertical drop from N tip to force-origin height
+  ctx.beginPath();
+  ctx.moveTo(nTipX, nTipY);
+  ctx.lineTo(nTipX, fOy);
+  ctx.stroke();
+  // Horizontal from origin to below N tip
+  ctx.beginPath();
+  ctx.moveTo(fOx, fOy);
+  ctx.lineTo(nTipX, fOy);
+  ctx.stroke();
+  ctx.restore();
+
+  // ================================================================
+  // SPEED INDICATOR BAR (right side of canvas)
+  // ================================================================
+  const barW = 12;
+  const barX = w - 55;
+  const barTop = 30;
+  const barH = Math.max(h - 70, 100);
+
+  ctx.save();
+  // Track background
+  ctx.fillStyle = darkMode ? 'rgba(60,60,60,0.35)' : 'rgba(200,200,200,0.35)';
+  ctx.beginPath();
+  ctx.roundRect(barX, barTop, barW, barH, 6);
+  ctx.fill();
+
+  const maxV = parseFloat(sliderSpeed.max);
+  const speedFrac = Math.min(state.v / maxV, 1);
+  const designFrac = Math.min(state.designSpeed / maxV, 1);
+  const fillH = speedFrac * barH;
+
+  // Color based on speed vs design
+  let barColor;
+  if (atDesign) barColor = c.normal;
+  else if (state.v > state.designSpeed) barColor = c.friction;
+  else barColor = c.frictionSlow;
+
+  // Fill from bottom
+  ctx.fillStyle = barColor;
+  ctx.beginPath();
+  ctx.roundRect(barX, barTop + barH - fillH, barW, Math.max(fillH, 0), 6);
+  ctx.fill();
+
+  // Design speed tick mark
+  const dsY = barTop + barH - designFrac * barH;
+  ctx.strokeStyle = c.text;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(barX - 5, dsY);
+  ctx.lineTo(barX + barW + 5, dsY);
+  ctx.stroke();
+
+  ctx.font = '600 10px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillStyle = c.text;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('v₀', barX - 8, dsY);
+
+  // Current speed readout
+  const curY = barTop + barH - speedFrac * barH;
+  ctx.fillStyle = barColor;
+  ctx.font = '700 11px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(state.v.toFixed(1), barX - 8, Math.min(Math.max(curY, barTop + 8), barTop + barH - 8));
+
+  // "Speed" label
+  ctx.font = `500 10px -apple-system, BlinkMacSystemFont, sans-serif`;
+  ctx.fillStyle = c.muted;
+  ctx.textAlign = 'center';
+  ctx.fillText('Speed', barX + barW / 2, barTop - 10);
+  ctx.fillText('m/s', barX + barW / 2, barTop + barH + 14);
+  ctx.restore();
+}
+
+function update() {
+  state.m = parseFloat(sliderMass.value);
+  state.v = parseFloat(sliderSpeed.value);
+
+  if (mode === 'pendulum') {
+    // In pendulum mode, the "radius" slider is string length
+    state.stringLength = parseFloat(sliderRadius.value);
+    computePendulum();
+    // Update the angle slider position to reflect computed θ
+    sliderAngle.value = Math.round(state.theta);
+  } else {
+    state.r = parseFloat(sliderRadius.value);
+    state.theta = parseFloat(sliderAngle.value);
+    compute();
+  }
+  updateUI();
+  draw();
+}
+
+function onAngleOrRadiusChange() {
+  if (mode === 'pendulum') {
+    // String length changed; speed stays, θ recomputes
+    state.stringLength = parseFloat(sliderRadius.value);
+    state.m = parseFloat(sliderMass.value);
+    state.v = parseFloat(sliderSpeed.value);
+    updateSpeedSliderRange();
+    computePendulum();
+    sliderAngle.value = Math.round(state.theta);
+    updateUI();
+    draw();
+    return;
+  }
+
+  state.r = parseFloat(sliderRadius.value);
+  state.theta = parseFloat(sliderAngle.value);
+  updateSpeedSliderRange();
+
+  // Set speed to design speed when angle/radius changes
+  state.v = computeDesignSpeed(state.theta, state.r);
+  sliderSpeed.value = state.v.toFixed(1);
+
+  update();
+}
+
+// Events
+sliderAngle.addEventListener('input', onAngleOrRadiusChange);
+sliderRadius.addEventListener('input', onAngleOrRadiusChange);
+sliderMass.addEventListener('input', update);
+sliderSpeed.addEventListener('input', update);
+
+// Resize
+let resizeRAF;
+const resizeObserver = new ResizeObserver(() => {
+  cancelAnimationFrame(resizeRAF);
+  resizeRAF = requestAnimationFrame(() => {
+    resizeCanvas();
+    draw();
+  });
+});
+resizeObserver.observe(canvas.parentElement);
+
+// Init
+resizeCanvas();
+state.theta = parseFloat(sliderAngle.value);
+state.r = parseFloat(sliderRadius.value);
+state.m = parseFloat(sliderMass.value);
+updateSpeedSliderRange();
+state.v = computeDesignSpeed(state.theta, state.r);
+sliderSpeed.value = state.v.toFixed(1);
+compute();
+updateUI();
+draw();
+</script>
+</body>
+</html>
