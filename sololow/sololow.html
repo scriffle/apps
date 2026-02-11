@@ -1119,7 +1119,7 @@
     (function() {
 
       // ─── Configuration ──────────────────────────────────────────────
-      var API_URL = 'https://script.google.com/macros/s/AKfycbzMmrkDvwta4GPYWYa9k_cWFTAOy2KmQ5EWTGRXzCj_UadL2WaMS5tcKkI8iDh_ybJo/exec';
+      var API_URL = 'https://script.google.com/macros/s/AKfycbz31aQ7PgsK5SypNRhm7Ha7QVdxE6daykFNLIGgocvWnoVc-gYU1urAXGFJ4AJHlkw/exec';
       var POLL_INTERVAL_DEFAULT = 5000;
       var POLL_INTERVAL_IDLE = 15000;
       var POLL_INTERVAL_BACKGROUND = 20000;
@@ -1242,9 +1242,8 @@
       }
 
       /**
-       * Generate a lightweight device fingerprint to detect duplicate entries
-       * from the same device (e.g. incognito windows with different names).
-       * Not bulletproof, but stops casual cheating on school WiFi.
+       * Lightweight device fingerprint to detect duplicate entries from the
+       * same device under different player names (e.g. incognito windows).
        */
       function getDeviceFingerprint() {
         var components = [
@@ -1257,7 +1256,6 @@
           navigator.platform || ''
         ];
         var raw = components.join('|');
-        // Simple hash (djb2)
         var hash = 5381;
         for (var i = 0; i < raw.length; i++) {
           hash = ((hash << 5) + hash + raw.charCodeAt(i)) & 0xFFFFFFFF;
@@ -1319,13 +1317,48 @@
       };
 
       // ─── Player Identity ────────────────────────────────────────────
+      // Player ID is stored redundantly across localStorage, sessionStorage,
+      // and a cookie. If a student clears one, the others restore it — preventing
+      // them from re-entering the game under a different name.
+
+      function setCookie(name, value, days) {
+        var expires = '';
+        if (days) {
+          var d = new Date();
+          d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+          expires = '; expires=' + d.toUTCString();
+        }
+        try {
+          document.cookie = name + '=' + encodeURIComponent(value) + expires + '; path=/; SameSite=Strict';
+        } catch (e) {}
+      }
+
+      function getCookie(name) {
+        try {
+          var match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+          return match ? decodeURIComponent(match[1]) : null;
+        } catch (e) {
+          return null;
+        }
+      }
 
       function loadPlayer() {
         var saved = storage.getJSON('lun_player');
+        var cookieId = getCookie('lun_pid');
+        var sessionId = null;
+        try { sessionId = sessionStorage.getItem('lun_pid'); } catch (e) {}
+
         if (saved && typeof saved === 'object' && saved.id && saved.name) {
           state.player.id = String(saved.id);
           state.player.name = String(saved.name).substring(0, MAX_NAME_LENGTH);
+        } else if (cookieId) {
+          // localStorage was cleared but cookie survived — restore the same ID
+          state.player.id = cookieId;
+        } else if (sessionId) {
+          // localStorage and cookie cleared but session survived
+          state.player.id = sessionId;
         }
+
         if (!state.player.id) {
           state.player.id = generateId();
         }
@@ -1337,6 +1370,9 @@
           id: state.player.id,
           name: state.player.name
         });
+        // Redundant storage — survives clearing localStorage alone
+        setCookie('lun_pid', state.player.id, 30);
+        try { sessionStorage.setItem('lun_pid', state.player.id); } catch (e) {}
       }
 
       // ─── API Layer ──────────────────────────────────────────────────
