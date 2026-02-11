@@ -1,0 +1,2511 @@
+<!DOCTYPE html>
+<html lang="en" data-version="1.0.0">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Lowest Unique Number — A real-time classroom game where players compete to pick the lowest unique number.">
+  <title>Lowest Unique Number</title>
+  <style>
+    /* ─── Reset ─────────────────────────────────────────────────────── */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* ─── CSS Custom Properties ─────────────────────────────────────── */
+    :root {
+      /* Colors */
+      --color-bg: #f4f6f9;
+      --color-surface: #ffffff;
+      --color-text: #1a1a2e;
+      --color-text-secondary: #555770;
+      --color-accent: #2563eb;
+      --color-accent-hover: #1d4ed8;
+      --color-success: #16a34a;
+      --color-success-bg: #dcfce7;
+      --color-danger: #dc2626;
+      --color-danger-bg: #fee2e2;
+      --color-warning: #d97706;
+      --color-warning-bg: #fef3c7;
+      --color-border: #e2e8f0;
+      --color-muted: #94a3b8;
+      --color-gold: #f59e0b;
+      --color-silver: #9ca3af;
+      --color-bronze: #b45309;
+
+      /* Spacing */
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 24px;
+      --space-6: 32px;
+      --space-7: 48px;
+      --space-8: 64px;
+
+      /* Typography */
+      --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-size-xs: clamp(0.7rem, 1.5vw, 0.75rem);
+      --font-size-sm: clamp(0.8rem, 2vw, 0.875rem);
+      --font-size-base: clamp(0.9rem, 2.2vw, 1rem);
+      --font-size-lg: clamp(1.1rem, 2.5vw, 1.25rem);
+      --font-size-xl: clamp(1.3rem, 3vw, 1.5rem);
+      --font-size-2xl: clamp(1.6rem, 4vw, 2rem);
+      --font-size-3xl: clamp(2rem, 5vw, 2.5rem);
+      --font-size-timer: clamp(2.5rem, 6vw, 5rem);
+
+      /* Borders */
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+
+      /* Shadows */
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+
+      /* Transitions */
+      --transition-fast: 0.15s ease;
+      --transition-base: 0.25s ease;
+    }
+
+    /* ─── Base ──────────────────────────────────────────────────────── */
+    html {
+      font-family: var(--font-family);
+      font-size: var(--font-size-base);
+      color: var(--color-text);
+      background: var(--color-bg);
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    a:focus-visible,
+    button:focus-visible,
+    input:focus-visible,
+    [tabindex]:focus-visible {
+      outline: 2px solid var(--color-accent);
+      outline-offset: 2px;
+    }
+
+    /* ─── Skip Link ────────────────────────────────────────────────── */
+    .skip-link {
+      position: absolute;
+      top: -100%;
+      left: var(--space-4);
+      background: var(--color-accent);
+      color: #fff;
+      padding: var(--space-2) var(--space-4);
+      border-radius: var(--radius-sm);
+      z-index: 1000;
+      font-size: var(--font-size-sm);
+      text-decoration: none;
+    }
+    .skip-link:focus {
+      top: var(--space-2);
+    }
+
+    /* ─── Header ───────────────────────────────────────────────────── */
+    .app-header {
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-border);
+      padding: var(--space-3) var(--space-4);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .app-title {
+      font-size: var(--font-size-lg);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .header-info {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      flex-wrap: wrap;
+    }
+
+    .phase-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      padding: var(--space-1) var(--space-3);
+      border-radius: 100px;
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .phase-badge--idle {
+      background: var(--color-border);
+      color: var(--color-text-secondary);
+    }
+    .phase-badge--guessing {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    .phase-badge--reveal {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .round-info {
+      font-size: var(--font-size-sm);
+      color: var(--color-text-secondary);
+    }
+
+    .timer-display {
+      font-size: var(--font-size-2xl);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      min-width: 4ch;
+      text-align: center;
+    }
+
+    .connection-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: var(--space-1);
+    }
+    .connection-dot--online { background: var(--color-success); }
+    .connection-dot--offline { background: var(--color-danger); }
+    .connection-dot--local { background: var(--color-muted); }
+
+    /* ─── Tab Navigation ───────────────────────────────────────────── */
+    .tab-nav {
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-border);
+      display: flex;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .tab-nav::-webkit-scrollbar { display: none; }
+
+    .tab-btn {
+      flex: 1;
+      min-width: 0;
+      padding: var(--space-3) var(--space-2);
+      border: none;
+      background: none;
+      color: var(--color-text-secondary);
+      font-size: var(--font-size-sm);
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      border-bottom: 3px solid transparent;
+      transition: color var(--transition-fast), border-color var(--transition-fast);
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tab-btn:hover {
+      color: var(--color-text);
+    }
+    .tab-btn[aria-selected="true"] {
+      color: var(--color-accent);
+      border-bottom-color: var(--color-accent);
+      font-weight: 600;
+    }
+
+    /* ─── Tab Panels ───────────────────────────────────────────────── */
+    .tab-panels {
+      flex: 1;
+      position: relative;
+    }
+
+    .tab-panel {
+      display: none;
+      padding: var(--space-4);
+      max-width: 900px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .tab-panel[aria-hidden="false"] {
+      display: block;
+    }
+
+    /* ─── Pick Tab ─────────────────────────────────────────────────── */
+    .player-name-section {
+      margin-bottom: var(--space-5);
+    }
+
+    .name-label {
+      display: block;
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      margin-bottom: var(--space-2);
+      color: var(--color-text-secondary);
+    }
+
+    .name-input-row {
+      display: flex;
+      gap: var(--space-2);
+    }
+
+    .name-input {
+      flex: 1;
+      padding: var(--space-3);
+      border: 2px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      font-size: var(--font-size-base);
+      font-family: inherit;
+      background: var(--color-surface);
+      color: var(--color-text);
+      transition: border-color var(--transition-fast);
+      max-width: 300px;
+    }
+    .name-input:focus {
+      border-color: var(--color-accent);
+      outline: none;
+    }
+    .name-input::placeholder {
+      color: var(--color-muted);
+    }
+
+    .your-pick-display {
+      text-align: center;
+      padding: var(--space-4);
+      margin-bottom: var(--space-4);
+      background: var(--color-surface);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+    }
+    .your-pick-label {
+      font-size: var(--font-size-sm);
+      color: var(--color-text-secondary);
+      margin-bottom: var(--space-1);
+    }
+    .your-pick-number {
+      font-size: var(--font-size-3xl);
+      font-weight: 700;
+      color: var(--color-accent);
+    }
+    .your-pick-none {
+      font-size: var(--font-size-lg);
+      color: var(--color-muted);
+    }
+
+    .number-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+      gap: var(--space-2);
+      margin-bottom: var(--space-4);
+    }
+
+    .number-btn {
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface);
+      color: var(--color-text);
+      font-size: var(--font-size-lg);
+      font-weight: 600;
+      cursor: pointer;
+      transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      min-height: 48px;
+      min-width: 48px;
+    }
+    .number-btn:hover:not(:disabled):not([aria-pressed="true"]) {
+      border-color: var(--color-accent);
+      background: #eff6ff;
+    }
+    .number-btn:active:not(:disabled) {
+      transform: scale(0.95);
+    }
+    .number-btn[aria-pressed="true"] {
+      background: var(--color-accent);
+      color: #ffffff;
+      border-color: var(--color-accent);
+    }
+    .number-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      background: var(--color-bg);
+    }
+
+    .pick-status-msg {
+      text-align: center;
+      padding: var(--space-4);
+      font-size: var(--font-size-base);
+      color: var(--color-text-secondary);
+      background: var(--color-surface);
+      border-radius: var(--radius-md);
+      border: 1px dashed var(--color-border);
+    }
+
+    /* ─── Results Tab ──────────────────────────────────────────────── */
+    .results-container {}
+
+    .results-guessing-msg {
+      text-align: center;
+      padding: var(--space-6);
+      color: var(--color-text-secondary);
+    }
+    .results-guessing-msg .guess-count-big {
+      font-size: var(--font-size-3xl);
+      font-weight: 700;
+      color: var(--color-accent);
+      display: block;
+      margin-bottom: var(--space-2);
+    }
+
+    .winner-banner {
+      text-align: center;
+      padding: var(--space-5);
+      margin-bottom: var(--space-5);
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      border-radius: var(--radius-lg);
+      border: 2px solid var(--color-gold);
+    }
+    .winner-banner--no-winner {
+      background: var(--color-bg);
+      border-color: var(--color-border);
+    }
+    .winner-label {
+      font-size: var(--font-size-sm);
+      color: var(--color-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: var(--space-1);
+    }
+    .winner-name {
+      font-size: var(--font-size-2xl);
+      font-weight: 700;
+      color: var(--color-text);
+    }
+    .winner-number {
+      font-size: var(--font-size-timer);
+      font-weight: 800;
+      color: var(--color-gold);
+      line-height: 1.1;
+    }
+    .winner-points {
+      font-size: var(--font-size-sm);
+      color: var(--color-text-secondary);
+      margin-top: var(--space-2);
+    }
+
+    .number-slots {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-bottom: var(--space-5);
+      justify-content: center;
+    }
+
+    .number-slot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 44px;
+      flex: 0 0 auto;
+    }
+    .slot-number {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-sm);
+      font-weight: 700;
+      font-size: var(--font-size-base);
+      border: 2px solid var(--color-border);
+      background: var(--color-surface);
+      color: var(--color-muted);
+      position: relative;
+    }
+    .slot-number--unpicked {
+      opacity: 0.4;
+    }
+    .slot-number--unique {
+      background: var(--color-success-bg);
+      border-color: var(--color-success);
+      color: var(--color-success);
+    }
+    .slot-number--duplicate {
+      background: var(--color-danger-bg);
+      border-color: var(--color-danger);
+      color: var(--color-danger);
+    }
+    .slot-number--winner {
+      background: #fef3c7;
+      border-color: var(--color-gold);
+      color: #92400e;
+      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3);
+    }
+    .slot-icon {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      line-height: 1;
+      color: #fff;
+    }
+    .slot-icon--check {
+      background: var(--color-success);
+    }
+    .slot-icon--x {
+      background: var(--color-danger);
+    }
+    .slot-icon--star {
+      background: var(--color-gold);
+    }
+    .slot-names {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: var(--space-1);
+      gap: 1px;
+      max-height: 80px;
+      overflow-y: auto;
+    }
+    .slot-player-name {
+      font-size: var(--font-size-xs);
+      color: var(--color-text-secondary);
+      white-space: nowrap;
+      max-width: 60px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .slot-player-name--struck {
+      text-decoration: line-through;
+      color: var(--color-danger);
+    }
+    .slot-player-name--winner {
+      font-weight: 700;
+      color: var(--color-gold);
+    }
+
+    .results-stats {
+      display: flex;
+      gap: var(--space-4);
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .stat-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3) var(--space-4);
+      text-align: center;
+      min-width: 100px;
+    }
+    .stat-value {
+      font-size: var(--font-size-xl);
+      font-weight: 700;
+      color: var(--color-text);
+    }
+    .stat-label {
+      font-size: var(--font-size-xs);
+      color: var(--color-text-secondary);
+      margin-top: var(--space-1);
+    }
+
+    /* ─── Leaderboard Tab ──────────────────────────────────────────── */
+    .leaderboard-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--space-4);
+      flex-wrap: wrap;
+      gap: var(--space-3);
+    }
+    .leaderboard-title {
+      font-size: var(--font-size-lg);
+      font-weight: 700;
+    }
+    .score-toggle {
+      display: flex;
+      background: var(--color-bg);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 1px solid var(--color-border);
+    }
+    .score-toggle-btn {
+      padding: var(--space-2) var(--space-3);
+      border: none;
+      background: none;
+      font-size: var(--font-size-sm);
+      font-weight: 500;
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      transition: background var(--transition-fast), color var(--transition-fast);
+      touch-action: manipulation;
+    }
+    .score-toggle-btn[aria-pressed="true"] {
+      background: var(--color-accent);
+      color: #fff;
+    }
+    .score-toggle-btn:hover:not([aria-pressed="true"]) {
+      background: var(--color-border);
+    }
+
+    .leaderboard-table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+    }
+    .leaderboard-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--font-size-sm);
+    }
+    .leaderboard-table th {
+      background: var(--color-bg);
+      font-weight: 600;
+      text-align: left;
+      padding: var(--space-3) var(--space-3);
+      border-bottom: 2px solid var(--color-border);
+      white-space: nowrap;
+      color: var(--color-text-secondary);
+    }
+    .leaderboard-table td {
+      padding: var(--space-3);
+      border-bottom: 1px solid var(--color-border);
+      vertical-align: middle;
+    }
+    .leaderboard-table tr:last-child td {
+      border-bottom: none;
+    }
+    .leaderboard-table tr[data-highlight="true"] {
+      background: #eff6ff;
+    }
+    .rank-cell {
+      font-weight: 700;
+      text-align: center;
+      width: 48px;
+    }
+    .rank-1 { color: var(--color-gold); }
+    .rank-2 { color: var(--color-silver); }
+    .rank-3 { color: var(--color-bronze); }
+    .rank-medal {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      line-height: 24px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .rank-medal--1 { background: var(--color-gold); }
+    .rank-medal--2 { background: var(--color-silver); }
+    .rank-medal--3 { background: var(--color-bronze); }
+    .player-name-cell {
+      font-weight: 500;
+      max-width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .score-cell {
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .leaderboard-empty {
+      text-align: center;
+      padding: var(--space-6);
+      color: var(--color-muted);
+    }
+
+    /* ─── History/Analytics Tab ─────────────────────────────────────── */
+    .history-section {
+      margin-bottom: var(--space-6);
+    }
+    .history-section-title {
+      font-size: var(--font-size-lg);
+      font-weight: 700;
+      margin-bottom: var(--space-4);
+    }
+
+    .freq-chart-container {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-4);
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .freq-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      min-height: 160px;
+      padding-bottom: var(--space-5);
+      position: relative;
+    }
+    .freq-bar-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+      min-width: 20px;
+      max-width: 36px;
+    }
+    .freq-bar {
+      width: 100%;
+      min-height: 2px;
+      background: var(--color-accent);
+      border-radius: 3px 3px 0 0;
+      transition: height var(--transition-base);
+      position: relative;
+    }
+    .freq-bar-count {
+      font-size: 9px;
+      color: var(--color-text-secondary);
+      margin-bottom: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+    .freq-bar-label {
+      font-size: 9px;
+      color: var(--color-text-secondary);
+      margin-top: var(--space-1);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .history-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: var(--space-3);
+      margin-bottom: var(--space-5);
+    }
+
+    .rounds-table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+    }
+    .rounds-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--font-size-sm);
+    }
+    .rounds-table th {
+      background: var(--color-bg);
+      font-weight: 600;
+      text-align: left;
+      padding: var(--space-2) var(--space-3);
+      border-bottom: 2px solid var(--color-border);
+      white-space: nowrap;
+      color: var(--color-text-secondary);
+    }
+    .rounds-table td {
+      padding: var(--space-2) var(--space-3);
+      border-bottom: 1px solid var(--color-border);
+    }
+    .rounds-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* ─── Admin Tab ────────────────────────────────────────────────── */
+    .admin-section {
+      margin-bottom: var(--space-6);
+    }
+    .admin-section-title {
+      font-size: var(--font-size-lg);
+      font-weight: 700;
+      margin-bottom: var(--space-4);
+    }
+
+    .passphrase-gate {
+      max-width: 360px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .passphrase-gate p {
+      color: var(--color-text-secondary);
+      margin-bottom: var(--space-4);
+    }
+    .passphrase-row {
+      display: flex;
+      gap: var(--space-2);
+    }
+    .passphrase-input {
+      flex: 1;
+      padding: var(--space-3);
+      border: 2px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      font-size: var(--font-size-base);
+      font-family: inherit;
+      background: var(--color-surface);
+      color: var(--color-text);
+      transition: border-color var(--transition-fast);
+    }
+    .passphrase-input:focus {
+      border-color: var(--color-accent);
+      outline: none;
+    }
+    .passphrase-error {
+      color: var(--color-danger);
+      font-size: var(--font-size-sm);
+      margin-top: var(--space-2);
+      min-height: 1.4em;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-4);
+      border: 2px solid transparent;
+      border-radius: var(--radius-sm);
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background var(--transition-fast), border-color var(--transition-fast), opacity var(--transition-fast);
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      min-height: 44px;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn--primary {
+      background: var(--color-accent);
+      color: #fff;
+      border-color: var(--color-accent);
+    }
+    .btn--primary:hover:not(:disabled) {
+      background: var(--color-accent-hover);
+    }
+    .btn--success {
+      background: var(--color-success);
+      color: #fff;
+      border-color: var(--color-success);
+    }
+    .btn--warning {
+      background: var(--color-warning);
+      color: #fff;
+      border-color: var(--color-warning);
+    }
+    .btn--danger {
+      background: var(--color-danger);
+      color: #fff;
+      border-color: var(--color-danger);
+    }
+    .btn--outline {
+      background: transparent;
+      color: var(--color-text);
+      border-color: var(--color-border);
+    }
+    .btn--outline:hover:not(:disabled) {
+      border-color: var(--color-accent);
+      color: var(--color-accent);
+    }
+
+    .config-form {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+    .config-field {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+    }
+    .config-field label {
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--color-text-secondary);
+    }
+    .config-field input {
+      padding: var(--space-2) var(--space-3);
+      border: 2px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      font-size: var(--font-size-base);
+      font-family: inherit;
+      background: var(--color-surface);
+      color: var(--color-text);
+      max-width: 200px;
+      transition: border-color var(--transition-fast);
+    }
+    .config-field input:focus {
+      border-color: var(--color-accent);
+      outline: none;
+    }
+    .config-field-error {
+      color: var(--color-danger);
+      font-size: var(--font-size-xs);
+      min-height: 1.2em;
+    }
+
+    .game-controls {
+      display: flex;
+      gap: var(--space-3);
+      flex-wrap: wrap;
+    }
+
+    .danger-zone {
+      border: 2px solid var(--color-danger);
+      border-radius: var(--radius-md);
+      padding: var(--space-4);
+    }
+    .danger-zone-title {
+      color: var(--color-danger);
+      font-weight: 700;
+      margin-bottom: var(--space-3);
+    }
+    .danger-zone .btn {
+      margin-right: var(--space-2);
+      margin-bottom: var(--space-2);
+    }
+
+    .admin-status {
+      font-size: var(--font-size-sm);
+      color: var(--color-text-secondary);
+      padding: var(--space-3);
+      background: var(--color-bg);
+      border-radius: var(--radius-sm);
+    }
+
+    /* ─── Placeholder Tab Panels ───────────────────────────────────── */
+    .placeholder-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+      color: var(--color-muted);
+      gap: var(--space-3);
+    }
+    .placeholder-panel-icon {
+      font-size: var(--font-size-3xl);
+    }
+
+    /* ─── Status Bar ───────────────────────────────────────────────── */
+    .status-bar {
+      background: var(--color-surface);
+      border-top: 1px solid var(--color-border);
+      padding: var(--space-2) var(--space-4);
+      font-size: var(--font-size-xs);
+      color: var(--color-text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    /* ─── Utilities ────────────────────────────────────────────────── */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border-width: 0;
+    }
+
+    /* ─── Responsive ───────────────────────────────────────────────── */
+    @media (min-width: 768px) {
+      .number-grid {
+        grid-template-columns: repeat(10, 1fr);
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+    }
+
+    @media (min-width: 1024px) {
+      .tab-panel {
+        padding: var(--space-6);
+      }
+    }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <header class="app-header">
+    <h1 class="app-title">Lowest Unique</h1>
+    <div class="header-info">
+      <span class="round-info" id="roundInfo">Round —</span>
+      <span class="phase-badge phase-badge--idle" id="phaseBadge">Idle</span>
+      <span class="timer-display" id="timerDisplay" aria-live="polite" aria-label="Time remaining">—</span>
+    </div>
+  </header>
+
+  <nav class="tab-nav" role="tablist" aria-label="Game sections">
+    <button class="tab-btn" role="tab" id="tab-pick" aria-controls="panel-pick" aria-selected="true" tabindex="0">Pick</button>
+    <button class="tab-btn" role="tab" id="tab-results" aria-controls="panel-results" aria-selected="false" tabindex="-1">Results</button>
+    <button class="tab-btn" role="tab" id="tab-leaderboard" aria-controls="panel-leaderboard" aria-selected="false" tabindex="-1">Board</button>
+    <button class="tab-btn" role="tab" id="tab-history" aria-controls="panel-history" aria-selected="false" tabindex="-1">History</button>
+    <button class="tab-btn" role="tab" id="tab-admin" aria-controls="panel-admin" aria-selected="false" tabindex="-1">Admin</button>
+  </nav>
+
+  <main class="tab-panels" id="main-content">
+    <!-- Pick Tab -->
+    <section class="tab-panel" id="panel-pick" role="tabpanel" aria-labelledby="tab-pick" aria-hidden="false">
+      <div class="player-name-section">
+        <label for="playerNameInput" class="name-label">Your Name</label>
+        <div class="name-input-row">
+          <input type="text" id="playerNameInput" class="name-input" placeholder="Enter your name" maxlength="30" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="your-pick-display" id="yourPickDisplay">
+        <div class="your-pick-label">Your Pick</div>
+        <div class="your-pick-none" id="yourPickNumber">Tap a number</div>
+      </div>
+
+      <div id="pickStatusMsg" class="pick-status-msg" style="display:none;" aria-live="polite"></div>
+
+      <div class="number-grid" id="numberGrid" role="group" aria-label="Number selection grid">
+        <!-- Number buttons rendered by JS -->
+      </div>
+    </section>
+
+    <!-- Results Tab -->
+    <section class="tab-panel" id="panel-results" role="tabpanel" aria-labelledby="tab-results" aria-hidden="true">
+      <div class="results-container" id="resultsContainer">
+        <div id="resultsContent">
+          <div class="placeholder-panel" id="resultsPlaceholder">
+            <div class="placeholder-panel-icon" aria-hidden="true">&#x1f3af;</div>
+            <p>Results will appear here after a round completes.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Leaderboard Tab -->
+    <section class="tab-panel" id="panel-leaderboard" role="tabpanel" aria-labelledby="tab-leaderboard" aria-hidden="true">
+      <div class="leaderboard-header">
+        <h2 class="leaderboard-title" id="leaderboardTitle">Leaderboard</h2>
+        <div class="score-toggle" role="group" aria-label="Score type">
+          <button type="button" class="score-toggle-btn" id="toggleStrategy" aria-pressed="true">Strategy</button>
+          <button type="button" class="score-toggle-btn" id="toggleSimple" aria-pressed="false">Simple</button>
+        </div>
+      </div>
+      <div id="leaderboardBody">
+        <div class="leaderboard-empty" id="leaderboardEmpty">
+          <p>No scores yet. Play a round to see the leaderboard.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- History Tab -->
+    <section class="tab-panel" id="panel-history" role="tabpanel" aria-labelledby="tab-history" aria-hidden="true">
+      <div id="historyContent">
+        <div class="placeholder-panel" id="historyPlaceholder">
+          <div class="placeholder-panel-icon" aria-hidden="true">&#x1f4ca;</div>
+          <p>History and analytics will appear here as rounds are played.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Admin Tab -->
+    <section class="tab-panel" id="panel-admin" role="tabpanel" aria-labelledby="tab-admin" aria-hidden="true">
+      <div id="adminContent">
+        <!-- Passphrase gate shown by default -->
+        <div class="passphrase-gate" id="passphraseGate">
+          <h2 class="admin-section-title">Admin Access</h2>
+          <p>Enter the admin passphrase to access game controls.</p>
+          <div class="passphrase-row">
+            <label for="passphraseInput" class="sr-only">Passphrase</label>
+            <input type="password" id="passphraseInput" class="passphrase-input" placeholder="Enter passphrase" autocomplete="off">
+            <button type="button" class="btn btn--primary" id="passphraseSubmit">Enter</button>
+          </div>
+          <div class="passphrase-error" id="passphraseError" role="alert"></div>
+        </div>
+
+        <!-- Admin panel shown after auth -->
+        <div id="adminPanel" style="display:none;">
+          <!-- Game Controls -->
+          <div class="admin-section">
+            <h2 class="admin-section-title">Game Controls</h2>
+            <div class="game-controls">
+              <button type="button" class="btn btn--success" id="btnStartGame">Start Game</button>
+              <button type="button" class="btn btn--warning" id="btnPauseGame">Pause</button>
+              <button type="button" class="btn btn--outline" id="btnForceNext">Force Next Phase</button>
+            </div>
+          </div>
+
+          <!-- Configuration -->
+          <div class="admin-section">
+            <h2 class="admin-section-title">Configuration</h2>
+            <div class="config-form" id="configForm">
+              <div class="config-field">
+                <label for="cfgMaxNumber">Max Number (range 1-N)</label>
+                <input type="number" id="cfgMaxNumber" min="5" max="200" value="50">
+                <div class="config-field-error" id="cfgMaxNumberError"></div>
+              </div>
+              <div class="config-field">
+                <label for="cfgGuessingDuration">Guessing Duration (seconds)</label>
+                <input type="number" id="cfgGuessingDuration" min="10" max="600" value="120">
+                <div class="config-field-error" id="cfgGuessingDurationError"></div>
+              </div>
+              <div class="config-field">
+                <label for="cfgRevealDuration">Reveal Duration (seconds)</label>
+                <input type="number" id="cfgRevealDuration" min="5" max="120" value="30">
+                <div class="config-field-error" id="cfgRevealDurationError"></div>
+              </div>
+              <div class="config-field">
+                <label for="cfgMinPlayers">Min Players for Valid Round</label>
+                <input type="number" id="cfgMinPlayers" min="2" max="100" value="5">
+                <div class="config-field-error" id="cfgMinPlayersError"></div>
+              </div>
+              <button type="button" class="btn btn--primary" id="btnSaveConfig">Save Config</button>
+            </div>
+          </div>
+
+          <!-- Danger Zone -->
+          <div class="admin-section">
+            <div class="danger-zone">
+              <div class="danger-zone-title">Danger Zone</div>
+              <button type="button" class="btn btn--danger" id="btnResetGame">Reset Game</button>
+            </div>
+          </div>
+
+          <!-- Status -->
+          <div class="admin-section">
+            <div class="admin-status" id="adminStatus">
+              Connection: checking...
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Live announcements for screen readers -->
+    <div id="liveAnnounce" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
+  </main>
+
+  <footer class="status-bar">
+    <span id="connectionStatus">
+      <span class="connection-dot connection-dot--local"></span>
+      Connecting...
+    </span>
+    <span id="statusMessage"></span>
+  </footer>
+
+  <script>
+    'use strict';
+    (function() {
+
+      // ─── Configuration ──────────────────────────────────────────────
+      var API_URL = 'https://script.google.com/macros/s/AKfycbwD4rWrLSGRMXsCjoVRkT2J87Hw_iNv2sxrI3P5qLXY6AiUf1zu8AZXH3Cr3edVRKkQ/exec';
+      var POLL_INTERVAL_DEFAULT = 5000;
+      var POLL_INTERVAL_IDLE = 15000;
+      var POLL_INTERVAL_BACKGROUND = 20000;
+      var GUESS_DEBOUNCE_MS = 1000;
+      var MAX_NAME_LENGTH = 30;
+
+      // ─── State Shape ────────────────────────────────────────────────
+      /**
+       * @typedef {Object} AppState
+       * @property {string} currentPhase - 'idle' | 'guessing' | 'reveal'
+       * @property {string} phaseStartTime - ISO timestamp of phase start
+       * @property {number} currentRoundId - current round number
+       * @property {number} guessCount - number of guesses submitted this round
+       * @property {Object} config - game configuration
+       * @property {number} config.maxNumber
+       * @property {number} config.guessingDuration
+       * @property {number} config.revealDuration
+       * @property {number} config.minPlayers
+       * @property {number} config.replayDurationRatio
+       * @property {Object} player - local player info
+       * @property {string} player.id
+       * @property {string} player.name
+       * @property {number|null} player.currentPick - number picked this round
+       * @property {string} activeTab - current tab id
+       * @property {string} connectionStatus - 'online' | 'offline' | 'local'
+       * @property {Object|null} lastRoundResult - result of last completed round
+       * @property {number} consecutiveErrors - count of consecutive API failures
+       */
+      var state = {
+        currentPhase: 'idle',
+        phaseStartTime: '',
+        currentRoundId: 0,
+        guessCount: 0,
+        config: {
+          maxNumber: 50,
+          guessingDuration: 120,
+          revealDuration: 30,
+          minPlayers: 5,
+          replayDurationRatio: 0.67
+        },
+        player: {
+          id: '',
+          name: '',
+          currentPick: null
+        },
+        activeTab: 'pick',
+        connectionStatus: 'local',
+        lastRoundResult: null,
+        leaderboardScoreType: 'strategy',
+        leaderboardData: null,
+        leaderboardLastFetch: 0,
+        historyData: null,
+        historyLastFetch: 0,
+        adminAuthenticated: false,
+        adminPassphrase: '',
+        resetConfirmPending: false,
+        consecutiveErrors: 0
+      };
+
+      // ─── DOM References (cached) ────────────────────────────────────
+      var els = {};
+
+      function cacheElements() {
+        els.roundInfo = document.getElementById('roundInfo');
+        els.phaseBadge = document.getElementById('phaseBadge');
+        els.timerDisplay = document.getElementById('timerDisplay');
+        els.numberGrid = document.getElementById('numberGrid');
+        els.playerNameInput = document.getElementById('playerNameInput');
+        els.yourPickNumber = document.getElementById('yourPickNumber');
+        els.yourPickDisplay = document.getElementById('yourPickDisplay');
+        els.pickStatusMsg = document.getElementById('pickStatusMsg');
+        els.connectionStatus = document.getElementById('connectionStatus');
+        els.statusMessage = document.getElementById('statusMessage');
+        els.liveAnnounce = document.getElementById('liveAnnounce');
+        els.resultsContent = document.getElementById('resultsContent');
+        els.resultsPlaceholder = document.getElementById('resultsPlaceholder');
+        els.leaderboardBody = document.getElementById('leaderboardBody');
+        els.leaderboardEmpty = document.getElementById('leaderboardEmpty');
+        els.toggleStrategy = document.getElementById('toggleStrategy');
+        els.toggleSimple = document.getElementById('toggleSimple');
+        els.historyContent = document.getElementById('historyContent');
+        els.passphraseGate = document.getElementById('passphraseGate');
+        els.passphraseInput = document.getElementById('passphraseInput');
+        els.passphraseSubmit = document.getElementById('passphraseSubmit');
+        els.passphraseError = document.getElementById('passphraseError');
+        els.adminPanel = document.getElementById('adminPanel');
+        els.adminStatus = document.getElementById('adminStatus');
+        els.btnStartGame = document.getElementById('btnStartGame');
+        els.btnPauseGame = document.getElementById('btnPauseGame');
+        els.btnForceNext = document.getElementById('btnForceNext');
+        els.btnSaveConfig = document.getElementById('btnSaveConfig');
+        els.btnResetGame = document.getElementById('btnResetGame');
+        els.cfgMaxNumber = document.getElementById('cfgMaxNumber');
+        els.cfgGuessingDuration = document.getElementById('cfgGuessingDuration');
+        els.cfgRevealDuration = document.getElementById('cfgRevealDuration');
+        els.cfgMinPlayers = document.getElementById('cfgMinPlayers');
+        els.tabBtns = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+        els.tabPanels = Array.prototype.slice.call(document.querySelectorAll('[role="tabpanel"]'));
+      }
+
+      // ─── Utility Functions ──────────────────────────────────────────
+
+      function generateId() {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+          return crypto.randomUUID();
+        }
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          var r = Math.random() * 16 | 0;
+          var v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        });
+      }
+
+      function sanitizeString(str) {
+        if (typeof str !== 'string') return '';
+        return str.replace(/[<>&"']/g, function(c) {
+          var map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#x27;' };
+          return map[c] || c;
+        }).substring(0, 200);
+      }
+
+      function clampInt(val, min, max) {
+        var n = parseInt(val, 10);
+        if (isNaN(n) || !isFinite(n)) return min;
+        return Math.max(min, Math.min(max, n));
+      }
+
+      function formatTime(seconds) {
+        if (seconds <= 0) return '0:00';
+        var m = Math.floor(seconds / 60);
+        var s = Math.floor(seconds % 60);
+        return m + ':' + (s < 10 ? '0' : '') + s;
+      }
+
+      function announce(message) {
+        if (els.liveAnnounce) {
+          els.liveAnnounce.textContent = message;
+        }
+      }
+
+      // ─── localStorage Helpers ───────────────────────────────────────
+
+      var storage = {
+        get: function(key) {
+          try {
+            return localStorage.getItem(key);
+          } catch (e) {
+            return null;
+          }
+        },
+        set: function(key, value) {
+          try {
+            localStorage.setItem(key, value);
+          } catch (e) {
+            // Quota exceeded or storage disabled — silently fail
+          }
+        },
+        getJSON: function(key) {
+          try {
+            var raw = localStorage.getItem(key);
+            return raw ? JSON.parse(raw) : null;
+          } catch (e) {
+            return null;
+          }
+        },
+        setJSON: function(key, value) {
+          try {
+            localStorage.setItem(key, JSON.stringify(value));
+          } catch (e) {
+            // Silently fail
+          }
+        }
+      };
+
+      // ─── Player Identity ────────────────────────────────────────────
+
+      function loadPlayer() {
+        var saved = storage.getJSON('lun_player');
+        if (saved && typeof saved === 'object' && saved.id && saved.name) {
+          state.player.id = String(saved.id);
+          state.player.name = String(saved.name).substring(0, MAX_NAME_LENGTH);
+        }
+        if (!state.player.id) {
+          state.player.id = generateId();
+        }
+        savePlayer();
+      }
+
+      function savePlayer() {
+        storage.setJSON('lun_player', {
+          id: state.player.id,
+          name: state.player.name
+        });
+      }
+
+      // ─── API Layer ──────────────────────────────────────────────────
+
+      function apiGet(action, params) {
+        var url = API_URL + '?action=' + encodeURIComponent(action);
+        if (params) {
+          for (var k in params) {
+            if (params.hasOwnProperty(k)) {
+              url += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+            }
+          }
+        }
+        return fetch(url, { method: 'GET', mode: 'cors' })
+          .then(function(resp) {
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            return resp.json();
+          });
+      }
+
+      function apiPost(action, body) {
+        body = body || {};
+        body.action = action;
+        return fetch(API_URL, {
+          method: 'POST',
+          mode: 'cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(body)
+        })
+          .then(function(resp) {
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            return resp.json();
+          });
+      }
+
+      // ─── Polling ────────────────────────────────────────────────────
+
+      var pollTimer = null;
+
+      function getPollingInterval() {
+        if (document.hidden) return POLL_INTERVAL_BACKGROUND;
+        if (state.currentPhase === 'idle') return POLL_INTERVAL_IDLE;
+        return POLL_INTERVAL_DEFAULT;
+      }
+
+      function startPolling() {
+        stopPolling();
+        pollGameState();
+        schedulePoll();
+      }
+
+      function schedulePoll() {
+        if (pollTimer) clearTimeout(pollTimer);
+        pollTimer = setTimeout(function() {
+          pollGameState();
+          schedulePoll();
+        }, getPollingInterval());
+      }
+
+      function stopPolling() {
+        if (pollTimer) {
+          clearTimeout(pollTimer);
+          pollTimer = null;
+        }
+      }
+
+      function pollGameState() {
+        apiGet('getGameState')
+          .then(function(data) {
+            if (!data || !data.success) {
+              handlePollError(new Error(data && data.error ? data.error : 'Unknown error'));
+              return;
+            }
+            state.consecutiveErrors = 0;
+            updateConnectionStatus('online');
+            reconcileServerState(data);
+          })
+          .catch(function(err) {
+            handlePollError(err);
+          });
+      }
+
+      function handlePollError(err) {
+        state.consecutiveErrors++;
+        if (state.consecutiveErrors >= 3) {
+          updateConnectionStatus('offline');
+        }
+      }
+
+      function reconcileServerState(serverData) {
+        var prevPhase = state.currentPhase;
+        var prevRound = state.currentRoundId;
+
+        state.currentPhase = serverData.currentPhase || 'idle';
+        state.phaseStartTime = serverData.phaseStartTime || '';
+        state.currentRoundId = parseInt(serverData.currentRoundId, 10) || 0;
+        state.guessCount = parseInt(serverData.guessCount, 10) || 0;
+
+        if (serverData.config) {
+          state.config.maxNumber = parseInt(serverData.config.maxNumber, 10) || 50;
+          state.config.guessingDuration = parseInt(serverData.config.guessingDuration, 10) || 120;
+          state.config.revealDuration = parseInt(serverData.config.revealDuration, 10) || 30;
+          state.config.minPlayers = parseInt(serverData.config.minPlayers, 10) || 5;
+          state.config.replayDurationRatio = parseFloat(serverData.config.replayDurationRatio) || 0.67;
+        }
+
+        // Update last round result if available
+        if (serverData.lastRoundResult) {
+          state.lastRoundResult = serverData.lastRoundResult;
+        }
+
+        // Detect phase transitions
+        if (prevPhase !== state.currentPhase || prevRound !== state.currentRoundId) {
+          onPhaseChange(prevPhase, state.currentPhase, prevRound, state.currentRoundId);
+        }
+
+        renderHeader();
+        renderPickTabState();
+
+        // Update results tab if visible or on phase change
+        if (state.activeTab === 'results') {
+          renderResultsTab();
+        }
+      }
+
+      function onPhaseChange(prevPhase, newPhase, prevRound, newRound) {
+        if (newPhase === 'guessing' && newRound !== prevRound) {
+          // New round started
+          state.player.currentPick = null;
+          announce('Round ' + newRound + ' \u2014 guessing phase started. Pick a number!');
+          renderNumberGrid();
+        } else if (newPhase === 'reveal') {
+          announce('Guessing is over. Revealing results...');
+          // Invalidate leaderboard cache so it refreshes after results
+          state.leaderboardLastFetch = 0;
+        } else if (newPhase === 'idle') {
+          announce('Game paused.');
+        }
+
+        // Rebuild the grid if maxNumber may have changed
+        if (newPhase === 'guessing') {
+          renderNumberGrid();
+        }
+
+        // Update results tab on every phase change
+        renderResultsTab();
+
+        // Reschedule polling with potentially new interval
+        schedulePoll();
+      }
+
+      // ─── Connection Status ──────────────────────────────────────────
+
+      function updateConnectionStatus(status) {
+        if (state.connectionStatus === status) return;
+        state.connectionStatus = status;
+        renderConnectionStatus();
+      }
+
+      function renderConnectionStatus() {
+        var dot = els.connectionStatus.querySelector('.connection-dot');
+        var label;
+        dot.className = 'connection-dot';
+
+        switch (state.connectionStatus) {
+          case 'online':
+            dot.classList.add('connection-dot--online');
+            label = 'Connected';
+            break;
+          case 'offline':
+            dot.classList.add('connection-dot--offline');
+            label = 'Offline';
+            break;
+          default:
+            dot.classList.add('connection-dot--local');
+            label = 'Connecting...';
+        }
+        els.connectionStatus.lastChild.textContent = label;
+      }
+
+      // ─── Timer ──────────────────────────────────────────────────────
+
+      var timerInterval = null;
+
+      function startTimer() {
+        stopTimer();
+        renderTimer();
+        timerInterval = setInterval(renderTimer, 1000);
+      }
+
+      function stopTimer() {
+        if (timerInterval) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+        }
+      }
+
+      function getTimeRemaining() {
+        if (!state.phaseStartTime || state.currentPhase === 'idle') return -1;
+
+        var startMs = new Date(state.phaseStartTime).getTime();
+        var nowMs = Date.now();
+        var durationSec = state.currentPhase === 'guessing'
+          ? state.config.guessingDuration
+          : state.config.revealDuration;
+
+        var remaining = durationSec - (nowMs - startMs) / 1000;
+        return Math.max(0, remaining);
+      }
+
+      function renderTimer() {
+        var remaining = getTimeRemaining();
+        if (remaining < 0) {
+          els.timerDisplay.textContent = '\u2014';
+          return;
+        }
+        els.timerDisplay.textContent = formatTime(remaining);
+      }
+
+      // ─── Render: Header ─────────────────────────────────────────────
+
+      function renderHeader() {
+        // Round info
+        if (state.currentRoundId > 0) {
+          els.roundInfo.textContent = 'Round ' + state.currentRoundId;
+        } else {
+          els.roundInfo.textContent = 'Round \u2014';
+        }
+
+        // Phase badge
+        els.phaseBadge.className = 'phase-badge';
+        switch (state.currentPhase) {
+          case 'guessing':
+            els.phaseBadge.classList.add('phase-badge--guessing');
+            els.phaseBadge.textContent = 'Guessing';
+            break;
+          case 'reveal':
+            els.phaseBadge.classList.add('phase-badge--reveal');
+            els.phaseBadge.textContent = 'Reveal';
+            break;
+          default:
+            els.phaseBadge.classList.add('phase-badge--idle');
+            els.phaseBadge.textContent = 'Idle';
+        }
+
+        // Timer
+        renderTimer();
+      }
+
+      // ─── Render: Pick Tab ───────────────────────────────────────────
+
+      function renderNumberGrid() {
+        var grid = els.numberGrid;
+        grid.innerHTML = '';
+        var max = state.config.maxNumber;
+        var frag = document.createDocumentFragment();
+
+        for (var i = 1; i <= max; i++) {
+          var btn = document.createElement('button');
+          btn.className = 'number-btn';
+          btn.textContent = i;
+          btn.setAttribute('data-number', i);
+          btn.setAttribute('type', 'button');
+          btn.setAttribute('aria-pressed', state.player.currentPick === i ? 'true' : 'false');
+
+          if (state.currentPhase !== 'guessing') {
+            btn.disabled = true;
+          }
+
+          frag.appendChild(btn);
+        }
+
+        grid.appendChild(frag);
+      }
+
+      function renderPickTabState() {
+        // Update pick display
+        if (state.player.currentPick !== null) {
+          els.yourPickNumber.textContent = state.player.currentPick;
+          els.yourPickNumber.className = 'your-pick-number';
+        } else {
+          els.yourPickNumber.textContent = 'Tap a number';
+          els.yourPickNumber.className = 'your-pick-none';
+        }
+
+        // Update status message
+        var msg = els.pickStatusMsg;
+        if (state.currentPhase === 'idle') {
+          msg.style.display = 'block';
+          msg.textContent = 'Waiting for the game to start...';
+        } else if (state.currentPhase === 'reveal') {
+          msg.style.display = 'block';
+          msg.textContent = 'Round in progress \u2014 wait for next round';
+        } else if (state.currentPhase === 'guessing') {
+          if (state.guessCount > 0) {
+            msg.style.display = 'block';
+            msg.textContent = state.guessCount + ' player' + (state.guessCount !== 1 ? 's' : '') + ' have guessed';
+          } else {
+            msg.style.display = 'none';
+          }
+        } else {
+          msg.style.display = 'none';
+        }
+
+        // Enable/disable grid buttons
+        var buttons = els.numberGrid.querySelectorAll('.number-btn');
+        var isGuessing = state.currentPhase === 'guessing';
+        for (var i = 0; i < buttons.length; i++) {
+          buttons[i].disabled = !isGuessing;
+          var num = parseInt(buttons[i].getAttribute('data-number'), 10);
+          buttons[i].setAttribute('aria-pressed', state.player.currentPick === num ? 'true' : 'false');
+        }
+      }
+
+      // ─── Render: Results Tab ────────────────────────────────────────
+
+      function renderResultsTab() {
+        if (!els.resultsContent) return;
+
+        // During guessing phase, show guess count
+        if (state.currentPhase === 'guessing') {
+          els.resultsContent.innerHTML =
+            '<div class="results-guessing-msg">' +
+              '<span class="guess-count-big">' + state.guessCount + '</span>' +
+              'player' + (state.guessCount !== 1 ? 's' : '') + ' guessed so far' +
+            '</div>';
+          return;
+        }
+
+        // If no result available, show placeholder
+        if (!state.lastRoundResult) {
+          els.resultsContent.innerHTML =
+            '<div class="placeholder-panel">' +
+              '<div class="placeholder-panel-icon" aria-hidden="true">&#x1f3af;</div>' +
+              '<p>Results will appear here after a round completes.</p>' +
+            '</div>';
+          return;
+        }
+
+        var result = state.lastRoundResult;
+        var guesses = [];
+        try {
+          guesses = typeof result.guesses === 'string' ? JSON.parse(result.guesses) : (result.guesses || []);
+        } catch (e) {
+          guesses = [];
+        }
+
+        // Build the results display
+        var html = '';
+
+        // Winner banner
+        if (result.winningNumber !== null && result.winningNumber !== '' && result.winnerName) {
+          html += '<div class="winner-banner">' +
+            '<div class="winner-label">Winner</div>' +
+            '<div class="winner-number">' + sanitizeString(String(result.winningNumber)) + '</div>' +
+            '<div class="winner-name">' + sanitizeString(result.winnerName) + '</div>' +
+            '<div class="winner-points">+' + result.simplePoints + ' simple / +' + result.strategyPoints + ' strategy</div>' +
+          '</div>';
+        } else {
+          html += '<div class="winner-banner winner-banner--no-winner">' +
+            '<div class="winner-label">Round ' + (result.roundId || '') + '</div>' +
+            '<div class="winner-name" style="color:var(--color-muted)">No winner this round</div>' +
+            '<div class="winner-points">Every picked number had duplicates</div>' +
+          '</div>';
+        }
+
+        // Number slots
+        html += buildNumberSlotsHTML(guesses, result.winningNumber, state.config.maxNumber);
+
+        // Stats
+        html += '<div class="results-stats">' +
+          '<div class="stat-card"><div class="stat-value">' + (result.totalGuesses || 0) + '</div><div class="stat-label">Guesses</div></div>' +
+          '<div class="stat-card"><div class="stat-value">' + (result.uniqueCount || 0) + '</div><div class="stat-label">Unique</div></div>' +
+          '<div class="stat-card"><div class="stat-value">' + (result.winningNumber !== null && result.winningNumber !== '' ? result.winningNumber : '\u2014') + '</div><div class="stat-label">Winning #</div></div>' +
+          '<div class="stat-card"><div class="stat-value">R' + (result.roundId || '') + '</div><div class="stat-label">Round</div></div>' +
+        '</div>';
+
+        els.resultsContent.innerHTML = html;
+      }
+
+      function buildNumberSlotsHTML(guesses, winningNumber, maxNumber) {
+        // Tally picks per number
+        var pickMap = {};  // number -> [{playerName, playerId}]
+        for (var i = 0; i < guesses.length; i++) {
+          var num = guesses[i].number;
+          if (!pickMap[num]) pickMap[num] = [];
+          pickMap[num].push({
+            playerName: guesses[i].playerName || 'Unknown',
+            playerId: guesses[i].playerId || ''
+          });
+        }
+
+        // Show numbers 1 to min(maxNumber, 20) in primary row, rest in secondary
+        var displayMax = Math.min(maxNumber, 50);
+        var html = '<div class="number-slots" aria-label="Number picks">';
+
+        for (var n = 1; n <= displayMax; n++) {
+          var picks = pickMap[n] || [];
+          var count = picks.length;
+          var isWinner = (n === winningNumber);
+          var isUnique = (count === 1);
+          var isDuplicate = (count > 1);
+          var isUnpicked = (count === 0);
+
+          var slotClass = 'slot-number';
+          var iconHTML = '';
+
+          if (isWinner) {
+            slotClass += ' slot-number--winner';
+            iconHTML = '<span class="slot-icon slot-icon--star" aria-label="Winner">&#x2605;</span>';
+          } else if (isUnique) {
+            slotClass += ' slot-number--unique';
+            iconHTML = '<span class="slot-icon slot-icon--check" aria-label="Unique">&#x2713;</span>';
+          } else if (isDuplicate) {
+            slotClass += ' slot-number--duplicate';
+            iconHTML = '<span class="slot-icon slot-icon--x" aria-label="Duplicate">&#x2717;</span>';
+          } else {
+            slotClass += ' slot-number--unpicked';
+          }
+
+          html += '<div class="number-slot">';
+          html += '<div class="' + slotClass + '">' + n + iconHTML + '</div>';
+
+          if (picks.length > 0) {
+            html += '<div class="slot-names">';
+            for (var p = 0; p < picks.length; p++) {
+              var nameClass = 'slot-player-name';
+              if (isWinner) {
+                nameClass += ' slot-player-name--winner';
+              } else if (isDuplicate) {
+                nameClass += ' slot-player-name--struck';
+              }
+              html += '<span class="' + nameClass + '">' + sanitizeString(picks[p].playerName) + '</span>';
+            }
+            html += '</div>';
+          }
+
+          html += '</div>';
+        }
+
+        html += '</div>';
+        return html;
+      }
+
+      // ─── Render: Leaderboard Tab ──────────────────────────────────
+
+      var LEADERBOARD_CACHE_MS = 10000;
+
+      function fetchAndRenderLeaderboard() {
+        var now = Date.now();
+        // Use cached data if recent enough
+        if (state.leaderboardData && (now - state.leaderboardLastFetch) < LEADERBOARD_CACHE_MS) {
+          renderLeaderboardTable(state.leaderboardData, state.leaderboardScoreType);
+          return;
+        }
+
+        apiGet('getLeaderboard', { scoreType: state.leaderboardScoreType })
+          .then(function(data) {
+            if (data && data.success && Array.isArray(data.players)) {
+              state.leaderboardData = data.players;
+              state.leaderboardLastFetch = Date.now();
+              renderLeaderboardTable(data.players, state.leaderboardScoreType);
+            }
+          })
+          .catch(function() {
+            // Use cached data if available
+            if (state.leaderboardData) {
+              renderLeaderboardTable(state.leaderboardData, state.leaderboardScoreType);
+            }
+          });
+      }
+
+      function renderLeaderboardTable(players, scoreType) {
+        if (!players || players.length === 0) {
+          els.leaderboardBody.innerHTML =
+            '<div class="leaderboard-empty"><p>No scores yet. Play a round to see the leaderboard.</p></div>';
+          return;
+        }
+
+        // Sort by chosen score type
+        var sortKey = scoreType === 'simple' ? 'simpleScore' : 'strategyScore';
+        var sorted = players.slice().sort(function(a, b) { return (b[sortKey] || 0) - (a[sortKey] || 0); });
+
+        var frag = document.createDocumentFragment();
+        var wrap = document.createElement('div');
+        wrap.className = 'leaderboard-table-wrap';
+
+        var table = document.createElement('table');
+        table.className = 'leaderboard-table';
+        table.setAttribute('role', 'table');
+
+        // Header
+        var thead = document.createElement('thead');
+        var headerRow = document.createElement('tr');
+        var headers = ['#', 'Player', 'Score', 'Wins', 'Played'];
+        headers.forEach(function(h) {
+          var th = document.createElement('th');
+          th.setAttribute('scope', 'col');
+          th.textContent = h;
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        // Body
+        var tbody = document.createElement('tbody');
+        for (var i = 0; i < sorted.length; i++) {
+          var p = sorted[i];
+          var rank = i + 1;
+          var tr = document.createElement('tr');
+
+          // Highlight current player
+          if (p.playerId === state.player.id) {
+            tr.setAttribute('data-highlight', 'true');
+            tr.setAttribute('aria-current', 'true');
+          }
+
+          // Rank cell
+          var rankTd = document.createElement('td');
+          rankTd.className = 'rank-cell';
+          if (rank <= 3) {
+            var medal = document.createElement('span');
+            medal.className = 'rank-medal rank-medal--' + rank;
+            medal.textContent = rank;
+            medal.setAttribute('aria-label', rank === 1 ? '1st place' : rank === 2 ? '2nd place' : '3rd place');
+            rankTd.appendChild(medal);
+          } else {
+            rankTd.textContent = rank;
+          }
+          tr.appendChild(rankTd);
+
+          // Name cell
+          var nameTd = document.createElement('td');
+          nameTd.className = 'player-name-cell';
+          nameTd.textContent = p.playerName || 'Unknown';
+          tr.appendChild(nameTd);
+
+          // Score cell
+          var scoreTd = document.createElement('td');
+          scoreTd.className = 'score-cell';
+          scoreTd.textContent = p[sortKey] || 0;
+          tr.appendChild(scoreTd);
+
+          // Wins cell
+          var winsTd = document.createElement('td');
+          winsTd.textContent = p.totalWins || 0;
+          tr.appendChild(winsTd);
+
+          // Rounds played cell
+          var playedTd = document.createElement('td');
+          playedTd.textContent = p.roundsPlayed || 0;
+          tr.appendChild(playedTd);
+
+          tbody.appendChild(tr);
+        }
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+
+        els.leaderboardBody.innerHTML = '';
+        els.leaderboardBody.appendChild(wrap);
+      }
+
+      function handleScoreToggle(scoreType) {
+        state.leaderboardScoreType = scoreType;
+        els.toggleStrategy.setAttribute('aria-pressed', scoreType === 'strategy' ? 'true' : 'false');
+        els.toggleSimple.setAttribute('aria-pressed', scoreType === 'simple' ? 'true' : 'false');
+        // Force fresh fetch on toggle
+        state.leaderboardLastFetch = 0;
+        fetchAndRenderLeaderboard();
+      }
+
+      // ─── Render: History/Analytics Tab ─────────────────────────────
+
+      var HISTORY_CACHE_MS = 30000;
+
+      function fetchAndRenderHistory() {
+        var now = Date.now();
+        if (state.historyData && (now - state.historyLastFetch) < HISTORY_CACHE_MS) {
+          renderHistoryContent(state.historyData);
+          return;
+        }
+
+        apiGet('getRoundHistory', { limit: 50 })
+          .then(function(data) {
+            if (data && data.success && Array.isArray(data.rounds)) {
+              state.historyData = data.rounds;
+              state.historyLastFetch = Date.now();
+              renderHistoryContent(data.rounds);
+            }
+          })
+          .catch(function() {
+            if (state.historyData) {
+              renderHistoryContent(state.historyData);
+            }
+          });
+      }
+
+      function renderHistoryContent(rounds) {
+        if (!rounds || rounds.length === 0) {
+          els.historyContent.innerHTML =
+            '<div class="placeholder-panel">' +
+              '<div class="placeholder-panel-icon" aria-hidden="true">&#x1f4ca;</div>' +
+              '<p>No rounds played yet. Start a game to see analytics.</p>' +
+            '</div>';
+          return;
+        }
+
+        var html = '';
+
+        // Aggregate frequency data from all rounds
+        var freqMap = {};
+        var totalRounds = rounds.length;
+        var winningNumbers = [];
+        var maxNumber = state.config.maxNumber;
+
+        for (var r = 0; r < rounds.length; r++) {
+          var round = rounds[r];
+          var guesses = [];
+          try {
+            guesses = typeof round.guesses === 'string' ? JSON.parse(round.guesses) : (round.guesses || []);
+          } catch (e) {
+            guesses = [];
+          }
+          for (var g = 0; g < guesses.length; g++) {
+            var num = guesses[g].number;
+            freqMap[num] = (freqMap[num] || 0) + 1;
+          }
+          if (round.winningNumber !== null && round.winningNumber !== '') {
+            winningNumbers.push(parseInt(round.winningNumber, 10));
+          }
+        }
+
+        // Compute stats
+        var maxFreq = 0;
+        var mostPicked = null;
+        var leastPicked = null;
+        var leastPickedCount = Infinity;
+        var neverPicked = [];
+
+        for (var n = 1; n <= maxNumber; n++) {
+          var count = freqMap[n] || 0;
+          if (count > maxFreq) {
+            maxFreq = count;
+            mostPicked = n;
+          }
+          if (count > 0 && count < leastPickedCount) {
+            leastPickedCount = count;
+            leastPicked = n;
+          }
+          if (count === 0) {
+            neverPicked.push(n);
+          }
+        }
+
+        var avgWinning = winningNumbers.length > 0
+          ? (winningNumbers.reduce(function(a, b) { return a + b; }, 0) / winningNumbers.length).toFixed(1)
+          : '\u2014';
+
+        // Stats grid
+        html += '<div class="history-section">' +
+          '<h2 class="history-section-title">Stats</h2>' +
+          '<div class="history-stats-grid">' +
+            '<div class="stat-card"><div class="stat-value">' + totalRounds + '</div><div class="stat-label">Rounds Played</div></div>' +
+            '<div class="stat-card"><div class="stat-value">' + (mostPicked !== null ? mostPicked : '\u2014') + '</div><div class="stat-label">Most Picked</div></div>' +
+            '<div class="stat-card"><div class="stat-value">' + avgWinning + '</div><div class="stat-label">Avg Winning #</div></div>' +
+            '<div class="stat-card"><div class="stat-value">' + neverPicked.length + '</div><div class="stat-label">Never Picked</div></div>' +
+          '</div>' +
+        '</div>';
+
+        // Frequency chart
+        html += '<div class="history-section">' +
+          '<h2 class="history-section-title">Number Frequency</h2>' +
+          '<div class="freq-chart-container">' +
+            '<div class="freq-chart" role="img" aria-label="Bar chart showing how often each number was picked">';
+
+        var chartMax = Math.max(maxFreq, 1);
+        for (var n2 = 1; n2 <= maxNumber; n2++) {
+          var c = freqMap[n2] || 0;
+          var heightPct = (c / chartMax) * 100;
+          html += '<div class="freq-bar-col">' +
+            (c > 0 ? '<span class="freq-bar-count">' + c + '</span>' : '') +
+            '<div class="freq-bar" style="height:' + Math.max(heightPct, 1) + '%"' +
+              ' role="presentation"></div>' +
+            '<span class="freq-bar-label">' + n2 + '</span>' +
+          '</div>';
+        }
+
+        html += '</div></div></div>';
+
+        // Recent rounds table
+        html += '<div class="history-section">' +
+          '<h2 class="history-section-title">Recent Rounds</h2>' +
+          '<div class="rounds-table-wrap">' +
+            '<table class="rounds-table"><thead><tr>' +
+              '<th scope="col">#</th>' +
+              '<th scope="col">Winner</th>' +
+              '<th scope="col">Win #</th>' +
+              '<th scope="col">Guesses</th>' +
+              '<th scope="col">Unique</th>' +
+            '</tr></thead><tbody>';
+
+        var displayRounds = rounds.slice(0, 10);
+        for (var i = 0; i < displayRounds.length; i++) {
+          var rd = displayRounds[i];
+          html += '<tr>' +
+            '<td>' + (rd.roundId || '') + '</td>' +
+            '<td>' + sanitizeString(rd.winnerName || '\u2014') + '</td>' +
+            '<td>' + (rd.winningNumber !== null && rd.winningNumber !== '' ? rd.winningNumber : '\u2014') + '</td>' +
+            '<td>' + (rd.totalGuesses || 0) + '</td>' +
+            '<td>' + (rd.uniqueCount || 0) + '</td>' +
+          '</tr>';
+        }
+
+        html += '</tbody></table></div></div>';
+
+        els.historyContent.innerHTML = html;
+      }
+
+      // ─── Render: Admin Tab ────────────────────────────────────────
+
+      function showAdminPanel() {
+        els.passphraseGate.style.display = 'none';
+        els.adminPanel.style.display = 'block';
+        // Populate config fields with current values
+        els.cfgMaxNumber.value = state.config.maxNumber;
+        els.cfgGuessingDuration.value = state.config.guessingDuration;
+        els.cfgRevealDuration.value = state.config.revealDuration;
+        els.cfgMinPlayers.value = state.config.minPlayers;
+        updateAdminStatus();
+      }
+
+      function updateAdminStatus() {
+        if (!els.adminStatus) return;
+        var phase = state.currentPhase || 'idle';
+        var round = state.currentRoundId || 0;
+        var conn = state.connectionStatus;
+        els.adminStatus.textContent =
+          'Phase: ' + phase + ' | Round: ' + round + ' | Connection: ' + conn;
+      }
+
+      function handlePassphraseSubmit() {
+        var input = els.passphraseInput.value.trim();
+        if (!input) {
+          els.passphraseError.textContent = 'Please enter a passphrase.';
+          els.passphraseInput.focus();
+          return;
+        }
+
+        // Try to verify against server by attempting a benign admin action
+        // We use getConfig first, but the real verification happens on admin POST actions
+        // For now, store the passphrase and try it on the first admin action
+        state.adminPassphrase = input;
+        state.adminAuthenticated = true;
+        els.passphraseError.textContent = '';
+
+        // Store in sessionStorage so it persists across tab switches but not browser close
+        try {
+          sessionStorage.setItem('lun_admin', input);
+        } catch (e) {}
+
+        showAdminPanel();
+      }
+
+      function handleStartGame() {
+        if (!state.adminPassphrase) return;
+        setBtnLoading(els.btnStartGame, true);
+
+        apiPost('startGame', { passphrase: state.adminPassphrase })
+          .then(function(data) {
+            setBtnLoading(els.btnStartGame, false);
+            if (data && data.success) {
+              announce('Game started! Round ' + (data.roundId || ''));
+              pollGameState();
+            } else {
+              handleAdminError(data);
+            }
+          })
+          .catch(function(err) {
+            setBtnLoading(els.btnStartGame, false);
+            handleAdminError({ error: err.message });
+          });
+      }
+
+      function handlePauseGame() {
+        if (!state.adminPassphrase) return;
+        setBtnLoading(els.btnPauseGame, true);
+
+        apiPost('pauseGame', { passphrase: state.adminPassphrase })
+          .then(function(data) {
+            setBtnLoading(els.btnPauseGame, false);
+            if (data && data.success) {
+              announce('Game paused.');
+              pollGameState();
+            } else {
+              handleAdminError(data);
+            }
+          })
+          .catch(function(err) {
+            setBtnLoading(els.btnPauseGame, false);
+            handleAdminError({ error: err.message });
+          });
+      }
+
+      function handleForceNext() {
+        if (!state.adminPassphrase) return;
+        setBtnLoading(els.btnForceNext, true);
+
+        apiPost('advancePhase', { passphrase: state.adminPassphrase })
+          .then(function(data) {
+            setBtnLoading(els.btnForceNext, false);
+            if (data && data.success) {
+              announce('Phase advanced to ' + (data.phase || 'next') + '.');
+              // Invalidate history and leaderboard caches
+              state.historyLastFetch = 0;
+              state.leaderboardLastFetch = 0;
+              pollGameState();
+            } else {
+              handleAdminError(data);
+            }
+          })
+          .catch(function(err) {
+            setBtnLoading(els.btnForceNext, false);
+            handleAdminError({ error: err.message });
+          });
+      }
+
+      function handleSaveConfig() {
+        if (!state.adminPassphrase) return;
+
+        // Validate inputs
+        var maxNum = parseInt(els.cfgMaxNumber.value, 10);
+        var guessDur = parseInt(els.cfgGuessingDuration.value, 10);
+        var revealDur = parseInt(els.cfgRevealDuration.value, 10);
+        var minPlayers = parseInt(els.cfgMinPlayers.value, 10);
+        var valid = true;
+
+        clearConfigErrors();
+
+        if (isNaN(maxNum) || maxNum < 5 || maxNum > 200) {
+          document.getElementById('cfgMaxNumberError').textContent = 'Must be 5\u2013200';
+          valid = false;
+        }
+        if (isNaN(guessDur) || guessDur < 10 || guessDur > 600) {
+          document.getElementById('cfgGuessingDurationError').textContent = 'Must be 10\u2013600';
+          valid = false;
+        }
+        if (isNaN(revealDur) || revealDur < 5 || revealDur > 120) {
+          document.getElementById('cfgRevealDurationError').textContent = 'Must be 5\u2013120';
+          valid = false;
+        }
+        if (isNaN(minPlayers) || minPlayers < 2 || minPlayers > 100) {
+          document.getElementById('cfgMinPlayersError').textContent = 'Must be 2\u2013100';
+          valid = false;
+        }
+
+        if (!valid) return;
+
+        setBtnLoading(els.btnSaveConfig, true);
+        apiPost('setConfig', {
+          passphrase: state.adminPassphrase,
+          maxNumber: maxNum,
+          guessingDuration: guessDur,
+          revealDuration: revealDur,
+          minPlayers: minPlayers
+        })
+          .then(function(data) {
+            setBtnLoading(els.btnSaveConfig, false);
+            if (data && data.success) {
+              announce('Configuration saved.');
+              pollGameState();
+            } else {
+              handleAdminError(data);
+            }
+          })
+          .catch(function(err) {
+            setBtnLoading(els.btnSaveConfig, false);
+            handleAdminError({ error: err.message });
+          });
+      }
+
+      function handleResetGame() {
+        if (!state.adminPassphrase) return;
+
+        if (!state.resetConfirmPending) {
+          // First click — show confirmation
+          state.resetConfirmPending = true;
+          els.btnResetGame.textContent = 'Confirm Reset?';
+          els.btnResetGame.classList.remove('btn--danger');
+          els.btnResetGame.classList.add('btn--warning');
+          // Auto-cancel after 5 seconds
+          setTimeout(function() {
+            if (state.resetConfirmPending) {
+              state.resetConfirmPending = false;
+              els.btnResetGame.textContent = 'Reset Game';
+              els.btnResetGame.classList.remove('btn--warning');
+              els.btnResetGame.classList.add('btn--danger');
+            }
+          }, 5000);
+          return;
+        }
+
+        // Second click — actually reset
+        state.resetConfirmPending = false;
+        els.btnResetGame.textContent = 'Reset Game';
+        els.btnResetGame.classList.remove('btn--warning');
+        els.btnResetGame.classList.add('btn--danger');
+        setBtnLoading(els.btnResetGame, true);
+
+        apiPost('resetGame', { passphrase: state.adminPassphrase })
+          .then(function(data) {
+            setBtnLoading(els.btnResetGame, false);
+            if (data && data.success) {
+              announce('Game data has been reset.');
+              state.lastRoundResult = null;
+              state.leaderboardData = null;
+              state.historyData = null;
+              state.leaderboardLastFetch = 0;
+              state.historyLastFetch = 0;
+              pollGameState();
+            } else {
+              handleAdminError(data);
+            }
+          })
+          .catch(function(err) {
+            setBtnLoading(els.btnResetGame, false);
+            handleAdminError({ error: err.message });
+          });
+      }
+
+      function clearConfigErrors() {
+        var errorEls = document.querySelectorAll('.config-field-error');
+        for (var i = 0; i < errorEls.length; i++) {
+          errorEls[i].textContent = '';
+        }
+      }
+
+      function handleAdminError(data) {
+        var msg = (data && data.error) || 'An error occurred';
+        if (msg === 'Invalid passphrase') {
+          // Kick back to passphrase gate
+          state.adminAuthenticated = false;
+          state.adminPassphrase = '';
+          try { sessionStorage.removeItem('lun_admin'); } catch (e) {}
+          els.adminPanel.style.display = 'none';
+          els.passphraseGate.style.display = '';
+          els.passphraseError.textContent = 'Passphrase was incorrect. Please try again.';
+          els.passphraseInput.value = '';
+          els.passphraseInput.focus();
+        } else {
+          announce('Admin error: ' + msg);
+        }
+      }
+
+      function setBtnLoading(btn, loading) {
+        if (loading) {
+          btn.disabled = true;
+          btn.setAttribute('data-orig-text', btn.textContent);
+          btn.textContent = 'Loading...';
+        } else {
+          btn.disabled = false;
+          btn.textContent = btn.getAttribute('data-orig-text') || btn.textContent;
+        }
+      }
+
+      // ─── Number Pick Handler ────────────────────────────────────────
+
+      var guessDebounceTimer = null;
+
+      function handleNumberPick(number) {
+        if (state.currentPhase !== 'guessing') return;
+
+        var name = state.player.name.trim();
+        if (!name) {
+          els.playerNameInput.focus();
+          announce('Please enter your name first.');
+          return;
+        }
+
+        number = clampInt(number, 1, state.config.maxNumber);
+        state.player.currentPick = number;
+
+        // Update UI immediately (optimistic)
+        renderPickTabState();
+
+        // Debounce the server submission
+        if (guessDebounceTimer) clearTimeout(guessDebounceTimer);
+        guessDebounceTimer = setTimeout(function() {
+          submitGuessToServer(number);
+        }, GUESS_DEBOUNCE_MS);
+      }
+
+      function submitGuessToServer(number) {
+        apiPost('submitGuess', {
+          playerId: state.player.id,
+          playerName: state.player.name,
+          number: number
+        }).then(function(data) {
+          if (data && data.success) {
+            state.guessCount = data.guessCount || state.guessCount;
+            renderPickTabState();
+          }
+        }).catch(function() {
+          // Guess recorded locally; will try again on next pick or rely on current selection
+        });
+      }
+
+      // ─── Tab Navigation ─────────────────────────────────────────────
+
+      function switchTab(tabId) {
+        state.activeTab = tabId;
+
+        els.tabBtns.forEach(function(btn) {
+          var isSelected = btn.id === 'tab-' + tabId;
+          btn.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+          btn.setAttribute('tabindex', isSelected ? '0' : '-1');
+        });
+
+        els.tabPanels.forEach(function(panel) {
+          var panelTabId = panel.id.replace('panel-', '');
+          panel.setAttribute('aria-hidden', panelTabId === tabId ? 'false' : 'true');
+        });
+
+        // Trigger data load for tabs that need it
+        if (tabId === 'results') {
+          renderResultsTab();
+        } else if (tabId === 'leaderboard') {
+          fetchAndRenderLeaderboard();
+        } else if (tabId === 'history') {
+          fetchAndRenderHistory();
+        } else if (tabId === 'admin') {
+          updateAdminStatus();
+        }
+      }
+
+      function handleTabClick(e) {
+        var btn = e.target.closest('[role="tab"]');
+        if (!btn) return;
+        var tabId = btn.id.replace('tab-', '');
+        switchTab(tabId);
+        btn.focus();
+      }
+
+      function handleTabKeydown(e) {
+        var btn = e.target.closest('[role="tab"]');
+        if (!btn) return;
+
+        var currentIndex = els.tabBtns.indexOf(btn);
+        var newIndex = -1;
+
+        switch (e.key) {
+          case 'ArrowRight':
+          case 'ArrowDown':
+            newIndex = (currentIndex + 1) % els.tabBtns.length;
+            break;
+          case 'ArrowLeft':
+          case 'ArrowUp':
+            newIndex = (currentIndex - 1 + els.tabBtns.length) % els.tabBtns.length;
+            break;
+          case 'Home':
+            newIndex = 0;
+            break;
+          case 'End':
+            newIndex = els.tabBtns.length - 1;
+            break;
+          default:
+            return;
+        }
+
+        e.preventDefault();
+        var targetBtn = els.tabBtns[newIndex];
+        var tabId = targetBtn.id.replace('tab-', '');
+        switchTab(tabId);
+        targetBtn.focus();
+      }
+
+      // ─── Event Setup ────────────────────────────────────────────────
+
+      function setupEvents() {
+        // Tab navigation
+        var tabNav = document.querySelector('.tab-nav');
+        tabNav.addEventListener('click', handleTabClick);
+        tabNav.addEventListener('keydown', handleTabKeydown);
+
+        // Number grid (event delegation)
+        els.numberGrid.addEventListener('click', function(e) {
+          var btn = e.target.closest('.number-btn');
+          if (!btn || btn.disabled) return;
+          var num = parseInt(btn.getAttribute('data-number'), 10);
+          if (!isNaN(num)) {
+            handleNumberPick(num);
+          }
+        });
+
+        // Player name input
+        els.playerNameInput.addEventListener('input', function() {
+          var val = els.playerNameInput.value.substring(0, MAX_NAME_LENGTH);
+          state.player.name = val;
+          savePlayer();
+        });
+
+        // Prevent form submission on Enter in name field
+        els.playerNameInput.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            // Focus the number grid if name is entered
+            if (state.player.name.trim()) {
+              var firstBtn = els.numberGrid.querySelector('.number-btn:not(:disabled)');
+              if (firstBtn) firstBtn.focus();
+            }
+          }
+        });
+
+        // Leaderboard score toggle
+        els.toggleStrategy.addEventListener('click', function() {
+          handleScoreToggle('strategy');
+        });
+        els.toggleSimple.addEventListener('click', function() {
+          handleScoreToggle('simple');
+        });
+
+        // Admin: passphrase submission
+        els.passphraseSubmit.addEventListener('click', handlePassphraseSubmit);
+        els.passphraseInput.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            handlePassphraseSubmit();
+          }
+        });
+
+        // Admin: game controls
+        els.btnStartGame.addEventListener('click', handleStartGame);
+        els.btnPauseGame.addEventListener('click', handlePauseGame);
+        els.btnForceNext.addEventListener('click', handleForceNext);
+        els.btnSaveConfig.addEventListener('click', handleSaveConfig);
+        els.btnResetGame.addEventListener('click', handleResetGame);
+
+        // Visibility change — adjust polling and save state
+        document.addEventListener('visibilitychange', function() {
+          if (document.hidden) {
+            // Reduce polling frequency
+            schedulePoll();
+          } else {
+            // Immediately poll and restore normal frequency
+            pollGameState();
+            schedulePoll();
+          }
+        });
+
+        // Save on unload
+        window.addEventListener('beforeunload', function() {
+          savePlayer();
+        });
+      }
+
+      // ─── Initialization ─────────────────────────────────────────────
+
+      function init() {
+        cacheElements();
+        loadPlayer();
+
+        // Restore name in input
+        if (state.player.name) {
+          els.playerNameInput.value = state.player.name;
+        }
+
+        // Restore admin session if available
+        try {
+          var savedPass = sessionStorage.getItem('lun_admin');
+          if (savedPass) {
+            state.adminPassphrase = savedPass;
+            state.adminAuthenticated = true;
+            showAdminPanel();
+          }
+        } catch (e) {}
+
+        renderNumberGrid();
+        renderHeader();
+        renderPickTabState();
+        renderConnectionStatus();
+
+        setupEvents();
+        startTimer();
+        startPolling();
+      }
+
+      // Boot
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+
+    })();
+  </script>
+</body>
+</html>
