@@ -1119,7 +1119,7 @@
     (function() {
 
       // ─── Configuration ──────────────────────────────────────────────
-      var API_URL = 'https://script.google.com/macros/s/AKfycbwgkWL8Ei0V_sWy4ExLxw2GLKEhRPz7nfL_kV3SnkfF4-ejT0-We9-LKZj1CndKzx4I/exec';
+      var API_URL = 'https://script.google.com/macros/s/AKfycbzMmrkDvwta4GPYWYa9k_cWFTAOy2KmQ5EWTGRXzCj_UadL2WaMS5tcKkI8iDh_ybJo/exec';
       var POLL_INTERVAL_DEFAULT = 5000;
       var POLL_INTERVAL_IDLE = 15000;
       var POLL_INTERVAL_BACKGROUND = 20000;
@@ -1239,6 +1239,30 @@
           var map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#x27;' };
           return map[c] || c;
         }).substring(0, 200);
+      }
+
+      /**
+       * Generate a lightweight device fingerprint to detect duplicate entries
+       * from the same device (e.g. incognito windows with different names).
+       * Not bulletproof, but stops casual cheating on school WiFi.
+       */
+      function getDeviceFingerprint() {
+        var components = [
+          screen.width + 'x' + screen.height,
+          screen.colorDepth,
+          new Date().getTimezoneOffset(),
+          navigator.language,
+          navigator.hardwareConcurrency || 0,
+          navigator.maxTouchPoints || 0,
+          navigator.platform || ''
+        ];
+        var raw = components.join('|');
+        // Simple hash (djb2)
+        var hash = 5381;
+        for (var i = 0; i < raw.length; i++) {
+          hash = ((hash << 5) + hash + raw.charCodeAt(i)) & 0xFFFFFFFF;
+        }
+        return hash.toString(36);
       }
 
       function clampInt(val, min, max) {
@@ -2328,7 +2352,8 @@
         apiPost('submitGuess', {
           playerId: state.player.id,
           playerName: state.player.name,
-          number: number
+          number: number,
+          deviceFingerprint: getDeviceFingerprint()
         }).then(function(data) {
           if (data && data.success) {
             state.guessCount = data.guessCount || state.guessCount;
