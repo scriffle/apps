@@ -1,0 +1,1347 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Room Display</title>
+  <style>
+    :root {
+      --bg-primary: #1a1a2e;
+      --bg-secondary: #16213e;
+      --bg-card: #1f2940;
+      --text-primary: #f0f0f0;
+      --text-secondary: #f0f0f0;
+      --text-muted: #d0d0e0;
+      --accent: #4a90d9;
+      --accent-glow: rgba(74, 144, 217, 0.3);
+      --progress-bg: #2a2a4a;
+      --progress-fill: linear-gradient(90deg, #4a90d9, #64b5f6);
+      --success: #4caf50;
+      --warning: #ff9800;
+
+      --font-main: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      --transition-smooth: 0.5s ease-in-out;
+      --text-scale: 1.4;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font-main);
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      padding: clamp(1rem, 3vmin, 2rem);
+      gap: clamp(0.5rem, 2vmin, 1.5rem);
+    }
+
+    /* Header - Room name and date */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .room-name {
+      font-size: calc(clamp(1.5rem, 5vmin, 3rem) * var(--text-scale));
+      font-weight: 300;
+      letter-spacing: 0.05em;
+      color: var(--text-primary);
+    }
+
+    .date-display {
+      text-align: right;
+    }
+
+    .date-text {
+      font-size: calc(clamp(1.3rem, 4vmin, 2.4rem) * var(--text-scale));
+      font-weight: 300;
+      color: var(--text-secondary);
+    }
+
+    .season-text {
+      font-size: calc(clamp(1rem, 3vmin, 1.8rem) * var(--text-scale));
+      color: var(--accent);
+      margin-top: 0.25em;
+      font-style: italic;
+    }
+
+    /* Weather display */
+    .weather-display {
+      font-size: calc(clamp(0.9rem, 2vmin, 1.4rem) * var(--text-scale));
+      color: var(--text-muted);
+      margin-top: 0.5em;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+
+    .weather-display.visible {
+      opacity: 1;
+    }
+
+    .weather-display span {
+      margin-left: 1em;
+    }
+
+    .weather-display span:first-child {
+      margin-left: 0;
+    }
+
+    /* Year progress bar */
+    .year-progress-section {
+      flex-shrink: 0;
+    }
+
+    .year-progress-label {
+      font-size: calc(clamp(0.9rem, 2vmin, 1.4rem) * var(--text-scale));
+      color: var(--text-muted);
+      margin-bottom: 0.5em;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .progress-bar {
+      height: clamp(0.5rem, 1.5vmin, 1rem);
+      background: var(--progress-bg);
+      border-radius: 1rem;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--progress-fill);
+      border-radius: 1rem;
+      transition: width 1s ease-out;
+    }
+
+    .progress-bar-large {
+      height: clamp(1rem, 3vmin, 2rem);
+    }
+
+    .progress-bar-large .progress-fill {
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    /* Main content area */
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      min-height: 0;
+      position: relative;
+    }
+
+    /* Current period display */
+    .current-display {
+      width: 100%;
+      max-width: 90%;
+      text-align: center;
+      transition: opacity var(--transition-smooth);
+    }
+
+    .current-display.fade-out {
+      opacity: 0;
+    }
+
+    .time-display {
+      font-size: calc(clamp(3rem, 12vmin, 8rem) * var(--text-scale));
+      font-weight: 200;
+      letter-spacing: 0.02em;
+      color: var(--text-primary);
+      line-height: 1;
+    }
+
+    .period-name {
+      font-size: calc(clamp(1.5rem, 5vmin, 3rem) * var(--text-scale));
+      color: var(--text-secondary);
+      margin-top: 0.5em;
+      font-weight: 300;
+    }
+
+    .class-info {
+      font-size: calc(clamp(1.5rem, 5vmin, 3rem) * var(--text-scale));
+      color: var(--accent);
+      margin-top: 0.75em;
+      font-weight: 400;
+    }
+
+    .activity-display {
+      font-size: calc(clamp(2.5rem, 10vmin, 7rem) * var(--text-scale));
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-top: 0.5em;
+      line-height: 1.1;
+      text-shadow: 0 0 40px var(--accent-glow);
+    }
+
+    /* Period progress section */
+    .period-progress-section {
+      width: 100%;
+      max-width: 80%;
+      margin-top: clamp(1rem, 4vmin, 3rem);
+    }
+
+    .period-progress-label {
+      font-size: calc(clamp(1rem, 2.5vmin, 1.6rem) * var(--text-scale));
+      color: var(--text-muted);
+      margin-bottom: 0.5em;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Upcoming events overlay */
+    .upcoming-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: var(--bg-primary);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--transition-smooth);
+      text-align: center;
+      padding: clamp(1rem, 3vmin, 2rem);
+    }
+
+    .upcoming-overlay.visible {
+      opacity: 1;
+    }
+
+    .upcoming-label {
+      font-size: calc(clamp(1.3rem, 4vmin, 2.4rem) * var(--text-scale));
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      margin-bottom: 1em;
+    }
+
+    .upcoming-description {
+      font-size: calc(clamp(2rem, 8vmin, 5rem) * var(--text-scale));
+      font-weight: 500;
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+
+    .upcoming-date {
+      font-size: calc(clamp(1.5rem, 5vmin, 3rem) * var(--text-scale));
+      color: var(--accent);
+      margin-top: 0.75em;
+      font-weight: 300;
+    }
+
+    /* Empty state - no class */
+    .empty-state .activity-display,
+    .empty-state .class-info {
+      display: none;
+    }
+
+    .empty-state .time-display {
+      font-size: calc(clamp(4rem, 15vmin, 12rem) * var(--text-scale));
+    }
+
+    .empty-state .period-name {
+      color: var(--text-muted);
+    }
+
+    /* Outside school hours */
+    .outside-hours .period-name {
+      color: var(--text-muted);
+    }
+
+    /* Loading state */
+    .loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      font-size: calc(clamp(1.5rem, 4vmin, 2.5rem) * var(--text-scale));
+      color: var(--text-muted);
+    }
+
+    /* Error state */
+    .error-message {
+      color: var(--warning);
+      font-size: calc(clamp(1.2rem, 3vmin, 2rem) * var(--text-scale));
+      text-align: center;
+      padding: 1rem;
+    }
+
+    /* Preview mode indicator */
+    .preview-indicator {
+      position: fixed;
+      bottom: clamp(1rem, 3vmin, 2rem);
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 152, 0, 0.9);
+      color: #000;
+      padding: 0.5em 1.5em;
+      border-radius: 2rem;
+      font-size: calc(clamp(1rem, 2.5vmin, 1.6rem) * var(--text-scale));
+      font-weight: 500;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 0.75em;
+    }
+
+    .preview-indicator.visible {
+      opacity: 1;
+    }
+
+    .preview-indicator kbd {
+      background: rgba(0, 0, 0, 0.2);
+      padding: 0.2em 0.5em;
+      border-radius: 0.25rem;
+      font-family: inherit;
+      font-size: 0.85em;
+    }
+
+    /* Smooth animations */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* High contrast for projector readability */
+    @media (prefers-contrast: more) {
+      :root {
+        --text-primary: #ffffff;
+        --text-secondary: #cccccc;
+        --bg-primary: #000000;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="loading" id="loading">Loading...</div>
+
+  <header class="header" id="header" style="display: none;">
+    <h1 class="room-name" id="room-name">Room</h1>
+    <div class="date-display">
+      <div class="date-text" id="date-text"></div>
+      <div class="season-text" id="season-text"></div>
+      <div class="weather-display" id="weather-display"></div>
+    </div>
+  </header>
+
+  <section class="year-progress-section" id="year-progress-section" style="display: none;">
+    <div class="year-progress-label">
+      <span>School Year Progress</span>
+      <span id="year-progress-percent">0%</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="year-progress-fill" style="width: 0%;"></div>
+    </div>
+  </section>
+
+  <main class="main-content" id="main-content" style="display: none;">
+    <div class="current-display" id="current-display">
+      <div class="time-display" id="time-display">--:--</div>
+      <div class="period-name" id="period-name"></div>
+      <div class="class-info" id="class-info"></div>
+      <div class="activity-display" id="activity-display"></div>
+
+      <div class="period-progress-section" id="period-progress-section">
+        <div class="period-progress-label">
+          <span id="period-start-time"></span>
+          <span id="period-end-time"></span>
+        </div>
+        <div class="progress-bar progress-bar-large">
+          <div class="progress-fill" id="period-progress-fill" style="width: 0%;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="upcoming-overlay" id="upcoming-overlay">
+      <div class="upcoming-label" id="upcoming-label">Upcoming</div>
+      <div class="upcoming-description" id="upcoming-description"></div>
+      <div class="upcoming-date" id="upcoming-date"></div>
+    </div>
+  </main>
+
+  <div class="preview-indicator" id="preview-indicator">
+    <span id="preview-text">Previewing</span>
+    <kbd>Esc</kbd> to return
+  </div>
+
+  <script>
+    'use strict';
+
+    // ============================================
+    // CONFIGURATION
+    // ============================================
+    const CONFIG = {
+      dataUrl: 'data.json',
+      refreshIntervalMs: 60 * 60 * 1000, // 1 hour
+      updateIntervalMs: 1000, // Update display every second
+      upcomingShowDurationMs: 10 * 1000, // 10 seconds
+      upcomingIntervalMs: 3 * 60 * 1000, // Every 3 minutes
+      morningRefreshHour: 8,
+      morningRefreshMinute: 15,
+      quoteShowDurationMs: 12 * 1000, // 12 seconds
+      quoteIntervalMs: 20 * 60 * 1000, // Every 20 minutes (average)
+    };
+
+    // ============================================
+    // SCHEDULE DEFINITION
+    // ============================================
+    const SCHEDULE = [
+      { name: 'Morning Greeting', start: '08:20', end: '08:30', period: null },
+      { name: 'Period 1', start: '08:30', end: '09:20', period: 'P1' },
+      { name: 'Period 2', start: '09:20', end: '10:10', period: 'P2' },
+      { name: 'Recess', start: '10:10', end: '10:30', period: null },
+      { name: 'Period 3', start: '10:30', end: '11:20', period: 'P3' },
+      { name: 'Period 4', start: '11:20', end: '12:10', period: 'P4' },
+      { name: 'Period 12:10', start: '12:10', end: '12:50', period: 'P12:10' },
+      { name: 'Lunch', start: '12:50', end: '13:30', period: null },
+      { name: 'Period 5', start: '13:30', end: '14:20', period: 'P5' },
+      { name: 'Period 6', start: '14:20', end: '15:10', period: 'P6' }
+    ];
+
+    // ============================================
+    // WURUNDJERI SEASONS (Kulin Nation)
+    // ============================================
+    const WURUNDJERI_SEASONS = [
+      { name: 'Biderap', meaning: 'Dry Season', startMonth: 1, startDay: 1, endMonth: 2, endDay: 14 },
+      { name: 'Iuk', meaning: 'Eel Season', startMonth: 2, startDay: 15, endMonth: 3, endDay: 31 },
+      { name: 'Waring', meaning: 'Wombat Season', startMonth: 4, startDay: 1, endMonth: 4, endDay: 30 },
+      { name: 'Guling', meaning: 'Orchid Season', startMonth: 5, startDay: 1, endMonth: 7, endDay: 14 },
+      { name: 'Poorneet', meaning: 'Tadpole Season', startMonth: 7, startDay: 15, endMonth: 9, endDay: 14 },
+      { name: 'Buath Gurru', meaning: 'Grass Flowering Season', startMonth: 9, startDay: 15, endMonth: 11, endDay: 14 },
+      { name: 'Kangaroo Apple Season', meaning: 'Kangaroo Apple Season', startMonth: 11, startDay: 15, endMonth: 12, endDay: 31 }
+    ];
+
+    // ============================================
+    // DEFAULT THEME
+    // ============================================
+    const DEFAULT_THEME = {
+      accent: '#4a90d9',
+      glow: 'rgba(74, 144, 217, 0.3)'
+    };
+
+    // ============================================
+    // STATE
+    // ============================================
+    let appData = null;
+    let currentUpcomingIndex = 0;
+    let showingUpcoming = false;
+    let lastRefreshDate = null;
+    let currentTheme = DEFAULT_THEME;
+
+    // Preview mode state
+    let previewMode = false;
+    let previewDate = null;
+    let previewPeriodIndex = 0;
+
+    // Text scale: keys 1-9 map to scale factors 0.6 to 2.2
+    // Key 5 = default 1.4 (good for smallish TV)
+    const TEXT_SCALE_MAP = {
+      '1': 0.6, '2': 0.8, '3': 1.0, '4': 1.2,
+      '5': 1.4, '6': 1.6, '7': 1.8, '8': 2.0, '9': 2.2
+    };
+
+    // ============================================
+    // DOM ELEMENTS
+    // ============================================
+    const elements = {
+      loading: document.getElementById('loading'),
+      header: document.getElementById('header'),
+      roomName: document.getElementById('room-name'),
+      dateText: document.getElementById('date-text'),
+      seasonText: document.getElementById('season-text'),
+      yearProgressSection: document.getElementById('year-progress-section'),
+      yearProgressFill: document.getElementById('year-progress-fill'),
+      yearProgressPercent: document.getElementById('year-progress-percent'),
+      mainContent: document.getElementById('main-content'),
+      currentDisplay: document.getElementById('current-display'),
+      timeDisplay: document.getElementById('time-display'),
+      periodName: document.getElementById('period-name'),
+      classInfo: document.getElementById('class-info'),
+      activityDisplay: document.getElementById('activity-display'),
+      periodProgressSection: document.getElementById('period-progress-section'),
+      periodProgressFill: document.getElementById('period-progress-fill'),
+      periodStartTime: document.getElementById('period-start-time'),
+      periodEndTime: document.getElementById('period-end-time'),
+      upcomingOverlay: document.getElementById('upcoming-overlay'),
+      upcomingLabel: document.getElementById('upcoming-label'),
+      upcomingDescription: document.getElementById('upcoming-description'),
+      upcomingDate: document.getElementById('upcoming-date'),
+      weatherDisplay: document.getElementById('weather-display'),
+      previewIndicator: document.getElementById('preview-indicator'),
+      previewText: document.getElementById('preview-text')
+    };
+
+    // ============================================
+    // UTILITY FUNCTIONS
+    // ============================================
+    function parseTime(timeStr) {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return { hours, minutes };
+    }
+
+    function timeToMinutes(timeStr) {
+      const { hours, minutes } = parseTime(timeStr);
+      return hours * 60 + minutes;
+    }
+
+    function formatTime12Hour(date) {
+      let hours = date.getHours();
+      const minutes = date.getMinutes();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      const minutesStr = minutes < 10 ? '0' + minutes : minutes;
+      return `${hours}:${minutesStr} ${ampm}`;
+    }
+
+    function formatTime12HourShort(timeStr) {
+      const { hours, minutes } = parseTime(timeStr);
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const hour12 = hours % 12 || 12;
+      const minutesStr = minutes < 10 ? '0' + minutes : minutes;
+      return `${hour12}:${minutesStr} ${ampm}`;
+    }
+
+    function formatDateLong(date) {
+      const options = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+      return date.toLocaleDateString('en-AU', options);
+    }
+
+    function formatDateShort(dateStr) {
+      const date = new Date(dateStr + 'T00:00:00');
+      const options = { weekday: 'short', day: 'numeric', month: 'short' };
+      return date.toLocaleDateString('en-AU', options);
+    }
+
+    function getDateString(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    // ============================================
+    // THEME FUNCTIONS
+    // ============================================
+    function getThemeForClass(className) {
+      if (!appData || !appData.classThemes || !className) {
+        return DEFAULT_THEME;
+      }
+      return appData.classThemes[className] || DEFAULT_THEME;
+    }
+
+    function applyTheme(theme) {
+      if (currentTheme.accent === theme.accent) return; // No change needed
+
+      currentTheme = theme;
+      document.documentElement.style.setProperty('--accent', theme.accent);
+      document.documentElement.style.setProperty('--accent-glow', theme.glow);
+      document.documentElement.style.setProperty('--progress-fill', `linear-gradient(90deg, ${theme.accent}, ${lightenColor(theme.accent, 20)})`);
+    }
+
+    function lightenColor(hex, percent) {
+      // Convert hex to RGB, lighten, convert back
+      const num = parseInt(hex.replace('#', ''), 16);
+      const r = Math.min(255, (num >> 16) + Math.round(255 * percent / 100));
+      const g = Math.min(255, ((num >> 8) & 0x00FF) + Math.round(255 * percent / 100));
+      const b = Math.min(255, (num & 0x0000FF) + Math.round(255 * percent / 100));
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+
+    function resetTheme() {
+      applyTheme(DEFAULT_THEME);
+    }
+
+    // ============================================
+    // WURUNDJERI SEASON
+    // ============================================
+    function getWurundjeriSeason(date) {
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+
+      for (const season of WURUNDJERI_SEASONS) {
+        const afterStart = month > season.startMonth ||
+                          (month === season.startMonth && day >= season.startDay);
+        const beforeEnd = month < season.endMonth ||
+                         (month === season.endMonth && day <= season.endDay);
+
+        // Handle wrap-around for seasons spanning year end
+        if (season.startMonth <= season.endMonth) {
+          if (afterStart && beforeEnd) {
+            return season;
+          }
+        } else {
+          if (afterStart || beforeEnd) {
+            return season;
+          }
+        }
+      }
+
+      return WURUNDJERI_SEASONS[0]; // Default fallback
+    }
+
+    // ============================================
+    // YEAR PROGRESS
+    // ============================================
+    function calculateYearProgress(date) {
+      if (!appData || !appData.terms || appData.terms.length === 0) {
+        return 0;
+      }
+
+      const terms = appData.terms.sort((a, b) => new Date(a.start) - new Date(b.start));
+      const yearStart = new Date(terms[0].start + 'T00:00:00');
+      const yearEnd = new Date(terms[terms.length - 1].end + 'T23:59:59');
+
+      if (date < yearStart) return 0;
+      if (date > yearEnd) return 100;
+
+      const totalDuration = yearEnd - yearStart;
+      const elapsed = date - yearStart;
+
+      return Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
+    }
+
+    // ============================================
+    // SCHEDULE FUNCTIONS
+    // ============================================
+    function getCurrentScheduleSlot(date) {
+      const currentMinutes = date.getHours() * 60 + date.getMinutes();
+
+      for (const slot of SCHEDULE) {
+        const startMinutes = timeToMinutes(slot.start);
+        const endMinutes = timeToMinutes(slot.end);
+
+        if (currentMinutes >= startMinutes && currentMinutes < endMinutes) {
+          return slot;
+        }
+      }
+
+      return null;
+    }
+
+    function getSlotProgress(slot, date) {
+      const currentMinutes = date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60;
+      const startMinutes = timeToMinutes(slot.start);
+      const endMinutes = timeToMinutes(slot.end);
+
+      const progress = ((currentMinutes - startMinutes) / (endMinutes - startMinutes)) * 100;
+      return Math.min(100, Math.max(0, progress));
+    }
+
+    function getEventsForDate(dateStr) {
+      if (!appData || !appData.days) return [];
+
+      const dayData = appData.days.find(d => d.date === dateStr);
+      return dayData ? dayData.events : [];
+    }
+
+    function getTodayEvents() {
+      const today = getDateString(new Date());
+      return getEventsForDate(today);
+    }
+
+    function getEventForPeriodOnDate(period, dateStr) {
+      if (!period) return null;
+
+      const events = getEventsForDate(dateStr);
+
+      for (const event of events) {
+        if (event.period === period) {
+          return event;
+        }
+        if (event.period.includes('-')) {
+          const [start, end] = event.period.split('-');
+          const startNum = parseInt(start.replace('P', ''));
+          const endNum = parseInt(end.replace('P', ''));
+          const periodNum = parseInt(period.replace('P', ''));
+          if (periodNum >= startNum && periodNum <= endNum) {
+            return event;
+          }
+        }
+      }
+      return null;
+    }
+
+    function getEventForPeriod(period) {
+      if (!period) return null;
+
+      const events = getTodayEvents();
+
+      for (const event of events) {
+        // Handle single periods
+        if (event.period === period) {
+          return event;
+        }
+
+        // Handle double periods (e.g., "P3-P4")
+        if (event.period.includes('-')) {
+          const [start, end] = event.period.split('-');
+          const startNum = parseInt(start.replace('P', ''));
+          const endNum = parseInt(end.replace('P', ''));
+          const periodNum = parseInt(period.replace('P', ''));
+
+          if (periodNum >= startNum && periodNum <= endNum) {
+            return event;
+          }
+        }
+      }
+
+      return null;
+    }
+
+    // ============================================
+    // UPCOMING EVENTS
+    // ============================================
+    function getUpcomingEvents() {
+      if (!appData || !appData.upcoming) return [];
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      return appData.upcoming
+        .filter(event => new Date(event.date + 'T00:00:00') >= today)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+    }
+
+    function showUpcomingEvent() {
+      if (overlayBusy || previewMode) return;
+
+      const upcoming = getUpcomingEvents();
+      if (upcoming.length === 0) return;
+
+      overlayBusy = true;
+      showingUpcoming = true;
+
+      const event = upcoming[currentUpcomingIndex % upcoming.length];
+
+      elements.upcomingLabel.textContent = 'Upcoming';
+      elements.upcomingDescription.textContent = event.description;
+      elements.upcomingDate.textContent = formatDateShort(event.date);
+
+      elements.currentDisplay.classList.add('fade-out');
+
+      setTimeout(() => {
+        elements.upcomingOverlay.classList.add('visible');
+      }, 500);
+
+      setTimeout(() => {
+        hideUpcomingEvent();
+        currentUpcomingIndex++;
+      }, CONFIG.upcomingShowDurationMs);
+    }
+
+    function hideUpcomingEvent() {
+      elements.upcomingOverlay.classList.remove('visible');
+
+      setTimeout(() => {
+        elements.currentDisplay.classList.remove('fade-out');
+        showingUpcoming = false;
+        overlayBusy = false;
+      }, 500);
+    }
+
+    // ============================================
+    // QUOTES
+    // ============================================
+    const QUOTES = [
+      // Why we're here together
+      { text: "You are in this classroom because you can do things here you can't do on your own.", author: null },
+      { text: "The person who asks a question is a fool for a minute. The person who doesn't is a fool for a lifetime.", author: null },
+      { text: "Every expert was once a beginner.", author: null },
+      { text: "You don't have to be great to start, but you have to start to be great.", author: null },
+      { text: "The best way to predict your future is to create it.", author: null },
+
+      // Curiosity and wonder
+      { text: "Stay curious. The answers will come.", author: null },
+      { text: "The important thing is not to stop questioning.", author: "Albert Einstein" },
+      { text: "Somewhere, something incredible is waiting to be known.", author: "Carl Sagan" },
+      { text: "Wonder is the beginning of wisdom.", author: "Socrates" },
+      { text: "Look up at the stars and not down at your feet.", author: "Stephen Hawking" },
+      { text: "The universe is under no obligation to make sense to you.", author: "Neil deGrasse Tyson" },
+      { text: "Not all who wander are lost.", author: "J.R.R. Tolkien" },
+      { text: "The only true wisdom is in knowing you know nothing.", author: "Socrates" },
+
+      // Mistakes and growth
+      { text: "Mistakes are proof that you are trying.", author: null },
+      { text: "A smooth sea never made a skilled sailor.", author: null },
+      { text: "The only real mistake is the one from which we learn nothing.", author: "Henry Ford" },
+      { text: "Fall seven times, stand up eight.", author: null },
+      { text: "It's not about being perfect. It's about effort.", author: null },
+      { text: "You are allowed to be both a masterpiece and a work in progress.", author: null },
+      { text: "Be patient with yourself. Nothing in nature blooms all year.", author: null },
+      { text: "Confusion is the sweat of learning.", author: null },
+      { text: "If it doesn't challenge you, it doesn't change you.", author: null },
+
+      // Thinking and learning
+      { text: "Think for yourself. Not less than others, but differently.", author: null },
+      { text: "The mind is not a vessel to be filled, but a fire to be kindled.", author: "Plutarch" },
+      { text: "What we learn with pleasure we never forget.", author: "Alfred Mercier" },
+      { text: "Tell me and I forget. Teach me and I remember. Involve me and I learn.", author: "Benjamin Franklin" },
+      { text: "Learning is not attained by chance. It must be sought with ardour.", author: "Abigail Adams" },
+      { text: "Live as if you were to die tomorrow. Learn as if you were to live forever.", author: "Mahatma Gandhi" },
+      { text: "The capacity to learn is a gift; the ability to learn is a skill; the willingness to learn is a choice.", author: "Brian Herbert" },
+      { text: "Education is not the filling of a pail, but the lighting of a fire.", author: "W.B. Yeats" },
+
+      // Kindness and character
+      { text: "Be the reason someone smiles today.", author: null },
+      { text: "In a world where you can be anything, be kind.", author: null },
+      { text: "How you treat people says everything about you.", author: null },
+      { text: "Strong people lift others up.", author: null },
+      { text: "Your vibe attracts your tribe.", author: null },
+      { text: "Kindness is free. Sprinkle that stuff everywhere.", author: null },
+      { text: "The world needs who you were made to be.", author: null },
+
+      // Effort and perseverance
+      { text: "Hard work beats talent when talent doesn't work hard.", author: "Tim Notke" },
+      { text: "Small daily improvements over time lead to stunning results.", author: null },
+      { text: "You don't have to see the whole staircase. Just take the first step.", author: "Martin Luther King Jr." },
+      { text: "The secret of getting ahead is getting started.", author: "Mark Twain" },
+      { text: "Don't watch the clock; do what it does. Keep going.", author: "Sam Levenson" },
+      { text: "It always seems impossible until it's done.", author: "Nelson Mandela" },
+      { text: "Discipline is choosing between what you want now and what you want most.", author: "Abraham Lincoln" },
+      { text: "A year from now you will wish you had started today.", author: null },
+
+      // Science-flavoured
+      { text: "Science is a way of thinking much more than it is a body of knowledge.", author: "Carl Sagan" },
+      { text: "Nothing in life is to be feared, it is only to be understood.", author: "Marie Curie" },
+      { text: "We are all made of star stuff.", author: "Carl Sagan" },
+      { text: "Equipped with his five senses, man explores the universe around him and calls the adventure Science.", author: "Edwin Hubble" },
+      { text: "The good thing about science is that it's true whether or not you believe in it.", author: "Neil deGrasse Tyson" },
+      { text: "Research is what I'm doing when I don't know what I'm doing.", author: "Wernher von Braun" },
+      { text: "An experiment is a question which science poses to Nature.", author: "Max Planck" },
+
+      // Perspective
+      { text: "Everything you've ever wanted is on the other side of fear.", author: "George Addair" },
+      { text: "The best time to plant a tree was 20 years ago. The second best time is now.", author: null },
+      { text: "You miss 100% of the shots you don't take.", author: "Wayne Gretzky" },
+      { text: "What lies behind us and what lies before us are tiny matters compared to what lies within us.", author: "Ralph Waldo Emerson" },
+      { text: "Be yourself; everyone else is already taken.", author: "Oscar Wilde" },
+      { text: "Not everything that counts can be counted, and not everything that can be counted counts.", author: "William Bruce Cameron" },
+
+      // Quiet encouragement
+      { text: "You belong here.", author: null },
+      { text: "Your potential is enormous. Don't let anyone tell you otherwise.", author: null },
+      { text: "Progress, not perfection.", author: null },
+      { text: "Today is a good day to learn something new.", author: null },
+      { text: "You are more capable than you know.", author: null },
+      { text: "What you do today matters.", author: null },
+      { text: "Start where you are. Use what you have. Do what you can.", author: "Arthur Ashe" },
+      { text: "Believe you can and you're halfway there.", author: "Theodore Roosevelt" },
+      { text: "Your only limit is your mind.", author: null },
+      { text: "Done is better than perfect.", author: null },
+      { text: "The struggle you're in today is developing the strength you need for tomorrow.", author: null },
+
+      // Collaboration
+      { text: "Alone we can do so little; together we can do so much.", author: "Helen Keller" },
+      { text: "If you want to go fast, go alone. If you want to go far, go together.", author: null },
+      { text: "We rise by lifting others.", author: "Robert Ingersoll" },
+      { text: "None of us is as smart as all of us.", author: "Ken Blanchard" },
+      { text: "Great things are done by a series of small things brought together.", author: "Vincent van Gogh" },
+
+      // Courage
+      { text: "Courage is not the absence of fear, but the judgement that something else is more important.", author: "Ambrose Redmoon" },
+      { text: "Do one thing every day that scares you.", author: "Eleanor Roosevelt" },
+      { text: "The only way to do great work is to love what you do.", author: "Steve Jobs" },
+      { text: "Dream big. Start small. Act now.", author: null },
+      { text: "Your comfort zone is a beautiful place, but nothing ever grows there.", author: null },
+
+      // Wisdom
+      { text: "The more I read, the more I acquire, the more certain I am that I know nothing.", author: "Voltaire" },
+      { text: "In the middle of difficulty lies opportunity.", author: "Albert Einstein" },
+      { text: "We do not learn from experience. We learn from reflecting on experience.", author: "John Dewey" },
+      { text: "Knowing is not enough; we must apply. Willing is not enough; we must do.", author: "Johann Wolfgang von Goethe" },
+      { text: "Change is the end result of all true learning.", author: "Leo Buscaglia" },
+      { text: "The beautiful thing about learning is that nobody can take it away from you.", author: "B.B. King" },
+    ];
+
+    let currentQuoteIndex = 0;
+    let showingQuote = false;
+    let overlayBusy = false; // prevents upcoming and quote from colliding
+
+    // Shuffle quotes on load for variety
+    function shuffleQuotes() {
+      for (let i = QUOTES.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [QUOTES[i], QUOTES[j]] = [QUOTES[j], QUOTES[i]];
+      }
+    }
+    shuffleQuotes();
+
+    function showQuote() {
+      if (overlayBusy || previewMode) return;
+      overlayBusy = true;
+      showingQuote = true;
+
+      const quote = QUOTES[currentQuoteIndex % QUOTES.length];
+      currentQuoteIndex++;
+
+      elements.upcomingLabel.textContent = '';
+      elements.upcomingDescription.textContent = quote.text;
+      elements.upcomingDate.textContent = quote.author ? `— ${quote.author}` : '';
+
+      elements.currentDisplay.classList.add('fade-out');
+
+      setTimeout(() => {
+        elements.upcomingOverlay.classList.add('visible');
+      }, 500);
+
+      setTimeout(() => {
+        hideQuote();
+      }, CONFIG.quoteShowDurationMs);
+    }
+
+    function hideQuote() {
+      elements.upcomingOverlay.classList.remove('visible');
+
+      setTimeout(() => {
+        elements.currentDisplay.classList.remove('fade-out');
+        showingQuote = false;
+        overlayBusy = false;
+      }, 500);
+    }
+
+    // ============================================
+    // DISPLAY UPDATE
+    // ============================================
+    function updateDisplay() {
+      // Don't update main display when in preview mode
+      if (previewMode) return;
+
+      const now = new Date();
+
+      // Update time
+      elements.timeDisplay.textContent = formatTime12Hour(now);
+
+      // Update date
+      elements.dateText.textContent = formatDateLong(now);
+
+      // Update Wurundjeri season
+      const season = getWurundjeriSeason(now);
+      elements.seasonText.textContent = `Naarm — ${season.name} — ${season.meaning}`;
+
+      // Update year progress
+      const yearProgress = calculateYearProgress(now);
+      elements.yearProgressFill.style.width = `${yearProgress}%`;
+      elements.yearProgressPercent.textContent = `${Math.round(yearProgress)}%`;
+
+      // Get current schedule slot
+      const currentSlot = getCurrentScheduleSlot(now);
+
+      if (currentSlot) {
+        // During school hours
+        elements.periodName.textContent = currentSlot.name;
+
+        // Update period progress
+        const slotProgress = getSlotProgress(currentSlot, now);
+        elements.periodProgressFill.style.width = `${slotProgress}%`;
+        elements.periodStartTime.textContent = formatTime12HourShort(currentSlot.start);
+        elements.periodEndTime.textContent = formatTime12HourShort(currentSlot.end);
+        elements.periodProgressSection.style.display = 'block';
+
+        // Check for event in this period
+        const event = getEventForPeriod(currentSlot.period);
+
+        if (event) {
+          // Class is scheduled
+          elements.currentDisplay.classList.remove('empty-state', 'outside-hours');
+          elements.classInfo.textContent = event.class;
+          elements.activityDisplay.textContent = event.activity;
+
+          // Apply class-specific theme
+          const theme = getThemeForClass(event.class);
+          applyTheme(theme);
+        } else {
+          // No class scheduled (break or free period)
+          elements.currentDisplay.classList.add('empty-state');
+          elements.currentDisplay.classList.remove('outside-hours');
+          elements.classInfo.textContent = '';
+          elements.activityDisplay.textContent = '';
+          resetTheme();
+        }
+      } else {
+        // Outside school hours
+        elements.currentDisplay.classList.add('outside-hours');
+        elements.currentDisplay.classList.remove('empty-state');
+        elements.periodName.textContent = 'Outside School Hours';
+        elements.classInfo.textContent = '';
+        elements.activityDisplay.textContent = '';
+        elements.periodProgressSection.style.display = 'none';
+        resetTheme();
+      }
+    }
+
+    // ============================================
+    // DATA LOADING
+    // ============================================
+    async function loadData() {
+      try {
+        const response = await fetch(CONFIG.dataUrl + '?t=' + Date.now());
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        appData = await response.json();
+
+        // Update room name
+        elements.roomName.textContent = appData.room || 'Room';
+
+        // Show main UI
+        elements.loading.style.display = 'none';
+        elements.header.style.display = 'flex';
+        elements.yearProgressSection.style.display = 'block';
+        elements.mainContent.style.display = 'flex';
+
+        lastRefreshDate = new Date();
+        console.log('Data loaded successfully at', lastRefreshDate.toLocaleTimeString());
+
+      } catch (error) {
+        console.error('Error loading data:', error);
+        elements.loading.innerHTML = `<div class="error-message">Unable to load data. Will retry...<br><small>${error.message}</small></div>`;
+
+        // Retry in 30 seconds
+        setTimeout(loadData, 30000);
+      }
+    }
+
+    function checkMorningRefresh() {
+      const now = new Date();
+
+      if (lastRefreshDate) {
+        const lastDate = lastRefreshDate.toDateString();
+        const todayDate = now.toDateString();
+
+        // If it's a new day and past the morning refresh time
+        if (lastDate !== todayDate &&
+            now.getHours() >= CONFIG.morningRefreshHour &&
+            now.getMinutes() >= CONFIG.morningRefreshMinute) {
+          console.log('Morning refresh triggered');
+          loadData();
+        }
+      }
+    }
+
+    // ============================================
+    // WEATHER (Open-Meteo API - Melbourne)
+    // ============================================
+    const WEATHER_CONFIG = {
+      // Melbourne coordinates
+      latitude: -37.8136,
+      longitude: 144.9631,
+      refreshIntervalMs: 30 * 60 * 1000 // 30 minutes
+    };
+
+    let weatherData = null;
+
+    async function loadWeather() {
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${WEATHER_CONFIG.latitude}&longitude=${WEATHER_CONFIG.longitude}&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset&current=temperature_2m,relative_humidity_2m,dew_point_2m&timezone=Australia%2FMelbourne&forecast_days=1`;
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Weather fetch failed');
+
+        weatherData = await response.json();
+        updateWeatherDisplay();
+      } catch (error) {
+        // Fail silently - weather is optional
+        console.log('Weather unavailable:', error.message);
+        elements.weatherDisplay.classList.remove('visible');
+      }
+    }
+
+    function updateWeatherDisplay() {
+      if (!weatherData) return;
+
+      try {
+        const current = weatherData.current;
+        const daily = weatherData.daily;
+
+        const temp = Math.round(current.temperature_2m);
+        const dewPoint = Math.round(current.dew_point_2m);
+        const min = Math.round(daily.temperature_2m_min[0]);
+        const max = Math.round(daily.temperature_2m_max[0]);
+
+        // Parse sunrise/sunset times
+        const sunrise = new Date(daily.sunrise[0]);
+        const sunset = new Date(daily.sunset[0]);
+        const sunriseStr = formatTime12Hour(sunrise).replace(' ', '');
+        const sunsetStr = formatTime12Hour(sunset).replace(' ', '');
+
+        elements.weatherDisplay.innerHTML =
+          `<span>${temp}°C</span>` +
+          `<span>${min}°/${max}°</span>` +
+          `<span>☀${sunriseStr}</span>` +
+          `<span>☾${sunsetStr}</span>` +
+          `<span>Dew ${dewPoint}°</span>`;
+
+        elements.weatherDisplay.classList.add('visible');
+      } catch (error) {
+        // Fail silently
+        console.log('Weather display error:', error.message);
+      }
+    }
+
+    // ============================================
+    // PREVIEW MODE / KEYBOARD NAVIGATION
+    // ============================================
+    function enterPreviewMode() {
+      if (!previewMode) {
+        previewMode = true;
+        previewDate = new Date();
+        previewPeriodIndex = getCurrentPeriodIndex();
+        if (previewPeriodIndex < 0) previewPeriodIndex = 0;
+      }
+      updatePreviewIndicator();
+      updatePreviewDisplay();
+    }
+
+    function exitPreviewMode() {
+      previewMode = false;
+      previewDate = null;
+      previewPeriodIndex = 0;
+      elements.previewIndicator.classList.remove('visible');
+      updateDisplay();
+    }
+
+    function getCurrentPeriodIndex() {
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+      for (let i = 0; i < SCHEDULE.length; i++) {
+        const slot = SCHEDULE[i];
+        const startMinutes = timeToMinutes(slot.start);
+        const endMinutes = timeToMinutes(slot.end);
+        if (currentMinutes >= startMinutes && currentMinutes < endMinutes) {
+          return i;
+        }
+      }
+      return -1;
+    }
+
+    function navigatePeriod(direction) {
+      enterPreviewMode();
+
+      previewPeriodIndex += direction;
+
+      if (previewPeriodIndex >= SCHEDULE.length) {
+        // Move to next day, first period
+        previewDate.setDate(previewDate.getDate() + 1);
+        previewPeriodIndex = 0;
+      } else if (previewPeriodIndex < 0) {
+        // Move to previous day, last period
+        previewDate.setDate(previewDate.getDate() - 1);
+        previewPeriodIndex = SCHEDULE.length - 1;
+      }
+
+      updatePreviewIndicator();
+      updatePreviewDisplay();
+    }
+
+    function navigateDay(direction) {
+      enterPreviewMode();
+      previewDate.setDate(previewDate.getDate() + direction);
+      updatePreviewIndicator();
+      updatePreviewDisplay();
+    }
+
+    function navigateWeek(direction) {
+      enterPreviewMode();
+      previewDate.setDate(previewDate.getDate() + (direction * 7));
+      updatePreviewIndicator();
+      updatePreviewDisplay();
+    }
+
+    function updatePreviewIndicator() {
+      const dateStr = formatDateLong(previewDate);
+      const slot = SCHEDULE[previewPeriodIndex];
+      elements.previewText.textContent = `${dateStr} — ${slot.name}`;
+      elements.previewIndicator.classList.add('visible');
+    }
+
+    function updatePreviewDisplay() {
+      const slot = SCHEDULE[previewPeriodIndex];
+      const dateStr = getDateString(previewDate);
+
+      // Update date display
+      elements.dateText.textContent = formatDateLong(previewDate);
+
+      // Update Wurundjeri season
+      const season = getWurundjeriSeason(previewDate);
+      elements.seasonText.textContent = `Naarm — ${season.name} — ${season.meaning}`;
+
+      // Update year progress
+      const yearProgress = calculateYearProgress(previewDate);
+      elements.yearProgressFill.style.width = `${yearProgress}%`;
+      elements.yearProgressPercent.textContent = `${Math.round(yearProgress)}%`;
+
+      // Show period time in the time display
+      elements.timeDisplay.textContent = formatTime12HourShort(slot.start);
+
+      // Update period info
+      elements.periodName.textContent = slot.name;
+      elements.periodStartTime.textContent = formatTime12HourShort(slot.start);
+      elements.periodEndTime.textContent = formatTime12HourShort(slot.end);
+      elements.periodProgressFill.style.width = '0%';
+      elements.periodProgressSection.style.display = 'block';
+
+      // Check for event
+      const event = getEventForPeriodOnDate(slot.period, dateStr);
+
+      if (event) {
+        elements.currentDisplay.classList.remove('empty-state', 'outside-hours');
+        elements.classInfo.textContent = event.class;
+        elements.activityDisplay.textContent = event.activity;
+        const theme = getThemeForClass(event.class);
+        applyTheme(theme);
+      } else {
+        elements.currentDisplay.classList.add('empty-state');
+        elements.currentDisplay.classList.remove('outside-hours');
+        elements.classInfo.textContent = '';
+        elements.activityDisplay.textContent = '';
+        resetTheme();
+      }
+    }
+
+    function setTextScale(key) {
+      const scale = TEXT_SCALE_MAP[key];
+      if (scale === undefined) return;
+
+      document.documentElement.style.setProperty('--text-scale', scale);
+
+      // Persist to localStorage
+      try { localStorage.setItem('displace-text-scale', key); } catch (e) {}
+
+      // Brief visual feedback via preview indicator
+      elements.previewText.textContent = `Text size: ${key} (${Math.round(scale * 100)}%)`;
+      elements.previewIndicator.classList.add('visible');
+      setTimeout(() => {
+        if (!previewMode) {
+          elements.previewIndicator.classList.remove('visible');
+        }
+      }, 1500);
+    }
+
+    function loadTextScale() {
+      try {
+        const saved = localStorage.getItem('displace-text-scale');
+        if (saved && TEXT_SCALE_MAP[saved] !== undefined) {
+          document.documentElement.style.setProperty('--text-scale', TEXT_SCALE_MAP[saved]);
+        }
+      } catch (e) {}
+    }
+
+    function handleKeydown(event) {
+      const key = event.key;
+
+      // Text scale: 1-9 (without modifiers)
+      if (key >= '1' && key <= '9' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        setTextScale(key);
+        event.preventDefault();
+        return;
+      }
+
+      if (key === 'Escape' && previewMode) {
+        exitPreviewMode();
+        event.preventDefault();
+        return;
+      }
+
+      if (key === 'ArrowLeft' || key === 'ArrowRight') {
+        event.preventDefault();
+        const direction = key === 'ArrowRight' ? 1 : -1;
+
+        if (event.ctrlKey || event.metaKey) {
+          // Ctrl/Cmd + Arrow: navigate weeks
+          navigateWeek(direction);
+        } else if (event.shiftKey) {
+          // Shift + Arrow: navigate days
+          navigateDay(direction);
+        } else {
+          // Plain Arrow: navigate periods
+          navigatePeriod(direction);
+        }
+      }
+    }
+
+    // ============================================
+    // INITIALIZATION
+    // ============================================
+    function init() {
+      // Restore saved text scale
+      loadTextScale();
+
+      // Load data
+      loadData();
+
+      // Start update loop
+      setInterval(updateDisplay, CONFIG.updateIntervalMs);
+
+      // Schedule hourly refresh
+      setInterval(loadData, CONFIG.refreshIntervalMs);
+
+      // Check for morning refresh every minute
+      setInterval(checkMorningRefresh, 60000);
+
+      // Schedule upcoming events display
+      setInterval(() => {
+        if (!overlayBusy && !previewMode && getUpcomingEvents().length > 0) {
+          showUpcomingEvent();
+        }
+      }, CONFIG.upcomingIntervalMs);
+
+      // Initial upcoming show after 30 seconds
+      setTimeout(() => {
+        if (getUpcomingEvents().length > 0) {
+          showUpcomingEvent();
+        }
+      }, 30000);
+
+      // Schedule quotes — random interval averaging ~20 minutes
+      function scheduleNextQuote() {
+        // Random delay: 15–25 minutes (±5 min around the 20 min average)
+        const jitter = (Math.random() - 0.5) * 10 * 60 * 1000;
+        const delay = CONFIG.quoteIntervalMs + jitter;
+        setTimeout(() => {
+          if (!overlayBusy && !previewMode) {
+            showQuote();
+          }
+          scheduleNextQuote();
+        }, delay);
+      }
+      scheduleNextQuote();
+
+      // Load weather (fails silently if unavailable)
+      loadWeather();
+      setInterval(loadWeather, WEATHER_CONFIG.refreshIntervalMs);
+
+      // Keyboard navigation
+      document.addEventListener('keydown', handleKeydown);
+    }
+
+    // Start the app
+    init();
+  </script>
+</body>
+</html>
