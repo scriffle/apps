@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -276,7 +275,7 @@
     .period-progress-label {
       font-size: calc(clamp(0.8rem, 1.5vmin, 1.2rem) * var(--text-scale));
       color: var(--text-muted);
-      margin-bottom: 0.2em;
+      margin-bottom: 0.5em;
       display: flex;
       justify-content: space-between;
     }
@@ -464,7 +463,6 @@
         --bg-primary: #000000;
       }
     }
-
   </style>
 </head>
 <body>
@@ -595,14 +593,6 @@
     ];
 
     // ============================================
-    // DEFAULT THEME
-    // ============================================
-    const DEFAULT_THEME = {
-      accent: '#4a90d9',
-      glow: 'rgba(74, 144, 217, 0.3)'
-    };
-
-    // ============================================
     // STATE
     // ============================================
     let appData = null;
@@ -610,7 +600,6 @@
     let currentUpcomingIndex = 0;
     let showingUpcoming = false;
     let lastRefreshDate = null;
-    let currentTheme = DEFAULT_THEME;
     let newsHeadlines = [];
 
     // Preview mode state
@@ -619,6 +608,7 @@
     let previewPeriodIndex = 0;
 
     // Text scale: keys 1-9 map to scale factors 0.6 to 2.2
+    // Key 5 = default 1.4 (good for smallish TV)
     const TEXT_SCALE_MAP = {
       '1': 0.6, '2': 0.8, '3': 1.0, '4': 1.2,
       '5': 1.4, '6': 1.6, '7': 1.8, '8': 2.0, '9': 2.2
@@ -709,6 +699,9 @@
     }
 
     // ============================================
+    // THEME FUNCTIONS
+    // ============================================
+    // ============================================
     // WURUNDJERI SEASON
     // ============================================
     function getWurundjeriSeason(date) {
@@ -721,6 +714,7 @@
         const beforeEnd = month < season.endMonth ||
                          (month === season.endMonth && day <= season.endDay);
 
+        // Handle wrap-around for seasons spanning year end
         if (season.startMonth <= season.endMonth) {
           if (afterStart && beforeEnd) {
             return season;
@@ -732,7 +726,7 @@
         }
       }
 
-      return WURUNDJERI_SEASONS[0];
+      return WURUNDJERI_SEASONS[0]; // Default fallback
     }
 
     // ============================================
@@ -783,7 +777,6 @@
 
         marker.style.left = `${position}%`;
 
-        // Use specified position or default to alternating
         const label = document.createElement('div');
         label.className = 'key-date-label';
         label.textContent = keyDate.description;
@@ -808,12 +801,10 @@
       const canvas = elements.sparklerCanvas;
       const progressBar = elements.progressBar;
 
-      // Size canvas to match progress bar container area
       const barRect = progressBar.getBoundingClientRect();
       const barHeight = barRect.height;
 
-      // Canvas height scales from 1x to 3x bar height based on progress
-      const maxCanvasHeight = barHeight * 6; // Allow room for 3x on each side
+      const maxCanvasHeight = barHeight * 6;
       canvas.width = barRect.width;
       canvas.height = maxCanvasHeight;
       canvas.style.height = `${maxCanvasHeight}px`;
@@ -823,32 +814,23 @@
       sparklerStartTime = Date.now();
     }
 
-    // Get sinusoidal pulse multiplier (1x to 10x over 10 second period)
     function getPulseMultiplier() {
-      const elapsed = (Date.now() - sparklerStartTime) / 1000; // seconds
-      const period = 10; // 10 second period
-      // Sinusoidal from 1 to 10: base + amplitude * (sin + 1) / 2
-      // sin goes -1 to 1, so (sin + 1) / 2 goes 0 to 1
-      // We want 1 to 10, so: 1 + 9 * (sin + 1) / 2 = 1 + 4.5 * (sin + 1)
+      const elapsed = (Date.now() - sparklerStartTime) / 1000;
+      const period = 10;
       const sineValue = Math.sin((elapsed / period) * Math.PI * 2);
-      return 1 + 4.5 * (sineValue + 1); // ranges from 1 to 10
+      return 1 + 4.5 * (sineValue + 1);
     }
 
     function createSpark(x, progress, pulseMultiplier) {
-      // Scale intensity from 1x to 3x based on progress
       const intensityScale = 1 + (progress / 100) * 2;
       const canvasHeight = elements.sparklerCanvas.height;
       const centerY = canvasHeight / 2;
 
-      // Random angle for spark direction (full 360 degrees)
       const angle = Math.random() * Math.PI * 2;
-      // Speed scales with progress
       const speed = (2 + Math.random() * 4) * intensityScale;
-      // Spark size scales with progress
       const size = (1 + Math.random() * 2) * intensityScale;
 
-      // White or gold color (randomly choose)
-      const isWhite = Math.random() < 0.4; // 40% white, 60% gold
+      const isWhite = Math.random() < 0.4;
 
       return {
         x: x,
@@ -859,7 +841,6 @@
         life: 1.0,
         decay: 0.015 + Math.random() * 0.025,
         isWhite: isWhite,
-        // Gold hue range: 40-50 (golden yellow)
         hue: isWhite ? 0 : (40 + Math.random() * 10),
       };
     }
@@ -870,22 +851,14 @@
       currentYearProgress = progress;
 
       const canvas = elements.sparklerCanvas;
-
-      // Calculate spark emission point (at the progress position)
       const sparkX = (progress / 100) * canvas.width;
-
-      // Get pulse multiplier for sinusoidal variation
       const pulseMultiplier = getPulseMultiplier();
 
-      // Base spawn rate scales with progress (more sparks as we get closer to Done!)
-      // 10x intensity increase
       const baseSpawnRate = (1 + (progress / 100) * 4) * 10;
-      // Apply pulse multiplier to spawn rate
       const spawnRate = Math.floor(baseSpawnRate * pulseMultiplier);
 
-      // Create new sparks
       for (let i = 0; i < spawnRate; i++) {
-        if (Math.random() < 0.7) { // 70% chance each frame
+        if (Math.random() < 0.7) {
           sparks.push(createSpark(sparkX, progress, pulseMultiplier));
         }
       }
@@ -897,43 +870,35 @@
       const canvas = elements.sparklerCanvas;
       const ctx = sparklerCtx;
 
-      // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Update and draw sparks
       for (let i = sparks.length - 1; i >= 0; i--) {
         const spark = sparks[i];
 
-        // Update position
         spark.x += spark.vx;
         spark.y += spark.vy;
-        spark.vy += 0.1; // Gravity
+        spark.vy += 0.1;
         spark.life -= spark.decay;
 
-        // Remove dead sparks
         if (spark.life <= 0) {
           sparks.splice(i, 1);
           continue;
         }
 
-        // Draw spark with 35% opacity
         const alpha = spark.life * 0.35;
         ctx.beginPath();
         ctx.arc(spark.x, spark.y, spark.size, 0, Math.PI * 2);
 
-        // Bright core - white or gold
         const gradient = ctx.createRadialGradient(
           spark.x, spark.y, 0,
           spark.x, spark.y, spark.size
         );
 
         if (spark.isWhite) {
-          // Pure white spark
           gradient.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);
           gradient.addColorStop(0.4, `rgba(240, 240, 255, ${alpha * 0.8})`);
           gradient.addColorStop(1, `rgba(200, 200, 255, 0)`);
         } else {
-          // Gold spark
           gradient.addColorStop(0, `hsla(${spark.hue}, 100%, 90%, ${alpha})`);
           gradient.addColorStop(0.4, `hsla(${spark.hue}, 100%, 65%, ${alpha * 0.8})`);
           gradient.addColorStop(1, `hsla(${spark.hue}, 100%, 50%, 0)`);
@@ -942,7 +907,6 @@
         ctx.fillStyle = gradient;
         ctx.fill();
 
-        // Add glow effect
         ctx.beginPath();
         ctx.arc(spark.x, spark.y, spark.size * 2, 0, Math.PI * 2);
         if (spark.isWhite) {
@@ -960,7 +924,6 @@
       initSparkler();
       renderSparkler();
 
-      // Reinit on resize
       window.addEventListener('resize', () => {
         setTimeout(initSparkler, 100);
       });
@@ -1072,6 +1035,12 @@
       { text: "The difference between a successful person and others is not a lack of strength, but rather a lack of will.", author: "Vince Lombardi" },
       { text: "Don't watch the clock; do what it does. Keep going.", author: "Sam Levenson" },
       { text: "Through perseverance many people win success out of what seemed destined to be certain failure.", author: "Benjamin Disraeli" },
+      { text: "Hard work beats talent when talent doesn't work hard.", author: "Tim Notke" },
+      { text: "Small daily improvements over time lead to stunning results.", author: null },
+      { text: "You don't have to see the whole staircase. Just take the first step.", author: "Martin Luther King Jr." },
+      { text: "The secret of getting ahead is getting started.", author: "Mark Twain" },
+      { text: "Discipline is choosing between what you want now and what you want most.", author: "Abraham Lincoln" },
+      { text: "The struggle you're in today is developing the strength you need for tomorrow.", author: null },
 
       // === EXCELLENCE ===
       { text: "Excellence is not a skill. It is an attitude.", author: "Ralph Marston" },
@@ -1082,7 +1051,6 @@
       { text: "The quality of a person's life is in direct proportion to their commitment to excellence.", author: "Vince Lombardi" },
       { text: "Excellence is the gradual result of always striving to do better.", author: "Pat Riley" },
       { text: "If you are going to achieve excellence in big things, you develop the habit in little matters.", author: "Colin Powell" },
-      { text: "Hard work beats talent when talent doesn't work hard.", author: "Tim Notke" },
       { text: "The pursuit of excellence is gratifying and healthy. The pursuit of perfection is frustrating and a waste of time.", author: "Ed Bliss" },
       { text: "Every expert was once a beginner.", author: null },
       { text: "The only way to do great work is to love what you do.", author: "Steve Jobs" },
@@ -1094,6 +1062,11 @@
       { text: "Somewhere, something incredible is waiting to be known.", author: "Carl Sagan" },
       { text: "Wonder is the beginning of wisdom.", author: "Socrates" },
       { text: "Look up at the stars and not down at your feet.", author: "Stephen Hawking" },
+      { text: "Education is not the filling of a pail, but the lighting of a fire.", author: "W.B. Yeats" },
+      { text: "The capacity to learn is a gift; the ability to learn is a skill; the willingness to learn is a choice.", author: "Brian Herbert" },
+      { text: "What we learn with pleasure we never forget.", author: "Alfred Mercier" },
+      { text: "Tell me and I forget. Teach me and I remember. Involve me and I learn.", author: "Benjamin Franklin" },
+      { text: "Learning is not attained by chance. It must be sought with ardour.", author: "Abigail Adams" },
 
       // === RESPECT ===
       { text: "Respect for ourselves guides our morals; respect for others guides our manners.", author: "Laurence Sterne" },
@@ -1112,9 +1085,9 @@
       { text: "Strong people stand up for themselves. Stronger people stand up for others.", author: null },
       { text: "We rise by lifting others.", author: "Robert Ingersoll" },
       { text: "Alone we can do so little; together we can do so much.", author: "Helen Keller" },
-      { text: "You belong here.", author: null },
-      { text: "Your potential is enormous. Don't let anyone tell you otherwise.", author: null },
-      { text: "You are in this classroom because you can do things here you can't do on your own.", author: null },
+      { text: "If you want to go fast, go alone. If you want to go far, go together.", author: null },
+      { text: "None of us is as smart as all of us.", author: "Ken Blanchard" },
+      { text: "Great things are done by a series of small things brought together.", author: "Vincent van Gogh" },
 
       // === COURAGE ===
       { text: "Courage is not the absence of fear, but the judgement that something else is more important.", author: "Ambrose Redmoon" },
@@ -1133,10 +1106,9 @@
       { text: "With courage you will dare to take risks, have the strength to be compassionate, and the wisdom to be humble.", author: "Keshavan Nair" },
       { text: "Courage doesn't always roar. Sometimes courage is the quiet voice at the end of the day saying, 'I will try again tomorrow.'", author: "Mary Anne Radmacher" },
       { text: "Dream big. Start small. Act now.", author: null },
-      { text: "Believe you can and you're halfway there.", author: "Theodore Roosevelt" },
-      { text: "Start where you are. Use what you have. Do what you can.", author: "Arthur Ashe" },
-      { text: "The best way to predict your future is to create it.", author: null },
-      { text: "You are more capable than you know.", author: null },
+      { text: "Everything you've ever wanted is on the other side of fear.", author: "George Addair" },
+      { text: "Your comfort zone is a beautiful place, but nothing ever grows there.", author: null },
+      { text: "You miss 100% of the shots you don't take.", author: "Wayne Gretzky" },
 
       // === KINDNESS ===
       { text: "In a world where you can be anything, be kind.", author: null },
@@ -1157,17 +1129,53 @@
       { text: "Three things in human life are important: the first is to be kind; the second is to be kind; and the third is to be kind.", author: "Henry James" },
       { text: "What wisdom can you find that is greater than kindness?", author: "Jean-Jacques Rousseau" },
       { text: "Compassion is the basis of morality.", author: "Arthur Schopenhauer" },
+      { text: "How you treat people says everything about you.", author: null },
+      { text: "The world needs who you were made to be.", author: null },
 
-      // === GENERAL LEARNING ===
+      // === SCIENCE & LEARNING ===
+      { text: "Science is a way of thinking much more than it is a body of knowledge.", author: "Carl Sagan" },
+      { text: "Nothing in life is to be feared, it is only to be understood.", author: "Marie Curie" },
+      { text: "We are all made of star stuff.", author: "Carl Sagan" },
+      { text: "Equipped with his five senses, man explores the universe around him and calls the adventure Science.", author: "Edwin Hubble" },
+      { text: "The good thing about science is that it's true whether or not you believe in it.", author: "Neil deGrasse Tyson" },
+      { text: "Research is what I'm doing when I don't know what I'm doing.", author: "Wernher von Braun" },
+      { text: "An experiment is a question which science poses to Nature.", author: "Max Planck" },
+      { text: "The universe is under no obligation to make sense to you.", author: "Neil deGrasse Tyson" },
+      { text: "Not all who wander are lost.", author: "J.R.R. Tolkien" },
+      { text: "The only true wisdom is in knowing you know nothing.", author: "Socrates" },
+      { text: "The more I read, the more I acquire, the more certain I am that I know nothing.", author: "Voltaire" },
+      { text: "In the middle of difficulty lies opportunity.", author: "Albert Einstein" },
+      { text: "We do not learn from experience. We learn from reflecting on experience.", author: "John Dewey" },
+      { text: "Knowing is not enough; we must apply. Willing is not enough; we must do.", author: "Johann Wolfgang von Goethe" },
+      { text: "Change is the end result of all true learning.", author: "Leo Buscaglia" },
+
+      // === GENERAL ENCOURAGEMENT ===
+      { text: "You are in this classroom because you can do things here you can't do on your own.", author: null },
       { text: "The person who asks a question is a fool for a minute. The person who doesn't is a fool for a lifetime.", author: null },
-      { text: "Today is a good day to learn something new.", author: null },
-      { text: "Progress, not perfection.", author: null },
-      { text: "Done is better than perfect.", author: null },
-      { text: "A year from now you will wish you had started today.", author: null },
+      { text: "You don't have to be great to start, but you have to start to be great.", author: null },
+      { text: "The best way to predict your future is to create it.", author: null },
       { text: "Stay curious. The answers will come.", author: null },
       { text: "Mistakes are proof that you are trying.", author: null },
+      { text: "The only real mistake is the one from which we learn nothing.", author: "Henry Ford" },
       { text: "It's not about being perfect. It's about effort.", author: null },
-      { text: "You don't have to be great to start, but you have to start to be great.", author: null },
+      { text: "You are allowed to be both a masterpiece and a work in progress.", author: null },
+      { text: "Confusion is the sweat of learning.", author: null },
+      { text: "Think for yourself. Not less than others, but differently.", author: null },
+      { text: "The best time to plant a tree was 20 years ago. The second best time is now.", author: null },
+      { text: "What lies behind us and what lies before us are tiny matters compared to what lies within us.", author: "Ralph Waldo Emerson" },
+      { text: "Be yourself; everyone else is already taken.", author: "Oscar Wilde" },
+      { text: "Not everything that counts can be counted, and not everything that can be counted counts.", author: "William Bruce Cameron" },
+      { text: "You belong here.", author: null },
+      { text: "Your potential is enormous. Don't let anyone tell you otherwise.", author: null },
+      { text: "Progress, not perfection.", author: null },
+      { text: "Today is a good day to learn something new.", author: null },
+      { text: "You are more capable than you know.", author: null },
+      { text: "What you do today matters.", author: null },
+      { text: "Start where you are. Use what you have. Do what you can.", author: "Arthur Ashe" },
+      { text: "Believe you can and you're halfway there.", author: "Theodore Roosevelt" },
+      { text: "Your only limit is your mind.", author: null },
+      { text: "Done is better than perfect.", author: null },
+      { text: "A year from now you will wish you had started today.", author: null },
     ];
 
     let currentQuoteIndex = 0;
@@ -1175,9 +1183,7 @@
     let currentHistoryIndex = 0;
     let currentWordIndex = 0;
 
-    // Create array of history keys for cycling through
-    const HISTORY_KEYS = Object.keys(THIS_DAY_IN_HISTORY).sort();
-
+    // Shuffle quotes on load for variety
     function shuffleQuotes() {
       for (let i = QUOTES.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -1233,7 +1239,6 @@
     // ============================================
     // THIS DAY IN HISTORY (Australian Positive)
     // ============================================
-    // Key: "MM-DD" format
     const THIS_DAY_IN_HISTORY = {
       "01-01": { year: 1901, event: "The Commonwealth of Australia is proclaimed, uniting six colonies into one nation" },
       "01-02": { year: 2020, event: "Volunteer firefighters from across Australia unite to battle unprecedented bushfires" },
@@ -1602,6 +1607,9 @@
       "12-30": { year: 1922, event: "Soviet Union officially established" },
       "12-31": { year: 1999, event: "Y2K bug fears prove unfounded; new millennium begins peacefully" },
     };
+
+    // Create array of history keys for cycling through
+    const HISTORY_KEYS = Object.keys(THIS_DAY_IN_HISTORY).sort();
 
     // ============================================
     // WORD OF THE DAY (365 Positive Psychology Words)
@@ -2210,6 +2218,7 @@
       }
     }
 
+
     // ============================================
     // DISPLAY UPDATE
     // ============================================
@@ -2266,14 +2275,6 @@
     // ============================================
     // DATA LOADING
     // ============================================
-    function showMainUI() {
-      elements.loading.style.display = 'none';
-      elements.header.style.display = 'flex';
-      elements.yearProgressSection.style.display = 'block';
-      elements.mainContent.style.display = 'flex';
-      renderKeyDateMarkers();
-    }
-
     async function loadData() {
       try {
         const response = await fetch(CONFIG.dataUrl + '?t=' + Date.now());
@@ -2286,7 +2287,7 @@
         }
         appData = JSON.parse(text);
 
-        // Use upcoming from data.json if available
+        // Use upcoming from data if available
         if (appData.upcoming && appData.upcoming.length > 0) {
           keyDates = appData.upcoming;
         }
@@ -2303,6 +2304,15 @@
         // Continue with hardcoded data - this is expected
       }
 
+      // Show main UI regardless of data load success
+      elements.loading.style.display = 'none';
+      elements.header.style.display = 'flex';
+      elements.yearProgressSection.style.display = 'block';
+      elements.mainContent.style.display = 'flex';
+
+      // Render key date markers
+      renderKeyDateMarkers();
+
       lastRefreshDate = new Date();
     }
 
@@ -2313,6 +2323,7 @@
         const lastDate = lastRefreshDate.toDateString();
         const todayDate = now.toDateString();
 
+        // If it's a new day and past the morning refresh time
         if (lastDate !== todayDate &&
             now.getHours() >= CONFIG.morningRefreshHour &&
             now.getMinutes() >= CONFIG.morningRefreshMinute) {
@@ -2326,9 +2337,10 @@
     // WEATHER (Open-Meteo API - Melbourne)
     // ============================================
     const WEATHER_CONFIG = {
+      // Melbourne coordinates
       latitude: -37.8136,
       longitude: 144.9631,
-      refreshIntervalMs: 30 * 60 * 1000
+      refreshIntervalMs: 30 * 60 * 1000 // 30 minutes
     };
 
     let weatherData = null;
@@ -2343,6 +2355,7 @@
         weatherData = await response.json();
         updateWeatherDisplay();
       } catch (error) {
+        // Fail silently - weather is optional
         console.log('Weather unavailable:', error.message);
         elements.weatherDisplay.classList.remove('visible');
       }
@@ -2360,6 +2373,7 @@
         const min = Math.round(daily.temperature_2m_min[0]);
         const max = Math.round(daily.temperature_2m_max[0]);
 
+        // Parse sunrise/sunset times
         const sunrise = new Date(daily.sunrise[0]);
         const sunset = new Date(daily.sunset[0]);
         const sunriseStr = formatTime12Hour(sunrise).replace(' ', '');
@@ -2374,6 +2388,7 @@
 
         elements.weatherDisplay.classList.add('visible');
       } catch (error) {
+        // Fail silently
         console.log('Weather display error:', error.message);
       }
     }
@@ -2421,9 +2436,11 @@
       previewPeriodIndex += direction;
 
       if (previewPeriodIndex >= SCHEDULE.length) {
+        // Move to next day, first period
         previewDate.setDate(previewDate.getDate() + 1);
         previewPeriodIndex = 0;
       } else if (previewPeriodIndex < 0) {
+        // Move to previous day, last period
         previewDate.setDate(previewDate.getDate() - 1);
         previewPeriodIndex = SCHEDULE.length - 1;
       }
@@ -2491,8 +2508,10 @@
 
       document.documentElement.style.setProperty('--text-scale', scale);
 
+      // Persist to localStorage
       try { localStorage.setItem('displace-text-scale', key); } catch (e) {}
 
+      // Brief visual feedback via preview indicator
       elements.previewText.textContent = `Text size: ${key} (${Math.round(scale * 100)}%)`;
       elements.previewIndicator.classList.add('visible');
       setTimeout(() => {
@@ -2514,6 +2533,7 @@
     function handleKeydown(event) {
       const key = event.key;
 
+      // Text scale: 1-9 (without modifiers)
       if (key >= '1' && key <= '9' && !event.ctrlKey && !event.metaKey && !event.altKey) {
         setTextScale(key);
         event.preventDefault();
@@ -2531,18 +2551,20 @@
         const direction = key === 'ArrowRight' ? 1 : -1;
 
         if (event.ctrlKey || event.metaKey) {
+          // Ctrl/Cmd + Arrow: navigate weeks
           navigateWeek(direction);
         } else if (event.shiftKey) {
+          // Shift + Arrow: navigate days
           navigateDay(direction);
         } else {
+          // Plain Arrow: navigate periods
           navigatePeriod(direction);
         }
       }
 
-      // Debug: 'q' to cycle through quotes
+      // 'q' to cycle through quotes
       if (key === 'q' || key === 'Q') {
         if (showingQuote) {
-          // If quote showing, dismiss and show next
           hideQuote();
           setTimeout(() => showQuote(), 600);
         } else {
@@ -2578,15 +2600,27 @@
     // INITIALIZATION
     // ============================================
     function init() {
+      // Restore saved text scale
       loadTextScale();
-      showMainUI();
-      updateDisplay();
 
-      // Start sparkler animation after a short delay (let DOM settle)
-      setTimeout(startSparkler, 500);
+      // Load data (graceful failure — shows UI regardless)
+      loadData();
 
       // Start update loop
       setInterval(updateDisplay, CONFIG.updateIntervalMs);
+
+      // Schedule hourly refresh of data
+      setInterval(loadData, CONFIG.refreshIntervalMs);
+
+      // Check for morning refresh every minute
+      setInterval(checkMorningRefresh, 60000);
+
+      // Start sparkler animation after brief delay
+      setTimeout(startSparkler, 500);
+
+      // Load good news headlines
+      loadGoodNews();
+      setInterval(loadGoodNews, CONFIG.newsRefreshMs);
 
       // Schedule upcoming events display
       setInterval(() => {
@@ -2602,7 +2636,7 @@
         }
       }, 30000);
 
-      // Schedule quotes
+      // Schedule quotes — random interval averaging ~20 minutes
       function scheduleNextQuote() {
         const jitter = (Math.random() - 0.5) * 10 * 60 * 1000;
         const delay = CONFIG.quoteIntervalMs + jitter;
@@ -2615,12 +2649,9 @@
       }
       scheduleNextQuote();
 
-      // Load weather
+      // Load weather (fails silently if unavailable)
       loadWeather();
       setInterval(loadWeather, WEATHER_CONFIG.refreshIntervalMs);
-
-      // Pre-load good news (but don't display - press 'n' to toggle)
-      loadGoodNews();
 
       // Keyboard navigation
       document.addEventListener('keydown', handleKeydown);
