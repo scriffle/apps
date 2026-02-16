@@ -1,0 +1,2744 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="dark" data-version="1.0.0">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="Interactive star lifecycle explorer for Year 10 students - choose your star's mass and follow its journey from nebula to death and rebirth.">
+<meta property="og:title" content="Star Lifecycles: Choose Your Own Adventure">
+<meta property="og:description" content="Interactive stellar evolution explorer for students">
+<title>Star Lifecycles: Choose Your Own Adventure</title>
+<style>
+/* ============================================
+   CSS RESET & VARIABLES
+   ============================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* Spacing scale */
+  --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem;
+  --space-4: 1rem; --space-5: 1.5rem; --space-6: 2rem;
+  --space-7: 3rem; --space-8: 4rem;
+
+  /* Font sizes — readable, not tiny */
+  --font-xs: clamp(0.75rem, 1.4vw, 0.85rem);
+  --font-sm: clamp(0.85rem, 1.6vw, 0.95rem);
+  --font-md: clamp(0.95rem, 1.8vw, 1.05rem);
+  --font-lg: clamp(1.1rem, 2.2vw, 1.3rem);
+  --font-xl: clamp(1.25rem, 2.5vw, 1.5rem);
+  --font-2xl: clamp(1.5rem, 3vw, 1.8rem);
+  --font-3xl: clamp(1.8rem, 4vw, 2.2rem);
+
+  /* Animation */
+  --transition-fast: 0.15s ease;
+  --transition-med: 0.3s ease;
+  --transition-slow: 0.5s ease;
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Radius */
+  --radius-sm: 0.375rem; --radius-md: 0.5rem;
+  --radius-lg: 0.75rem; --radius-xl: 1rem;
+  --radius-full: 9999px;
+}
+
+/* Dark theme (default) — high contrast text */
+[data-theme="dark"] {
+  --bg-primary: #080816;
+  --bg-secondary: #10102a;
+  --bg-surface: #181838;
+  --bg-surface-hover: #222255;
+  --bg-overlay: rgba(0, 0, 0, 0.7);
+  --text-primary: #f0f0f8;
+  --text-secondary: #c8c8e0;
+  --text-muted: #8888aa;
+  --border-color: #2e2e5e;
+  --border-hover: #4a4a8a;
+  --accent: #7e9dff;
+  --accent-hover: #99b2ff;
+  --accent-glow: rgba(126, 157, 255, 0.3);
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --error: #f87171;
+  --star-glow: rgba(255, 200, 50, 0.4);
+  --nebula-color: #ff6b9d;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.5);
+  --shadow-lg: 0 8px 30px rgba(0,0,0,0.6);
+  color-scheme: dark;
+}
+
+/* Light theme */
+[data-theme="light"] {
+  --bg-primary: #f0f0f8;
+  --bg-secondary: #e4e4f0;
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #f5f5ff;
+  --bg-overlay: rgba(255, 255, 255, 0.8);
+  --text-primary: #1a1a2e;
+  --text-secondary: #4a4a6a;
+  --text-muted: #8a8aa0;
+  --border-color: #d0d0e0;
+  --border-hover: #a0a0c0;
+  --accent: #4a6cf7;
+  --accent-hover: #3a5ce7;
+  --accent-glow: rgba(74, 108, 247, 0.2);
+  --success: #22c55e;
+  --warning: #eab308;
+  --error: #ef4444;
+  --star-glow: rgba(255, 180, 0, 0.3);
+  --nebula-color: #e05080;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+  --shadow-lg: 0 8px 30px rgba(0,0,0,0.15);
+  color-scheme: light;
+}
+
+@media (prefers-contrast: more) {
+  :root { --text-primary: #fff; --text-secondary: #ddd; --border-color: #888; }
+}
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
+html { height: 100%; scroll-behavior: smooth; }
+
+body {
+  min-height: 100dvh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: var(--font-md);
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  line-height: 1.5;
+  overflow-x: hidden;
+  transition: background-color var(--transition-med), color var(--transition-med);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Skip link */
+.skip-link {
+  position: absolute; top: -100%; left: var(--space-4);
+  background: var(--accent); color: #fff;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  z-index: 1000; font-weight: 600;
+  text-decoration: none;
+}
+.skip-link:focus { top: var(--space-2); }
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ============================================
+   LAYOUT
+   ============================================ */
+.app-container {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100dvh;
+  padding-inline: env(safe-area-inset-left, 0) env(safe-area-inset-right, 0);
+}
+
+/* Header */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-secondary);
+  border-block-end: 1px solid var(--border-color);
+  position: sticky; top: 0; z-index: 100;
+  min-height: 40px;
+  gap: var(--space-3);
+}
+.app-title {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), var(--nebula-color));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  white-space: nowrap;
+}
+.header-controls {
+  display: flex; gap: var(--space-2); align-items: center;
+}
+.btn-new-star {
+  display: none;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+.btn-new-star:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-new-star.visible { display: inline-flex; }
+
+/* Main content */
+.app-main {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  width: 100%;
+  margin-inline: auto;
+  overflow-y: auto;
+}
+
+/* Footer / Status bar */
+.app-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-4);
+  background: var(--bg-secondary);
+  border-block-start: 1px solid var(--border-color);
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  min-height: 28px;
+}
+
+/* ============================================
+   BUTTONS
+   ============================================ */
+.btn {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: var(--font-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-height: 38px;
+  touch-action: manipulation;
+  user-select: none;
+  text-decoration: none;
+}
+.btn:hover { background: var(--bg-surface-hover); border-color: var(--border-hover); }
+.btn:active { transform: scale(0.97); }
+
+.btn-primary {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+}
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+.btn-sm { padding: var(--space-1) var(--space-3); min-height: 32px; font-size: var(--font-xs); }
+.btn-lg { padding: var(--space-2) var(--space-5); min-height: 42px; font-size: var(--font-md); }
+
+.btn-icon {
+  padding: var(--space-1); min-height: 34px; min-width: 34px;
+  justify-content: center; border: none; background: transparent;
+}
+.btn-icon:hover { background: var(--bg-surface-hover); }
+
+.btn[aria-disabled="true"], .btn:disabled {
+  opacity: 0.5; pointer-events: none;
+}
+
+/* ============================================
+   STAR CANVAS AREA
+   ============================================ */
+.star-viewport {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: radial-gradient(ellipse at center, #0d0d2b 0%, #050510 100%);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  contain: layout style paint;
+}
+.star-viewport canvas {
+  width: 100%; height: 100%;
+  display: block;
+}
+
+/* ============================================
+   TIMELINE
+   ============================================ */
+.timeline-container {
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+.timeline-track {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  position: relative;
+  padding: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.timeline-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 70px;
+  flex: 1;
+  cursor: pointer;
+  position: relative;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+.timeline-stage:hover { background: var(--bg-surface-hover); }
+.timeline-stage[aria-current="step"] {
+  background: var(--accent-glow);
+}
+.timeline-dot {
+  width: 14px; height: 14px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--border-color);
+  background: var(--bg-surface);
+  transition: all var(--transition-fast);
+  z-index: 1;
+}
+.timeline-stage[aria-current="step"] .timeline-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+.timeline-stage.completed .timeline-dot {
+  background: var(--success);
+  border-color: var(--success);
+}
+.timeline-connector {
+  flex: 1; height: 2px;
+  background: var(--border-color);
+  min-width: 20px;
+}
+.timeline-connector.active { background: var(--accent); }
+.timeline-label {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  text-align: center;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+/* ============================================
+   STAGE DETAIL CARD
+   ============================================ */
+.stage-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-med);
+  animation: fadeSlideIn 0.3s ease;
+  overflow-y: auto;
+}
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.stage-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-block-end: var(--space-3);
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.stage-title {
+  font-size: var(--font-xl);
+  font-weight: 700;
+}
+.stage-subtitle {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  margin-block-start: 2px;
+}
+.stage-badge {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  background: var(--accent-glow);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.stage-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-2);
+  margin-block: var(--space-3);
+}
+.fact-item {
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+}
+.fact-label {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.fact-value {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.stage-description {
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-block: var(--space-2);
+  font-size: var(--font-sm);
+}
+
+/* Expandable advanced section */
+.advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: var(--font-sm);
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  width: 100%;
+  text-align: left;
+}
+.advanced-toggle:hover { background: var(--bg-surface-hover); }
+.advanced-toggle .arrow {
+  transition: transform var(--transition-fast);
+  display: inline-block;
+}
+.advanced-toggle[aria-expanded="true"] .arrow { transform: rotate(90deg); }
+.advanced-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height var(--transition-med);
+}
+.advanced-content.open {
+  max-height: 500px;
+}
+.advanced-inner {
+  padding: var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+  line-height: 1.6;
+  border-inline-start: 2px solid var(--accent);
+  margin-block-start: var(--space-2);
+  margin-inline-start: var(--space-1);
+  padding-inline-start: var(--space-4);
+}
+
+/* Stage nav buttons */
+.stage-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-block-start: var(--space-3);
+  gap: var(--space-2);
+}
+
+/* ============================================
+   STAR SELECTOR
+   ============================================ */
+.selector-section {
+  text-align: center;
+  padding: var(--space-4) var(--space-4);
+  max-width: 800px;
+  margin-inline: auto;
+}
+.selector-title {
+  font-size: var(--font-2xl);
+  margin-block-end: var(--space-1);
+}
+.selector-subtitle {
+  color: var(--text-secondary);
+  margin-block-end: var(--space-4);
+  font-size: var(--font-sm);
+}
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+  margin-block-end: var(--space-4);
+}
+.preset-card {
+  padding: var(--space-3);
+  background: var(--bg-surface);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: center;
+}
+.preset-card:hover {
+  border-color: var(--accent);
+  background: var(--bg-surface-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+.preset-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 15px var(--accent-glow);
+}
+.preset-icon {
+  font-size: 1.8rem;
+  margin-block-end: var(--space-1);
+  display: block;
+}
+.preset-name {
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+.preset-range {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  margin-block-start: 2px;
+}
+
+.slider-container {
+  max-width: 550px;
+  margin-inline: auto;
+  padding: var(--space-3) var(--space-4);
+}
+.slider-label {
+  display: flex;
+  justify-content: space-between;
+  margin-block-end: var(--space-1);
+  font-size: var(--font-sm);
+}
+.mass-slider {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: var(--radius-full);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  outline: none;
+  cursor: pointer;
+}
+.mass-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px; height: 20px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  border: 2px solid #fff;
+  cursor: pointer;
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+.mass-slider::-moz-range-thumb {
+  width: 20px; height: 20px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  border: 2px solid #fff;
+  cursor: pointer;
+}
+.mass-display {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  color: var(--accent);
+  margin-block: var(--space-1);
+}
+.mass-unit {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* ============================================
+   GENERATION TRACKER
+   ============================================ */
+.generation-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  font-size: var(--font-xs);
+  overflow-x: auto;
+}
+.gen-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  font-size: var(--font-xs);
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+.gen-chip.current {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.gen-arrow {
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+}
+.elements-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  font-weight: 500;
+  margin-inline: 2px;
+}
+
+/* ============================================
+   SETTINGS PANEL
+   ============================================ */
+.settings-overlay {
+  position: fixed; inset: 0;
+  background: var(--bg-overlay);
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-med);
+}
+.settings-overlay.open { opacity: 1; pointer-events: auto; }
+.settings-panel {
+  position: fixed;
+  top: 0; right: 0;
+  width: min(400px, 90vw);
+  height: 100%;
+  background: var(--bg-secondary);
+  border-inline-start: 1px solid var(--border-color);
+  z-index: 201;
+  transform: translateX(100%);
+  transition: transform var(--transition-med);
+  overflow-y: auto;
+  padding: var(--space-5);
+}
+.settings-panel.open { transform: translateX(0); }
+.settings-title {
+  font-size: var(--font-xl);
+  margin-block-end: var(--space-5);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ============================================
+   TOAST NOTIFICATIONS
+   ============================================ */
+.toast-container {
+  position: fixed;
+  bottom: var(--space-5);
+  right: var(--space-5);
+  z-index: 300;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--space-2);
+}
+.toast {
+  padding: var(--space-3) var(--space-5);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--font-sm);
+  animation: slideInRight var(--transition-med) var(--spring);
+  display: flex; align-items: center; gap: var(--space-3);
+  max-width: 360px;
+}
+.toast.success { border-color: var(--success); }
+.toast.error { border-color: var(--error); }
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* ============================================
+   HELP / ONBOARDING MODAL
+   ============================================ */
+.help-overlay {
+  position: fixed; inset: 0;
+  background: var(--bg-overlay);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-med);
+}
+.help-overlay.open { opacity: 1; pointer-events: auto; }
+.help-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  max-width: min(600px, 90vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  transform: scale(0.95);
+  transition: transform var(--transition-med);
+}
+.help-overlay.open .help-panel { transform: scale(1); }
+
+/* ============================================
+   RESPONSIVE — LIFECYCLE LAYOUT
+   ============================================ */
+/* Mobile: stacked layout (default) */
+.star-viewport { max-height: 40vh; }
+
+/* Desktop/landscape: canvas left, card right, timeline full-width bottom */
+@media (min-width: 768px) {
+  #lifecycleScreen.active {
+    display: grid !important;
+    /* 3 rows: gen-bar | canvas+card | timeline */
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto 1fr auto;
+    gap: var(--space-2);
+    height: calc(100dvh - 72px);
+    overflow: hidden;
+  }
+  /* Row 1: generation bar spans full width */
+  #lifecycleScreen .generation-bar {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  /* Row 2 left: canvas — square, constrained so it doesn't hog width */
+  #lifecycleScreen .star-viewport {
+    grid-column: 1;
+    grid-row: 2;
+    aspect-ratio: 1 / 1;
+    max-height: 100%;
+    max-width: min(45vh, 45vw);
+    width: auto;
+    height: auto;
+    align-self: start;
+  }
+  /* Row 2 right: stage card fills remaining space */
+  #lifecycleScreen .stage-card {
+    grid-column: 2;
+    grid-row: 2;
+    overflow-y: auto;
+    min-height: 0;
+  }
+  /* Row 3: timeline spans full width at the bottom */
+  #lifecycleScreen .timeline-container {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+}
+
+/* Larger screens: slightly bigger canvas */
+@media (min-width: 1200px) {
+  #lifecycleScreen .star-viewport {
+    max-width: min(50vh, 40vw);
+  }
+  #lifecycleScreen.active {
+    gap: var(--space-3);
+  }
+}
+
+/* Mobile small */
+@media (max-width: 767px) {
+  .app-header { padding: var(--space-2) var(--space-3); }
+  .app-main { padding: var(--space-2); }
+  .stage-facts { grid-template-columns: repeat(2, 1fr); }
+  .preset-grid { grid-template-columns: repeat(2, 1fr); }
+  .star-viewport { aspect-ratio: 16 / 9; max-height: 35vh; }
+}
+@media (max-width: 480px) {
+  .stage-facts { grid-template-columns: 1fr; }
+  .preset-grid { grid-template-columns: 1fr 1fr; }
+  .stage-nav { flex-direction: column; }
+}
+
+/* Print */
+@media print {
+  .app-header, .app-footer, .settings-overlay, .toast-container,
+  .stage-nav, .btn-icon, .header-controls { display: none !important; }
+  .star-viewport { break-inside: avoid; }
+  body { background: #fff; color: #000; }
+  .stage-card { border: 1px solid #ccc; box-shadow: none; }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================
+   UTILITY
+   ============================================ */
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0,0,0,0); border: 0;
+}
+.hidden { display: none !important; }
+
+/* Screen: selector vs lifecycle */
+.screen { display: none !important; }
+.screen.active { display: block !important; }
+/* Grid layout overrides block for lifecycle screen on desktop — see media query */
+</style>
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to content</a>
+
+<div class="app-container">
+  <!-- HEADER -->
+  <header class="app-header" role="banner">
+    <h1 class="app-title">Star Lifecycles</h1>
+    <div class="header-controls">
+      <button class="btn-new-star" id="newStarBtn" aria-label="Choose a new star" onclick="UI.backToSelector()">&#9733; New Star</button>
+      <div class="generation-badge" id="genBadge" aria-live="polite" style="display:none;">
+        <span class="gen-chip current" id="genBadgeText">Generation 1</span>
+      </div>
+      <button class="btn-icon" id="helpBtn" aria-label="Help" title="Help (?)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      </button>
+      <button class="btn-icon" id="settingsBtn" aria-label="Settings" title="Settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2m-9-11h2m18 0h2m-4.22-5.78 1.42-1.42m-15.56 0 1.42 1.42m0 11.31-1.42 1.42m15.56 0-1.42-1.42"/>
+        </svg>
+      </button>
+      <button class="btn-icon" id="themeToggle" aria-label="Toggle theme" title="Toggle light/dark">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main class="app-main" id="main-content" role="main">
+
+    <!-- SCREEN: Star Selector -->
+    <section class="screen active" id="selectorScreen" aria-label="Choose your star">
+      <div class="selector-section">
+        <h2 class="selector-title">Choose Your Star</h2>
+        <p class="selector-subtitle">Select a preset or use the slider, then follow the lifecycle from birth to death and beyond.</p>
+
+        <div class="preset-grid" role="radiogroup" aria-label="Star type presets">
+          <div class="preset-card" role="radio" aria-checked="false" tabindex="0" data-mass="0.3" data-category="red-dwarf">
+            <span class="preset-icon" aria-hidden="true">&#9899;</span>
+            <div class="preset-name">Red Dwarf</div>
+            <div class="preset-range">0.08 - 0.5 M&#9737;</div>
+          </div>
+          <div class="preset-card" role="radio" aria-checked="false" tabindex="0" data-mass="1" data-category="sun-like">
+            <span class="preset-icon" aria-hidden="true">&#9728;</span>
+            <div class="preset-name">Sun-like Star</div>
+            <div class="preset-range">0.5 - 8 M&#9737;</div>
+          </div>
+          <div class="preset-card" role="radio" aria-checked="false" tabindex="0" data-mass="15" data-category="massive">
+            <span class="preset-icon" aria-hidden="true">&#11088;</span>
+            <div class="preset-name">Massive Star</div>
+            <div class="preset-range">8 - 25 M&#9737;</div>
+          </div>
+          <div class="preset-card" role="radio" aria-checked="false" tabindex="0" data-mass="60" data-category="supermassive">
+            <span class="preset-icon" aria-hidden="true">&#128165;</span>
+            <div class="preset-name">Supermassive Star</div>
+            <div class="preset-range">25 - 150 M&#9737;</div>
+          </div>
+        </div>
+
+        <div class="slider-container">
+          <div class="slider-label">
+            <span>0.08 M&#9737;</span>
+            <span>Mass (Solar Masses)</span>
+            <span>150 M&#9737;</span>
+          </div>
+          <input type="range" class="mass-slider" id="massSlider"
+                 min="0.08" max="150" step="0.01" value="1"
+                 aria-label="Star mass in solar masses">
+          <div class="mass-display" aria-live="polite">
+            <span id="massValue">1.00</span>
+            <span class="mass-unit">M&#9737; (Solar Masses)</span>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-lg" id="startBtn">
+          Begin Lifecycle &rarr;
+        </button>
+      </div>
+    </section>
+
+    <!-- SCREEN: Lifecycle Viewer -->
+    <section class="screen" id="lifecycleScreen" aria-label="Star lifecycle viewer">
+
+      <!-- Generation tracker -->
+      <div class="generation-bar" id="generationBar" role="log" aria-label="Star generation history">
+        <!-- Filled by JS -->
+      </div>
+
+      <!-- Star canvas -->
+      <div class="star-viewport" aria-label="Star visualization">
+        <canvas id="starCanvas"></canvas>
+      </div>
+
+      <!-- Timeline -->
+      <nav class="timeline-container" aria-label="Lifecycle timeline">
+        <div class="timeline-track" id="timelineTrack" role="tablist">
+          <!-- Filled by JS -->
+        </div>
+      </nav>
+
+      <!-- Stage detail card -->
+      <article class="stage-card" id="stageCard" aria-live="polite">
+        <!-- Filled by JS -->
+      </article>
+
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="app-footer" role="contentinfo">
+    <span id="statusText">Choose a star to begin</span>
+    <span>v1.0.0</span>
+  </footer>
+</div>
+
+<!-- SETTINGS PANEL -->
+<div class="settings-overlay" id="settingsOverlay" aria-hidden="true">
+  <div class="settings-panel" id="settingsPanel" role="dialog" aria-label="Settings">
+    <div class="settings-title">
+      <span>Settings</span>
+      <button class="btn-icon" id="settingsClose" aria-label="Close settings">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:var(--space-4);">
+      <label style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Animation Speed</span>
+        <select id="animSpeed" class="btn btn-sm" style="min-height:36px;">
+          <option value="0.5">Slow</option>
+          <option value="1" selected>Normal</option>
+          <option value="2">Fast</option>
+        </select>
+      </label>
+      <label style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Show Canvas Stars</span>
+        <input type="checkbox" id="showBgStars" checked>
+      </label>
+      <label style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Sound Effects</span>
+        <input type="checkbox" id="soundEnabled">
+      </label>
+      <button class="btn" id="resetBtn">Reset All Data</button>
+      <button class="btn" id="exportBtn">Export Progress (JSON)</button>
+    </div>
+  </div>
+</div>
+
+<!-- HELP OVERLAY -->
+<div class="help-overlay" id="helpOverlay" aria-hidden="true">
+  <div class="help-panel" role="dialog" aria-label="Help">
+    <h2 style="margin-block-end:var(--space-4);">Welcome to Star Lifecycles!</h2>
+    <p style="color:var(--text-secondary);margin-block-end:var(--space-4);">Explore how stars are born, live, and die - and how their deaths seed the birth of new stars.</p>
+    <h3 style="margin-block-end:var(--space-2);">How to use</h3>
+    <ol style="color:var(--text-secondary);padding-inline-start:var(--space-5);margin-block-end:var(--space-4);line-height:2;">
+      <li>Choose a star type or adjust the mass slider</li>
+      <li>Click "Begin Lifecycle" to start the journey</li>
+      <li>Navigate through stages using the timeline or Next/Back buttons</li>
+      <li>Click "Learn More" for advanced scientific details</li>
+      <li>When your star dies, its remnants form a new nebula - start a new generation!</li>
+    </ol>
+    <h3 style="margin-block-end:var(--space-2);">Keyboard Shortcuts</h3>
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:var(--space-2) var(--space-4);color:var(--text-secondary);font-size:var(--font-sm);margin-block-end:var(--space-4);">
+      <kbd style="background:var(--bg-secondary);padding:2px 8px;border-radius:var(--radius-sm);font-family:monospace;">&rarr;</kbd><span>Next stage</span>
+      <kbd style="background:var(--bg-secondary);padding:2px 8px;border-radius:var(--radius-sm);font-family:monospace;">&larr;</kbd><span>Previous stage</span>
+      <kbd style="background:var(--bg-secondary);padding:2px 8px;border-radius:var(--radius-sm);font-family:monospace;">?</kbd><span>Toggle this help</span>
+      <kbd style="background:var(--bg-secondary);padding:2px 8px;border-radius:var(--radius-sm);font-family:monospace;">Esc</kbd><span>Close panels</span>
+      <kbd style="background:var(--bg-secondary);padding:2px 8px;border-radius:var(--radius-sm);font-family:monospace;">T</kbd><span>Toggle theme</span>
+    </div>
+    <button class="btn btn-primary" id="helpClose" style="width:100%;">Got it!</button>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+<script>
+'use strict';
+
+// ============================================
+// SCIENTIFIC DATA MODEL
+// ============================================
+
+/**
+ * Stellar lifecycle data based on astrophysics.
+ * Mass thresholds (in solar masses M_sun):
+ * - Red dwarf: 0.08 - 0.5 M_sun
+ * - Sun-like (low/intermediate mass): 0.5 - 8 M_sun
+ * - Massive: 8 - 25 M_sun (neutron star remnant)
+ * - Supermassive: 25+ M_sun (black hole remnant)
+ *
+ * Key thresholds:
+ * - 0.08 M_sun: minimum for hydrogen fusion
+ * - 0.5 M_sun: below this, star never becomes red giant (fully convective)
+ * - 1.44 M_sun: Chandrasekhar limit (white dwarf max core mass)
+ * - 8 M_sun: boundary between white dwarf and supernova fate
+ * - ~25 M_sun: approximate boundary between neutron star and black hole remnant
+ * - 3.0 M_sun (remnant core): Tolman-Oppenheimer-Volkoff limit
+ */
+
+const STELLAR_DATA = {
+  categories: {
+    'red-dwarf': { min: 0.08, max: 0.5, label: 'Red Dwarf' },
+    'sun-like': { min: 0.5, max: 8, label: 'Sun-like Star' },
+    'massive': { min: 8, max: 25, label: 'Massive Star' },
+    'supermassive': { min: 25, max: 150, label: 'Supermassive Star' }
+  },
+
+  /**
+   * Returns the stellar category for a given mass
+   * @param {number} mass - in solar masses
+   * @returns {string}
+   */
+  getCategory(mass) {
+    if (mass < 0.5) return 'red-dwarf';
+    if (mass < 8) return 'sun-like';
+    if (mass < 25) return 'massive';
+    return 'supermassive';
+  },
+
+  /**
+   * Returns main sequence lifespan in years.
+   * Approximation: t = t_sun * (M_sun/M)^2.5
+   * where t_sun ~ 10 billion years
+   * For red dwarfs, lifespans can exceed 1 trillion years
+   */
+  getMainSequenceLifespan(mass) {
+    const tSun = 1e10; // 10 billion years
+    const t = tSun * Math.pow(1 / mass, 2.5);
+    return Math.min(t, 1e13); // Cap at ~10 trillion for tiny red dwarfs
+  },
+
+  /**
+   * Returns approximate surface temperature (K) on main sequence.
+   * Rough relation: T ~ 5778 * M^0.505
+   */
+  getMainSequenceTemp(mass) {
+    return Math.round(5778 * Math.pow(mass, 0.505));
+  },
+
+  /**
+   * Returns approximate luminosity relative to Sun.
+   * L ~ M^3.5 for main sequence
+   */
+  getLuminosity(mass) {
+    return Math.pow(mass, 3.5);
+  },
+
+  /**
+   * Returns approximate radius relative to Sun on main sequence.
+   * R ~ M^0.8
+   */
+  getRadius(mass) {
+    return Math.pow(mass, 0.8);
+  },
+
+  /**
+   * Returns spectral class based on temperature
+   */
+  getSpectralClass(temp) {
+    if (temp >= 30000) return 'O';
+    if (temp >= 10000) return 'B';
+    if (temp >= 7500) return 'A';
+    if (temp >= 6000) return 'F';
+    if (temp >= 5200) return 'G';
+    if (temp >= 3700) return 'K';
+    return 'M';
+  },
+
+  /**
+   * Returns the star color (CSS) based on temperature
+   */
+  getStarColor(temp) {
+    if (temp >= 30000) return '#9bb0ff';
+    if (temp >= 10000) return '#aabfff';
+    if (temp >= 7500) return '#cad7ff';
+    if (temp >= 6000) return '#fff4e8';
+    if (temp >= 5200) return '#ffd2a1';
+    if (temp >= 3700) return '#ffaa33';
+    return '#ff6030';
+  },
+
+  /**
+   * Returns the lifecycle stages for a star of given mass.
+   * Each stage includes scientifically accurate descriptions.
+   */
+  getLifecycleStages(mass) {
+    const category = this.getCategory(mass);
+    const msTemp = this.getMainSequenceTemp(mass);
+    const msLifespan = this.getMainSequenceLifespan(mass);
+    const luminosity = this.getLuminosity(mass);
+    const radius = this.getRadius(mass);
+    const spectral = this.getSpectralClass(msTemp);
+
+    // All stars start from a nebula
+    const stages = [];
+
+    // STAGE 1: Molecular Cloud / Nebula
+    stages.push({
+      id: 'nebula',
+      name: 'Molecular Cloud',
+      subtitle: 'Stellar Nursery',
+      description: 'A vast cloud of gas and dust, primarily hydrogen and helium with traces of heavier elements, begins to collapse under its own gravity. A trigger - perhaps a nearby supernova shockwave or a density wave from a spiral arm - initiates the collapse.',
+      advanced: 'The Jeans mass determines the minimum cloud mass needed for gravitational collapse: M_J ~ (5kT / GmH)^(3/2) * (3 / 4\u03c0\u03c1)^(1/2). Typical molecular clouds are 10-100 light-years across with temperatures of 10-30 K and densities of ~10\u00b3 particles/cm\u00b3. Fragmentation of the cloud produces multiple protostars simultaneously.',
+      facts: {
+        'Temperature': '10 - 30 K',
+        'Composition': '~73% H, ~25% He, ~2% metals',
+        'Density': '~10\u00b3 particles/cm\u00b3',
+        'Duration': '~1-10 million years'
+      },
+      color: '#ff6b9d',
+      canvasType: 'nebula'
+    });
+
+    // STAGE 2: Protostar
+    stages.push({
+      id: 'protostar',
+      name: 'Protostar',
+      subtitle: 'Gravitational Contraction',
+      description: `As the cloud fragment collapses, it heats up and forms a dense core called a protostar. The protostar is surrounded by an accretion disk of gas and dust. It radiates energy from gravitational contraction (the Kelvin-Helmholtz mechanism) but has not yet begun nuclear fusion.`,
+      advanced: `The protostellar phase follows the Hayashi track on the HR diagram - the star is fully convective and contracts at roughly constant temperature. For a ${mass.toFixed(1)} M\u2609 star, the Kelvin-Helmholtz timescale is approximately ${this.formatNumber(1.5e7 / Math.pow(mass, 2))} years. T Tauri stars (for low-mass protostars) or Herbig Ae/Be stars (for intermediate mass) exhibit strong stellar winds and bipolar outflows during this phase.`,
+      facts: {
+        'Core Temperature': `${this.formatNumber(Math.min(mass * 500000, 2000000))} K`,
+        'Surface Temperature': `${this.formatNumber(2000 + mass * 500)} K`,
+        'Duration': this.formatDuration(1.5e7 / Math.pow(mass, 2)),
+        'Process': 'Gravitational contraction'
+      },
+      color: '#ff9944',
+      canvasType: 'protostar'
+    });
+
+    // STAGE 3: Main Sequence
+    stages.push({
+      id: 'main-sequence',
+      name: 'Main Sequence',
+      subtitle: `${spectral}-type Star`,
+      description: `The core reaches approximately 10 million K, igniting hydrogen fusion. The star enters hydrostatic equilibrium where the outward radiation pressure balances the inward pull of gravity. This is the longest and most stable phase of the star's life.${mass < 1.3 ? ' At this mass, the proton-proton chain dominates energy production.' : ' At this mass, the CNO cycle is the dominant energy production mechanism.'}`,
+      advanced: `A ${mass.toFixed(1)} M\u2609 star has a main sequence luminosity of ~${luminosity.toFixed(luminosity > 100 ? 0 : 2)} L\u2609 and radius ~${radius.toFixed(2)} R\u2609. ${mass < 1.3 ? 'The proton-proton (pp) chain: 4\u00b9H \u2192 \u2074He + 2e\u207a + 2\u03bd_e + 26.73 MeV. The pp chain operates at T > 4\u00d710\u2076 K.' : 'The CNO cycle uses carbon, nitrogen, and oxygen as catalysts: the net reaction is the same (4H \u2192 He) but is far more temperature-sensitive (proportional to T\u00b9\u2076 vs T\u2074 for pp chain).'} The star\'s position on the Hertzsprung-Russell diagram is determined by its mass, with more massive stars being hotter and more luminous. The mass-luminosity relation L \u221d M^3.5 means that a star twice as massive is roughly 5.7 times more luminous.`,
+      facts: {
+        'Surface Temp': `${this.formatNumber(msTemp)} K`,
+        'Luminosity': `${luminosity.toFixed(luminosity > 100 ? 0 : 2)} L\u2609`,
+        'Duration': this.formatDuration(msLifespan),
+        'Spectral Class': spectral,
+        'Radius': `${radius.toFixed(2)} R\u2609`,
+        'Core Temp': `${this.formatNumber(15e6 * Math.pow(mass, 0.5))} K`
+      },
+      color: this.getStarColor(msTemp),
+      canvasType: 'mainsequence'
+    });
+
+    // Diverge based on mass category
+    if (category === 'red-dwarf') {
+      this.addRedDwarfStages(stages, mass);
+    } else if (category === 'sun-like') {
+      this.addSunLikeStages(stages, mass);
+    } else {
+      this.addMassiveStages(stages, mass);
+    }
+
+    return stages;
+  },
+
+  /** Red dwarf stages: MS -> (slow fade to) white dwarf */
+  addRedDwarfStages(stages, mass) {
+    stages.push({
+      id: 'blue-dwarf',
+      name: 'Blue Dwarf Phase',
+      subtitle: 'Theoretical End State',
+      description: 'Red dwarfs are fully convective, meaning they continually mix their hydrogen fuel throughout the entire star. This makes them incredibly efficient. Rather than expanding into a red giant, a red dwarf slowly increases in temperature and luminosity over trillions of years, theoretically becoming a "blue dwarf" before finally exhausting its fuel.',
+      advanced: 'No red dwarf has ever died in the history of the universe - the universe is only 13.8 billion years old, far less than even the shortest red dwarf lifespan (~100 billion years for a 0.5 M\u2609 star). The blue dwarf phase is entirely theoretical, predicted by stellar evolution models. Full convection means that unlike Sun-like stars, red dwarfs have access to 100% of their hydrogen, not just the ~10% in the core.',
+      facts: {
+        'Temperature': `${this.formatNumber(8000 + mass * 5000)} K (increasing)`,
+        'Duration': 'Trillions of years (theoretical)',
+        'Luminosity': 'Slowly increasing',
+        'Status': 'No red dwarf has reached this phase yet'
+      },
+      color: '#6e8efb',
+      canvasType: 'bluedwarf'
+    });
+
+    stages.push({
+      id: 'white-dwarf',
+      name: 'White Dwarf',
+      subtitle: 'Helium White Dwarf',
+      description: 'After trillions of years, the red dwarf finally exhausts its hydrogen. Without the energy from fusion, it contracts into a small, dense white dwarf composed mostly of helium. Unlike heavier stars, a red dwarf does not produce a planetary nebula because it never expands into a red giant.',
+      advanced: `This white dwarf will be composed primarily of helium (unlike the carbon-oxygen white dwarfs from Sun-like stars) because the core temperature of a red dwarf never reaches the ~100 million K needed to fuse helium via the triple-alpha process. The resulting helium white dwarf has a mass of approximately ${(mass * 0.9).toFixed(2)} M\u2609. Electron degeneracy pressure supports it against gravitational collapse.`,
+      facts: {
+        'Composition': 'Mostly helium',
+        'Temperature': '~8,000 - 40,000 K (cooling)',
+        'Size': 'Roughly Earth-sized',
+        'Mass': `~${(mass * 0.9).toFixed(2)} M\u2609`,
+        'Fate': 'Cools to black dwarf over trillions of years'
+      },
+      color: '#e8e8ff',
+      canvasType: 'whitedwarf',
+      isFinalStage: true,
+      deathType: 'white-dwarf',
+      remnantElements: ['H', 'He']
+    });
+  },
+
+  /** Sun-like stages: MS -> Subgiant -> Red Giant -> Planetary Nebula -> White Dwarf */
+  addSunLikeStages(stages, mass) {
+    const rgRadius = mass < 2 ? 100 + mass * 50 : 50 + mass * 30;
+
+    stages.push({
+      id: 'subgiant',
+      name: 'Subgiant Phase',
+      subtitle: 'Hydrogen Shell Burning',
+      description: 'The hydrogen in the core is exhausted, leaving an inert helium core. Hydrogen fusion continues in a shell around the core. The star expands and cools slightly, moving off the main sequence. This is a transitional phase.',
+      advanced: `As the helium core contracts and heats (but is not yet hot enough for helium fusion), a hydrogen-burning shell forms around it. The mirror principle in stellar physics means that as the core contracts, the envelope expands. The star crosses the Hertzsprung gap on the HR diagram. For a ${mass.toFixed(1)} M\u2609 star, this phase lasts approximately ${this.formatDuration(this.getMainSequenceLifespan(mass) * 0.01)}.`,
+      facts: {
+        'Temperature': `${this.formatNumber(this.getMainSequenceTemp(mass) * 0.85)} K (cooling)`,
+        'Luminosity': `${(this.getLuminosity(mass) * 3).toFixed(1)} L\u2609 (increasing)`,
+        'Duration': this.formatDuration(this.getMainSequenceLifespan(mass) * 0.01),
+        'Core': 'Inert helium, hydrogen shell burning'
+      },
+      color: '#ffcc66',
+      canvasType: 'subgiant'
+    });
+
+    stages.push({
+      id: 'red-giant',
+      name: 'Red Giant',
+      subtitle: 'Helium Core Ignition',
+      description: `The star expands enormously - up to ${Math.round(rgRadius)} times its original radius - and its surface cools to around 3,000-4,000 K, giving it a red color. Eventually the core reaches ~100 million K and helium fusion ignites${mass < 2.25 ? ' in a dramatic event called the helium flash' : ' gradually'}.`,
+      advanced: `${mass < 2.25 ? 'For stars below ~2.25 M\u2609, the helium core becomes electron-degenerate before ignition. When the core reaches ~10\u2078 K, helium fusion via the triple-alpha process (3 \u2074He \u2192 \u00b9\u00b2C) ignites explosively in a "helium flash" - releasing energy comparable to the luminosity of an entire galaxy for a few seconds, though this energy is absorbed by the overlying layers and is not visible externally.' : 'For stars above ~2.25 M\u2609, the core is not degenerate when helium ignites, so fusion begins gradually without a flash.'} The triple-alpha process: 3\u2074He \u2192 \u00b9\u00b2C + \u03b3 (7.275 MeV). Some carbon further fuses to oxygen: \u00b9\u00b2C + \u2074He \u2192 \u00b9\u2076O.`,
+      facts: {
+        'Surface Temp': '3,000 - 4,500 K',
+        'Radius': `~${Math.round(rgRadius)} R\u2609`,
+        'Core Temp': '~100,000,000 K',
+        'Core Fusion': 'Triple-alpha: 3 He \u2192 C',
+        'Duration': this.formatDuration(this.getMainSequenceLifespan(mass) * 0.1)
+      },
+      color: '#ff4422',
+      canvasType: 'redgiant'
+    });
+
+    if (mass > 2) {
+      stages.push({
+        id: 'agb',
+        name: 'AGB Star',
+        subtitle: 'Asymptotic Giant Branch',
+        description: 'After exhausting core helium, the star enters the Asymptotic Giant Branch phase. It has a carbon-oxygen core surrounded by a helium-burning shell and a hydrogen-burning shell. The star pulsates and sheds mass through powerful stellar winds.',
+        advanced: 'Thermal pulses occur during the AGB phase - periodic helium shell flashes that dredge up carbon from the core to the surface (the "third dredge-up"). Stars in the 2-4 M\u2609 range can become carbon stars (C-type), where atmospheric carbon exceeds oxygen. Mira variables are AGB stars undergoing large pulsations with periods of 100-1000 days. The s-process (slow neutron capture) during AGB thermal pulses produces elements heavier than iron.',
+        facts: {
+          'Surface Temp': '2,500 - 3,500 K',
+          'Radius': `~${Math.round(rgRadius * 2)} R\u2609`,
+          'Mass Loss': 'Up to 10\u207b\u2074 M\u2609/year',
+          'Pulsations': 'Period: 100-1000 days'
+        },
+        color: '#cc2200',
+        canvasType: 'redgiant'
+      });
+    }
+
+    stages.push({
+      id: 'planetary-nebula',
+      name: 'Planetary Nebula',
+      subtitle: 'Shedding Outer Layers',
+      description: 'The star gently sheds its outer layers into space, creating a beautiful shell of glowing gas called a planetary nebula (named for their round shape when viewed through early telescopes - they have nothing to do with planets). The hot core is exposed, ionizing the ejected gas and making it glow.',
+      advanced: 'Planetary nebulae last only ~10,000-20,000 years before dispersing into the interstellar medium. The ejected material enriches the ISM with helium, carbon, nitrogen, and oxygen - raw materials for future stars and planets. Famous examples include the Ring Nebula (M57), the Helix Nebula, and the Cat\'s Eye Nebula. UV radiation from the ~100,000 K central star ionizes the nebula, producing emission lines of H, He, O, N, and other elements.',
+      facts: {
+        'Expansion Speed': '20 - 30 km/s',
+        'Temperature (gas)': '~10,000 K',
+        'Temperature (core)': '~100,000 - 200,000 K',
+        'Duration': '~10,000 - 20,000 years',
+        'Composition': 'H, He, C, N, O enriched'
+      },
+      color: '#44ddaa',
+      canvasType: 'planetarynebula'
+    });
+
+    stages.push({
+      id: 'white-dwarf',
+      name: 'White Dwarf',
+      subtitle: 'Carbon-Oxygen Remnant',
+      description: `The exposed core is now a white dwarf - an incredibly dense object about the size of Earth but containing ${mass < 3 ? '~0.5-0.7' : '~0.8-1.2'} solar masses of material. It shines from residual heat but performs no fusion. Electron degeneracy pressure prevents further collapse.`,
+      advanced: `White dwarfs are supported by electron degeneracy pressure - a quantum mechanical effect where electrons resist being squeezed closer together (Pauli exclusion principle). The Chandrasekhar limit of 1.44 M\u2609 is the maximum mass a white dwarf can have; above this, electron degeneracy cannot support the star. A teaspoon of white dwarf material weighs about 5 tonnes. The white dwarf will cool over billions to trillions of years, eventually becoming a hypothetical "black dwarf" - but the universe is not yet old enough for any to exist.`,
+      facts: {
+        'Composition': 'Carbon + Oxygen core',
+        'Mass': `~${(0.4 + mass * 0.06).toFixed(2)} M\u2609`,
+        'Radius': '~6,000 km (Earth-sized)',
+        'Density': '~10\u2079 kg/m\u00b3',
+        'Surface Temp': '8,000 - 40,000 K (cooling)',
+        'Fate': 'Black dwarf (trillions of years)'
+      },
+      color: '#e8e8ff',
+      canvasType: 'whitedwarf',
+      isFinalStage: true,
+      deathType: 'planetary-nebula',
+      remnantElements: ['H', 'He', 'C', 'N', 'O']
+    });
+  },
+
+  /** Massive star stages: MS -> Supergiant -> (advanced fusion) -> Supernova -> NS/BH */
+  addMassiveStages(stages, mass) {
+    const isSuperMassive = mass >= 25;
+
+    stages.push({
+      id: 'blue-supergiant',
+      name: mass > 40 ? 'Blue Hypergiant' : 'Blue Supergiant',
+      subtitle: 'Post-Main Sequence Expansion',
+      description: `After exhausting core hydrogen, the massive star expands and evolves rapidly. At ${mass.toFixed(1)} M\u2609, it becomes a luminous ${mass > 40 ? 'hypergiant' : 'supergiant'} with extreme luminosity. The core contracts and heats, beginning helium fusion almost immediately.`,
+      advanced: `Massive stars evolve across the top of the HR diagram. Stars above ~40 M\u2609 may experience Luminous Blue Variable (LBV) eruptions - dramatic mass-loss events like those observed in Eta Carinae. The Eddington luminosity limit L_Edd = 4\u03c0cGM/\u03ba determines the maximum luminosity before radiation pressure blows off the outer layers. Wolf-Rayet stars form when extreme mass loss strips the hydrogen envelope, exposing the helium-burning core.`,
+      facts: {
+        'Temperature': `${this.formatNumber(10000 + mass * 300)} K`,
+        'Luminosity': `${this.formatNumber(this.getLuminosity(mass))} L\u2609`,
+        'Mass Loss': `~10\u207b\u2076 to 10\u207b\u2074 M\u2609/year`,
+        'Duration': this.formatDuration(this.getMainSequenceLifespan(mass) * 0.05)
+      },
+      color: '#8899ff',
+      canvasType: 'bluesupergiant'
+    });
+
+    stages.push({
+      id: 'red-supergiant',
+      name: mass > 40 ? 'Red Hypergiant' : 'Red Supergiant',
+      subtitle: 'Advanced Nuclear Burning',
+      description: `The star expands to an enormous size - potentially over 1,000 times the Sun's radius. Its surface cools to ~3,000-4,000 K while the core undergoes successive stages of nuclear fusion, creating heavier and heavier elements in concentric shells like an onion.`,
+      advanced: `The "onion shell" structure of a massive star before collapse:\n\u2022 Core: Iron/Nickel (T ~ 3\u00d710\u2079 K)\n\u2022 Shell 1: Silicon burning \u2192 Iron (~3\u00d710\u2079 K)\n\u2022 Shell 2: Oxygen burning \u2192 Silicon (~2\u00d710\u2079 K)\n\u2022 Shell 3: Neon burning \u2192 Oxygen (~1.5\u00d710\u2079 K)\n\u2022 Shell 4: Carbon burning \u2192 Neon (~8\u00d710\u2078 K)\n\u2022 Shell 5: Helium burning \u2192 Carbon (~2\u00d710\u2078 K)\n\u2022 Shell 6: Hydrogen burning \u2192 Helium (~5\u00d710\u2077 K)\n\nEach successive fuel burns for dramatically less time: hydrogen ~millions of years, helium ~hundreds of thousands, carbon ~hundreds, neon ~1 year, oxygen ~months, silicon ~days.`,
+      facts: {
+        'Surface Temp': '3,000 - 4,500 K',
+        'Radius': `~${Math.round(500 + mass * 20)} R\u2609`,
+        'Core Shells': 'H \u2192 He \u2192 C \u2192 Ne \u2192 O \u2192 Si \u2192 Fe',
+        'Si Burning Duration': '~1-2 days',
+        'Core Temp': '~3 billion K (final stage)'
+      },
+      color: '#ff3300',
+      canvasType: 'redsupergiant'
+    });
+
+    // Supernova - this is a choice point: after this, student picks NS or BH
+    const remnantCoreEst = mass < 20 ? mass * 0.15 : mass * 0.3;
+    const likelyOutcome = remnantCoreEst < 3 ? 'neutron star' : 'black hole';
+
+    stages.push({
+      id: 'supernova',
+      name: mass > 25 ? 'Core-Collapse Supernova' : 'Type II Supernova',
+      subtitle: isSuperMassive ? 'Type Ib/c or II' : 'Type II',
+      description: `When the core accumulates ~1.4 M\u2609 of iron, fusion can no longer continue - iron fusion consumes energy rather than releasing it. In less than a second, the core collapses from roughly Earth-size to a sphere just ~20 km across. The outer layers rebound off the ultra-dense core in a catastrophic explosion - a supernova that can briefly outshine an entire galaxy.`,
+      advanced: `The iron core collapse proceeds at ~0.25c (quarter the speed of light). When the core reaches nuclear density (~2.3\u00d710\u00b9\u2077 kg/m\u00b3), the strong nuclear force causes it to "bounce." A shockwave propagates outward but stalls in the iron core. The shockwave is revived by a flood of neutrinos from neutronization (p + e\u207b \u2192 n + \u03bd_e) - the "delayed neutrino-heating mechanism." About 99% of the ~3\u00d710\u2074\u00b3 J of gravitational energy is carried away by neutrinos. The r-process (rapid neutron capture) during the supernova produces elements heavier than iron: gold, platinum, uranium, and all naturally occurring elements up to #94 (plutonium).`,
+      facts: {
+        'Peak Luminosity': `~10\u00b9 - 10\u00b9\u00b3 L\u2609`,
+        'Energy Released': '~3 \u00d7 10\u2074\u00b3 Joules',
+        'Neutrinos': '~99% of energy',
+        'Ejecta Speed': 'Up to 30,000 km/s',
+        'Duration (peak)': '~2-3 weeks',
+        'Elements Created': 'All elements up to uranium'
+      },
+      color: '#ffffff',
+      canvasType: 'supernova',
+      // Mark this as a choice point - UI will show NS/BH choice
+      isChoicePoint: true,
+      likelyOutcome: likelyOutcome,
+      remnantCoreEst: remnantCoreEst,
+      remnantElements: ['H', 'He', 'C', 'N', 'O', 'Ne', 'Mg', 'Si', 'S', 'Fe', 'Ni', 'Au', 'U']
+    });
+
+    // No NS/BH stage added here - the UI will append the chosen one dynamically
+  },
+
+  /** Returns a neutron star stage for a given mass */
+  getNeutronStarStage(mass) {
+    return {
+      id: 'neutron-star',
+      name: 'Neutron Star',
+      subtitle: 'Ultra-Dense Remnant',
+      description: 'The core collapses until protons and electrons merge into neutrons. The result is an incredibly dense object - a teaspoon would weigh about a billion tonnes. Neutron stars are typically only ~20 km in diameter but contain 1.4-2.5 solar masses. Many neutron stars are observed as pulsars, emitting beams of radiation from their magnetic poles.',
+      advanced: `Neutron stars are supported by neutron degeneracy pressure and the strong nuclear force. They have surface gravity ~2\u00d710\u00b9\u00b9 m/s\u00b2 (200 billion g). Rotation periods range from milliseconds to seconds - conservation of angular momentum means the collapsing core spins up dramatically (like an ice skater pulling in their arms). Magnetic fields reach 10\u2078-10\u00b9\u2075 Tesla. Magnetars (B > 10\u2079 T) are the most magnetic objects in the universe. The interior may contain exotic states of matter: superfluids, superconductors, and possibly quark matter or strange matter.`,
+      facts: {
+        'Mass': `~${(1.4 + (mass - 8) * 0.05).toFixed(1)} M\u2609`,
+        'Radius': '~10 km',
+        'Density': '~4 \u00d7 10\u00b9\u2077 kg/m\u00b3',
+        'Rotation': 'Up to 716 Hz (known record)',
+        'Magnetic Field': '10\u2078 - 10\u00b9\u2075 Tesla',
+        'Surface Gravity': '~2 \u00d7 10\u00b9\u00b9 m/s\u00b2'
+      },
+      color: '#aabbff',
+      canvasType: 'neutronstar',
+      isFinalStage: true,
+      deathType: 'supernova',
+      remnantElements: ['H', 'He', 'C', 'N', 'O', 'Ne', 'Mg', 'Si', 'S', 'Fe', 'Ni', 'Au', 'U']
+    };
+  },
+
+  /** Returns a black hole stage for a given mass */
+  getBlackHoleStage(mass) {
+    return {
+      id: 'black-hole',
+      name: 'Black Hole',
+      subtitle: 'Stellar-Mass Black Hole',
+      description: `The remnant core exceeds the Tolman-Oppenheimer-Volkoff limit (~3 M\u2609) and no known force can halt the collapse. The matter compresses to a singularity surrounded by an event horizon - a boundary from which nothing, not even light, can escape. A stellar-mass black hole is born.`,
+      advanced: `The Schwarzschild radius (event horizon for a non-rotating BH) is r_s = 2GM/c\u00b2 \u2248 ${(2.95 * mass * 0.3).toFixed(1)} km for the remnant. Real black holes likely rotate (Kerr black holes) and may carry charge (Kerr-Newman). The no-hair theorem states that a black hole is completely described by just three properties: mass, spin, and charge. Hawking radiation allows black holes to slowly evaporate, but for stellar-mass black holes this takes ~10\u2076\u2077 years - far longer than the current age of the universe. Accretion disks around black holes can produce powerful X-ray binaries and relativistic jets.`,
+      facts: {
+        'Remnant Mass': `~${(mass * 0.3).toFixed(1)} M\u2609`,
+        'Event Horizon': `~${(2.95 * mass * 0.3).toFixed(1)} km radius`,
+        'Escape Velocity': 'c (speed of light)',
+        'Hawking Temp': `~${(6.17e-8 / (mass * 0.3)).toExponential(1)} K`,
+        'Information': 'Preserved (holographic principle)'
+      },
+      color: '#1a0030',
+      canvasType: 'blackhole',
+      isFinalStage: true,
+      deathType: 'supernova',
+      remnantElements: ['H', 'He', 'C', 'N', 'O', 'Ne', 'Mg', 'Si', 'S', 'Fe', 'Ni', 'Au', 'U']
+    };
+  },
+
+  /** Format large numbers with SI prefixes */
+  formatNumber(n) {
+    if (n >= 1e12) return (n / 1e12).toFixed(1) + ' trillion';
+    if (n >= 1e9) return (n / 1e9).toFixed(1) + ' billion';
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + ' million';
+    if (n >= 1e3) return n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+    return n.toFixed(0);
+  },
+
+  /** Format duration in years */
+  formatDuration(years) {
+    if (years >= 1e12) return `~${(years / 1e12).toFixed(1)} trillion years`;
+    if (years >= 1e9) return `~${(years / 1e9).toFixed(1)} billion years`;
+    if (years >= 1e6) return `~${(years / 1e6).toFixed(0)} million years`;
+    if (years >= 1e3) return `~${(years / 1e3).toFixed(0)} thousand years`;
+    if (years >= 1) return `~${years.toFixed(0)} years`;
+    if (years * 365 >= 1) return `~${(years * 365).toFixed(0)} days`;
+    return `~${(years * 365 * 24).toFixed(0)} hours`;
+  }
+};
+
+
+// ============================================
+// APPLICATION STATE
+// ============================================
+
+const AppState = {
+  screen: 'selector', // 'selector' | 'lifecycle'
+  mass: 1,
+  category: 'sun-like',
+  stages: [],
+  currentStageIndex: 0,
+  generation: 1,
+  generationHistory: [],
+  // Each gen: { mass, category, deathType, elements }
+  settings: {
+    theme: 'dark',
+    animSpeed: 1,
+    showBgStars: true,
+    soundEnabled: false
+  },
+  undoStack: [],
+  redoStack: [],
+
+  /** Save a snapshot for undo */
+  saveSnapshot() {
+    this.undoStack.push({
+      screen: this.screen,
+      mass: this.mass,
+      currentStageIndex: this.currentStageIndex,
+      generation: this.generation,
+      generationHistory: JSON.parse(JSON.stringify(this.generationHistory))
+    });
+    if (this.undoStack.length > 100) this.undoStack.shift();
+    this.redoStack = [];
+  },
+
+  undo() {
+    if (this.undoStack.length === 0) return false;
+    this.redoStack.push({
+      screen: this.screen, mass: this.mass,
+      currentStageIndex: this.currentStageIndex,
+      generation: this.generation,
+      generationHistory: JSON.parse(JSON.stringify(this.generationHistory))
+    });
+    const snap = this.undoStack.pop();
+    Object.assign(this, snap);
+    return true;
+  },
+
+  redo() {
+    if (this.redoStack.length === 0) return false;
+    this.undoStack.push({
+      screen: this.screen, mass: this.mass,
+      currentStageIndex: this.currentStageIndex,
+      generation: this.generation,
+      generationHistory: JSON.parse(JSON.stringify(this.generationHistory))
+    });
+    const snap = this.redoStack.pop();
+    Object.assign(this, snap);
+    return true;
+  },
+
+  /** Persist to localStorage */
+  save() {
+    try {
+      localStorage.setItem('starLifecycles', JSON.stringify({
+        mass: this.mass,
+        screen: this.screen,
+        currentStageIndex: this.currentStageIndex,
+        generation: this.generation,
+        generationHistory: this.generationHistory,
+        settings: this.settings,
+        version: '1.0.0'
+      }));
+    } catch (e) { /* quota exceeded */ }
+  },
+
+  /** Restore from localStorage */
+  load() {
+    try {
+      const raw = localStorage.getItem('starLifecycles');
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      if (data.version !== '1.0.0') return false;
+      this.mass = data.mass || 1;
+      this.screen = data.screen || 'selector';
+      this.currentStageIndex = data.currentStageIndex || 0;
+      this.generation = data.generation || 1;
+      this.generationHistory = data.generationHistory || [];
+      Object.assign(this.settings, data.settings || {});
+      return true;
+    } catch (e) { return false; }
+  },
+
+  reset() {
+    this.screen = 'selector';
+    this.mass = 1;
+    this.category = 'sun-like';
+    this.stages = [];
+    this.currentStageIndex = 0;
+    this.generation = 1;
+    this.generationHistory = [];
+    this.undoStack = [];
+    this.redoStack = [];
+    localStorage.removeItem('starLifecycles');
+  }
+};
+
+// ============================================
+// TOAST SYSTEM
+// ============================================
+const Toast = {
+  container: null,
+  init() { this.container = document.getElementById('toastContainer'); },
+  show(msg, type = 'info', duration = 3500) {
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.textContent = msg;
+    el.setAttribute('role', 'status');
+    this.container.appendChild(el);
+    // Max 3 visible
+    while (this.container.children.length > 3) {
+      this.container.removeChild(this.container.firstChild);
+    }
+    setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateX(100%)';
+      setTimeout(() => el.remove(), 300);
+    }, duration);
+  }
+};
+
+// ============================================
+// UI CONTROLLER
+// ============================================
+const UI = {
+  els: {},
+
+  init() {
+    // Cache DOM elements
+    this.els = {
+      selectorScreen: document.getElementById('selectorScreen'),
+      lifecycleScreen: document.getElementById('lifecycleScreen'),
+      massSlider: document.getElementById('massSlider'),
+      massValue: document.getElementById('massValue'),
+      startBtn: document.getElementById('startBtn'),
+      presetCards: document.querySelectorAll('.preset-card'),
+      timelineTrack: document.getElementById('timelineTrack'),
+      stageCard: document.getElementById('stageCard'),
+      starCanvas: document.getElementById('starCanvas'),
+      generationBar: document.getElementById('generationBar'),
+      genBadge: document.getElementById('genBadge'),
+      genBadgeText: document.getElementById('genBadgeText'),
+      statusText: document.getElementById('statusText'),
+      themeToggle: document.getElementById('themeToggle'),
+      helpBtn: document.getElementById('helpBtn'),
+      helpOverlay: document.getElementById('helpOverlay'),
+      helpClose: document.getElementById('helpClose'),
+      settingsBtn: document.getElementById('settingsBtn'),
+      settingsOverlay: document.getElementById('settingsOverlay'),
+      settingsPanel: document.getElementById('settingsPanel'),
+      settingsClose: document.getElementById('settingsClose'),
+      animSpeed: document.getElementById('animSpeed'),
+      showBgStars: document.getElementById('showBgStars'),
+      soundEnabled: document.getElementById('soundEnabled'),
+      resetBtn: document.getElementById('resetBtn'),
+      exportBtn: document.getElementById('exportBtn')
+    };
+    this.bindEvents();
+    this.loadState();
+  },
+
+  bindEvents() {
+    const { els } = this;
+
+    // Slider
+    els.massSlider.addEventListener('input', () => {
+      const v = parseFloat(els.massSlider.value);
+      this.setMass(v);
+    });
+
+    // Presets
+    els.presetCards.forEach(card => {
+      const handler = () => {
+        const m = parseFloat(card.dataset.mass);
+        this.selectPreset(card, m);
+      };
+      card.addEventListener('click', handler);
+      card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); }});
+    });
+
+    // Start button
+    els.startBtn.addEventListener('click', () => this.startLifecycle());
+
+    // Theme
+    els.themeToggle.addEventListener('click', () => this.toggleTheme());
+
+    // Help
+    els.helpBtn.addEventListener('click', () => this.toggleHelp(true));
+    els.helpClose.addEventListener('click', () => this.toggleHelp(false));
+    els.helpOverlay.addEventListener('click', e => {
+      if (e.target === els.helpOverlay) this.toggleHelp(false);
+    });
+
+    // Settings
+    els.settingsBtn.addEventListener('click', () => this.toggleSettings(true));
+    els.settingsClose.addEventListener('click', () => this.toggleSettings(false));
+    els.settingsOverlay.addEventListener('click', e => {
+      if (e.target === els.settingsOverlay) this.toggleSettings(false);
+    });
+    els.animSpeed.addEventListener('change', () => {
+      AppState.settings.animSpeed = parseFloat(els.animSpeed.value);
+      AppState.save();
+    });
+    els.showBgStars.addEventListener('change', () => {
+      AppState.settings.showBgStars = els.showBgStars.checked;
+      AppState.save();
+      StarCanvas.draw();
+    });
+    els.soundEnabled.addEventListener('change', () => {
+      AppState.settings.soundEnabled = els.soundEnabled.checked;
+      AppState.save();
+    });
+    els.resetBtn.addEventListener('click', () => {
+      AppState.reset();
+      this.showScreen('selector');
+      this.setMass(1);
+      Toast.show('All data reset', 'success');
+    });
+    els.exportBtn.addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify({
+        state: { mass: AppState.mass, generation: AppState.generation, history: AppState.generationHistory },
+        exported: new Date().toISOString()
+      }, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'star-lifecycles-progress.json';
+      a.click(); URL.revokeObjectURL(url);
+      Toast.show('Progress exported', 'success');
+    });
+
+    // Keyboard
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        if (els.settingsOverlay.classList.contains('open')) this.toggleSettings(false);
+        else if (els.helpOverlay.classList.contains('open')) this.toggleHelp(false);
+      }
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') {
+        e.preventDefault();
+        this.toggleHelp();
+      }
+      if (e.key === 't' && !e.ctrlKey && !e.metaKey && e.target.tagName !== 'INPUT') {
+        this.toggleTheme();
+      }
+      if (AppState.screen === 'lifecycle') {
+        if (e.key === 'ArrowRight') this.nextStage();
+        if (e.key === 'ArrowLeft') this.prevStage();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) { if (AppState.redo()) this.refreshUI(); }
+        else { if (AppState.undo()) this.refreshUI(); }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault();
+        if (AppState.redo()) this.refreshUI();
+      }
+    });
+
+    // Save on visibility change / unload
+    document.addEventListener('visibilitychange', () => AppState.save());
+    window.addEventListener('beforeunload', () => AppState.save());
+  },
+
+  loadState() {
+    const restored = AppState.load();
+    // Apply settings
+    document.documentElement.dataset.theme = AppState.settings.theme;
+    this.els.animSpeed.value = AppState.settings.animSpeed;
+    this.els.showBgStars.checked = AppState.settings.showBgStars;
+    this.els.soundEnabled.checked = AppState.settings.soundEnabled;
+
+    if (restored && AppState.screen === 'lifecycle') {
+      this.setMass(AppState.mass, false);
+      AppState.stages = STELLAR_DATA.getLifecycleStages(AppState.mass);
+      AppState.category = STELLAR_DATA.getCategory(AppState.mass);
+      this.showScreen('lifecycle');
+      Toast.show('Progress restored', 'success');
+    } else {
+      this.setMass(AppState.mass, false);
+      this.showScreen('selector');
+      // Show help on first visit
+      if (!localStorage.getItem('starLifecycles_visited')) {
+        setTimeout(() => this.toggleHelp(true), 500);
+        localStorage.setItem('starLifecycles_visited', '1');
+      }
+    }
+  },
+
+  setMass(mass, updateSlider = true) {
+    AppState.mass = mass;
+    AppState.category = STELLAR_DATA.getCategory(mass);
+    this.els.massValue.textContent = mass < 10 ? mass.toFixed(2) : mass.toFixed(1);
+    if (updateSlider) this.els.massSlider.value = mass;
+
+    // Highlight matching preset
+    this.els.presetCards.forEach(card => {
+      const cat = card.dataset.category;
+      const match = cat === AppState.category;
+      card.classList.toggle('selected', match);
+      card.setAttribute('aria-checked', match);
+    });
+
+    this.els.statusText.textContent = `${STELLAR_DATA.categories[AppState.category].label} \u2022 ${mass < 10 ? mass.toFixed(2) : mass.toFixed(1)} M\u2609`;
+  },
+
+  selectPreset(card, mass) {
+    this.setMass(mass);
+    this.els.massSlider.value = mass;
+    // Scroll slider into view on mobile
+    this.els.massSlider.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  },
+
+  showScreen(name) {
+    AppState.screen = name;
+    this.els.selectorScreen.classList.toggle('active', name === 'selector');
+    this.els.lifecycleScreen.classList.toggle('active', name === 'lifecycle');
+    this.els.genBadge.style.display = name === 'lifecycle' ? '' : 'none';
+    // Show/hide "New Star" escape button in header
+    const newStarBtn = document.getElementById('newStarBtn');
+    if (newStarBtn) newStarBtn.classList.toggle('visible', name === 'lifecycle');
+    if (name === 'lifecycle') {
+      this.renderTimeline();
+      this.renderStage();
+      this.renderGenerationBar();
+      StarCanvas.init();
+    }
+    AppState.save();
+  },
+
+  startLifecycle() {
+    AppState.saveSnapshot();
+    AppState.stages = STELLAR_DATA.getLifecycleStages(AppState.mass);
+    AppState.currentStageIndex = 0;
+    if (AppState.generation === 1 && AppState.generationHistory.length === 0) {
+      AppState.generationHistory.push({
+        gen: 1, mass: AppState.mass,
+        category: AppState.category,
+        deathType: null, elements: ['H', 'He']
+      });
+    }
+    this.showScreen('lifecycle');
+    Toast.show(`Starting ${STELLAR_DATA.categories[AppState.category].label} lifecycle`, 'success');
+  },
+
+  // ---- Timeline ----
+  renderTimeline() {
+    const track = this.els.timelineTrack;
+    track.innerHTML = '';
+    AppState.stages.forEach((stage, i) => {
+      if (i > 0) {
+        const conn = document.createElement('div');
+        conn.className = 'timeline-connector' + (i <= AppState.currentStageIndex ? ' active' : '');
+        track.appendChild(conn);
+      }
+      const el = document.createElement('div');
+      el.className = 'timeline-stage' + (i < AppState.currentStageIndex ? ' completed' : '');
+      el.setAttribute('role', 'tab');
+      el.setAttribute('tabindex', '0');
+      el.setAttribute('aria-label', stage.name);
+      if (i === AppState.currentStageIndex) el.setAttribute('aria-current', 'step');
+      el.innerHTML = `<div class="timeline-dot" style="background:${i <= AppState.currentStageIndex ? stage.color : ''}; border-color:${i <= AppState.currentStageIndex ? stage.color : ''}"></div>
+        <span class="timeline-label">${stage.name}</span>`;
+      el.addEventListener('click', () => this.goToStage(i));
+      el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.goToStage(i); }});
+      track.appendChild(el);
+    });
+  },
+
+  goToStage(index) {
+    if (index < 0 || index >= AppState.stages.length) return;
+    AppState.saveSnapshot();
+    AppState.currentStageIndex = index;
+    this.renderTimeline();
+    this.renderStage();
+    StarCanvas.draw();
+    AppState.save();
+  },
+
+  nextStage() {
+    if (AppState.currentStageIndex < AppState.stages.length - 1) {
+      this.goToStage(AppState.currentStageIndex + 1);
+    }
+  },
+  prevStage() {
+    if (AppState.currentStageIndex > 0) {
+      this.goToStage(AppState.currentStageIndex - 1);
+    }
+  },
+
+  // ---- Stage Card ----
+  renderStage() {
+    const stage = AppState.stages[AppState.currentStageIndex];
+    if (!stage) return;
+    const card = this.els.stageCard;
+    const isFirst = AppState.currentStageIndex === 0;
+    const isLast = AppState.currentStageIndex === AppState.stages.length - 1;
+
+    let factsHTML = '';
+    for (const [label, value] of Object.entries(stage.facts)) {
+      factsHTML += `<div class="fact-item"><div class="fact-label">${this.escapeHTML(label)}</div><div class="fact-value">${this.escapeHTML(String(value))}</div></div>`;
+    }
+
+    let advancedHTML = '';
+    if (stage.advanced) {
+      advancedHTML = `
+        <button class="advanced-toggle" aria-expanded="false" onclick="UI.toggleAdvanced(this)">
+          <span class="arrow">\u25B6</span> Learn More (Advanced)
+        </button>
+        <div class="advanced-content">
+          <div class="advanced-inner">${this.escapeHTML(stage.advanced).replace(/\n/g, '<br>')}</div>
+        </div>`;
+    }
+
+    // Build navigation buttons based on stage type
+    let navHTML = '';
+
+    if (stage.isChoicePoint) {
+      // Supernova choice: student picks neutron star or black hole
+      const likely = stage.likelyOutcome;
+      const coreEst = stage.remnantCoreEst;
+      navHTML = `
+        <div class="stage-nav" style="flex-direction:column;gap:var(--space-2);">
+          <button class="btn btn-sm" onclick="UI.prevStage()">\u2190 Previous</button>
+          <p style="text-align:center;color:var(--text-secondary);font-size:var(--font-xs);">
+            The supernova leaves a compressed core of ~${coreEst.toFixed(1)} M\u2609.
+            A <strong>${likely}</strong> is the most likely outcome (TOV limit \u2248 3 M\u2609). What does it become?
+          </p>
+          <div style="display:flex;gap:var(--space-3);justify-content:center;flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="UI.chooseRemnant('neutron-star')" style="flex:1;min-width:160px;">
+              Neutron Star ${likely === 'neutron star' ? '(likely)' : '(unlikely)'}
+            </button>
+            <button class="btn btn-primary" onclick="UI.chooseRemnant('black-hole')" style="flex:1;min-width:160px;">
+              Black Hole ${likely === 'black hole' ? '(likely)' : '(unlikely)'}
+            </button>
+          </div>
+        </div>`;
+    } else if (isLast && stage.isFinalStage) {
+      if (stage.deathType === 'supernova') {
+        // Supernova remnant (NS or BH) - can seed a new generation
+        const canNextGen = AppState.generation < 5;
+        navHTML = `
+          <div class="stage-nav" style="flex-direction:column;gap:var(--space-2);">
+            <div style="display:flex;justify-content:space-between;gap:var(--space-2);">
+              <button class="btn btn-sm" onclick="UI.prevStage()">\u2190 Previous</button>
+              <button class="btn btn-sm" onclick="UI.backToSelector()">New Unrelated Star</button>
+            </div>
+            ${canNextGen ? `
+              <p style="text-align:center;color:var(--text-secondary);font-size:var(--font-xs);line-height:1.4;">
+                The supernova ejecta - enriched with heavy elements - can trigger
+                the collapse of a nearby cloud, seeding a new star from the same material.
+              </p>
+              <button class="btn btn-primary" style="width:100%;" onclick="UI.startNextGeneration()">
+                Seed Next Generation from Ejecta \u2192 Gen ${AppState.generation + 1}
+              </button>` : `
+              <p style="text-align:center;color:var(--text-muted);font-size:var(--font-xs);">
+                Maximum generations (5) reached.
+              </p>`}
+          </div>`;
+      } else {
+        // Non-supernova ending (white dwarf, red dwarf fade) - THE END
+        const isWD = stage.id === 'white-dwarf';
+        const fadeTime = isWD ? 'billions to trillions' : 'trillions';
+        const noGenReason = isWD
+          ? 'A white dwarf has no mechanism to trigger the birth of a new star. It simply radiates away its residual heat and fades. There is no explosion, no shockwave, and no ejection of material into space.'
+          : 'This star slowly exhausts its fuel without ever producing a supernova. Without the violent energy of a supernova shockwave, there is nothing to compress nearby gas into a new star.';
+        navHTML = `
+          <div class="stage-nav" style="flex-direction:column;gap:var(--space-3);">
+            <button class="btn" onclick="UI.prevStage()">\u2190 Previous</button>
+            <div style="text-align:center;padding:var(--space-3);background:var(--bg-secondary);border-radius:var(--radius-md);border:2px solid var(--border-color);">
+              <p style="font-size:var(--font-md);font-weight:700;margin-block-end:var(--space-1);color:var(--text-primary);">
+                \u2014 End of the Line \u2014
+              </p>
+              <p style="color:var(--text-secondary);font-size:var(--font-sm);margin-block-end:var(--space-2);line-height:1.5;">
+                ${noGenReason}
+                This ${stage.name.toLowerCase()} will cool and fade over ${fadeTime} of years
+                into a cold, dark remnant. <strong>No new generation of star can form from this death.</strong>
+              </p>
+              <p style="color:var(--text-muted);font-size:var(--font-xs);margin-block-end:var(--space-3);">
+                Only supernovae produce the shockwaves and enriched ejecta needed to seed the birth of a new star.
+              </p>
+              <button class="btn btn-primary" onclick="UI.backToSelector()" style="width:100%;">
+                Start a Completely New Star \u2192
+              </button>
+            </div>
+          </div>`;
+      }
+    } else {
+      // Normal navigation
+      navHTML = `
+        <div class="stage-nav">
+          <button class="btn" onclick="UI.prevStage()" ${isFirst ? 'disabled aria-disabled="true"' : ''}>\u2190 Previous</button>
+          <button class="btn btn-primary" onclick="UI.nextStage()" ${isLast ? 'disabled aria-disabled="true"' : ''}>Next Stage \u2192</button>
+        </div>`;
+    }
+
+    // Google Image search terms for each stage type
+    const imageSearchTerms = {
+      'nebula': 'molecular cloud nebula real images',
+      'protostar': 'protostar real images astronomy',
+      'main-sequence': 'main sequence stars real images',
+      'subgiant': 'subgiant star real images astronomy',
+      'red-giant': 'red giant star real images',
+      'agb': 'AGB asymptotic giant branch star real images',
+      'planetary-nebula': 'planetary nebula real images',
+      'white-dwarf': 'white dwarf star real images',
+      'blue-dwarf': 'blue dwarf star real images astronomy',
+      'blue-supergiant': 'blue supergiant star real images',
+      'red-supergiant': 'red supergiant star real images Betelgeuse',
+      'supernova': 'supernova real images',
+      'neutron-star': 'neutron star pulsar real images',
+      'black-hole': 'black hole real images'
+    };
+    const searchTerm = imageSearchTerms[stage.id] || (stage.name + ' star real images');
+    const googleUrl = 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(searchTerm);
+    const imageLink = `<a href="${googleUrl}" target="_blank" rel="noopener noreferrer" class="image-search-link" style="display:inline-flex;align-items:center;gap:4px;font-size:var(--font-xs);color:var(--accent);text-decoration:none;margin-block-start:var(--space-1);" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> See real images</a>`;
+
+    card.innerHTML = `
+      <div class="stage-card-header">
+        <div>
+          <h3 class="stage-title" style="color:${stage.color}">${this.escapeHTML(stage.name)}</h3>
+          <div class="stage-subtitle">${this.escapeHTML(stage.subtitle)} ${imageLink}</div>
+        </div>
+        <span class="stage-badge">Stage ${AppState.currentStageIndex + 1} / ${AppState.stages.length}</span>
+      </div>
+      <p class="stage-description">${this.escapeHTML(stage.description)}</p>
+      <div class="stage-facts">${factsHTML}</div>
+      ${advancedHTML}
+      ${navHTML}
+    `;
+
+    this.els.statusText.textContent = `Gen ${AppState.generation} \u2022 ${stage.name} \u2022 ${AppState.mass < 10 ? AppState.mass.toFixed(2) : AppState.mass.toFixed(1)} M\u2609`;
+    this.els.genBadgeText.textContent = `Generation ${AppState.generation}`;
+  },
+
+  toggleAdvanced(btn) {
+    const expanded = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', !expanded);
+    btn.nextElementSibling.classList.toggle('open', !expanded);
+  },
+
+  // ---- Remnant Choice (after supernova) ----
+  chooseRemnant(type) {
+    AppState.saveSnapshot();
+    const mass = AppState.mass;
+    let remnantStage;
+    if (type === 'neutron-star') {
+      remnantStage = STELLAR_DATA.getNeutronStarStage(mass);
+    } else {
+      remnantStage = STELLAR_DATA.getBlackHoleStage(mass);
+    }
+    // Append the chosen remnant as the final stage
+    AppState.stages.push(remnantStage);
+    AppState.currentStageIndex = AppState.stages.length - 1;
+    this.renderTimeline();
+    this.renderStage();
+    StarCanvas.draw();
+    AppState.save();
+    Toast.show(`The remnant becomes a ${remnantStage.name}`, 'success');
+  },
+
+  // ---- Generation System ----
+  // Only supernova endings can seed a new generation - the ejecta from the
+  // old star provides the enriched material for the next star.
+  startNextGeneration() {
+    AppState.saveSnapshot();
+    const lastStage = AppState.stages[AppState.stages.length - 1];
+
+    // Only supernova deaths seed new generations
+    if (lastStage.deathType !== 'supernova') return;
+
+    // Record current generation result
+    const currentGen = AppState.generationHistory[AppState.generationHistory.length - 1];
+    if (currentGen) {
+      currentGen.deathType = lastStage.deathType;
+      currentGen.elements = lastStage.remnantElements || ['H', 'He'];
+    }
+
+    AppState.generation++;
+
+    // The new star forms from the same material ejected by the supernova,
+    // enriched with heavier elements. Mass is randomised but drawn from
+    // the ejecta cloud (supernova shockwaves can trigger larger star formation).
+    let newMass = 0.5 + Math.random() * 30;
+    newMass = Math.round(newMass * 100) / 100;
+    newMass = Math.max(0.08, Math.min(150, newMass));
+
+    AppState.mass = newMass;
+    AppState.category = STELLAR_DATA.getCategory(newMass);
+    AppState.stages = STELLAR_DATA.getLifecycleStages(newMass);
+    AppState.currentStageIndex = 0;
+
+    // Same material carries forward - elements accumulate across generations
+    const prevElements = currentGen ? currentGen.elements : ['H', 'He'];
+    AppState.generationHistory.push({
+      gen: AppState.generation,
+      mass: newMass,
+      category: AppState.category,
+      deathType: null,
+      elements: [...new Set(prevElements)]
+    });
+
+    this.setMass(newMass, true);
+    this.renderTimeline();
+    this.renderStage();
+    this.renderGenerationBar();
+    StarCanvas.draw();
+    AppState.save();
+
+    Toast.show(`Generation ${AppState.generation}: ${STELLAR_DATA.categories[AppState.category].label} (${newMass.toFixed(2)} M\u2609) formed from supernova ejecta`, 'success');
+  },
+
+  renderGenerationBar() {
+    const bar = this.els.generationBar;
+    bar.innerHTML = '<strong style="white-space:nowrap;">Generations:</strong>';
+    AppState.generationHistory.forEach((gen, i) => {
+      if (i > 0) {
+        const arrow = document.createElement('span');
+        arrow.className = 'gen-arrow';
+        arrow.textContent = '\u2192';
+        bar.appendChild(arrow);
+      }
+      const chip = document.createElement('span');
+      chip.className = 'gen-chip' + (gen.gen === AppState.generation ? ' current' : '');
+      const cat = STELLAR_DATA.categories[gen.category];
+      chip.innerHTML = `Gen ${gen.gen}: ${cat ? cat.label : '?'} (${gen.mass.toFixed(1)} M\u2609)`;
+      chip.title = `Elements: ${gen.elements.join(', ')}`;
+      bar.appendChild(chip);
+    });
+  },
+
+  backToSelector() {
+    AppState.saveSnapshot();
+    AppState.generation = 1;
+    AppState.generationHistory = [];
+    this.showScreen('selector');
+    Toast.show('Starting fresh', 'info');
+  },
+
+  refreshUI() {
+    if (AppState.screen === 'lifecycle') {
+      AppState.stages = STELLAR_DATA.getLifecycleStages(AppState.mass);
+      this.showScreen('lifecycle');
+    } else {
+      this.setMass(AppState.mass);
+      this.showScreen('selector');
+    }
+  },
+
+  // ---- Theme ----
+  toggleTheme() {
+    const current = document.documentElement.dataset.theme;
+    const next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    AppState.settings.theme = next;
+    AppState.save();
+    StarCanvas.draw();
+  },
+
+  // ---- Panels ----
+  toggleHelp(forceOpen) {
+    const overlay = this.els.helpOverlay;
+    const open = forceOpen !== undefined ? forceOpen : !overlay.classList.contains('open');
+    overlay.classList.toggle('open', open);
+    overlay.setAttribute('aria-hidden', !open);
+    if (open) this.els.helpClose.focus();
+  },
+
+  toggleSettings(forceOpen) {
+    const overlay = this.els.settingsOverlay;
+    const panel = this.els.settingsPanel;
+    const open = forceOpen !== undefined ? forceOpen : !overlay.classList.contains('open');
+    overlay.classList.toggle('open', open);
+    panel.classList.toggle('open', open);
+    overlay.setAttribute('aria-hidden', !open);
+    if (open) this.els.settingsClose.focus();
+  },
+
+  /** Escape HTML to prevent XSS */
+  escapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+};
+
+// ============================================
+// STAR CANVAS RENDERER
+// ============================================
+const StarCanvas = {
+  canvas: null,
+  ctx: null,
+  width: 0,
+  height: 0,
+  bgStars: [],
+  animFrame: null,
+  time: 0,
+  // Morph transition state
+  lastStageId: null,
+  stageEnterTime: 0,
+  morphT: 1,              // 0 = start of morph, 1 = fully arrived
+  morphDuration: 2.0,     // seconds for morph
+  prevCanvasType: null,    // canvasType of the stage we're morphing FROM
+  prevColor: '#ffffff',    // color of the stage we're morphing FROM
+  // Morph params: the interpolated visual state
+  // Each frame we compute these from prev→current based on morphT
+  morphParams: null,       // { blobs, coreR, coreColor, glowSize, diskAlpha, diskR, shellR, shellAlpha, beamAlpha, bhAlpha, isSupernova }
+
+  init() {
+    this.canvas = document.getElementById('starCanvas');
+    this.ctx = this.canvas.getContext('2d');
+    this.resize();
+    this.generateBgStars();
+    this.animate();
+    const ro = new ResizeObserver(() => { this.resize(); this.generateBgStars(); });
+    ro.observe(this.canvas.parentElement);
+  },
+
+  resize() {
+    const rect = this.canvas.parentElement.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    this.width = rect.width;
+    this.height = rect.height;
+    this.canvas.width = rect.width * dpr;
+    this.canvas.height = rect.height * dpr;
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  },
+
+  generateBgStars() {
+    this.bgStars = [];
+    const starColors = ['#9bb0ff','#aabfff','#cad7ff','#fff4e8','#ffd2a1','#ffaa33','#ff6030'];
+    const colorWeights = [1, 2, 4, 8, 12, 15, 20];
+    const totalWeight = colorWeights.reduce((a, b) => a + b, 0);
+    const count = Math.floor((this.width * this.height) / 800);
+    for (let i = 0; i < count; i++) {
+      let r = Math.random() * totalWeight;
+      let colorIdx = 0;
+      for (let j = 0; j < colorWeights.length; j++) {
+        r -= colorWeights[j];
+        if (r <= 0) { colorIdx = j; break; }
+      }
+      const baseBrightness = 0.2 + Math.random() * 0.6;
+      const hotBoost = (6 - colorIdx) / 6;
+      this.bgStars.push({
+        x: Math.random() * this.width,
+        y: Math.random() * this.height,
+        r: Math.random() * 1.5 + 0.3,
+        brightness: Math.min(1, baseBrightness + hotBoost * 0.3),
+        color: starColors[colorIdx]
+      });
+    }
+  },
+
+  /**
+   * Get the visual parameters for a given canvasType.
+   * Returns an object describing what to draw:
+   *   blobs:      0 (none) to 1 (full nebula blobs)
+   *   blobSpread: how far blobs are from centre (px)
+   *   blobSize:   radius of each blob
+   *   coreR:      radius of the central star body
+   *   coreColor:  [r,g,b] of the star
+   *   glowSize:   size of outer glow relative to coreR
+   *   diskAlpha:  0-1 accretion disk visibility
+   *   diskR:      accretion disk radius
+   *   shellR:     planetary nebula shell radius (0 = none)
+   *   shellAlpha: shell visibility
+   *   beamAlpha:  neutron star beam visibility
+   *   bhAlpha:    black hole event horizon visibility
+   *   brightness: overall brightness multiplier
+   */
+  getVisualParams(canvasType, color, h) {
+    const mass = AppState.mass;
+    const rgb = this._hexToRgb(color || '#ffffff');
+    const base = {
+      blobs: 0, blobSpread: 0, blobSize: 0,
+      coreR: 0, coreColor: rgb, glowSize: 0,
+      diskAlpha: 0, diskR: 0,
+      shellR: 0, shellAlpha: 0,
+      beamAlpha: 0, bhAlpha: 0,
+      brightness: 1
+    };
+    switch (canvasType) {
+      case 'nebula':
+        return { ...base, blobs: 1, blobSpread: 50, blobSize: 70, coreR: 2, coreColor: [255,255,200], glowSize: 0, brightness: 0.8 };
+      case 'protostar':
+        return { ...base, blobs: 0.4, blobSpread: 20, blobSize: 35, coreR: 18, coreColor: [255,153,68], glowSize: 6, diskAlpha: 0.6, diskR: 80 };
+      case 'mainsequence': {
+        const r = Math.max(15, Math.min(60, 15 + Math.pow(mass, 0.8) * 3));
+        return { ...base, coreR: r, coreColor: rgb, glowSize: r * 0.15 };
+      }
+      case 'subgiant':
+        return { ...base, coreR: 50, coreColor: rgb, glowSize: 8 };
+      case 'redgiant':
+        return { ...base, coreR: Math.min(h * 0.4, 120), coreColor: [255,68,34], glowSize: 15 };
+      case 'redsupergiant':
+        return { ...base, coreR: Math.min(h * 0.45, 150), coreColor: [255,51,0], glowSize: 20 };
+      case 'bluesupergiant':
+        return { ...base, coreR: Math.min(h * 0.35, 100), coreColor: [136,153,255], glowSize: 12 };
+      case 'bluedwarf':
+        return { ...base, coreR: 25, coreColor: [110,142,251], glowSize: 5 };
+      case 'planetarynebula':
+        return { ...base, coreR: 6, coreColor: [232,232,255], glowSize: 2, shellR: Math.min(h * 0.38, 140), shellAlpha: 1 };
+      case 'whitedwarf':
+        return { ...base, coreR: 12, coreColor: [232,232,255], glowSize: 3 };
+      case 'neutronstar':
+        return { ...base, coreR: 8, coreColor: [170,187,255], glowSize: 4, beamAlpha: 1 };
+      case 'blackhole':
+        return { ...base, coreR: 0, coreColor: [0,0,0], glowSize: 0, bhAlpha: 1, diskAlpha: 1, diskR: 80 };
+      case 'supernova':
+        return { ...base, coreR: 0, coreColor: [255,255,255], brightness: 1 };
+      default:
+        return base;
+    }
+  },
+
+  /** Linearly interpolate between two visual param objects */
+  lerpParams(a, b, t) {
+    const lerp = (x, y) => x + (y - x) * t;
+    const lerpC = (c1, c2) => [lerp(c1[0], c2[0]), lerp(c1[1], c2[1]), lerp(c1[2], c2[2])];
+    return {
+      blobs: lerp(a.blobs, b.blobs),
+      blobSpread: lerp(a.blobSpread, b.blobSpread),
+      blobSize: lerp(a.blobSize, b.blobSize),
+      coreR: lerp(a.coreR, b.coreR),
+      coreColor: lerpC(a.coreColor, b.coreColor),
+      glowSize: lerp(a.glowSize, b.glowSize),
+      diskAlpha: lerp(a.diskAlpha, b.diskAlpha),
+      diskR: lerp(a.diskR, b.diskR),
+      shellR: lerp(a.shellR, b.shellR),
+      shellAlpha: lerp(a.shellAlpha, b.shellAlpha),
+      beamAlpha: lerp(a.beamAlpha, b.beamAlpha),
+      bhAlpha: lerp(a.bhAlpha, b.bhAlpha),
+      brightness: lerp(a.brightness, b.brightness)
+    };
+  },
+
+  /** Smooth ease-in-out curve */
+  easeInOut(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  },
+
+  animate() {
+    const dt = 0.016 * (AppState.settings.animSpeed || 1);
+    this.time += dt;
+
+    // Detect stage change
+    const currentStage = AppState.stages[AppState.currentStageIndex];
+    const stageId = currentStage ? currentStage.id + '-' + AppState.currentStageIndex : '';
+    if (stageId !== this.lastStageId) {
+      // Save current stage as the morph source
+      if (this.lastStageId !== null && currentStage) {
+        const prevIdx = AppState.stages.findIndex((s, i) =>
+          (s.id + '-' + i) === this.lastStageId);
+        if (prevIdx >= 0 && AppState.stages[prevIdx]) {
+          this.prevCanvasType = AppState.stages[prevIdx].canvasType;
+          this.prevColor = AppState.stages[prevIdx].color;
+        }
+      }
+      this.lastStageId = stageId;
+      this.stageEnterTime = this.time;
+      this.morphT = 0;
+    }
+    if (this.morphT < 1) {
+      this.morphT = Math.min(1, this.morphT + dt / this.morphDuration);
+    }
+
+    this.draw();
+    this.animFrame = requestAnimationFrame(() => this.animate());
+  },
+
+  draw() {
+    const { ctx, width: w, height: h } = this;
+    if (!ctx || w === 0) return;
+
+    // Background
+    ctx.fillStyle = document.documentElement.dataset.theme === 'dark' ? '#050510' : '#1a1a3e';
+    ctx.fillRect(0, 0, w, h);
+
+    // Background stars
+    if (AppState.settings.showBgStars) {
+      this.bgStars.forEach(s => {
+        ctx.globalAlpha = s.brightness;
+        ctx.fillStyle = s.color;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    }
+
+    const stage = AppState.stages[AppState.currentStageIndex];
+    if (!stage) return;
+    const cx = w / 2;
+    const cy = h / 2;
+
+    // Supernova is special - draws its own flash animation, no morph
+    if (stage.canvasType === 'supernova') {
+      this.drawSupernova(cx, cy, w, h);
+      return;
+    }
+
+    // Compute morph parameters
+    const targetParams = this.getVisualParams(stage.canvasType, stage.color, h);
+    let p;
+    if (this.morphT < 1 && this.prevCanvasType && this.prevCanvasType !== 'supernova') {
+      const sourceParams = this.getVisualParams(this.prevCanvasType, this.prevColor, h);
+      const eased = this.easeInOut(this.morphT);
+      p = this.lerpParams(sourceParams, targetParams, eased);
+    } else {
+      p = targetParams;
+    }
+
+    const t = this.time;
+    ctx.globalAlpha = p.brightness;
+
+    // --- Layer 1: Nebula blobs ---
+    if (p.blobs > 0.01) {
+      const blobColors = [[255,107,157],[130,100,255],[255,150,80],[100,200,255],[200,130,255],[255,200,100],[100,255,200],[180,100,255]];
+      for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2 + t * 0.1;
+        const dist = p.blobSpread + 15 * Math.sin(t * 0.3 + i);
+        const x = cx + Math.cos(angle) * dist;
+        const y = cy + Math.sin(angle) * dist;
+        const r = p.blobSize + 15 * Math.sin(t * 0.2 + i * 0.7);
+        const bc = blobColors[i];
+        const alpha = p.blobs;
+        const grad = ctx.createRadialGradient(x, y, 0, x, y, Math.max(1, r));
+        grad.addColorStop(0, `rgba(${bc[0]},${bc[1]},${bc[2]},${0.3 * alpha})`);
+        grad.addColorStop(0.5, `rgba(${bc[0]},${bc[1]},${bc[2]},${0.1 * alpha})`);
+        grad.addColorStop(1, `rgba(${bc[0]},${bc[1]},${bc[2]},0)`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      }
+    }
+
+    // --- Layer 2: Accretion disk ---
+    if (p.diskAlpha > 0.01 && p.bhAlpha < 0.5) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(1, 0.3);
+      const dr = Math.max(10, p.diskR);
+      const diskGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, dr);
+      diskGrad.addColorStop(0, `rgba(255,200,100,${0.01 * p.diskAlpha})`);
+      diskGrad.addColorStop(0.3, `rgba(255,150,50,${0.15 * p.diskAlpha})`);
+      diskGrad.addColorStop(0.7, `rgba(200,80,30,${0.1 * p.diskAlpha})`);
+      diskGrad.addColorStop(1, 'rgba(200,80,30,0)');
+      ctx.fillStyle = diskGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, dr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // --- Layer 3: Planetary nebula — Southern Ring style ---
+    if (p.shellAlpha > 0.01 && p.shellR > 1) {
+      ctx.save();
+      const sA = p.shellAlpha;
+      const sR = p.shellR;
+
+      // [A] Outer filamentary halo — vast red/brown tendrils streaming outward
+      //    These are the huge dusty filaments visible in the JWST image
+      const filCount = 40;
+      for (let i = 0; i < filCount; i++) {
+        const pr = ((i * 137 + 42) % 100) / 100;
+        const baseAngle = (i / filCount) * Math.PI * 2;
+        const angle = baseAngle + (pr - 0.5) * 0.5;
+        // Filaments start from the bright shell edge and extend far out
+        const startR = sR * (0.7 + pr * 0.25);
+        const endR = sR * (1.3 + pr * 0.9); // extend up to ~2x shell radius
+        const curve = (pr - 0.5) * 0.8;
+        // Multiple bezier control points for organic curves
+        const x0 = cx + Math.cos(angle) * startR;
+        const y0 = cy + Math.sin(angle) * startR * 0.8; // slight elliptical
+        const x3 = cx + Math.cos(angle + curve) * endR;
+        const y3 = cy + Math.sin(angle + curve) * endR * 0.8;
+        const m1 = (startR + endR) * 0.4;
+        const m2 = (startR + endR) * 0.65;
+        const drift = Math.sin(t * 0.12 + i * 1.7) * 2;
+        const x1 = cx + Math.cos(angle + curve * 0.3) * m1 + drift;
+        const y1 = cy + Math.sin(angle + curve * 0.3) * m1 * 0.8;
+        const x2 = cx + Math.cos(angle + curve * 0.7) * m2 - drift;
+        const y2 = cy + Math.sin(angle + curve * 0.7) * m2 * 0.8;
+        // Colour: deep red-brown to orange, like dusty expelled material
+        const hue = 10 + (i * 7) % 30; // 10-40 range: red to orange-brown
+        const sat = 60 + pr * 30;
+        const lit = 25 + pr * 20;
+        const filAlpha = (0.06 + pr * 0.12) * sA;
+        ctx.strokeStyle = `hsla(${hue},${sat}%,${lit}%,${filAlpha})`;
+        ctx.lineWidth = 2 + pr * 5;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.bezierCurveTo(x1, y1, x2, y2, x3, y3);
+        ctx.stroke();
+      }
+
+      // [B] Diffuse outer dust glow — the reddish-brown haze surrounding everything
+      const outerDust = ctx.createRadialGradient(cx, cy, sR * 0.8, cx, cy, sR * 2.0);
+      outerDust.addColorStop(0, `rgba(180,80,20,${0.06 * sA})`);
+      outerDust.addColorStop(0.4, `rgba(140,50,10,${0.04 * sA})`);
+      outerDust.addColorStop(0.8, `rgba(80,20,5,${0.02 * sA})`);
+      outerDust.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = outerDust;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, sR * 2.0, sR * 1.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // [C] Bright shell rim — the dense golden-orange ring of expelled gas
+      //    This is the prominent bright oval in the image
+      ctx.save();
+      ctx.translate(cx, cy);
+      // Draw as a thick glowing elliptical ring
+      const rimOuter = sR * 0.95;
+      const rimInner = sR * 0.6;
+      const rimMid = (rimOuter + rimInner) / 2;
+      const rimW = (rimOuter - rimInner) / 2;
+      // Warm golden glow of the rim
+      for (let pass = 0; pass < 3; pass++) {
+        const rScale = 1 + pass * 0.08;
+        const alphaScale = [0.25, 0.15, 0.08][pass];
+        const hueShift = pass * 15; // inner=gold, outer=red
+        ctx.strokeStyle = `hsla(${35 - hueShift},90%,${60 - pass * 10}%,${alphaScale * sA})`;
+        ctx.lineWidth = rimW * 2 * rScale;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, rimMid * rScale, rimMid * 0.75 * rScale, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // Add bright knots along the rim — denser clumps
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2 + ((i * 73) % 100) / 300;
+        const kx = Math.cos(a) * rimMid + Math.sin(t * 0.2 + i) * 2;
+        const ky = Math.sin(a) * rimMid * 0.75 + Math.cos(t * 0.2 + i) * 1.5;
+        const kSize = 5 + ((i * 37) % 7);
+        const kGrad = ctx.createRadialGradient(kx, ky, 0, kx, ky, kSize);
+        kGrad.addColorStop(0, `rgba(255,200,100,${0.3 * sA})`);
+        kGrad.addColorStop(0.4, `rgba(255,150,50,${0.15 * sA})`);
+        kGrad.addColorStop(1, 'rgba(200,80,20,0)');
+        ctx.fillStyle = kGrad;
+        ctx.beginPath();
+        ctx.arc(kx, ky, kSize, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // [D] Inner ionised cavity — bright blue-white gas filling the interior
+      //    Ionised by UV from the hot central white dwarf
+      const cavGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, sR * 0.65);
+      cavGrad.addColorStop(0, `rgba(180,210,255,${0.2 * sA})`);
+      cavGrad.addColorStop(0.3, `rgba(140,180,240,${0.18 * sA})`);
+      cavGrad.addColorStop(0.6, `rgba(100,150,220,${0.12 * sA})`);
+      cavGrad.addColorStop(0.85, `rgba(80,120,200,${0.06 * sA})`);
+      cavGrad.addColorStop(1, 'rgba(60,80,160,0)');
+      ctx.fillStyle = cavGrad;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, sR * 0.65, sR * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // [E] Subtle inner structure — wisps inside the cavity
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + t * 0.03;
+        const wr = sR * (0.2 + ((i * 53) % 30) / 100);
+        const wx = cx + Math.cos(a) * wr * 0.5;
+        const wy = cy + Math.sin(a) * wr * 0.4;
+        const ws = 10 + ((i * 41) % 15);
+        const wGrad = ctx.createRadialGradient(wx, wy, 0, wx, wy, ws);
+        wGrad.addColorStop(0, `rgba(160,200,255,${0.08 * sA})`);
+        wGrad.addColorStop(0.5, `rgba(120,170,230,${0.04 * sA})`);
+        wGrad.addColorStop(1, 'rgba(80,130,200,0)');
+        ctx.fillStyle = wGrad;
+        ctx.beginPath();
+        ctx.arc(wx, wy, ws, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    // --- Layer 4: Core star body ---
+    if (p.coreR > 0.5) {
+      const cc = p.coreColor;
+      const colorHex = this._rgbToHex(Math.round(cc[0]), Math.round(cc[1]), Math.round(cc[2]));
+      const pulse = 1 + 0.03 * Math.sin(t * 2);
+      const r = p.coreR * pulse;
+      const gs = Math.max(0, p.glowSize);
+
+      // Outer glow
+      if (gs > 0.5) {
+        const glowGrad = ctx.createRadialGradient(cx, cy, r * 0.5, cx, cy, r + gs * 3);
+        glowGrad.addColorStop(0, colorHex);
+        glowGrad.addColorStop(0.4, colorHex + '88');
+        glowGrad.addColorStop(1, colorHex.substring(0, 7) + '00');
+        ctx.fillStyle = glowGrad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r + gs * 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Star body
+      const bodyGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(1, r));
+      bodyGrad.addColorStop(0, '#ffffff');
+      bodyGrad.addColorStop(0.25, colorHex);
+      bodyGrad.addColorStop(0.8, colorHex + 'dd');
+      bodyGrad.addColorStop(1, colorHex + 'aa');
+      ctx.fillStyle = bodyGrad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(1, r), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // --- Layer 5: Black hole ---
+    if (p.bhAlpha > 0.01) {
+      const ba = p.bhAlpha;
+      // BH accretion disk (hot, tilted)
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(1, 0.35);
+      for (let i = 3; i >= 0; i--) {
+        const r = 50 + i * 15;
+        const grad = ctx.createRadialGradient(0, 0, 30, 0, 0, r);
+        const hue = 30 + i * 20 + t * 10;
+        grad.addColorStop(0, `hsla(${hue},100%,50%,0)`);
+        grad.addColorStop(0.5, `hsla(${hue},90%,60%,${0.3 * ba})`);
+        grad.addColorStop(0.8, `hsla(${hue},80%,40%,${0.1 * ba})`);
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      // Event horizon
+      ctx.fillStyle = `rgba(0,0,0,${ba})`;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 22 * ba, 0, Math.PI * 2);
+      ctx.fill();
+      // Photon ring
+      ctx.strokeStyle = `rgba(255,200,100,${0.5 * ba})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 25 * ba, 0, Math.PI * 2);
+      ctx.stroke();
+      // Lensed stars
+      ctx.globalAlpha = 0.3 * ba;
+      for (let i = 0; i < 6; i++) {
+        const a = t * 0.5 + i;
+        const r = 30 + i * 5;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.4, 1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = p.brightness;
+    }
+
+    // --- Layer 6: Neutron star beams ---
+    if (p.beamAlpha > 0.01) {
+      ctx.save();
+      ctx.globalAlpha = p.beamAlpha;
+      ctx.translate(cx, cy);
+      ctx.rotate(t * 5);
+      const beamGrad = ctx.createLinearGradient(0, -200, 0, 200);
+      beamGrad.addColorStop(0, 'rgba(170,187,255,0)');
+      beamGrad.addColorStop(0.45, `rgba(170,187,255,${0.3 * p.beamAlpha})`);
+      beamGrad.addColorStop(0.5, `rgba(255,255,255,${0.6 * p.beamAlpha})`);
+      beamGrad.addColorStop(0.55, `rgba(170,187,255,${0.3 * p.beamAlpha})`);
+      beamGrad.addColorStop(1, 'rgba(170,187,255,0)');
+      ctx.fillStyle = beamGrad;
+      ctx.fillRect(-3, -200, 6, 400);
+      ctx.restore();
+    }
+
+    ctx.globalAlpha = 1;
+  },
+
+  /** Supernova - special one-shot animation, not morphed */
+  drawSupernova(cx, cy, w, h) {
+    const { ctx } = this;
+    const elapsed = this.time - this.stageEnterTime;
+    const maxR = Math.max(w, h) * 0.9;
+
+    const flashPeak = 0.15;
+    const flashEnd = 1.2;
+    let flash = 0;
+    if (elapsed < flashPeak) {
+      flash = Math.pow(elapsed / flashPeak, 0.3);
+    } else if (elapsed < flashEnd) {
+      flash = 1 - Math.pow((elapsed - flashPeak) / (flashEnd - flashPeak), 0.6);
+    }
+
+    if (flash > 0.01) {
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
+      grad.addColorStop(0, `rgba(255,255,255,${flash})`);
+      grad.addColorStop(0.05, `rgba(255,255,240,${flash * 0.95})`);
+      grad.addColorStop(0.15, `rgba(255,240,200,${flash * 0.8})`);
+      grad.addColorStop(0.4, `rgba(255,180,80,${flash * 0.5})`);
+      grad.addColorStop(0.7, `rgba(255,80,20,${flash * 0.2})`);
+      grad.addColorStop(1, 'rgba(200,30,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    const debrisStart = 0.3;
+    if (elapsed > debrisStart) {
+      const debrisTime = elapsed - debrisStart;
+      const expandSpeed = 80;
+      const ringR = debrisTime * expandSpeed;
+      const ringAlpha = Math.max(0, 1 - ringR / (maxR * 1.2));
+      if (ringAlpha > 0 && ringR < maxR * 1.2) {
+        ctx.strokeStyle = `rgba(255,200,100,${ringAlpha * 0.6})`;
+        ctx.lineWidth = Math.max(2, 8 - debrisTime * 2);
+        ctx.beginPath();
+        ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      for (let i = 0; i < 30; i++) {
+        const angle = (i / 30) * Math.PI * 2 + i * 0.37;
+        const speed = 30 + (i % 7) * 12;
+        const dist = debrisTime * speed;
+        if (dist > maxR) continue;
+        const x = cx + Math.cos(angle) * dist;
+        const y = cy + Math.sin(angle) * dist;
+        const alpha = Math.max(0, 1 - dist / maxR);
+        const r = Math.max(0.5, 3 - debrisTime * 0.5);
+        ctx.fillStyle = `rgba(255,${140 + (i * 7) % 100},${30 + (i * 13) % 80},${alpha})`;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    const residual = Math.max(0, 0.4 - elapsed * 0.05);
+    if (residual > 0.01) {
+      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 60);
+      glow.addColorStop(0, `rgba(255,220,150,${residual})`);
+      glow.addColorStop(0.5, `rgba(255,100,30,${residual * 0.3})`);
+      glow.addColorStop(1, 'rgba(255,50,0,0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 60, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  },
+
+  // --- Colour utility ---
+  _hexToRgb(hex) {
+    if (!hex || hex.length < 7) return [255, 255, 255];
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return [isNaN(r) ? 255 : r, isNaN(g) ? 255 : g, isNaN(b) ? 255 : b];
+  },
+  _rgbToHex(r, g, b) {
+    return '#' + [r, g, b].map(c => Math.max(0, Math.min(255, c)).toString(16).padStart(2, '0')).join('');
+  }
+};
+
+// ============================================
+// EASTER EGG: Konami Code
+// ============================================
+// EASTER EGG: Konami code triggers a special effect
+const konamiCode = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+let konamiIndex = 0;
+document.addEventListener('keydown', e => {
+  if (e.key === konamiCode[konamiIndex]) {
+    konamiIndex++;
+    if (konamiIndex === konamiCode.length) {
+      konamiIndex = 0;
+      Toast.show('You found the secret! Every atom in your body was forged in a star.', 'success', 6000);
+      // Rainbow stars effect - make all stars bright with random colours
+      const rainbowColors = ['#ff6b9d','#6e8efb','#4ade80','#fbbf24','#f87171','#a78bfa','#38bdf8'];
+      StarCanvas.bgStars.forEach(s => { s.brightness = 1; s.color = rainbowColors[Math.floor(Math.random() * rainbowColors.length)]; });
+      document.documentElement.style.setProperty('--accent', `hsl(${Math.random() * 360}, 80%, 65%)`);
+    }
+  } else {
+    konamiIndex = e.key === konamiCode[0] ? 1 : 0;
+  }
+});
+
+// ============================================
+// INIT
+// ============================================
+document.addEventListener('DOMContentLoaded', () => {
+  // Detect system theme preference
+  if (!localStorage.getItem('starLifecycles')) {
+    if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+      document.documentElement.dataset.theme = 'light';
+      AppState.settings.theme = 'light';
+    }
+  }
+  Toast.init();
+  UI.init();
+});
+</script>
+</body>
+</html>
