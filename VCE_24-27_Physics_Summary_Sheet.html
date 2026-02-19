@@ -290,9 +290,68 @@
     opacity: 0.7;
   }
 
+  /* ===== LAYOUT MODE ===== */
+  body.layout-mode .page p,
+  body.layout-mode .page li {
+    cursor: text;
+  }
+  body.layout-mode .page p:hover,
+  body.layout-mode .page li:hover {
+    outline: 1px dashed #e67e22;
+    outline-offset: 1px;
+  }
+  .user-break-marker {
+    display: inline;
+    color: #e67e22;
+    font-size: 6pt;
+    vertical-align: super;
+    cursor: pointer;
+    user-select: none;
+  }
+  body:not(.layout-mode) .user-break-marker { display: none; }
+  @media print { .user-break-marker { display: none !important; } }
+  /* I-beam caret for layout mode */
+  .layout-ibeam {
+    display: inline;
+    position: relative;
+    width: 0;
+    font-size: inherit;
+    user-select: none;
+    pointer-events: none;
+  }
+  .layout-ibeam::after {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: -1px;
+    width: 1.5px;
+    height: 1.15em;
+    background: #e67e22;
+    animation: ibeam-blink 0.8s step-end infinite;
+    z-index: 10;
+  }
+  @keyframes ibeam-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  .layout-ibeam-hint {
+    position: fixed;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(44,62,80,0.92);
+    color: #fff;
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 9pt;
+    z-index: 2000;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  @media print { .layout-ibeam, .layout-ibeam-hint { display: none !important; } }
+
   /* ===== VCAA FORMULA SHEET OVERLAY (provided in exam — subtle) ===== */
   .vcaa-formula {
-    border-left: 3px solid #85c1e9;
     background: #ebf5fb;
     padding: 2px 5px;
     margin: 2px 0;
@@ -300,12 +359,11 @@
     font-size: 8pt;
   }
 
-  /* ===== NOT-ON-SHEET FORMULAS (must memorise — standout) ===== */
+  /* ===== NOT-ON-SHEET FORMULAS (derived — standout) ===== */
   .not-on-sheet {
     /* no styling by default — highlighted only when toggle is on */
   }
   body.show-memorise .not-on-sheet {
-    border-left: 3px solid #e67e22;
     background: #fef5e7;
     padding: 2px 5px;
     margin: 2px 0;
@@ -387,7 +445,6 @@
       display: none;
     }
     body.show-memorise .not-on-sheet {
-      border-left: 3px solid #e67e22;
       background: #fef5e7;
       padding: 2px 5px;
       margin: 2px 0;
@@ -688,6 +745,7 @@
     </label>
   </div>
 
+  <button id="layoutModeBtn" onclick="toggleLayoutMode()" title="Click text to add/remove line breaks">✂ Layout Mode</button>
   <button onclick="openPrintDialog()" style="background:#27ae60;border-color:#27ae60">🖨 Print / PDF</button>
   <button onclick="openOnboarding()" title="Help (or press ?)" style="width:28px;height:28px;border-radius:50%;padding:0;text-align:center;font-weight:700;font-size:12pt;line-height:28px">?</button>
 </div>
@@ -1286,6 +1344,14 @@
         </div>
       </div>
     </div>
+    <div class="option-group" id="bookletOption" style="display:none">
+      <div class="option-title">Page Order</div>
+      <label style="font-size:9pt;cursor:pointer;display:flex;align-items:center;gap:6px">
+        <input type="checkbox" id="bookletFold">
+        Booklet fold (Page 1 as front cover)
+      </label>
+      <div style="font-size:8pt;color:#999;margin-top:3px">Reorders pages so Page 1 is the front cover when the A3 sheet is folded in half.</div>
+    </div>
     <div class="option-group">
       <div class="option-title">Content Shown</div>
       <div style="font-size:9pt;color:#666;line-height:1.4">
@@ -1328,6 +1394,9 @@
     <h3>Italic Mode</h3>
     <p>Traps and templates can each be independently italicised, so they remain visible but visually distinct from core content.</p>
 
+    <h3>Layout Mode</h3>
+    <p>Click <b>✂ Layout Mode</b> to enter break-editing mode. Click on any text to place a blinking I-beam cursor, then use <b>← →</b> arrow keys to move character-by-character. Press <b>Enter</b> to insert a line break at the cursor, or <b>Esc</b> to cancel. Click the <span style="color:#e67e22">↵</span> marker to remove an existing break. Breaks are saved automatically and persist across sessions.</p>
+
     <h3>AOS Colour Coding</h3>
     <p>All section headings are colour-coded by Area of Study. Click any numbered swatch in the toolbar to customise colours:</p>
     <ul>
@@ -1339,7 +1408,7 @@
     </ul>
 
     <h3>Printing</h3>
-    <p>Click <b>Print / PDF</b> to choose between <b>A4</b> (4 portrait pages) or <b>A3</b> (2 landscape sheets with two pages side-by-side). Set your toggles before printing &mdash; hidden content won't appear in the printout.</p>
+    <p>Click <b>Print / PDF</b> to choose between <b>A4</b> (4 portrait pages) or <b>A3</b> (2 landscape sheets with two pages side-by-side). In A3 mode, enable <b>Booklet fold</b> to reorder pages so Page 1 is the front cover when the sheet is folded in half. Set your toggles before printing &mdash; hidden content won't appear in the printout.</p>
 
     <h3>Keyboard Shortcut</h3>
     <p>Press <span class="ob-key">?</span> at any time to reopen this guide.</p>
@@ -1404,7 +1473,8 @@
 
   // ===== A3 sheet population =====
   // Clone page content into the A3 sheet containers
-  function populateA3Sheets() {
+  // booklet=true: imposition for folding — Sheet 1 front [Page4|Page1], Sheet 2 (back) [Page2|Page3]
+  function populateA3Sheets(booklet) {
     const pages = document.querySelectorAll('.page');
     const sheet1 = document.getElementById('a3sheet1');
     const sheet2 = document.getElementById('a3sheet2');
@@ -1412,30 +1482,32 @@
     sheet1.innerHTML = '';
     sheet2.innerHTML = '';
 
-    if (pages.length >= 2) {
-      const half1a = document.createElement('div');
-      half1a.className = 'a3-half';
-      half1a.innerHTML = pages[0].innerHTML;
-      const half1b = document.createElement('div');
-      half1b.className = 'a3-half';
-      half1b.innerHTML = pages[1].innerHTML;
-      sheet1.appendChild(half1a);
-      sheet1.appendChild(half1b);
+    if (pages.length < 4) return;
+
+    function makeHalf(pageEl) {
+      const div = document.createElement('div');
+      div.className = 'a3-half';
+      div.innerHTML = pageEl.innerHTML;
+      return div;
     }
-    if (pages.length >= 4) {
-      const half2a = document.createElement('div');
-      half2a.className = 'a3-half';
-      half2a.innerHTML = pages[2].innerHTML;
-      const half2b = document.createElement('div');
-      half2b.className = 'a3-half';
-      half2b.innerHTML = pages[3].innerHTML;
-      sheet2.appendChild(half2a);
-      sheet2.appendChild(half2b);
+
+    if (booklet) {
+      // Booklet imposition: front = [Page 4 | Page 1], back = [Page 2 | Page 3]
+      sheet1.appendChild(makeHalf(pages[3])); // Page 4 (left)
+      sheet1.appendChild(makeHalf(pages[0])); // Page 1 (right = front cover when folded)
+      sheet2.appendChild(makeHalf(pages[1])); // Page 2 (left inside)
+      sheet2.appendChild(makeHalf(pages[2])); // Page 3 (right inside)
+    } else {
+      // Standard order: Sheet 1 [Page1|Page2], Sheet 2 [Page3|Page4]
+      sheet1.appendChild(makeHalf(pages[0]));
+      sheet1.appendChild(makeHalf(pages[1]));
+      sheet2.appendChild(makeHalf(pages[2]));
+      sheet2.appendChild(makeHalf(pages[3]));
     }
   }
 
   // Build A3 sheets on load
-  populateA3Sheets();
+  populateA3Sheets(false);
 
   // ===== Print dialog =====
   function getContentModeText() {
@@ -1455,6 +1527,8 @@
     document.querySelectorAll('.print-dialog .radio-btn').forEach(btn => {
       btn.classList.toggle('selected', btn.dataset.size === selectedPaperSize);
     });
+    // Show booklet option if A3 is selected
+    document.getElementById('bookletOption').style.display = (selectedPaperSize === 'a3') ? '' : 'none';
     printOverlay.classList.add('open');
   };
 
@@ -1467,6 +1541,8 @@
     document.querySelectorAll('.print-dialog .radio-btn').forEach(btn => {
       btn.classList.toggle('selected', btn.dataset.size === size);
     });
+    // Show booklet option only for A3
+    document.getElementById('bookletOption').style.display = (size === 'a3') ? '' : 'none';
   };
 
   window.confirmPrint = function() {
@@ -1474,7 +1550,8 @@
 
     if (selectedPaperSize === 'a3') {
       // Refresh A3 content in case toggles changed
-      populateA3Sheets();
+      const booklet = document.getElementById('bookletFold').checked;
+      populateA3Sheets(booklet);
       document.body.classList.add('a3-mode');
       dynamicPageStyle.textContent = '@page { size: A3 landscape; margin: 4mm; }';
     } else {
@@ -1542,6 +1619,421 @@
   onboardingOverlay.addEventListener('click', function(e) {
     if (e.target === onboardingOverlay) closeOnboarding();
   });
+
+  // ===== Layout Mode — click-to-break =====
+  const layoutBtn = document.getElementById('layoutModeBtn');
+  let layoutMode = false;
+  const STORAGE_KEY = 'vce-physics-breaks';
+
+  // Generate a path-based ID for an element relative to its .page ancestor
+  function getElementPath(el) {
+    const parts = [];
+    let node = el;
+    while (node && !node.classList.contains('page') && node.tagName !== 'BODY') {
+      const parent = node.parentElement;
+      if (!parent) break;
+      const siblings = Array.from(parent.children);
+      const idx = siblings.indexOf(node);
+      parts.unshift(node.tagName.toLowerCase() + '[' + idx + ']');
+      node = parent;
+    }
+    // Identify which page
+    const pages = Array.from(document.querySelectorAll('.page'));
+    const pageIdx = pages.indexOf(node);
+    return 'page[' + pageIdx + ']/' + parts.join('/');
+  }
+
+  // Find element from a path string
+  function getElementFromPath(path) {
+    const match = path.match(/^page\[(\d+)\]\/(.+)$/);
+    if (!match) return null;
+    const pageIdx = parseInt(match[1]);
+    const pages = document.querySelectorAll('.page');
+    if (pageIdx >= pages.length) return null;
+    let el = pages[pageIdx];
+    const steps = match[2].split('/');
+    for (const step of steps) {
+      const m = step.match(/^(\w+)\[(\d+)\]$/);
+      if (!m) return null;
+      const children = Array.from(el.children);
+      const idx = parseInt(m[2]);
+      if (idx >= children.length) return null;
+      el = children[idx];
+    }
+    return el;
+  }
+
+  // Save all user breaks to localStorage
+  function saveBreaks() {
+    const breaks = [];
+    document.querySelectorAll('.user-break').forEach(br => {
+      const parent = br.parentElement;
+      if (!parent) return;
+      const path = getElementPath(parent);
+      // Find word index: count text words before this <br>
+      let wordCount = 0;
+      let node = parent.firstChild;
+      while (node && node !== br) {
+        if (node.nodeType === 3) { // text node
+          const words = node.textContent.split(/\s+/).filter(w => w.length > 0);
+          wordCount += words.length;
+        } else if (node.nodeType === 1 && !node.classList.contains('user-break-marker')) {
+          const words = node.textContent.split(/\s+/).filter(w => w.length > 0);
+          wordCount += words.length;
+        }
+        node = node.nextSibling;
+      }
+      breaks.push({ path: path, wordIndex: wordCount });
+    });
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(breaks)); } catch(e) {}
+  }
+
+  // Insert a <br> after the Nth word in an element
+  function insertBreakAtWord(el, wordIndex) {
+    let count = 0;
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    let textNode;
+    while ((textNode = walker.nextNode())) {
+      // Skip text inside markers
+      if (textNode.parentElement.classList && textNode.parentElement.classList.contains('user-break-marker')) continue;
+      const text = textNode.textContent;
+      const parts = text.split(/(\s+)/);
+      let localWords = 0;
+      let charPos = 0;
+      for (let i = 0; i < parts.length; i++) {
+        if (parts[i].trim().length > 0) {
+          localWords++;
+          count++;
+          if (count === wordIndex) {
+            // Split text node here
+            charPos += parts[i].length;
+            // Include trailing whitespace if present
+            if (i + 1 < parts.length && parts[i + 1].trim() === '') {
+              charPos += parts[i + 1].length;
+            }
+            const after = textNode.splitText(charPos);
+            const br = document.createElement('br');
+            br.className = 'user-break';
+            const marker = document.createElement('span');
+            marker.className = 'user-break-marker';
+            marker.textContent = '↵';
+            marker.title = 'Click to remove this line break';
+            after.parentNode.insertBefore(br, after);
+            after.parentNode.insertBefore(marker, br);
+            return true;
+          }
+        }
+        charPos += parts[i].length;
+      }
+    }
+    return false;
+  }
+
+  // Restore breaks from localStorage
+  function restoreBreaks() {
+    try {
+      const data = localStorage.getItem(STORAGE_KEY);
+      if (!data) return;
+      const breaks = JSON.parse(data);
+      breaks.forEach(b => {
+        const el = getElementFromPath(b.path);
+        if (el) insertBreakAtWord(el, b.wordIndex);
+      });
+    } catch(e) {}
+  }
+
+  // ===== I-beam caret state =====
+  let ibeamNode = null;   // the text node the caret is in
+  let ibeamOffset = 0;    // character offset within that text node
+  let ibeamEl = null;     // the <span class="layout-ibeam"> element
+  let ibeamHint = null;   // the hint bar at the bottom
+  let ibeamParent = null; // the p/li element the caret lives in
+
+  function removeIbeam() {
+    if (ibeamEl) { ibeamEl.remove(); ibeamEl = null; }
+    if (ibeamHint) { ibeamHint.remove(); ibeamHint = null; }
+    // Re-merge text nodes that were split by I-beam placement
+    if (ibeamParent) { ibeamParent.normalize(); }
+    ibeamNode = null;
+    ibeamOffset = 0;
+    ibeamParent = null;
+  }
+
+  function placeIbeam(textNode, offset) {
+    removeIbeam();
+    if (!textNode || textNode.nodeType !== 3) return;
+    const text = textNode.textContent;
+    if (offset < 0) offset = 0;
+    if (offset > text.length) offset = text.length;
+
+    ibeamParent = textNode.parentElement.closest('p, li') || textNode.parentElement;
+
+    // Split the text node at offset and insert I-beam span between
+    if (offset === 0) {
+      // Insert before the text node
+      ibeamEl = document.createElement('span');
+      ibeamEl.className = 'layout-ibeam';
+      textNode.parentNode.insertBefore(ibeamEl, textNode);
+      ibeamNode = textNode;
+      ibeamOffset = 0;
+    } else if (offset >= text.length) {
+      // Insert after the text node
+      ibeamEl = document.createElement('span');
+      ibeamEl.className = 'layout-ibeam';
+      textNode.parentNode.insertBefore(ibeamEl, textNode.nextSibling);
+      ibeamNode = textNode;
+      ibeamOffset = text.length;
+    } else {
+      // Split and insert between
+      const afterNode = textNode.splitText(offset);
+      ibeamEl = document.createElement('span');
+      ibeamEl.className = 'layout-ibeam';
+      afterNode.parentNode.insertBefore(ibeamEl, afterNode);
+      ibeamNode = textNode;  // left part
+      ibeamOffset = offset;
+    }
+
+    // Show hint bar
+    if (!ibeamHint) {
+      ibeamHint = document.createElement('div');
+      ibeamHint.className = 'layout-ibeam-hint';
+      ibeamHint.textContent = '← → move  |  Enter = insert break  |  Esc = cancel';
+      document.body.appendChild(ibeamHint);
+    }
+  }
+
+  // Get all text nodes in order within a container, skipping markers
+  function getTextNodes(container) {
+    const nodes = [];
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+      acceptNode: function(node) {
+        if (node.parentElement.classList.contains('user-break-marker')) return NodeFilter.FILTER_REJECT;
+        if (node.parentElement.classList.contains('layout-ibeam')) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    let n;
+    while ((n = walker.nextNode())) nodes.push(n);
+    return nodes;
+  }
+
+  // Move I-beam by delta characters (-1 = left, +1 = right)
+  function moveIbeam(delta) {
+    if (!ibeamEl || !ibeamParent) return;
+
+    // Remove ibeam element, normalize to get clean text, then reposition
+    ibeamEl.remove();
+    ibeamEl = null;
+    ibeamParent.normalize();
+
+    // Find all text nodes in this paragraph
+    const textNodes = getTextNodes(ibeamParent);
+    if (textNodes.length === 0) return;
+
+    // Find which text node and offset we're at by counting characters
+    // We stored ibeamOffset as position in the original text node,
+    // but after normalize, nodes may have merged. Recalculate.
+    let totalOffset = 0;
+    let found = false;
+    let currentNode = null;
+    let currentLocalOffset = 0;
+
+    // Calculate absolute offset (sum of all previous text + ibeamOffset)
+    // Since we stored ibeamNode reference and it may be gone after normalize,
+    // we need to use a running count based on the previous state.
+    // Instead, store absolute offset before removing.
+    // Actually, let's compute from the ibeam's former position in DOM:
+    // After normalize, we need to find where offset chars into the paragraph text.
+    // Compute the absolute char position by finding ibeamOffset in the full text.
+
+    // Reconstruct: before the ibeam was the left text (ibeamNode with ibeamOffset chars),
+    // preceded by other text nodes. Count chars up to ibeamNode.
+    // After normalize this is tricky, so let's use a simpler approach:
+    // store the absolute character offset in the paragraph.
+    let absOffset = 0;
+    for (const tn of textNodes) {
+      if (absOffset + tn.textContent.length >= ibeamOffset && !found) {
+        // This might be our node — but ibeamOffset is local. We need absolute.
+        break;
+      }
+      absOffset += tn.textContent.length;
+    }
+    // Fallback: use stored absolute position
+    absOffset = ibeamAbsOffset + delta;
+
+    // Clamp
+    let totalChars = 0;
+    for (const tn of textNodes) totalChars += tn.textContent.length;
+    if (absOffset < 0) absOffset = 0;
+    if (absOffset > totalChars) absOffset = totalChars;
+
+    ibeamAbsOffset = absOffset;
+
+    // Find the text node and local offset for this absolute position
+    let charCount = 0;
+    for (const tn of textNodes) {
+      if (charCount + tn.textContent.length >= absOffset) {
+        placeIbeamAbs(tn, absOffset - charCount);
+        return;
+      }
+      charCount += tn.textContent.length;
+    }
+    // If we get here, place at end of last node
+    const lastNode = textNodes[textNodes.length - 1];
+    placeIbeamAbs(lastNode, lastNode.textContent.length);
+  }
+
+  let ibeamAbsOffset = 0; // absolute char offset within the paragraph
+
+  // Place I-beam given a text node and local offset, without updating absOffset
+  function placeIbeamAbs(textNode, localOffset) {
+    if (ibeamEl) { ibeamEl.remove(); ibeamEl = null; }
+    if (!textNode || textNode.nodeType !== 3) return;
+
+    const text = textNode.textContent;
+    if (localOffset < 0) localOffset = 0;
+    if (localOffset > text.length) localOffset = text.length;
+
+    ibeamParent = textNode.parentElement.closest('p, li') || textNode.parentElement;
+    ibeamOffset = localOffset;
+
+    if (localOffset === 0) {
+      ibeamEl = document.createElement('span');
+      ibeamEl.className = 'layout-ibeam';
+      textNode.parentNode.insertBefore(ibeamEl, textNode);
+      ibeamNode = textNode;
+    } else if (localOffset >= text.length) {
+      ibeamEl = document.createElement('span');
+      ibeamEl.className = 'layout-ibeam';
+      textNode.parentNode.insertBefore(ibeamEl, textNode.nextSibling);
+      ibeamNode = textNode;
+    } else {
+      const afterNode = textNode.splitText(localOffset);
+      ibeamEl = document.createElement('span');
+      ibeamEl.className = 'layout-ibeam';
+      afterNode.parentNode.insertBefore(ibeamEl, afterNode);
+      ibeamNode = textNode;
+    }
+  }
+
+  // Confirm break at current I-beam position
+  function confirmIbeamBreak() {
+    if (!ibeamEl || !ibeamParent) return;
+
+    // The ibeam is already splitting the text at the right position.
+    // Replace the ibeam span with a br + marker.
+    const br = document.createElement('br');
+    br.className = 'user-break';
+    const marker = document.createElement('span');
+    marker.className = 'user-break-marker';
+    marker.textContent = '↵';
+    marker.title = 'Click to remove this line break';
+
+    ibeamEl.parentNode.insertBefore(marker, ibeamEl);
+    ibeamEl.parentNode.insertBefore(br, ibeamEl.nextSibling);
+    ibeamEl.remove();
+    ibeamEl = null;
+    if (ibeamHint) { ibeamHint.remove(); ibeamHint = null; }
+    ibeamNode = null;
+    ibeamParent = null;
+    ibeamOffset = 0;
+
+    saveBreaks();
+  }
+
+  // Handle click in layout mode
+  function handleLayoutClick(e) {
+    if (!layoutMode) return;
+
+    // If clicking a break marker, remove that break
+    if (e.target.classList.contains('user-break-marker')) {
+      removeIbeam();
+      const marker = e.target;
+      const br = marker.nextSibling;
+      if (br && br.classList && br.classList.contains('user-break')) {
+        const parent = marker.parentElement;
+        marker.remove();
+        br.remove();
+        parent.normalize();
+        saveBreaks();
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    // Find the clicked p or li inside a .page
+    const target = e.target.closest('.page p, .page li');
+    if (!target) { removeIbeam(); return; }
+    // Don't add breaks in headings, tables, exam traps, explain templates
+    if (target.closest('h2, h3, th, td, .exam-trap, .explain-template, .controls')) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Remove previous I-beam and normalize
+    removeIbeam();
+
+    // Find character position at click using caretRangeFromPoint
+    let range;
+    if (document.caretRangeFromPoint) {
+      range = document.caretRangeFromPoint(e.clientX, e.clientY);
+    } else if (document.caretPositionFromPoint) {
+      const pos = document.caretPositionFromPoint(e.clientX, e.clientY);
+      range = document.createRange();
+      range.setStart(pos.offsetNode, pos.offset);
+    }
+    if (!range) return;
+
+    const textNode = range.startContainer;
+    if (textNode.nodeType !== 3) return;
+    const offset = range.startOffset;
+
+    // Calculate absolute offset within the paragraph
+    const textNodes = getTextNodes(target);
+    let absOff = 0;
+    for (const tn of textNodes) {
+      if (tn === textNode) { absOff += offset; break; }
+      absOff += tn.textContent.length;
+    }
+    ibeamAbsOffset = absOff;
+
+    placeIbeam(textNode, offset);
+  }
+
+  // Keyboard handler for I-beam navigation
+  function handleLayoutKeydown(e) {
+    if (!layoutMode || !ibeamEl) return;
+
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      moveIbeam(-1);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      moveIbeam(1);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      confirmIbeamBreak();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      removeIbeam();
+    }
+  }
+
+  window.toggleLayoutMode = function() {
+    layoutMode = !layoutMode;
+    document.body.classList.toggle('layout-mode', layoutMode);
+    layoutBtn.style.background = layoutMode ? '#e67e22' : '';
+    layoutBtn.style.borderColor = layoutMode ? '#e67e22' : '';
+    if (!layoutMode) removeIbeam();
+  };
+
+  // Listen for clicks and keys in page content
+  document.addEventListener('click', handleLayoutClick);
+  document.addEventListener('keydown', handleLayoutKeydown);
+
+  // Restore saved breaks on load
+  restoreBreaks();
 
 })();
 </script>
