@@ -1,0 +1,2732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Student Progress Learning Profiles</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5"></script>
+<style>
+  :root {
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --text-muted: #64748b;
+    --radius: 10px;
+    --green: #16a34a;
+    --green-bg: #f0fdf4;
+    --amber: #d97706;
+    --amber-bg: #fffbeb;
+    --red: #dc2626;
+    --red-bg: #fef2f2;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  header {
+    background: var(--primary);
+    color: white;
+    padding: 1.5rem 2rem;
+    text-align: center;
+  }
+  header h1 { font-size: 1.6rem; font-weight: 700; }
+  header p { font-size: 0.9rem; opacity: 0.85; margin-top: 0.25rem; }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+
+  /* ── Tab bar ── */
+  .tab-bar {
+    display: flex;
+    gap: 0;
+    margin-bottom: 0;
+    border-bottom: 2px solid var(--border);
+  }
+  .tab-btn {
+    padding: 0.7rem 1.5rem;
+    border: none;
+    background: transparent;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+  }
+  .tab-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .tab-content { display: none; padding-top: 1.5rem; }
+  .tab-content.active { display: block; }
+
+  /* ── Input section ── */
+  .input-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .input-section h2 {
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+    color: var(--text);
+  }
+  .input-section .hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+  }
+  .input-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+  }
+  .input-row label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: 0.3rem;
+  }
+  textarea {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.8rem;
+    resize: vertical;
+    margin-bottom: 1rem;
+  }
+  textarea:focus { outline: 2px solid var(--primary); border-color: transparent; }
+  #rollInput { height: 90px; }
+  #csvInput { height: 60px; }
+
+  /* ── Drag & drop zone ── */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 2rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    margin-bottom: 1rem;
+    position: relative;
+  }
+  .drop-zone:hover { border-color: var(--primary); background: #eff6ff; }
+  .drop-zone.drag-over {
+    border-color: var(--primary);
+    background: #dbeafe;
+    border-style: solid;
+  }
+  .drop-zone .drop-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    display: block;
+  }
+  .drop-zone .drop-main {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .drop-zone .drop-sub {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+  }
+  .drop-zone .drop-file-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--green);
+    margin-top: 0.5rem;
+  }
+  .drop-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .file-upload {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    background: white;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-secondary { background: #e2e8f0; color: var(--text); }
+  .btn-secondary:hover { background: #cbd5e1; }
+  .btn-green { background: var(--green); color: white; }
+  .btn-green:hover { background: #15803d; }
+
+  .controls-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  /* ── Match review panel ── */
+  .match-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .match-panel h2 {
+    font-size: 1.1rem;
+    margin-bottom: 0.25rem;
+  }
+  .match-panel .match-hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+  }
+  .match-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  .match-table th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg);
+    border-bottom: 2px solid var(--border);
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .match-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .match-table tr:last-child td { border-bottom: none; }
+
+  .match-table tr.match-exact { background: var(--green-bg); }
+  .match-table tr.match-close { background: var(--amber-bg); }
+  .match-table tr.match-none  { background: var(--red-bg); }
+
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .badge-exact { background: #dcfce7; color: var(--green); }
+  .badge-close { background: #fef3c7; color: var(--amber); }
+  .badge-none  { background: #fee2e2; color: var(--red); }
+
+  .match-select {
+    padding: 0.3rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 0.8rem;
+    background: white;
+    min-width: 180px;
+  }
+
+  .match-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    align-items: center;
+  }
+  .match-stats {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+
+  .extra-students {
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+  .extra-students h3 {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+  }
+  .extra-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    margin-right: 1rem;
+    margin-bottom: 0.35rem;
+  }
+  .extra-label input { margin: 0; }
+
+  /* ── Interpretation guide ── */
+  .guide-toggle {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+  }
+  .guide-toggle-btn {
+    width: 100%;
+    padding: 0.85rem 1.5rem;
+    border: none;
+    background: var(--card);
+    text-align: left;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .guide-toggle-btn:hover { background: var(--bg); }
+  .guide-toggle-btn .arrow {
+    transition: transform 0.2s;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  .guide-toggle-btn.open .arrow { transform: rotate(180deg); }
+  .guide-body {
+    display: none;
+    padding: 0 1.5rem 1.5rem;
+  }
+  .guide-body.open { display: block; }
+
+  .guide-intro {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 1.25rem;
+    line-height: 1.6;
+  }
+
+  .archetype-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1rem;
+  }
+  .archetype-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+  .archetype-card .arch-shape {
+    flex-shrink: 0;
+    width: 100px;
+    height: 100px;
+    position: relative;
+  }
+  .archetype-card .arch-shape canvas {
+    width: 100px;
+    height: 100px;
+  }
+  .archetype-card .arch-text { flex: 1; }
+  .archetype-card .arch-name {
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin-bottom: 0.2rem;
+  }
+  .archetype-card .arch-pattern {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 0.4rem;
+    font-style: italic;
+  }
+  .archetype-card .arch-means {
+    font-size: 0.8rem;
+    color: var(--text);
+    margin-bottom: 0.35rem;
+  }
+  .archetype-card .arch-action {
+    font-size: 0.8rem;
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  /* ── Summary bar ── */
+  .summary-bar {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .summary-stat { text-align: center; }
+  .summary-stat .val {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--primary);
+  }
+  .summary-stat .lbl {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── Chart grid ── */
+  .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+  }
+  @media (max-width: 1024px) { .chart-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 640px)  { .chart-grid { grid-template-columns: 1fr; } }
+
+  .chart-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    text-align: center;
+  }
+  .chart-card h3 {
+    font-size: 0.95rem;
+    margin-bottom: 0.25rem;
+    color: var(--text);
+  }
+  .chart-card .subtitle {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+  }
+  .chart-card canvas { max-width: 100%; max-height: 280px; }
+  .archetype-tags {
+    display: flex;
+    gap: 0.35rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 0.4rem;
+  }
+  .arch-tag {
+    display: inline-block;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    border: 1.5px solid;
+  }
+  .arch-tag-primary {
+    color: white;
+  }
+  .arch-tag-secondary {
+    background: white;
+  }
+
+  /* ── Definitions ── */
+  .definitions {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+  }
+  .definitions h2 { font-size: 1.1rem; margin-bottom: 0.75rem; }
+  .def-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 0.75rem;
+  }
+  .def-item {
+    padding: 0.6rem 0.75rem;
+    background: var(--bg);
+    border-radius: 6px;
+  }
+  .def-item strong { color: var(--primary); font-size: 0.85rem; }
+  .def-item p { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.15rem; }
+
+  /* ── Comment bank controls ── */
+  .comment-controls {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .pill-group {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    font-size: 0.78rem;
+  }
+  .pill-group label {
+    display: inline-block;
+    padding: 0.35rem 0.65rem;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: white;
+    border-right: 1px solid var(--border);
+    user-select: none;
+    transition: background 0.15s, color 0.15s;
+  }
+  .pill-group label:last-child { border-right: none; }
+  .pill-group input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
+  .pill-group label.pill-active {
+    background: var(--primary);
+    color: white;
+  }
+
+  /* ── Comment text per card ── */
+  .comment-wrapper {
+    margin-top: 0.5rem;
+    text-align: left;
+    position: relative;
+  }
+  .comment-toggle-btn {
+    background: none;
+    border: none;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--primary);
+    cursor: pointer;
+    padding: 0;
+    margin-bottom: 0.25rem;
+  }
+  .comment-toggle-btn:hover { text-decoration: underline; }
+  .comment-text {
+    font-size: 0.8rem;
+    color: var(--text);
+    line-height: 1.55;
+    margin-top: 0.25rem;
+  }
+  .comment-copy-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.15rem 0.4rem;
+    font-size: 0.68rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: background 0.15s;
+  }
+  .comment-copy-btn:hover { background: #e2e8f0; color: var(--text); }
+
+  /* ── Copy All panel ── */
+  .copy-all-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+  }
+  .copy-all-panel h2 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+  .copy-all-content {
+    font-size: 0.8rem;
+    line-height: 1.55;
+    color: var(--text);
+    padding: 0.75rem;
+    background: var(--bg);
+    border-radius: 6px;
+    margin-bottom: 0.75rem;
+  }
+  .copy-all-content .student-comment-block {
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .copy-all-content .student-comment-block:last-child { border-bottom: none; margin-bottom: 0; }
+  .copy-all-content .student-comment-name {
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 0.2rem;
+  }
+
+  /* ── Timeline charts ── */
+  .timeline-charts {
+    margin-top: 0.75rem;
+    border-top: 1px solid var(--border);
+    padding-top: 0.5rem;
+  }
+  .timeline-charts h4 {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-bottom: 0.4rem;
+    font-weight: 600;
+  }
+  .timeline-charts canvas {
+    max-width: 100%;
+    max-height: 200px;
+    margin-bottom: 0.5rem;
+  }
+  .timeline-nodata {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+    padding: 1rem 0;
+  }
+  .chart-grid.timeline-expanded {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  @media (max-width: 1024px) {
+    .chart-grid.timeline-expanded { grid-template-columns: 1fr; }
+  }
+
+  /* ── Print styles ── */
+  @media print {
+    .tab-bar, .input-section, .match-panel, .no-print, #tabSetup { display: none !important; }
+    .tab-content.tab-charts { display: block !important; }
+    header { padding: 0.75rem 1rem; }
+    header h1 { font-size: 1.2rem; }
+    .container { padding: 0.5rem; }
+    .guide-toggle { break-after: page; page-break-after: always; }
+    .guide-body { display: block !important; }
+    .summary-bar { padding: 0.5rem 1rem; margin-bottom: 0.75rem; }
+    .chart-grid { grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+    .chart-grid.timeline-expanded { grid-template-columns: 1fr !important; gap: 0.75rem; }
+    .chart-card {
+      padding: 0.4rem;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .chart-card h3 { font-size: 0.8rem; }
+    .chart-card .subtitle { font-size: 0.65rem; }
+    .chart-card canvas { max-height: 200px; }
+    .timeline-charts canvas { max-height: 150px; }
+    .timeline-charts h4 { font-size: 0.7rem; }
+    .comment-copy-btn, .comment-toggle-btn { display: none !important; }
+    .comment-text { display: block !important; font-size: 0.7rem; }
+    .copy-all-panel { break-before: page; page-break-before: always; }
+    .copy-all-panel .no-print { display: none !important; }
+    .definitions { break-before: page; page-break-before: always; }
+    body { background: white; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Student Progress Learning Profiles</h1>
+  <p>Upload CSV data from the Dynamic Checklist platform and match to your class roll</p>
+</header>
+
+<div class="container">
+
+  <!-- ── Tab bar ── -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('setup')" id="tabBtnSetup">Setup &amp; Name Matching</button>
+    <button class="tab-btn" onclick="switchTab('charts')" id="tabBtnCharts" disabled>Charts</button>
+  </div>
+
+  <!-- ══════════ TAB 1: SETUP ══════════ -->
+  <div class="tab-content active tab-setup" id="tabSetup">
+
+    <div class="input-section">
+      <h2>1. Class Roll (optional)</h2>
+      <p class="hint">Paste two columns from your spreadsheet: Surname, Firstname. If provided, student names will be matched to the official roll.</p>
+      <textarea id="rollInput" placeholder="Paste Surname + Firstname columns from spreadsheet here...&#10;e.g.&#10;Benfield&#9;Araleyah&#10;Chang&#9;William&#10;Smith&#9;Liv"></textarea>
+
+      <h2>2. Progress Data</h2>
+      <p class="hint">Drag and drop your CSV file, or click to browse. You can also paste CSV text below.</p>
+
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="csvFile" accept=".csv">
+        <span class="drop-icon">&#128196;</span>
+        <span class="drop-main">Drop CSV file here or click to browse</span>
+        <span class="drop-sub">Accepts .csv files exported from Dynamic Checklist</span>
+        <span class="drop-file-name" id="dropFileName" style="display:none;"></span>
+      </div>
+
+      <textarea id="csvInput" placeholder="Or paste CSV data here..."></textarea>
+
+      <div class="controls-row">
+        <button class="btn btn-primary" onclick="handleGenerate()">Generate Charts</button>
+        <div>
+          <label for="classFilter">Filter by class:</label>
+          <select id="classFilter" onchange="handleClassFilter()">
+            <option value="__all__">All Classes</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div id="matchPanel" class="match-panel" style="display:none;"></div>
+
+  </div>
+
+  <!-- ══════════ TAB 2: CHARTS ══════════ -->
+  <div class="tab-content tab-charts" id="tabCharts">
+
+    <!-- Collapsible interpretation guide -->
+    <div class="guide-toggle" id="guideToggle">
+      <button class="guide-toggle-btn" onclick="toggleGuide()">
+        How to Read These Charts
+        <span class="arrow">&#9660;</span>
+      </button>
+      <div class="guide-body" id="guideBody">
+        <p class="guide-intro">
+          Each radar chart shows a student's learning profile across six axes.
+          The further a point reaches toward the outer edge, the stronger that metric is <strong>relative to the class</strong>.
+          A value at the centre means the student is at the class minimum for that metric; the outer ring means class maximum.
+          The <strong>raw values</strong> (e.g. 86%, 92 level-ups, 25 learning points) are shown at each data point so you can assess absolute performance.
+          For <strong>Effort</strong>, each chart also shows how the student's questions and active time compare to the class median (e.g. "+20q, +5m" means 20 more questions and 5 more active minutes than the typical student).
+          The summary bar at the top shows the class median and full range for questions and time, so you can judge whether the class baseline itself is high or low.
+          <strong>Key relationship &mdash; Accuracy vs Mastery:</strong> Accuracy is the proportion correct across <em>all</em> attempts. Mastery is accuracy in the student's <em>most recent</em> attempts only.
+          When both are high, the student understood from the start.
+          When Accuracy is lower than Mastery, the student has built understanding over time &mdash; that's real learning in action.
+          When Accuracy is higher than Mastery, there is an opportunity to revisit recent material and rebuild momentum.
+          Below are common profile shapes you may see, what they suggest, and how you might respond.
+        </p>
+        <div class="archetype-grid" id="archetypeGrid">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <div class="controls-row no-print" style="margin-bottom:1rem;">
+      <button class="btn btn-secondary" onclick="window.print()">Print Charts</button>
+      <label id="rollFilterToggle" style="display:none;font-size:0.85rem;font-weight:600;color:var(--text-muted);cursor:pointer;user-select:none;">
+        <input type="checkbox" id="rollFilterCb" checked onchange="handleRollFilterToggle()" style="margin-right:0.35rem;vertical-align:middle;">
+        Roll students only
+      </label>
+      <label style="font-size:0.85rem;font-weight:600;color:var(--text-muted);cursor:pointer;user-select:none;">
+        <input type="checkbox" id="timelineCb" onchange="handleTimelineToggle()" style="margin-right:0.35rem;vertical-align:middle;">
+        Timeline charts
+      </label>
+      <span style="border-left:1px solid var(--border);height:1.5rem;margin:0 0.25rem;"></span>
+      <span style="font-size:0.78rem;font-weight:600;color:var(--text-muted);">Tone:</span>
+      <div class="pill-group" id="tonePills">
+        <label class="pill-active"><input type="radio" name="commentTone" value="student" checked>Student</label>
+        <label><input type="radio" name="commentTone" value="parent">Parent</label>
+        <label><input type="radio" name="commentTone" value="teacher">Teacher</label>
+      </div>
+      <span style="font-size:0.78rem;font-weight:600;color:var(--text-muted);">Length:</span>
+      <div class="pill-group" id="lengthPills">
+        <label class="pill-active"><input type="radio" name="commentLength" value="brief" checked>Brief</label>
+        <label><input type="radio" name="commentLength" value="detailed">Detailed</label>
+      </div>
+      <span style="font-size:0.78rem;font-weight:600;color:var(--text-muted);">Focus:</span>
+      <div class="pill-group" id="focusPills">
+        <label class="pill-active"><input type="radio" name="commentFocus" value="knowledge" checked>Knowledge</label>
+        <label><input type="radio" name="commentFocus" value="growth">Growth</label>
+      </div>
+      <button class="btn btn-secondary" style="font-size:0.78rem;padding:0.35rem 0.75rem;" onclick="scrollToCopyAll()">&#128203; Copy All</button>
+    </div>
+
+    <div id="summaryBar" class="summary-bar" style="display:none;"></div>
+    <div id="chartGrid" class="chart-grid"></div>
+
+    <div class="copy-all-panel" id="copyAllPanel" style="display:none;">
+      <h2>All Student Comments</h2>
+      <div class="copy-all-content" id="copyAllContent"></div>
+      <button class="btn btn-green no-print" onclick="copyAllComments()">&#128203; Copy All to Clipboard</button>
+    </div>
+
+    <div class="definitions" id="definitions" style="display:none;">
+      <h2>Metric Definitions</h2>
+      <div class="def-grid">
+        <div class="def-item"><strong>Accuracy</strong><p>Proportion of questions answered correctly</p></div>
+        <div class="def-item"><strong>Progression</strong><p>Rate of advancing through Bloom's cognitive levels per question attempted</p></div>
+        <div class="def-item"><strong>Depth</strong><p>Total Bloom's cognitive levels achieved (raw level-up count)</p></div>
+        <div class="def-item"><strong>Breadth</strong><p>Number of distinct learning points engaged with</p></div>
+        <div class="def-item"><strong>Mastery</strong><p>Accuracy in the student's most recent attempts (final quarter). High Accuracy + High Mastery = understood from the start. Lower Accuracy + High Mastery = understanding has been built over time.</p></div>
+        <div class="def-item"><strong>Effort</strong><p>Combined measure of total questions attempted and active time invested, shown relative to the class. Check the summary bar for absolute median and range values to judge the class baseline.</p></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// roundRect polyfill for older browsers
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    this.moveTo(x + r, y);
+    this.arcTo(x + w, y, x + w, y + h, r);
+    this.arcTo(x + w, y + h, x, y + h, r);
+    this.arcTo(x, y + h, x, y, r);
+    this.arcTo(x, y, x + w, y, r);
+    this.closePath();
+    return this;
+  };
+}
+
+// ══════════════════════════════════════
+//  GLOBALS
+// ══════════════════════════════════════
+const COLOURS = [
+  '#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6','#ec4899',
+  '#06b6d4','#84cc16','#f97316','#6366f1','#14b8a6','#e11d48',
+  '#0ea5e9','#a855f7','#22c55e','#eab308','#d946ef','#64748b',
+];
+
+let parsedData = null;
+let chartInstances = [];
+let activeNameMap = null;      // roll students + extras (used when checkbox unchecked, to rename)
+let rollOnlyNameMap = null;    // roll students only (used when checkbox checked)
+let timelineChartInstances = [];
+let lastTimeSeriesData = null;
+
+// ══════════════════════════════════════
+//  TAB SWITCHING
+// ══════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tabBtn' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
+  document.getElementById('tab' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
+}
+
+function enableChartsTab() {
+  document.getElementById('tabBtnCharts').disabled = false;
+}
+
+// ══════════════════════════════════════
+//  DRAG & DROP + FILE INPUT
+// ══════════════════════════════════════
+const dropZone = document.getElementById('dropZone');
+const csvFileInput = document.getElementById('csvFile');
+const dropFileName = document.getElementById('dropFileName');
+
+function loadFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    document.getElementById('csvInput').value = ev.target.result;
+    dropFileName.textContent = '✓ ' + file.name;
+    dropFileName.style.display = 'block';
+  };
+  reader.readAsText(file);
+}
+
+csvFileInput.addEventListener('change', function(e) {
+  loadFile(e.target.files[0]);
+});
+
+dropZone.addEventListener('dragover', function(e) {
+  e.preventDefault();
+  dropZone.classList.add('drag-over');
+});
+dropZone.addEventListener('dragleave', function(e) {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+});
+dropZone.addEventListener('drop', function(e) {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.endsWith('.csv')) {
+    loadFile(file);
+  } else {
+    alert('Please drop a .csv file.');
+  }
+});
+
+// ══════════════════════════════════════
+//  LEVENSHTEIN DISTANCE
+// ══════════════════════════════════════
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i-1] === b[j-1]
+        ? dp[i-1][j-1]
+        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+    }
+  }
+  return dp[m][n];
+}
+
+function normaliseName(s) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+// ══════════════════════════════════════
+//  ROLL PARSING
+// ══════════════════════════════════════
+function parseRoll(text) {
+  if (!text.trim()) return [];
+  const lines = text.trim().split(/\n/);
+  const names = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const parts = trimmed.split('\t');
+    if (parts.length >= 2) {
+      const surname = parts[0].trim();
+      const firstname = parts[1].trim();
+      if (surname && firstname) {
+        names.push({ surname, firstname, display: firstname + ' ' + surname });
+      }
+    } else {
+      names.push({ surname: '', firstname: '', display: trimmed });
+    }
+  }
+  return names;
+}
+
+function getCsvStudentNames(data) {
+  const nameSet = new Set();
+  data.forEach(row => {
+    const first = (row['Preferred Name'] || '').trim();
+    const last = (row['Family Name'] || '').trim();
+    if (first || last) nameSet.add((first + ' ' + last).trim());
+  });
+  return [...nameSet].sort();
+}
+
+// ══════════════════════════════════════
+//  FUZZY NAME MATCHING
+// ══════════════════════════════════════
+function matchNames(rollNames, csvNames) {
+  const matches = [];
+  const unmatchedCsv = new Set(csvNames);
+
+  for (const roll of rollNames) {
+    const rollNorm = normaliseName(roll.display);
+    const rollSurnameNorm = normaliseName(roll.surname);
+    const rollFirstNorm = normaliseName(roll.firstname);
+    let bestMatch = null;
+    let bestConfidence = 'none';
+    let bestDistance = Infinity;
+
+    for (const csv of unmatchedCsv) {
+      const csvNorm = normaliseName(csv);
+
+      if (csvNorm === rollNorm) {
+        bestMatch = csv; bestConfidence = 'exact'; bestDistance = 0;
+        break;
+      }
+
+      if (rollSurnameNorm) {
+        const csvParts = csvNorm.split(' ');
+        const csvLastNorm = csvParts.slice(1).join(' ') || csvParts[0];
+        const csvFirstNorm = csvParts[0];
+        if (csvLastNorm === rollSurnameNorm) {
+          const firstDist = levenshtein(csvFirstNorm, rollFirstNorm);
+          if (firstDist <= 3 && firstDist < bestDistance) {
+            bestMatch = csv;
+            bestConfidence = firstDist === 0 ? 'exact' : 'close';
+            bestDistance = firstDist;
+          }
+        }
+      }
+
+      if (!bestMatch || bestConfidence !== 'exact') {
+        const fullDist = levenshtein(csvNorm, rollNorm);
+        if (fullDist <= 3 && fullDist < bestDistance) {
+          bestMatch = csv;
+          bestConfidence = fullDist === 0 ? 'exact' : 'close';
+          bestDistance = fullDist;
+        }
+      }
+    }
+
+    if (bestMatch) unmatchedCsv.delete(bestMatch);
+    matches.push({
+      rollDisplay: roll.display,
+      csvName: bestMatch,
+      confidence: bestMatch ? bestConfidence : 'none',
+      distance: bestMatch ? bestDistance : Infinity,
+    });
+  }
+
+  return { matches, unmatchedCsv: [...unmatchedCsv] };
+}
+
+// ══════════════════════════════════════
+//  MATCH REVIEW PANEL
+// ══════════════════════════════════════
+function showMatchPanel(rollNames, csvNames) {
+  const { matches, unmatchedCsv } = matchNames(rollNames, csvNames);
+  const panel = document.getElementById('matchPanel');
+
+  const exactCount = matches.filter(m => m.confidence === 'exact').length;
+  const closeCount = matches.filter(m => m.confidence === 'close').length;
+  const noneCount = matches.filter(m => m.confidence === 'none').length;
+  const allCsvOptions = csvNames.slice().sort();
+
+  let html = `
+    <h2>Name Matching Review</h2>
+    <p class="match-hint">Review how CSV student names are matched to the class roll. Adjust any incorrect matches using the dropdowns.</p>
+    <table class="match-table"><thead><tr>
+      <th>Roll Name</th><th>Matched CSV Name</th><th>Confidence</th><th>Override</th>
+    </tr></thead><tbody>
+  `;
+
+  matches.forEach((m, i) => {
+    const rowClass = m.confidence === 'exact' ? 'match-exact' : m.confidence === 'close' ? 'match-close' : 'match-none';
+    const badgeClass = m.confidence === 'exact' ? 'badge-exact' : m.confidence === 'close' ? 'badge-close' : 'badge-none';
+    const badgeLabel = m.confidence === 'exact' ? 'Exact' : m.confidence === 'close' ? 'Close (d=' + m.distance + ')' : 'No match';
+
+    html += `<tr class="${rowClass}">
+      <td><strong>${m.rollDisplay}</strong></td>
+      <td>${m.csvName || '<em style="color:var(--text-muted)">&#8212;</em>'}</td>
+      <td><span class="badge ${badgeClass}">${badgeLabel}</span></td>
+      <td><select class="match-select" data-roll-idx="${i}" onchange="onMatchOverride(this)">
+        <option value="__auto__"${m.csvName ? '' : ' selected'}>&#8212; Auto &#8212;</option>
+        <option value="__none__"${!m.csvName ? ' selected' : ''}>No match</option>
+        ${allCsvOptions.map(n => `<option value="${n}"${n === m.csvName ? ' selected' : ''}>${n}</option>`).join('')}
+      </select></td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+
+  if (unmatchedCsv.length > 0) {
+    html += `<div class="extra-students">
+      <h3>CSV students not on roll (${unmatchedCsv.length})</h3>
+      <p class="match-hint">Uncheck to exclude these students from the charts.</p>`;
+    unmatchedCsv.forEach(name => {
+      html += `<label class="extra-label"><input type="checkbox" class="extra-cb" value="${name}" checked> ${name}</label>`;
+    });
+    html += '</div>';
+  }
+
+  html += `<div class="match-actions">
+    <button class="btn btn-green" onclick="confirmAndGenerate()">Confirm &amp; Generate Charts</button>
+    <span class="match-stats">${exactCount} exact, ${closeCount} close, ${noneCount} unmatched of ${matches.length} roll names</span>
+  </div>`;
+
+  panel.innerHTML = html;
+  panel.style.display = 'block';
+  panel._matchData = matches;
+  panel._unmatchedCsv = unmatchedCsv;
+  panel._csvNames = csvNames;
+}
+
+function onMatchOverride(sel) {
+  const tr = sel.closest('tr');
+  const val = sel.value;
+  tr.className = (val === '__none__' || val === '__auto__') ? 'match-none' : 'match-exact';
+}
+
+function confirmAndGenerate() {
+  const panel = document.getElementById('matchPanel');
+  const matchData = panel._matchData;
+  const rollMap = {};
+  const selects = panel.querySelectorAll('.match-select');
+
+  selects.forEach((sel, i) => {
+    const val = sel.value;
+    const rollDisplay = matchData[i].rollDisplay;
+    let csvName = val === '__auto__' ? matchData[i].csvName : val === '__none__' ? null : val;
+    if (csvName) rollMap[csvName] = rollDisplay;
+  });
+
+  // rollOnlyNameMap: just students matched to the roll
+  rollOnlyNameMap = Object.assign({}, rollMap);
+
+  // activeNameMap: roll students + any extras the teacher chose to include
+  const fullMap = Object.assign({}, rollMap);
+  const extraCbs = panel.querySelectorAll('.extra-cb');
+  extraCbs.forEach(cb => {
+    if (cb.checked && !fullMap[cb.value]) fullMap[cb.value] = cb.value;
+  });
+  activeNameMap = fullMap;
+
+  panel.style.display = 'none';
+  // Show the roll filter toggle on the Charts tab
+  document.getElementById('rollFilterToggle').style.display = '';
+  document.getElementById('rollFilterCb').checked = true;
+  applyFilter();
+  enableChartsTab();
+  switchTab('charts');
+}
+
+// ══════════════════════════════════════
+//  MAIN GENERATE
+// ══════════════════════════════════════
+function handleGenerate() {
+  const csv = document.getElementById('csvInput').value.trim();
+  if (!csv) { alert('Please drop a CSV file or paste data.'); return; }
+
+  const result = Papa.parse(csv, { header: true, skipEmptyLines: true });
+  if (result.errors.length > 0) console.warn('CSV parse warnings:', result.errors);
+  parsedData = result.data;
+
+  // Populate class filter
+  const classes = [...new Set(parsedData.map(r => r['Class Code']).filter(Boolean))].sort();
+  const sel = document.getElementById('classFilter');
+  sel.innerHTML = '<option value="__all__">All Classes</option>';
+  classes.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c; opt.textContent = c;
+    sel.appendChild(opt);
+  });
+
+  const rollText = document.getElementById('rollInput').value.trim();
+  if (rollText) {
+    const rollNames = parseRoll(rollText);
+    if (rollNames.length > 0) {
+      const csvNames = getCsvStudentNames(parsedData);
+      showMatchPanel(rollNames, csvNames);
+      return;
+    }
+  }
+
+  activeNameMap = null;
+  rollOnlyNameMap = null;
+  document.getElementById('rollFilterToggle').style.display = 'none';
+  applyFilter();
+  enableChartsTab();
+  switchTab('charts');
+}
+
+function handleClassFilter() {
+  if (!parsedData) return;
+  // Keep existing name map — the roll filter checkbox controls whether it's applied
+  applyFilter();
+}
+
+function handleRollFilterToggle() {
+  applyFilter();
+}
+
+function applyFilter() {
+  if (!parsedData) return;
+  const classCode = document.getElementById('classFilter').value;
+  const rows = classCode === '__all__'
+    ? parsedData
+    : parsedData.filter(r => r['Class Code'] === classCode);
+
+  // Determine which name map to use:
+  // - checkbox checked: roll students only (rollOnlyNameMap)
+  // - checkbox unchecked: show all CSV students (no filter)
+  const rollFilterCb = document.getElementById('rollFilterCb');
+  const useRoll = rollOnlyNameMap && rollFilterCb && rollFilterCb.checked;
+  const nameMap = useRoll ? rollOnlyNameMap : null;
+  const metrics = computeMetrics(rows, nameMap);
+  // Compute class benchmarks for Effort context
+  const classBenchmarks = computeClassBenchmarks(metrics);
+  // Build time-series data from the same filtered rows
+  lastTimeSeriesData = buildTimeSeriesData(rows, nameMap);
+  renderCharts(metrics, classBenchmarks);
+  // Render timeline charts if toggle is on
+  if (document.getElementById('timelineCb')?.checked) {
+    renderTimelineCharts(metrics, lastTimeSeriesData);
+  }
+}
+
+function computeClassBenchmarks(metrics) {
+  if (metrics.length === 0) return { medianQ: 0, medianM: 0, maxQ: 0, maxM: 0, minQ: 0, minM: 0 };
+  const sortedQ = metrics.map(m => m.totalQuestions).sort((a, b) => a - b);
+  const sortedM = metrics.map(m => m.activeMinutes).sort((a, b) => a - b);
+  const mid = Math.floor(sortedQ.length / 2);
+  const medianQ = sortedQ.length % 2 ? sortedQ[mid] : Math.round((sortedQ[mid - 1] + sortedQ[mid]) / 2);
+  const medianM = sortedM.length % 2 ? Math.round(sortedM[mid]) : Math.round((sortedM[mid - 1] + sortedM[mid]) / 2);
+  return {
+    medianQ, medianM,
+    maxQ: sortedQ[sortedQ.length - 1],
+    maxM: Math.round(sortedM[sortedM.length - 1]),
+    minQ: sortedQ[0],
+    minM: Math.round(sortedM[0]),
+  };
+}
+
+// ══════════════════════════════════════
+//  TIMELINE: TIMESTAMP PARSING
+// ══════════════════════════════════════
+function parseTimestamp(str) {
+  if (!str) return null;
+  const d = new Date(str);
+  if (!isNaN(d)) return d;
+  // Fallback: manual parse for "M/D/YYYY H:MM:SS"
+  const parts = str.trim().split(' ');
+  const [m, day, y] = (parts[0] || '').split('/').map(Number);
+  const [h, min, sec] = (parts[1] || '0:0:0').split(':').map(Number);
+  if (!y || !m) return null;
+  return new Date(y, m - 1, day, h || 0, min || 0, sec || 0);
+}
+
+function formatShortDate(d) {
+  return (d.getMonth() + 1) + '/' + d.getDate();
+}
+
+// ══════════════════════════════════════
+//  TIMELINE: BUILD TIME-SERIES DATA
+// ══════════════════════════════════════
+function buildTimeSeriesData(rows, nameMap) {
+  const students = {};
+
+  rows.forEach(row => {
+    const csvName = ((row['Preferred Name'] || '').trim() + ' ' + (row['Family Name'] || '').trim()).trim();
+    if (!csvName) return;
+
+    let displayName = csvName;
+    if (nameMap) {
+      if (nameMap[csvName]) displayName = nameMap[csvName];
+      else return;
+    }
+
+    const ts = parseTimestamp(row['Timestamp']);
+    if (!ts) return;
+
+    if (!students[displayName]) students[displayName] = [];
+    const et = (row['Event Type'] || '').trim();
+    let qd = {};
+    try { qd = JSON.parse(row['Quiz Data'] || '{}'); } catch(e) {}
+
+    students[displayName].push({
+      timestamp: ts,
+      eventType: et,
+      correct: et === 'quiz-result' ? !!qd.correct : null,
+      activeMs: et === 'session-end' ? (qd.activeMs || 0) : 0,
+    });
+  });
+
+  // Sort each student's events chronologically and build cumulative series
+  const result = {};
+  for (const [name, events] of Object.entries(students)) {
+    events.sort((a, b) => a.timestamp - b.timestamp);
+
+    let cumAttempts = 0, cumCorrect = 0, cumActiveMs = 0;
+    const dataPoints = [];
+
+    events.forEach(ev => {
+      if (ev.eventType === 'quiz-result') {
+        cumAttempts++;
+        if (ev.correct) cumCorrect++;
+      } else if (ev.eventType === 'session-end') {
+        cumActiveMs += ev.activeMs;
+      }
+      // Emit a data point at every event (so both axes update)
+      dataPoints.push({
+        date: ev.timestamp,
+        eventType: ev.eventType,
+        cumulativeAttempts: cumAttempts,
+        cumulativeCorrect: cumCorrect,
+        cumulativeActiveMinutes: cumActiveMs / 60000,
+        rollingAccuracy: cumAttempts > 0 ? cumCorrect / cumAttempts : 0,
+      });
+    });
+
+    result[name] = dataPoints;
+  }
+
+  // Compute class medians from each student's final data point
+  const finalAttempts = [];
+  const finalMinutes = [];
+  const finalAccuracy = [];
+  for (const pts of Object.values(result)) {
+    if (pts.length > 0) {
+      const last = pts[pts.length - 1];
+      finalAttempts.push(last.cumulativeAttempts);
+      finalMinutes.push(last.cumulativeActiveMinutes);
+      finalAccuracy.push(last.rollingAccuracy);
+    }
+  }
+
+  function median(arr) {
+    if (arr.length === 0) return 0;
+    const s = arr.slice().sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  }
+
+  return {
+    students: result,
+    classMedians: {
+      medianAttempts: median(finalAttempts),
+      medianActiveMinutes: median(finalMinutes),
+      medianAccuracy: median(finalAccuracy),
+    },
+  };
+}
+
+// ══════════════════════════════════════
+//  TIMELINE: CHART.JS PLUGINS
+// ══════════════════════════════════════
+function quadrantPlugin(medX, medY, labelsArr) {
+  // labelsArr: [bottomLeft, bottomRight, topLeft, topRight]
+  const labels = labelsArr || ['Getting Started', 'Exploring', 'Building', 'Extending'];
+  return {
+    id: 'quadrantLines',
+    afterDraw(chart) {
+      const { ctx, chartArea, scales } = chart;
+      if (!chartArea) return;
+      const yPx = scales.y.getPixelForValue(medY);
+
+      ctx.save();
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+
+      if (medX != null) {
+        const xPx = scales.x.getPixelForValue(medX);
+        // Vertical median line
+        ctx.beginPath();
+        ctx.moveTo(xPx, chartArea.top);
+        ctx.lineTo(xPx, chartArea.bottom);
+        ctx.stroke();
+      }
+
+      // Horizontal median line
+      ctx.beginPath();
+      ctx.moveTo(chartArea.left, yPx);
+      ctx.lineTo(chartArea.right, yPx);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      if (medX != null) {
+        const xPx = scales.x.getPixelForValue(medX);
+        // Quadrant labels
+        ctx.font = '8px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = '#94a3b8';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(labels[0], (chartArea.left + xPx) / 2, (yPx + chartArea.bottom) / 2);
+        ctx.fillText(labels[1], (xPx + chartArea.right) / 2, (yPx + chartArea.bottom) / 2);
+        ctx.fillText(labels[2], (chartArea.left + xPx) / 2, (chartArea.top + yPx) / 2);
+        ctx.fillText(labels[3], (xPx + chartArea.right) / 2, (chartArea.top + yPx) / 2);
+      } else {
+        // Horizontal-only: label the median line
+        ctx.font = '7px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = '#94a3b8';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('Class median', chartArea.left + 4, yPx - 3);
+      }
+
+      ctx.restore();
+    }
+  };
+}
+
+function startEndPlugin() {
+  return {
+    id: 'startEndLabels',
+    afterDraw(chart) {
+      const { ctx } = chart;
+      // Dataset 1 = start point, Dataset 2 = end point
+      if (chart.data.datasets.length < 3) return;
+      const startMeta = chart.getDatasetMeta(1);
+      const endMeta = chart.getDatasetMeta(2);
+
+      ctx.save();
+      ctx.font = 'bold 9px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+
+      if (startMeta.data[0]) {
+        const { x, y } = startMeta.data[0];
+        ctx.fillStyle = '#64748b';
+        ctx.fillText('S', x, y - 6);
+      }
+      if (endMeta.data[0]) {
+        const { x, y } = endMeta.data[0];
+        ctx.fillStyle = '#1e293b';
+        ctx.fillText('E', x, y - 6);
+      }
+      ctx.restore();
+    }
+  };
+}
+
+// ══════════════════════════════════════
+//  TIMELINE: RENDER TIMELINE CHARTS
+// ══════════════════════════════════════
+function renderTimelineCharts(metrics, tsData) {
+  // Destroy previous instances
+  timelineChartInstances.forEach(c => c.destroy());
+  timelineChartInstances = [];
+
+  if (!tsData || !tsData.students) return;
+  const medians = tsData.classMedians;
+
+  metrics.forEach((student, idx) => {
+    const points = tsData.students[student.name];
+    const section = document.getElementById('timeline-section-' + idx);
+    if (!section) return;
+
+    // Filter to quiz-result data points only for scatter (where attempts change)
+    // But keep all points for the cumulative chart
+    if (!points || points.length < 3) {
+      // Not enough data — show message
+      const canvases = section.querySelectorAll('canvas');
+      canvases.forEach(c => c.style.display = 'none');
+      let nodata = section.querySelector('.timeline-nodata');
+      if (!nodata) {
+        nodata = document.createElement('p');
+        nodata.className = 'timeline-nodata';
+        nodata.textContent = 'Timeline charts need at least 3 events to display.';
+        section.appendChild(nodata);
+      }
+      return;
+    }
+
+    // Remove any "no data" message
+    const nodata = section.querySelector('.timeline-nodata');
+    if (nodata) nodata.remove();
+    section.querySelectorAll('canvas').forEach(c => c.style.display = '');
+
+    const colour = COLOURS[idx % COLOURS.length];
+
+    // ── Chart 1: Cumulative Progress ──
+    // Deduplicate labels: group by date string and take the last point per date
+    const dateMap = new Map();
+    points.forEach(p => {
+      const key = formatShortDate(p.date);
+      dateMap.set(key, p);
+    });
+    const cumulPoints = [...dateMap.values()];
+    const cumulLabels = cumulPoints.map(p => formatShortDate(p.date));
+
+    const cumulCtx = document.getElementById('timeline-cumul-' + idx);
+    if (cumulCtx) {
+      timelineChartInstances.push(new Chart(cumulCtx.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: cumulLabels,
+          datasets: [
+            {
+              label: 'Cumulative Attempts',
+              data: cumulPoints.map(p => p.cumulativeAttempts),
+              borderColor: '#3b82f6',
+              backgroundColor: '#3b82f640',
+              yAxisID: 'yAttempts',
+              tension: 0.3,
+              pointRadius: 1,
+              borderWidth: 1.5,
+              fill: false,
+            },
+            {
+              label: 'Active Time (min)',
+              data: cumulPoints.map(p => Math.round(p.cumulativeActiveMinutes * 10) / 10),
+              borderColor: '#10b981',
+              backgroundColor: '#10b98140',
+              yAxisID: 'yTime',
+              tension: 0.3,
+              pointRadius: 1,
+              borderWidth: 1.5,
+              fill: false,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          animation: false,
+          plugins: {
+            legend: { display: true, position: 'bottom', labels: { font: { size: 8 }, boxWidth: 12 } },
+            tooltip: { mode: 'index', intersect: false },
+          },
+          scales: {
+            x: {
+              ticks: { font: { size: 8 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 },
+            },
+            yAttempts: {
+              position: 'left',
+              title: { display: true, text: 'Attempts', font: { size: 8 } },
+              ticks: { font: { size: 8 } },
+              beginAtZero: true,
+            },
+            yTime: {
+              position: 'right',
+              title: { display: true, text: 'Minutes', font: { size: 8 } },
+              ticks: { font: { size: 8 } },
+              beginAtZero: true,
+              grid: { drawOnChartArea: false },
+            },
+          },
+        },
+      }));
+    }
+
+    // Filter to quiz-result events only (where accuracy actually changes)
+    const quizPoints = points.filter(p => p.eventType === 'quiz-result');
+    if (quizPoints.length < 2) return;
+
+    const first = quizPoints[0];
+    const last = quizPoints[quizPoints.length - 1];
+
+    // ── Chart 2: Accuracy x Practice Volume ──
+    const scatterAttCtx = document.getElementById('timeline-scatter-attempts-' + idx);
+    if (scatterAttCtx) {
+      const attCap = 80;
+      timelineChartInstances.push(new Chart(scatterAttCtx.getContext('2d'), {
+        type: 'scatter',
+        data: {
+          datasets: [
+            {
+              label: 'Path',
+              data: quizPoints.map(p => ({
+                x: Math.min(p.cumulativeAttempts, attCap),
+                y: Math.round(p.rollingAccuracy * 1000) / 10,
+              })),
+              showLine: true,
+              borderColor: colour + '80',
+              backgroundColor: colour + '20',
+              pointRadius: 1,
+              pointHitRadius: 8,
+              borderWidth: 1.5,
+              tension: 0.2,
+              fill: false,
+            },
+            {
+              label: 'Start',
+              data: [{ x: Math.min(first.cumulativeAttempts, attCap), y: Math.round(first.rollingAccuracy * 1000) / 10 }],
+              pointStyle: 'rectRot',
+              pointRadius: 5,
+              backgroundColor: '#94a3b8',
+              borderColor: '#64748b',
+              borderWidth: 1,
+            },
+            {
+              label: 'End',
+              data: [{ x: Math.min(last.cumulativeAttempts, attCap), y: Math.round(last.rollingAccuracy * 1000) / 10 }],
+              pointStyle: 'triangle',
+              pointRadius: 6,
+              backgroundColor: colour,
+              borderColor: colour,
+              borderWidth: 1,
+            },
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          animation: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              displayColors: false,
+              titleFont: { size: 10, weight: 'bold' },
+              bodyFont: { size: 9 },
+              padding: 6,
+              callbacks: {
+                title: items => {
+                  const ds = items[0].datasetIndex;
+                  if (ds === 1) return 'Start';
+                  if (ds === 2) return 'Current';
+                  return formatShortDate(quizPoints[items[0].dataIndex].date);
+                },
+                label: ctx => {
+                  const p = ctx.datasetIndex === 1 ? first : ctx.datasetIndex === 2 ? last : quizPoints[ctx.dataIndex];
+                  return [
+                    'Attempts: ' + p.cumulativeAttempts,
+                    'Accuracy: ' + (Math.round(p.rollingAccuracy * 1000) / 10) + '%',
+                    p.cumulativeCorrect + ' of ' + p.cumulativeAttempts + ' correct',
+                  ];
+                },
+              },
+            },
+          },
+          scales: {
+            x: {
+              min: 0, max: attCap,
+              title: { display: true, text: 'Cumulative Attempts', font: { size: 8 } },
+              ticks: { font: { size: 8 } },
+            },
+            y: {
+              min: 0, max: 100,
+              title: { display: true, text: 'Accuracy %', font: { size: 8 } },
+              ticks: { font: { size: 8 } },
+            },
+          },
+        },
+        plugins: [
+          quadrantPlugin(Math.min(medians.medianAttempts, attCap), medians.medianAccuracy * 100),
+          startEndPlugin(),
+        ],
+      }));
+    }
+
+    // ── Chart 3: Accuracy Over Calendar Time ──
+    const scatterTimeCtx = document.getElementById('timeline-scatter-time-' + idx);
+    if (scatterTimeCtx) {
+      timelineChartInstances.push(new Chart(scatterTimeCtx.getContext('2d'), {
+        type: 'scatter',
+        data: {
+          datasets: [
+            {
+              label: 'Path',
+              data: quizPoints.map(p => ({
+                x: p.date.getTime(),
+                y: Math.round(p.rollingAccuracy * 1000) / 10,
+              })),
+              showLine: true,
+              borderColor: colour + '80',
+              backgroundColor: colour + '20',
+              pointRadius: 1,
+              pointHitRadius: 8,
+              borderWidth: 1.5,
+              tension: 0.2,
+              fill: false,
+            },
+            {
+              label: 'Start',
+              data: [{ x: first.date.getTime(), y: Math.round(first.rollingAccuracy * 1000) / 10 }],
+              pointStyle: 'rectRot',
+              pointRadius: 5,
+              backgroundColor: '#94a3b8',
+              borderColor: '#64748b',
+              borderWidth: 1,
+            },
+            {
+              label: 'End',
+              data: [{ x: last.date.getTime(), y: Math.round(last.rollingAccuracy * 1000) / 10 }],
+              pointStyle: 'triangle',
+              pointRadius: 6,
+              backgroundColor: colour,
+              borderColor: colour,
+              borderWidth: 1,
+            },
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          animation: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              displayColors: false,
+              titleFont: { size: 10, weight: 'bold' },
+              bodyFont: { size: 9 },
+              padding: 6,
+              callbacks: {
+                title: items => {
+                  const ds = items[0].datasetIndex;
+                  if (ds === 1) return 'Start';
+                  if (ds === 2) return 'Current';
+                  return formatShortDate(quizPoints[items[0].dataIndex].date);
+                },
+                label: ctx => {
+                  const p = ctx.datasetIndex === 1 ? first : ctx.datasetIndex === 2 ? last : quizPoints[ctx.dataIndex];
+                  return [
+                    'Accuracy: ' + (Math.round(p.rollingAccuracy * 1000) / 10) + '%',
+                    p.cumulativeCorrect + ' of ' + p.cumulativeAttempts + ' correct',
+                    'Attempts so far: ' + p.cumulativeAttempts,
+                  ];
+                },
+              },
+            },
+          },
+          scales: {
+            x: {
+              type: 'linear',
+              title: { display: true, text: 'Date', font: { size: 8 } },
+              ticks: {
+                font: { size: 8 },
+                maxTicksLimit: 6,
+                maxRotation: 0,
+                callback: function(value) {
+                  const d = new Date(value);
+                  return (d.getMonth() + 1) + '/' + d.getDate();
+                }
+              },
+            },
+            y: {
+              min: 0, max: 100,
+              title: { display: true, text: 'Accuracy %', font: { size: 8 } },
+              ticks: { font: { size: 8 } },
+            },
+          },
+        },
+        plugins: [
+          quadrantPlugin(null, medians.medianAccuracy * 100),
+          startEndPlugin(),
+        ],
+      }));
+    }
+  });
+}
+
+// ══════════════════════════════════════
+//  TIMELINE: TOGGLE HANDLER
+// ══════════════════════════════════════
+function handleTimelineToggle() {
+  const show = document.getElementById('timelineCb').checked;
+
+  // Show/hide timeline containers
+  document.querySelectorAll('.timeline-charts').forEach(el => {
+    el.style.display = show ? 'block' : 'none';
+  });
+
+  // Toggle grid column count
+  const grid = document.getElementById('chartGrid');
+  grid.classList.toggle('timeline-expanded', show);
+
+  if (show && lastTimeSeriesData && lastRenderedMetrics) {
+    renderTimelineCharts(lastRenderedMetrics, lastTimeSeriesData);
+  } else if (!show) {
+    timelineChartInstances.forEach(c => c.destroy());
+    timelineChartInstances = [];
+  }
+}
+
+// ══════════════════════════════════════
+//  COMPUTE METRICS
+// ══════════════════════════════════════
+function computeMetrics(rows, nameMap) {
+  const students = {};
+  rows.forEach(row => {
+    const csvName = ((row['Preferred Name'] || '').trim() + ' ' + (row['Family Name'] || '').trim()).trim();
+    if (!csvName) return;
+
+    let displayName = csvName;
+    if (nameMap) {
+      if (nameMap[csvName]) displayName = nameMap[csvName];
+      else return;
+    }
+
+    if (!students[displayName]) {
+      students[displayName] = { quizResults: [], levelChanges: 0, sessionEnds: [], learningPoints: new Set() };
+    }
+    const s = students[displayName];
+    const et = (row['Event Type'] || '').trim();
+
+    if (et === 'quiz-result') {
+      let qd = {};
+      try { qd = JSON.parse(row['Quiz Data'] || '{}'); } catch(e) {}
+      s.quizResults.push({ correct: !!qd.correct });
+      const lp = (row['Learning Point'] || '').trim();
+      if (lp) s.learningPoints.add(lp);
+    } else if (et === 'level-change') {
+      s.levelChanges++;
+      const lp = (row['Learning Point'] || '').trim();
+      if (lp) s.learningPoints.add(lp);
+    } else if (et === 'session-end') {
+      let qd = {};
+      try { qd = JSON.parse(row['Quiz Data'] || '{}'); } catch(e) {}
+      s.sessionEnds.push(qd);
+    }
+  });
+
+  const results = [];
+  for (const [name, s] of Object.entries(students)) {
+    const totalQ = s.quizResults.length;
+    if (totalQ === 0) continue;
+
+    const correctQ = s.quizResults.filter(q => q.correct).length;
+    const accuracy = correctQ / totalQ;
+    const progression = s.levelChanges / totalQ;
+    const depth = s.levelChanges;
+    const breadth = s.learningPoints.size;
+
+    // Mastery: accuracy in the final quarter of attempts.
+    // Separates from overall Accuracy (which includes early learning).
+    // High Accuracy + High Mastery = understood from the start.
+    // Low Accuracy + High Mastery = understanding built over time.
+    // High Accuracy + Low Mastery = opportunity to rebuild recent momentum.
+    let mastery = accuracy; // default: same as overall if too few questions
+    if (totalQ >= 4) {
+      const qSize = Math.floor(totalQ / 4);
+      mastery = s.quizResults.slice(totalQ - qSize).filter(q => q.correct).length / qSize;
+    }
+
+    const activeMs = s.sessionEnds.reduce((sum, se) => sum + (se.activeMs || 0), 0);
+    const activeMinutes = activeMs / 60000;
+
+    results.push({
+      name, accuracy, progression, depth, breadth, mastery,
+      totalQuestions: totalQ, activeMinutes,
+      rawAccuracy: correctQ + '/' + totalQ,
+    });
+  }
+
+  // Effort normalisation
+  if (results.length > 0) {
+    const allQ = results.map(r => r.totalQuestions);
+    const allM = results.map(r => r.activeMinutes);
+    const minQ = Math.min(...allQ), maxQ = Math.max(...allQ);
+    const minM = Math.min(...allM), maxM = Math.max(...allM);
+    results.forEach(r => {
+      const normQ = maxQ > minQ ? (r.totalQuestions - minQ) / (maxQ - minQ) : 0;
+      const normM = maxM > minM ? (r.activeMinutes - minM) / (maxM - minM) : 0;
+      r.effort = maxM > minM ? (normQ + normM) / 2 : normQ;
+    });
+
+    // Min-max normalise all 6
+    const fields = ['accuracy','progression','depth','breadth','mastery','effort'];
+    const mins = {}, maxs = {};
+    fields.forEach(f => {
+      const vals = results.map(r => r[f]);
+      mins[f] = Math.min(...vals); maxs[f] = Math.max(...vals);
+    });
+    results.forEach(r => {
+      r.normalised = {};
+      fields.forEach(f => {
+        const range = maxs[f] - mins[f];
+        r.normalised[f] = range > 0 ? (r[f] - mins[f]) / range : 0.5;
+      });
+    });
+
+    // Compute overall score as the mean of all 6 normalised metrics.
+    // This is fairer than polygon area because:
+    // - It's independent of axis order (area depends on which axes are adjacent)
+    // - It doesn't double-reward correlated adjacent metrics
+    // - It treats all 6 dimensions equally
+    results.forEach(r => {
+      const vals = fields.map(f => r.normalised[f]);
+      r.overallScore = vals.reduce((sum, v) => sum + v, 0) / vals.length;
+    });
+
+    // Sort by overall score descending (strongest overall profile first)
+    results.sort((a, b) => b.overallScore - a.overallScore);
+  }
+
+  return results;
+}
+
+// ══════════════════════════════════════
+//  TOOLTIP INFRASTRUCTURE
+// ══════════════════════════════════════
+const METRIC_NAMES = ['Accuracy', 'Progression', 'Depth', 'Breadth', 'Mastery', 'Effort'];
+const METRIC_DESCS = [
+  'Proportion of all questions answered correctly',
+  'Rate of level-ups per question attempted',
+  'Total number of level progressions achieved',
+  'Number of unique topics covered',
+  'Accuracy in the most recent 25% of attempts — shows current understanding vs early learning',
+  'Combined practice volume — questions attempted and active time spent',
+];
+
+let hoverTip = null;
+function getHoverTip() {
+  if (!hoverTip) {
+    hoverTip = document.createElement('div');
+    hoverTip.style.cssText = 'position:fixed;padding:6px 10px;background:rgba(30,41,59,0.92);color:#fff;font-size:11px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.4;border-radius:6px;pointer-events:none;z-index:9999;max-width:240px;opacity:0;transition:opacity 0.15s;';
+    document.body.appendChild(hoverTip);
+  }
+  return hoverTip;
+}
+
+function radarLabelPlugin() {
+  return {
+    id: 'radarLabelHover',
+    afterEvent(chart, args) {
+      const { event } = args;
+      if (event.type === 'mouseout') { getHoverTip().style.opacity = '0'; return; }
+      if (event.type !== 'mousemove') return;
+
+      const scale = chart.scales.r;
+      if (!scale) return;
+
+      const cx = scale.xCenter, cy = scale.yCenter;
+      const r = scale.drawingArea + (scale.options.pointLabels?.padding || 8) + 10;
+      const n = chart.data.labels.length;
+
+      let hitIdx = -1;
+      for (let i = 0; i < n; i++) {
+        const angle = (2 * Math.PI / n) * i - Math.PI / 2;
+        const lx = cx + Math.cos(angle) * r;
+        const ly = cy + Math.sin(angle) * r;
+        if (Math.sqrt((event.x - lx) ** 2 + (event.y - ly) ** 2) < 28) { hitIdx = i; break; }
+      }
+
+      const tip = getHoverTip();
+      if (hitIdx >= 0) {
+        tip.innerHTML = '<strong>' + METRIC_NAMES[hitIdx] + '</strong><br>' + METRIC_DESCS[hitIdx];
+        const rect = chart.canvas.getBoundingClientRect();
+        tip.style.left = (rect.left + event.x + 14) + 'px';
+        tip.style.top = (rect.top + event.y - 12) + 'px';
+        tip.style.opacity = '1';
+      } else {
+        tip.style.opacity = '0';
+      }
+    }
+  };
+}
+
+// ══════════════════════════════════════
+//  RENDER CHARTS
+// ══════════════════════════════════════
+function renderCharts(metrics, benchmarks) {
+  chartInstances.forEach(c => c.destroy());
+  chartInstances = [];
+  lastRenderedMetrics = metrics;
+  lastRenderedBenchmarks = benchmarks;
+
+  const grid = document.getElementById('chartGrid');
+  grid.innerHTML = '';
+
+  const summaryBar = document.getElementById('summaryBar');
+  const totalStudents = metrics.length;
+  const totalQuestions = metrics.reduce((s, m) => s + m.totalQuestions, 0);
+  const avgAccuracy = metrics.length > 0
+    ? (metrics.reduce((s, m) => s + m.accuracy, 0) / metrics.length * 100).toFixed(1) : 0;
+  const avgMastery = metrics.length > 0
+    ? (metrics.reduce((s, m) => s + m.mastery, 0) / metrics.length * 100).toFixed(1) : 0;
+  const bm = benchmarks || { medianQ: 0, medianM: 0, maxQ: 0, maxM: 0, minQ: 0, minM: 0 };
+  summaryBar.style.display = 'flex';
+  summaryBar.innerHTML = `
+    <div class="summary-stat"><div class="val">${totalStudents}</div><div class="lbl">Students</div></div>
+    <div class="summary-stat"><div class="val">${totalQuestions.toLocaleString()}</div><div class="lbl">Total Questions</div></div>
+    <div class="summary-stat"><div class="val">${avgAccuracy}%</div><div class="lbl">Avg Accuracy</div></div>
+    <div class="summary-stat"><div class="val">${avgMastery}%</div><div class="lbl">Avg Mastery</div></div>
+    <div class="summary-stat"><div class="val">${bm.medianQ}</div><div class="lbl">Median Questions</div></div>
+    <div class="summary-stat"><div class="val">${bm.medianM}m</div><div class="lbl">Median Active Time</div></div>
+    <div class="summary-stat"><div class="val">${bm.minQ}&#8211;${bm.maxQ}</div><div class="lbl">Questions Range</div></div>
+    <div class="summary-stat"><div class="val">${bm.minM}&#8211;${bm.maxM}m</div><div class="lbl">Time Range</div></div>
+  `;
+
+  document.getElementById('definitions').style.display = 'block';
+
+  // Archetype disclaimer
+  let disclaimer = document.getElementById('archetypeDisclaimer');
+  if (!disclaimer) {
+    disclaimer = document.createElement('div');
+    disclaimer.id = 'archetypeDisclaimer';
+    disclaimer.style.cssText = 'background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:0.7rem 1rem;margin-bottom:1.25rem;font-size:0.8rem;color:#92400e;line-height:1.5;';
+    grid.parentNode.insertBefore(disclaimer, grid);
+  }
+  disclaimer.innerHTML = '<strong>Archetype labels &mdash; quick reference:</strong>'
+    + '<ul style="margin:0.4rem 0 0.4rem 1.2rem;padding:0;list-style:disc;">'
+    + '<li><strong>All-Rounder</strong> &mdash; strong across all six metrics; accurate, deep, broad, and putting in the work</li>'
+    + '<li><strong>Persistent</strong> &mdash; high effort and wide coverage; accuracy and progression are the next areas to develop</li>'
+    + '<li><strong>Focused</strong> &mdash; very accurate in the areas they\'ve covered; broadening coverage is the next step</li>'
+    + '<li><strong>Rising</strong> &mdash; recent mastery is high, showing real learning has taken place since earlier attempts</li>'
+    + '<li><strong>Untapped</strong> &mdash; just getting started; engagement is the key opportunity</li>'
+    + '<li><strong>Specialist</strong> &mdash; gone deep into a small number of topics, reaching high cognitive levels</li>'
+    + '<li><strong>Explorer</strong> &mdash; sampled many topics; ready to choose a few and go deeper</li>'
+    + '<li><strong>Coasting</strong> &mdash; earlier accuracy shows capability; recent results suggest an opportunity to rebuild momentum</li>'
+    + '</ul>'
+    + '<p style="margin-top:0.5rem;">Each student is matched to the two closest profiles. These are <em>pattern suggestions, not diagnoses</em> &mdash; '
+    + 'your knowledge of the student\'s circumstances will always matter more than an algorithm.</p>';
+
+  if (metrics.length === 0) {
+    grid.innerHTML = '<p style="padding:2rem;text-align:center;color:var(--text-muted);">No student data found for the selected filter.</p>';
+    return;
+  }
+
+  metrics.forEach((student, idx) => {
+    const card = document.createElement('div');
+    card.className = 'chart-card';
+    const mins = Math.round(student.activeMinutes);
+    // Effort context: compare to class median
+    const qDiff = student.totalQuestions - bm.medianQ;
+    const mDiff = mins - bm.medianM;
+    const qLabel = qDiff > 0 ? '+' + qDiff : qDiff < 0 ? '' + qDiff : '=';
+    const mLabel = mDiff > 0 ? '+' + mDiff : mDiff < 0 ? '' + mDiff : '=';
+
+    const normData = [
+      student.normalised.accuracy,
+      student.normalised.progression,
+      student.normalised.depth,
+      student.normalised.breadth,
+      student.normalised.mastery,
+      student.normalised.effort,
+    ];
+
+    // Classify into closest two archetypes
+    const [primary, secondary] = classifyStudent(normData);
+
+    // Overall score as percentage (mean of 6 normalised metrics, 0–100%)
+    const scorePct = (student.overallScore * 100).toFixed(0);
+    const timelineVisible = document.getElementById('timelineCb')?.checked ? 'block' : 'none';
+
+    card.innerHTML = `
+      <h3>${student.name} <span style="font-size:0.75rem;font-weight:400;color:var(--text-muted);">#${idx + 1}</span></h3>
+      <div class="archetype-tags">
+        <span class="arch-tag arch-tag-primary" style="background:${primary.colour};border-color:${primary.colour};">${primary.name}</span>
+        <span class="arch-tag arch-tag-secondary" style="color:${secondary.colour};border-color:${secondary.colour};">${secondary.name}</span>
+      </div>
+      <p class="subtitle">${student.totalQuestions}q &middot; ${student.rawAccuracy} correct &middot; ${mins}m active &middot; ${scorePct}% overall</p>
+      <p class="subtitle" style="font-size:0.68rem;color:#94a3b8;">vs median: ${qLabel}q, ${mLabel}m</p>
+      <canvas id="chart-${idx}"></canvas>
+      <div class="timeline-charts" id="timeline-section-${idx}" style="display:${timelineVisible}">
+        <h4>Progress Over Time</h4>
+        <canvas id="timeline-cumul-${idx}"></canvas>
+        <canvas id="timeline-scatter-attempts-${idx}"></canvas>
+        <canvas id="timeline-scatter-time-${idx}"></canvas>
+      </div>
+      <div class="comment-wrapper">
+        <button class="comment-toggle-btn no-print" id="comment-toggle-${idx}" onclick="toggleCardComment(${idx})">&#9662; Hide comment</button>
+        <button class="comment-copy-btn no-print" onclick="copyCardComment(${idx})">Copy</button>
+        <div class="comment-text" id="comment-text-${idx}"></div>
+      </div>
+    `;
+    grid.appendChild(card);
+
+    // Set comment text safely (avoids template literal injection issues)
+    const commentText = generateComment(student, benchmarks, getCommentTone(), getCommentLength(), getCommentFocus());
+    document.getElementById('comment-text-' + idx).textContent = commentText;
+
+    const ctx = document.getElementById(`chart-${idx}`).getContext('2d');
+    const colour = COLOURS[idx % COLOURS.length];
+
+    const rawLabels = [
+      (student.accuracy * 100).toFixed(0) + '%',
+      (student.progression * 100).toFixed(0) + '%',
+      student.depth.toString(),
+      student.breadth.toString(),
+      (student.mastery * 100).toFixed(0) + '%',
+      student.totalQuestions + 'q ' + Math.round(student.activeMinutes) + 'm',
+    ];
+
+    const chart = new Chart(ctx, {
+      type: 'radar',
+      data: {
+        labels: ['Accuracy', 'Progression', 'Depth', 'Breadth', 'Mastery', 'Effort'],
+        datasets: [{
+          data: normData,
+          backgroundColor: colour + '40',
+          borderColor: colour,
+          borderWidth: 2,
+          pointBackgroundColor: colour,
+          pointBorderColor: '#fff',
+          pointBorderWidth: 1,
+          pointRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            displayColors: false,
+            titleFont: { size: 11, weight: 'bold' },
+            bodyFont: { size: 10 },
+            padding: 8,
+            callbacks: {
+              title: items => METRIC_NAMES[items[0].dataIndex],
+              label: ctx => rawLabels[ctx.dataIndex],
+              afterLabel: ctx => METRIC_DESCS[ctx.dataIndex],
+            }
+          }
+        },
+        scales: {
+          r: {
+            min: 0, max: 1,
+            ticks: { stepSize: 0.25, display: false },
+            grid: { color: '#e2e8f0' },
+            angleLines: { color: '#e2e8f0' },
+            pointLabels: {
+              font: { size: 10, weight: '600' },
+              color: '#475569',
+              padding: 8,
+            }
+          }
+        },
+        animation: { duration: 400 },
+      },
+      plugins: [radarLabelPlugin(), {
+        id: 'rawValueLabels',
+        afterDraw(chart) {
+          const { ctx } = chart;
+          const meta = chart.getDatasetMeta(0);
+          const scale = chart.scales.r;
+          const cx = scale.xCenter;
+          const cy = scale.yCenter;
+          const maxRadius = scale.drawingArea;
+
+          meta.data.forEach((point, i) => {
+            const { x, y } = point;
+            const dx = x - cx, dy = y - cy;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+            // Place label INWARD from the data point (toward centre)
+            // Pull back 16px from the point along the radial line
+            // But clamp so it doesn't go past centre for very small values
+            const pullback = Math.min(16, dist * 0.6);
+            let lx = x - (dx / dist) * pullback;
+            let ly = y - (dy / dist) * pullback;
+
+            // If the data point is very close to centre (norm < 0.15),
+            // push slightly outward instead so the label is still readable
+            const normVal = normData[i];
+            if (normVal < 0.15) {
+              lx = cx + (dx / dist) * (maxRadius * 0.22);
+              ly = cy + (dy / dist) * (maxRadius * 0.22);
+            }
+
+            const text = rawLabels[i];
+            ctx.save();
+            ctx.font = 'bold 9px -apple-system, BlinkMacSystemFont, sans-serif';
+            const tw = ctx.measureText(text).width;
+
+            // Draw background pill for readability
+            const pad = 3;
+            ctx.fillStyle = 'rgba(255,255,255,0.85)';
+            ctx.beginPath();
+            ctx.roundRect(lx - tw/2 - pad, ly - 6 - pad/2, tw + pad*2, 12 + pad, 3);
+            ctx.fill();
+
+            // Draw text
+            ctx.fillStyle = '#334155';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, lx, ly);
+            ctx.restore();
+          });
+        }
+      }]
+    });
+
+    chartInstances.push(chart);
+  });
+
+  // Render the Copy All panel
+  renderCopyAllPanel();
+}
+
+// ══════════════════════════════════════
+//  GUIDE TOGGLE + ARCHETYPE CHARTS
+// ══════════════════════════════════════
+function toggleGuide() {
+  const btn = document.querySelector('.guide-toggle-btn');
+  const body = document.getElementById('guideBody');
+  btn.classList.toggle('open');
+  body.classList.toggle('open');
+
+  // Render archetype mini-charts once when first opened
+  if (body.classList.contains('open') && !body._rendered) {
+    body._rendered = true;
+    renderArchetypes();
+  }
+}
+
+// ══════════════════════════════════════
+//  ARCHETYPE CLASSIFICATION
+// ══════════════════════════════════════
+// Euclidean distance between two 6-element arrays
+function vecDist(a, b) {
+  let sum = 0;
+  for (let i = 0; i < a.length; i++) sum += (a[i] - b[i]) ** 2;
+  return Math.sqrt(sum);
+}
+
+// Returns the two closest archetypes for a student's normalised data
+function classifyStudent(normData) {
+  const scored = ARCHETYPES.map(arch => ({
+    name: arch.name,
+    colour: arch.colour,
+    distance: vecDist(normData, arch.data),
+  }));
+  scored.sort((a, b) => a.distance - b.distance);
+  return [scored[0], scored[1]];
+}
+
+// Data order: [Accuracy, Progression, Depth, Breadth, Mastery, Effort]
+const ARCHETYPES = [
+  {
+    name: 'All-Rounder',
+    data: [0.9, 0.85, 0.9, 0.85, 0.9, 0.9],
+    colour: '#10b981',
+    pattern: 'Large, full hexagon reaching all outer edges',
+    means: 'High accuracy throughout and high mastery now. Strong progression, wide coverage, and consistent effort. Excelling across all dimensions.',
+    action: 'Celebrate their work. Challenge them with extension tasks, peer tutoring, or open-ended investigation to maintain engagement.'
+  },
+  {
+    name: 'Persistent',
+    data: [0.5, 0.3, 0.3, 0.8, 0.4, 0.95],
+    colour: '#f59e0b',
+    pattern: 'Spiked high on Effort and Breadth, with Accuracy/Mastery still developing',
+    means: 'Putting in lots of time and covering many topics. The effort and curiosity are clearly there \u2014 accuracy and consolidation are the next areas to develop.',
+    action: 'Acknowledge their effort first. Suggest they focus on consolidating one topic at a time \u2014 channelling this energy will accelerate results.'
+  },
+  {
+    name: 'Focused',
+    data: [0.85, 0.9, 0.7, 0.2, 0.9, 0.3],
+    colour: '#8b5cf6',
+    pattern: 'Spiked high on Accuracy/Mastery/Progression, with Breadth and Effort still developing',
+    means: 'Very accurate and understands what they\'ve covered. The capability is clearly there \u2014 the next step is applying it more broadly across the curriculum.',
+    action: 'Encourage them to broaden their coverage. Set a breadth goal. They have the capability \u2014 applying it more widely is the opportunity.'
+  },
+  {
+    name: 'Rising',
+    data: [0.5, 0.4, 0.4, 0.5, 0.85, 0.6],
+    colour: '#3b82f6',
+    pattern: 'Mastery much higher than overall Accuracy',
+    means: 'Overall accuracy includes early learning experiences, and recent accuracy is high. This student has built genuine understanding over time \u2014 a clear learning trajectory.',
+    action: 'Reinforce their progress explicitly \u2014 the gap between their Accuracy and Mastery IS the evidence of learning. This student responds well to persistence.'
+  },
+  {
+    name: 'Untapped',
+    data: [0.15, 0.05, 0.05, 0.15, 0.1, 0.1],
+    colour: '#ef4444',
+    pattern: 'Small shape near the centre — just getting started',
+    means: 'Engagement is still in its earliest stages across all metrics. This student may be finding their feet, or may benefit from support to get started.',
+    action: 'Prioritise a supportive conversation. Identify what would help them get started. Set a small, achievable first goal and check in regularly.'
+  },
+  {
+    name: 'Specialist',
+    data: [0.7, 0.8, 0.9, 0.2, 0.85, 0.5],
+    colour: '#06b6d4',
+    pattern: 'Tall spike on Depth/Progression/Mastery, with Breadth still developing',
+    means: 'Has gone very deep into a small number of learning points and demonstrates strong current understanding. Mastery of a specific area is genuine.',
+    action: 'Commend their depth. Encourage them to explore new topics \u2014 the same approach that built depth here will work across the curriculum.'
+  },
+  {
+    name: 'Explorer',
+    data: [0.4, 0.2, 0.15, 0.9, 0.25, 0.5],
+    colour: '#ec4899',
+    pattern: 'Wide on Breadth, with Depth/Mastery still developing',
+    means: 'Has sampled many learning points and shown curiosity across the curriculum. The next step is choosing a few topics and going deeper to build understanding.',
+    action: 'Guide them to pick 2\u20133 topics and commit to mastering those. Model what \u201cfinishing a topic\u201d looks like in the platform. Their curiosity is an asset.'
+  },
+  {
+    name: 'Coasting',
+    data: [0.6, 0.5, 0.5, 0.5, 0.3, 0.6],
+    colour: '#d946ef',
+    pattern: 'Accuracy higher than Mastery \u2014 earlier capability shown',
+    means: 'Overall accuracy shows real capability, and there is an opportunity to bring recent performance back to that level. May benefit from revisiting recent material.',
+    action: 'Check in about their experience. Suggest revisiting earlier content to rebuild confidence and momentum before moving into new material.'
+  },
+];
+
+// ══════════════════════════════════════
+//  COMMENT BANK
+// ══════════════════════════════════════
+// Sentence fragments keyed by metric and level (low/mid/high).
+// Each fragment has 3 tones: student ("You..."), parent ("$NAME..."), teacher (concise shorthand).
+// $NAME = student's first name. $RAW = raw value placeholder.
+// Focus modes: "knowledge" = where is the student now?  "growth" = how far have they come?
+
+const COMMENT_BANK = {
+  // ── Knowledge-focus openings: lead with current understanding (Mastery) ──
+  openingKnowledge: {
+    high: {
+      student: 'You currently demonstrate strong understanding of this material',
+      parent: '$NAME currently demonstrates strong understanding of this material',
+      teacher: 'Strong current understanding.',
+    },
+    mid: {
+      student: 'You show a developing understanding of the material',
+      parent: '$NAME shows a developing understanding of the material',
+      teacher: 'Developing understanding.',
+    },
+    low: {
+      student: 'Your understanding of the material is still building',
+      parent: '$NAME\'s understanding of the material is still building',
+      teacher: 'Understanding still building.',
+    },
+  },
+  // ── Growth-focus openings: lead with trajectory (Accuracy→Mastery gap) ──
+  openingGrowth: {
+    risingPath: {
+      student: 'You have shown significant growth in this subject',
+      parent: '$NAME has shown significant growth in this subject',
+      teacher: 'Significant growth evident.',
+    },
+    bothHigh: {
+      student: 'You arrived with a strong grasp of this material and have maintained it throughout',
+      parent: '$NAME arrived with a strong grasp of this material and has maintained it throughout',
+      teacher: 'Consistently strong throughout.',
+    },
+    coasting: {
+      student: 'Your earlier work shows capability, and your recent results suggest an opportunity to rebuild that momentum',
+      parent: '$NAME\'s earlier work shows capability, and recent results suggest an opportunity to rebuild that momentum',
+      teacher: 'Earlier strength evident — momentum to rebuild.',
+    },
+    bothLow: {
+      student: 'There is plenty of room for growth ahead',
+      parent: 'There is plenty of room for growth ahead for $NAME',
+      teacher: 'Growth opportunity — early stage.',
+    },
+  },
+  accuracy: {
+    high: {
+      student: 'demonstrating strong accuracy ($RAW correct)',
+      parent: 'demonstrating strong accuracy ($RAW correct)',
+      teacher: 'Accuracy $RAW — strong.',
+    },
+    mid: {
+      student: 'with developing accuracy ($RAW correct)',
+      parent: 'with developing accuracy ($RAW correct)',
+      teacher: 'Accuracy $RAW — developing.',
+    },
+    low: {
+      student: 'with accuracy that is still building ($RAW correct)',
+      parent: 'with accuracy that is still building ($RAW correct)',
+      teacher: 'Accuracy $RAW — still building.',
+    },
+  },
+  // ── Mastery–Accuracy relationship: used differently in each focus mode ──
+  // Knowledge focus: explains what the current state means
+  masteryKnowledge: {
+    bothHigh: {
+      student: 'Your accuracy is high in both earlier and recent work, indicating secure and consistent understanding.',
+      parent: '$NAME\'s accuracy is high in both earlier and recent work, indicating secure and consistent understanding.',
+      teacher: 'Mastery + accuracy both high — understanding is secure.',
+    },
+    risingPath: {
+      student: 'Your recent accuracy is stronger than your overall record, showing you have built genuine understanding of material that took time to click.',
+      parent: '$NAME\'s recent accuracy is stronger than the overall record, showing genuine understanding has been built for material that took time to click.',
+      teacher: 'Mastery > accuracy — current understanding solid, built through persistence.',
+    },
+    coasting: {
+      student: 'Your overall accuracy shows capability, and focusing on recent topics would help bring your current understanding up to match that potential.',
+      parent: '$NAME\'s overall accuracy shows capability, and focusing on recent topics would help bring current understanding up to match that potential.',
+      teacher: 'Accuracy > mastery — potential shown, recent consolidation needed.',
+    },
+    bothLow: {
+      student: 'Both your overall and recent accuracy are still building, and this is the area where focused effort will make the biggest difference.',
+      parent: 'Both $NAME\'s overall and recent accuracy are still building, and this is the area where focused effort will make the biggest difference.',
+      teacher: 'Both metrics still building — focused support recommended.',
+    },
+  },
+  // Growth focus: explains what the trajectory means
+  masteryGrowth: {
+    bothHigh: {
+      student: 'You understood this material from the outset — your accuracy has been consistently high throughout, which is a testament to your strong foundation.',
+      parent: '$NAME understood this material from the outset — accuracy has been consistently high throughout, which is a testament to a strong foundation.',
+      teacher: 'Consistent from the start — strong foundation evident.',
+    },
+    risingPath: {
+      student: 'Your early attempts were part of the learning process, and your recent accuracy is now much higher — the gap between these two numbers is the clearest evidence of genuine learning.',
+      parent: '$NAME\'s early attempts were part of the learning process, and recent accuracy is now much higher — the gap between these two numbers is the clearest evidence of genuine learning.',
+      teacher: 'Accuracy→Mastery gap is large — clear evidence of learning.',
+    },
+    coasting: {
+      student: 'Your earlier results demonstrate real capability, and there is an opportunity now to revisit recent material and bring your current performance back to that level.',
+      parent: '$NAME\'s earlier results demonstrate real capability, and there is an opportunity now to revisit recent material and bring current performance back to that level.',
+      teacher: 'Earlier capability shown — opportunity to consolidate recent material.',
+    },
+    bothLow: {
+      student: 'The building blocks are being put in place, and with continued practice the growth in understanding will follow.',
+      parent: 'The building blocks are being put in place for $NAME, and with continued practice the growth in understanding will follow.',
+      teacher: 'Foundations being laid — continued engagement will drive growth.',
+    },
+  },
+  progression: {
+    high: {
+      student: 'You have progressed through cognitive levels at an impressive rate, reaching $RAW level-ups.',
+      parent: '$NAME has progressed through cognitive levels at an impressive rate, reaching $RAW level-ups.',
+      teacher: 'Progression strong ($RAW level-ups).',
+    },
+    mid: {
+      student: 'You have made steady progress through the cognitive levels, with $RAW level-ups.',
+      parent: '$NAME has made steady progress through the cognitive levels, with $RAW level-ups.',
+      teacher: 'Progression steady ($RAW level-ups).',
+    },
+    low: {
+      student: 'Progress through the cognitive levels is still developing ($RAW level-ups), and there is room to build on this further.',
+      parent: 'Progress through the cognitive levels is still developing ($RAW level-ups), and there is room to build on this further.',
+      teacher: 'Progression developing ($RAW level-ups) — room to grow.',
+    },
+  },
+  breadth: {
+    high: {
+      student: 'You have engaged with a wide range of topics ($RAW learning points), showing broad coverage across the curriculum.',
+      parent: '$NAME has engaged with a wide range of topics ($RAW learning points), showing broad coverage across the curriculum.',
+      teacher: 'Breadth $RAW learning points — wide coverage.',
+    },
+    mid: {
+      student: 'You have covered a reasonable spread of topics ($RAW learning points).',
+      parent: '$NAME has covered a reasonable spread of topics ($RAW learning points).',
+      teacher: 'Breadth $RAW learning points — reasonable.',
+    },
+    low: {
+      student: 'You have started exploring topics ($RAW learning points so far), and broadening this coverage is a great next goal.',
+      parent: '$NAME has started exploring topics ($RAW learning points so far), and broadening this coverage is a great next goal.',
+      teacher: 'Breadth $RAW learning points — broadening recommended.',
+    },
+  },
+  effort: {
+    high: {
+      student: 'Your effort has been strong, with $RAW invested — well above the class median.',
+      parent: '$NAME\'s effort has been strong, with $RAW invested — well above the class median.',
+      teacher: 'Effort high ($RAW) — above median.',
+    },
+    mid: {
+      student: 'You have put in a solid amount of work ($RAW), sitting around the class median.',
+      parent: '$NAME has put in a solid amount of work ($RAW), sitting around the class median.',
+      teacher: 'Effort solid ($RAW) — near median.',
+    },
+    low: {
+      student: 'There is an opportunity to increase engagement ($RAW so far), and even a small increase in effort can make a real difference.',
+      parent: 'There is an opportunity for $NAME to increase engagement ($RAW so far), and even a small increase in effort can make a real difference.',
+      teacher: 'Effort emerging ($RAW) — more engagement would accelerate progress.',
+    },
+  },
+  // Closing actions — keyed by archetype
+  action: {
+    'Persistent': {
+      student: 'A great next step would be to focus on consolidating one topic at a time — your effort is already there, so channelling it will accelerate progress.',
+      parent: 'A great next step for $NAME would be to focus on consolidating one topic at a time — the effort is already there, so channelling it will accelerate progress.',
+      teacher: 'Action: channel existing effort into consolidating one topic at a time.',
+    },
+    'Focused': {
+      student: 'Your next goal should be to broaden your coverage across more topics — you have the capability, so apply it more widely.',
+      parent: 'The next goal for $NAME is to broaden coverage across more topics — the capability is clearly there.',
+      teacher: 'Action: broaden coverage — capability is evident.',
+    },
+    'Rising': {
+      student: 'Keep it up — the gap between your earlier and recent accuracy is clear evidence of real learning.',
+      parent: 'The gap between $NAME\'s earlier and recent accuracy is clear evidence of real learning — please encourage them to continue.',
+      teacher: 'Positive trend. Reinforce progress explicitly.',
+    },
+    'Untapped': {
+      student: 'A great place to start is choosing one topic and having a go — even a small amount of focused engagement will make a real difference.',
+      parent: 'We encourage $NAME to choose one topic and get started — even a small amount of focused engagement will make a real difference.',
+      teacher: 'Action: encourage a starting point. One topic, achievable first goal.',
+    },
+    'Explorer': {
+      student: 'A good strategy from here would be to pick 2–3 topics and commit to mastering those — your curiosity is an asset, and focusing it will build deeper understanding.',
+      parent: 'We recommend $NAME pick 2–3 topics and commit to mastering those — the curiosity is an asset, and focusing it will build deeper understanding.',
+      teacher: 'Action: focus curiosity on 2–3 topics for deeper mastery.',
+    },
+    'Coasting': {
+      student: 'Revisiting some earlier material would be a good way to rebuild confidence and momentum before moving into new content.',
+      parent: 'Revisiting some earlier material would help $NAME rebuild confidence and momentum before moving into new content.',
+      teacher: 'Action: revisit earlier content to rebuild momentum.',
+    },
+    'Specialist': {
+      student: 'Your depth is impressive — now try applying that same focus to some new topics to build a broader foundation.',
+      parent: '$NAME\'s depth is impressive — the next step is to apply that same focus to some new topics to build a broader foundation.',
+      teacher: 'Action: apply existing depth-building approach to new topics.',
+    },
+    'All-Rounder': {
+      student: 'Excellent work — consider challenging yourself with extension tasks or helping classmates as a peer tutor.',
+      parent: 'Excellent work from $NAME — extension tasks or peer tutoring could help maintain engagement and challenge.',
+      teacher: 'Strong across all metrics. Consider extension/enrichment.',
+    },
+  },
+};
+
+// ══════════════════════════════════════
+//  COMMENT GENERATION
+// ══════════════════════════════════════
+function metricLevel(normVal) {
+  if (normVal > 0.66) return 'high';
+  if (normVal >= 0.33) return 'mid';
+  return 'low';
+}
+
+function masteryRelationType(norm) {
+  if (norm.mastery > 0.66 && norm.accuracy > 0.66) return 'bothHigh';
+  if (norm.mastery > norm.accuracy + 0.15) return 'risingPath';
+  if (norm.accuracy > norm.mastery + 0.15) return 'coasting';
+  return 'bothLow';
+}
+
+function firstName(fullName) {
+  return (fullName || '').split(' ')[0] || fullName;
+}
+
+/**
+ * Generate a coherent paragraph comment for a student.
+ * @param {Object} student - the student metrics object
+ * @param {Object} benchmarks - class benchmarks
+ * @param {string} tone - 'student' | 'parent' | 'teacher'
+ * @param {string} length - 'brief' | 'detailed'
+ * @param {string} focus - 'knowledge' | 'growth'
+ * @returns {string}
+ */
+function generateComment(student, benchmarks, tone, length, focus) {
+  const n = student.normalised;
+  const name = firstName(student.name);
+
+  function frag(section, level, rawVal) {
+    const f = COMMENT_BANK[section][level][tone] || '';
+    return f.replace(/\$NAME/g, name).replace(/\$RAW/g, rawVal || '');
+  }
+
+  const accLevel = metricLevel(n.accuracy);
+  const masteryLevel = metricLevel(n.mastery);
+  const progLevel = metricLevel(n.progression);
+  const breadthLevel = metricLevel(n.breadth);
+  const effortLevel = metricLevel(n.effort);
+  const overallLevel = metricLevel(student.overallScore);
+  const masteryRel = masteryRelationType(n);
+
+  const rawAcc = student.rawAccuracy;
+  const rawMastery = (student.mastery * 100).toFixed(0) + '%';
+  const rawDepth = student.depth.toString();
+  const rawBreadth = student.breadth.toString();
+  const rawEffort = student.totalQuestions + ' questions, ' + Math.round(student.activeMinutes) + ' minutes';
+
+  const normData = [n.accuracy, n.progression, n.depth, n.breadth, n.mastery, n.effort];
+  const [primary] = classifyStudent(normData);
+
+  // ── TEACHER tone ──
+  if (tone === 'teacher') {
+    const parts = [];
+    if (focus === 'growth') {
+      parts.push(COMMENT_BANK.openingGrowth[masteryRel].teacher);
+      parts.push(frag('accuracy', accLevel, rawAcc));
+      if (length === 'detailed') {
+        parts.push(COMMENT_BANK.masteryGrowth[masteryRel].teacher);
+        parts.push(frag('progression', progLevel, rawDepth));
+        parts.push(frag('effort', effortLevel, rawEffort));
+      }
+    } else {
+      parts.push(COMMENT_BANK.openingKnowledge[masteryLevel].teacher);
+      parts.push(frag('accuracy', accLevel, rawAcc));
+      if (length === 'detailed') {
+        parts.push(COMMENT_BANK.masteryKnowledge[masteryRel].teacher);
+        parts.push(frag('breadth', breadthLevel, rawBreadth));
+        parts.push(frag('progression', progLevel, rawDepth));
+        parts.push(frag('effort', effortLevel, rawEffort));
+      }
+    }
+    if (!(primary.name === 'All-Rounder' && overallLevel === 'high')) {
+      const action = COMMENT_BANK.action[primary.name];
+      if (action) parts.push(action.teacher);
+    }
+    return parts.join(' ');
+  }
+
+  // ── STUDENT / PARENT tone ──
+  const sentences = [];
+
+  if (focus === 'growth') {
+    // Growth focus: lead with trajectory, then explain the gap
+    const opening = COMMENT_BANK.openingGrowth[masteryRel][tone].replace(/\$NAME/g, name);
+    const accFrag = frag('accuracy', accLevel, rawAcc);
+    sentences.push(opening + ', ' + accFrag + '.');
+
+    // The mastery–accuracy gap IS the growth story
+    sentences.push(frag('masteryGrowth', masteryRel));
+
+    if (length === 'detailed') {
+      sentences.push(frag('progression', progLevel, rawDepth));
+      sentences.push(frag('effort', effortLevel, rawEffort));
+      sentences.push(frag('breadth', breadthLevel, rawBreadth));
+    }
+  } else {
+    // Knowledge focus: lead with current understanding (mastery), then context
+    const opening = COMMENT_BANK.openingKnowledge[masteryLevel][tone].replace(/\$NAME/g, name);
+    const accFrag = frag('accuracy', accLevel, rawAcc);
+    sentences.push(opening + ', ' + accFrag + '.');
+
+    // The mastery–accuracy relationship explains current knowledge state
+    sentences.push(frag('masteryKnowledge', masteryRel));
+
+    if (length === 'detailed') {
+      sentences.push(frag('breadth', breadthLevel, rawBreadth));
+      sentences.push(frag('progression', progLevel, rawDepth));
+      sentences.push(frag('effort', effortLevel, rawEffort));
+    }
+  }
+
+  // Action item
+  const needsAction = overallLevel !== 'high' || primary.name !== 'All-Rounder';
+  if (needsAction || length === 'detailed') {
+    const action = COMMENT_BANK.action[primary.name];
+    if (action) sentences.push(frag('action', primary.name));
+  }
+
+  return sentences.join(' ');
+}
+
+// ══════════════════════════════════════
+//  COMMENT RENDERING & CONTROLS
+// ══════════════════════════════════════
+// Stored metrics and benchmarks for re-rendering comments without rebuilding charts
+let lastRenderedMetrics = null;
+let lastRenderedBenchmarks = null;
+
+function getCommentTone() {
+  const checked = document.querySelector('input[name="commentTone"]:checked');
+  return checked ? checked.value : 'student';
+}
+
+function getCommentLength() {
+  const checked = document.querySelector('input[name="commentLength"]:checked');
+  return checked ? checked.value : 'brief';
+}
+
+function getCommentFocus() {
+  const checked = document.querySelector('input[name="commentFocus"]:checked');
+  return checked ? checked.value : 'knowledge';
+}
+
+function renderAllComments() {
+  if (!lastRenderedMetrics || !lastRenderedBenchmarks) return;
+  const tone = getCommentTone();
+  const length = getCommentLength();
+  const focus = getCommentFocus();
+
+  // Update per-card comments
+  lastRenderedMetrics.forEach((student, idx) => {
+    const textEl = document.getElementById('comment-text-' + idx);
+    if (textEl) {
+      textEl.textContent = generateComment(student, lastRenderedBenchmarks, tone, length, focus);
+    }
+  });
+
+  // Update Copy All panel
+  renderCopyAllPanel();
+}
+
+function renderCopyAllPanel() {
+  if (!lastRenderedMetrics || !lastRenderedBenchmarks) return;
+  const tone = getCommentTone();
+  const length = getCommentLength();
+  const focus = getCommentFocus();
+  const panel = document.getElementById('copyAllPanel');
+  const content = document.getElementById('copyAllContent');
+
+  panel.style.display = 'block';
+  let html = '';
+  lastRenderedMetrics.forEach(student => {
+    const comment = generateComment(student, lastRenderedBenchmarks, tone, length, focus);
+    html += `<div class="student-comment-block">
+      <div class="student-comment-name">${student.name}</div>
+      <div>${comment}</div>
+    </div>`;
+  });
+  content.innerHTML = html;
+}
+
+function copyCardComment(idx) {
+  const textEl = document.getElementById('comment-text-' + idx);
+  if (!textEl) return;
+  navigator.clipboard.writeText(textEl.textContent).then(() => {
+    const btn = textEl.parentElement.querySelector('.comment-copy-btn');
+    if (btn) { btn.textContent = '✓ Copied'; setTimeout(() => { btn.textContent = 'Copy'; }, 1500); }
+  });
+}
+
+function copyAllComments() {
+  if (!lastRenderedMetrics || !lastRenderedBenchmarks) return;
+  const tone = getCommentTone();
+  const length = getCommentLength();
+  const focus = getCommentFocus();
+  const lines = lastRenderedMetrics.map(student => {
+    return student.name + '\n' + generateComment(student, lastRenderedBenchmarks, tone, length, focus);
+  });
+  navigator.clipboard.writeText(lines.join('\n\n')).then(() => {
+    const btn = document.querySelector('#copyAllPanel .btn-green');
+    if (btn) {
+      const orig = btn.innerHTML;
+      btn.innerHTML = '&#10003; Copied!';
+      setTimeout(() => { btn.innerHTML = orig; }, 1500);
+    }
+  });
+}
+
+function scrollToCopyAll() {
+  const panel = document.getElementById('copyAllPanel');
+  if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function toggleCardComment(idx) {
+  const textEl = document.getElementById('comment-text-' + idx);
+  const btn = document.getElementById('comment-toggle-' + idx);
+  if (!textEl || !btn) return;
+  if (textEl.style.display === 'none') {
+    textEl.style.display = 'block';
+    btn.textContent = '▾ Hide comment';
+  } else {
+    textEl.style.display = 'none';
+    btn.textContent = '▸ Show comment';
+  }
+}
+
+// Wire up pill toggles to re-render comments and update active styling
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.pill-group input[type="radio"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+      // Update pill-active class within this pill group
+      const group = this.closest('.pill-group');
+      group.querySelectorAll('label').forEach(l => l.classList.remove('pill-active'));
+      this.closest('label').classList.add('pill-active');
+      // Re-render comments
+      renderAllComments();
+    });
+  });
+});
+
+function renderArchetypes() {
+  const grid = document.getElementById('archetypeGrid');
+  grid.innerHTML = '';
+
+  ARCHETYPES.forEach((arch, idx) => {
+    const card = document.createElement('div');
+    card.className = 'archetype-card';
+    card.innerHTML = `
+      <div class="arch-shape"><canvas id="arch-${idx}" width="100" height="100"></canvas></div>
+      <div class="arch-text">
+        <div class="arch-name" style="color:${arch.colour}">${arch.name}</div>
+        <div class="arch-pattern">${arch.pattern}</div>
+        <div class="arch-means">${arch.means}</div>
+        <div class="arch-action">&#9654; ${arch.action}</div>
+      </div>
+    `;
+    grid.appendChild(card);
+
+    const ctx = document.getElementById(`arch-${idx}`).getContext('2d');
+    new Chart(ctx, {
+      type: 'radar',
+      data: {
+        labels: ['Acc', 'Prog', 'Dep', 'Bre', 'Mas', 'Eff'],
+        datasets: [{
+          data: arch.data,
+          backgroundColor: arch.colour + '30',
+          borderColor: arch.colour,
+          borderWidth: 1.5,
+          pointRadius: 0,
+        }]
+      },
+      options: {
+        responsive: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: {
+          r: {
+            min: 0, max: 1,
+            ticks: { display: false, count: 5 },
+            grid: { color: '#cbd5e1', lineWidth: 1 },
+            angleLines: { color: '#cbd5e1', lineWidth: 1 },
+            pointLabels: {
+              display: true,
+              font: { size: 7, weight: '600' },
+              color: '#94a3b8',
+            },
+          }
+        },
+        animation: false,
+      }
+    });
+  });
+}
+</script>
+
+</body>
+</html>
