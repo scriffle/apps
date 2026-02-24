@@ -325,6 +325,12 @@
       transition: border-color var(--transition);
     }
 
+    .player-name-input.name-blocked {
+      border-color: var(--duplicate-color);
+      background-color: rgba(239, 68, 68, 0.06);
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+    }
+
     .player-name-input:focus {
       outline: none;
       border-color: var(--accent-blue);
@@ -1801,6 +1807,271 @@
         "union", "unite", "until", "upper", "upset", "urban", "usage", "usher", "usual", "utter"
       ]);
 
+      /* ===== NAME FILTER (classroom-safe, fuzzy) ===== */
+      var NameFilter = (function() {
+        // Compact blocklist derived from LDNOOBW + classroom essentials.
+        // Stored as base fragments — the matcher checks if any fragment appears
+        // as a substring of the normalized input. Short words (<=3 chars) require
+        // exact match or word-boundary match to reduce false positives.
+        var BLOCK_FRAGMENTS = [
+          // === Core profanity & variants ===
+          'fuck','fck','fuk','fuq','phuck','phuk','fux','fcuk',
+          'shit','sht','shite','shiit','schit',
+          'cunt','cnt','cuunt',
+          'dick','dik','diick',
+          'cock','cok','cawk',
+          'pussy','puss','pusy','pvssy',
+          'bitch','btch','biatch','biotch','beyotch',
+          'whore','whor','hoar','hore',
+          'slut','sluut','sl0t',
+          'bastard','bastad','bustard',
+          'prick','prik','priick',
+          'twat','twaat',
+          'turd',
+          // === Sexual / anatomy ===
+          'penis','peenis','peen',
+          'vagina','vajayjay','vag',
+          'anus','annus',
+          'dildo','dild',
+          'blowjob','blow job','bj',
+          'handjob','hand job','hj',
+          'masturbat','wank','wanker','wankr',
+          'orgasm','orgasim',
+          'porn','pron','pr0n','prn',
+          'erotic','erotica',
+          'fetish','hentai','milf',
+          'boob','booob','bewb',
+          'tits','tit','titty','tittie',
+          'ass','arse','arsehole','asshole','ashole','asswipe','asshat',
+          'spunk','jizz','jism','cum','cumshot',
+          'queef','rimjob','rimming',
+          'anal','anale',
+          'tosser','knob','bellend','nonce',
+          'bollock','ballsack','nutsack',
+          // === Slurs — racial / ethnic ===
+          'nigger','nigga','niga','nigg','negro','negr',
+          'chink','chinky',
+          'spic','spik','spick',
+          'wetback','beaner',
+          'kike','kyke',
+          'gook','guk',
+          'coon','cooon',
+          'darkie','darky',
+          'cracker','honky','honkey',
+          'gringo','jap','zipperhead','raghead','towelhead','cameljokey',
+          'redskin','injun','squaw',
+          'abo','abbo',
+          // === Slurs — sexuality / gender / disability ===
+          'faggot','fagot','fag','fagg',
+          'dyke','dike',
+          'tranny','shemale','ladyboy',
+          'homo','lesbo',
+          'retard','rtard','retrd','spaz','spastic','mong','mongoloid',
+          // === Violence / self-harm ===
+          'kill','murder','suicide','suicid',
+          'shoot','shooter',
+          'bomb','bombed','bomber',
+          'stab','stabber',
+          'rape','rapist','raper',
+          'molest','molester',
+          'pedo','paedo','pedophil',
+          'predator',
+          // === Hate groups / extremism ===
+          'nazi','naz1','hitler','hitlr',
+          'jihad','jihaad',
+          'kkk','klan',
+          'aryan','whitepower','whitepow',
+          'heil',
+          // === Drugs (classroom context) ===
+          'cocaine','cocain',
+          'heroin','heroine',
+          'meth','metham',
+          'stoner','pothead','crackhead',
+          'ecstasy','mdma','lsd',
+          // === Common evasion slang ===
+          'wtf','stfu','lmfao','milf',
+          'deez','deeznut','ligma','sugma','sugondese',
+          'coomer','goatse','lemon party',
+          'thot','skank','hoe','pimp',
+          '69','420'
+        ];
+
+        // Whitelist — legitimate names/words that contain blocklist fragments
+        var WHITELIST = new Set([
+          // Words containing 'ass'
+          'class','classic','bass','mass','pass','grass','brass','glass','lasso',
+          'assassin','compass','harass','molasses','cassette','bassoon','passage',
+          'assume','assist','assign','asset','assort','assert','assure','assembly',
+          'massage','sassy','classy','embassy','rassle','passive','passion',
+          // Words containing 'dick' / 'cock' fragments
+          'dick','dickens','dickson','dickenson','benedict','addicted','predict',
+          'richard','rico','hancock','peacock','hitchcock',
+          'cockatoo','cockpit','cockney','woodcock','shuttlecock','cocktail',
+          // Words containing 'cum'
+          'cumming','cummings','cumberland','document','undocumented','circumvent',
+          'cucumber','accumulate','circumstance',
+          // Words containing 'tit'
+          'title','titanic','titan','titillate','constitution','institute',
+          'petition','competition','appetite','gratitude','attitude',
+          // Words containing 'kill' / 'kil'
+          'skill','skilled','spill','grill','filler','kiln','kilt','kilogram',
+          'skillful','thriller','distill','vanilla','gorilla','caterpillar',
+          // Words containing 'homo'
+          'homogeneous','homonym','homework','homage','homer','homing',
+          // Words containing 'anal'
+          'analyst','analysis','analog','analogy','banal','canal','finale',
+          // Words containing 'rape' / 'raper'
+          'grape','drape','scrape','landscape','grapefruit','scraper','draper',
+          'therapist','therapy',
+          // Words containing 'hoe'
+          'shoe','shoes','horseshoe','phoenix','hoek',
+          // Words containing 'nig'
+          'night','nightfall','knight','knighthood','nigel','nigeria',
+          // Words containing 'piss'
+          'mississippi',
+          // Words containing 'hit'
+          'hitesh','white','whiten','architect','hitch','kitchen',
+          // Words containing 'bomb'
+          'bombard','bombastic',
+          // Words containing 'shoot'
+          'troubleshoot','overshoot',
+          // Words containing 'stab'
+          'establish','stable','unstable','constable',
+          // Words containing 'drug'
+          'drugstore','shrug',
+          // Words containing 'meth'
+          'method','methodical','something','methane','prometheus',
+          // Words containing 'crack'
+          'cracker','firecracker','nutcracker','wisecrack',
+          // Words containing 'heil'
+          'ceiling',
+          // Place names
+          'scunthorpe','sussex','essex','middlesex','peniston','penistone',
+          // Common names
+          'bob','bobby','rob','robbie','robert','bobcat','bobsled',
+          'thatcher','mustang','mushroom','deadline','deadly',
+          'canada','canary','buttery','butter','butterfly','button','buttress','rebuttal',
+          'arsenal','docket','socket','rocket','sprocket',
+          'hobart','hooker','hooking','booking','cooking','looking'
+        ]);
+
+        // Leetspeak and homoglyph map
+        var LEET_MAP = {
+          '0':'o', '1':'i', '2':'z', '3':'e', '4':'a', '5':'s', '6':'g',
+          '7':'t', '8':'b', '9':'g', '@':'a', '$':'s', '!':'i', '|':'i',
+          '*':'', '#':'', '~':'',
+          '+':'t', '(':'c', ')':'d', '<':'c', '{':'c', '}':'d',
+          '\u00e0':'a', '\u00e1':'a', '\u00e2':'a', '\u00e3':'a', '\u00e4':'a',
+          '\u00e8':'e', '\u00e9':'e', '\u00ea':'e', '\u00eb':'e',
+          '\u00ec':'i', '\u00ed':'i', '\u00ee':'i', '\u00ef':'i',
+          '\u00f2':'o', '\u00f3':'o', '\u00f4':'o', '\u00f5':'o', '\u00f6':'o',
+          '\u00f9':'u', '\u00fa':'u', '\u00fb':'u', '\u00fc':'u',
+          '\u00df':'ss', '\u00f1':'n', '\u00e7':'c',
+          '\u0430':'a', '\u0435':'e', '\u043e':'o', '\u0440':'p', '\u0441':'c',
+          '\u0443':'y', '\u0445':'x'  // Cyrillic lookalikes
+        };
+
+        function normalize(text) {
+          if (!text) return '';
+          // 1. Lowercase
+          var s = text.toLowerCase();
+          // 2. Unicode normalize (decompose then strip combining marks)
+          if (s.normalize) s = s.normalize('NFKD');
+          // 3. Apply leet/homoglyph map
+          var out = '';
+          for (var i = 0; i < s.length; i++) {
+            var ch = s[i];
+            out += LEET_MAP[ch] || ch;
+          }
+          // 4. Strip combining diacritical marks
+          out = out.replace(/[\u0300-\u036f]/g, '');
+          // 5. Collapse repeated characters (2+ of same → 1)
+          out = out.replace(/(.)\1+/g, '$1');
+          // 6. Strip non-alphanumeric (spaces, dots, dashes, underscores, etc)
+          var stripped = out.replace(/[^a-z]/g, '');
+          return stripped;
+        }
+
+        // Pre-normalize all fragments (collapse repeats like the input normalizer does)
+        var NORM_FRAGMENTS = BLOCK_FRAGMENTS.map(function(f) {
+          return f.replace(/(.)\1+/g, '$1');
+        });
+        // De-dup while keeping originals paired
+        var FRAG_PAIRS = []; // [{orig, norm}]
+        var seenNorm = {};
+        for (var fi = 0; fi < BLOCK_FRAGMENTS.length; fi++) {
+          var nf = NORM_FRAGMENTS[fi];
+          if (!seenNorm[nf]) {
+            FRAG_PAIRS.push({ orig: BLOCK_FRAGMENTS[fi], norm: nf });
+            seenNorm[nf] = true;
+          }
+          // Also keep original if different
+          if (BLOCK_FRAGMENTS[fi] !== nf && !seenNorm[BLOCK_FRAGMENTS[fi]]) {
+            FRAG_PAIRS.push({ orig: BLOCK_FRAGMENTS[fi], norm: BLOCK_FRAGMENTS[fi] });
+            seenNorm[BLOCK_FRAGMENTS[fi]] = true;
+          }
+        }
+
+        // High-confidence consonant patterns for the worst words only
+        // These catch f**k, c**t, etc. where vowels are replaced with symbols
+        var CONSONANT_PATTERNS = ['fck','fk','sht','cnt','ct','dck','dk','btch','bch','pss','nggr','ngr','slt'];
+
+        function isWhitelistedRaw(rawName) {
+          var rawLower = rawName.trim().toLowerCase();
+          var found = false;
+          WHITELIST.forEach(function(wl) {
+            if (rawLower.indexOf(wl) !== -1) found = true;
+          });
+          return found;
+        }
+
+        function check(rawName) {
+          if (!rawName || rawName.trim().length === 0) return { clean: true };
+
+          var whitelisted = WHITELIST.has(rawName.trim().toLowerCase());
+          if (whitelisted) return { clean: true };
+
+          var norm = normalize(rawName);
+          if (norm.length < 2) return { clean: true };
+
+          // Pass 1: normalized fragment matching
+          for (var i = 0; i < FRAG_PAIRS.length; i++) {
+            var frag = FRAG_PAIRS[i].norm;
+            var origLen = FRAG_PAIRS[i].orig.length;
+            if (frag.length <= 3 && origLen <= 3) {
+              // Short fragments: require exact match or word-boundary match
+              if (norm === frag) return { clean: false, reason: 'blocked' };
+              var words = rawName.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/);
+              for (var w = 0; w < words.length; w++) {
+                var nw = normalize(words[w]);
+                if (nw === frag) return { clean: false, reason: 'blocked' };
+              }
+            } else {
+              // Longer fragments (or collapsed from longer): substring match
+              if (norm.indexOf(frag) !== -1) {
+                if (!isWhitelistedRaw(rawName)) return { clean: false, reason: 'blocked' };
+              }
+            }
+          }
+
+          // Pass 2: consonant-only patterns (catches f**k, c**t, d**k etc)
+          // Only match when the input is short (likely an obfuscated slur, not a real name)
+          if (norm.length <= 6) {
+            var consonantsOnly = norm.replace(/[aeiou]/g, '');
+            for (var ci = 0; ci < CONSONANT_PATTERNS.length; ci++) {
+              var cp = CONSONANT_PATTERNS[ci];
+              if (consonantsOnly.length <= cp.length + 1 && consonantsOnly.indexOf(cp) !== -1) {
+                if (!isWhitelistedRaw(rawName)) return { clean: false, reason: 'blocked' };
+              }
+            }
+          }
+
+          return { clean: true };
+        }
+
+        return { check: check, normalize: normalize };
+      })();
+
       /* ===== STATE ===== */
       let state = {
         currentPhase: 'idle',
@@ -2746,6 +3017,21 @@
           return;
         }
 
+        // Re-read name from input and check filter before submission
+        var currentName = dom.playerNameInput.value.slice(0, 30);
+        var nameCheck = NameFilter.check(currentName);
+        if (!nameCheck.clean) {
+          dom.playerNameInput.value = '';
+          state.player.name = '';
+          dom.playerNameInput.classList.add('name-blocked');
+          state.statusMessageText = 'Please choose an appropriate name before picking.';
+          renderStatusMessage();
+          dom.playerNameInput.focus();
+          setTimeout(function() { dom.playerNameInput.classList.remove('name-blocked'); }, 4000);
+          return;
+        }
+        state.player.name = currentName;
+
         state.player.currentPick = num;
         renderPick();
 
@@ -3166,11 +3452,40 @@
       function setupEvents() {
         // Player name
         dom.playerNameInput.addEventListener('change', () => {
-          state.player.name = dom.playerNameInput.value.slice(0, 30);
+          var raw = dom.playerNameInput.value.slice(0, 30);
+          var result = NameFilter.check(raw);
+          if (!result.clean) {
+            dom.playerNameInput.classList.add('name-blocked');
+            dom.playerNameInput.value = '';
+            state.player.name = '';
+            state.statusMessageText = 'That name is not allowed. Please choose another.';
+            renderStatusMessage();
+            setTimeout(function() {
+              dom.playerNameInput.classList.remove('name-blocked');
+              if (state.statusMessageText === 'That name is not allowed. Please choose another.') {
+                state.statusMessageText = '';
+                renderStatusMessage();
+              }
+            }, 4000);
+          } else {
+            dom.playerNameInput.classList.remove('name-blocked');
+            state.player.name = raw;
+          }
           const stored = getLocalPlayer();
           if (stored) {
             stored.name = state.player.name;
             setLocalPlayer(stored);
+          }
+        });
+
+        // Also check on input (live feedback)
+        dom.playerNameInput.addEventListener('input', () => {
+          var raw = dom.playerNameInput.value;
+          var result = NameFilter.check(raw);
+          if (!result.clean) {
+            dom.playerNameInput.classList.add('name-blocked');
+          } else {
+            dom.playerNameInput.classList.remove('name-blocked');
           }
         });
 
