@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Student Progress Learning Profiles</title>
+<title>Dynamic Checklist — Student Analytics</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5"></script>
 <style>
@@ -393,11 +393,6 @@
 
   /* ── Summary bar ── */
   .summary-bar {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1rem 1.5rem;
-    margin-bottom: 1.5rem;
     display: flex;
     gap: 2rem;
     flex-wrap: wrap;
@@ -466,14 +461,6 @@
   }
 
   /* ── Definitions ── */
-  .definitions {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1.5rem;
-    margin-top: 1.5rem;
-  }
-  .definitions h2 { font-size: 1.1rem; margin-bottom: 0.75rem; }
   .def-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -652,8 +639,8 @@
 <body>
 
 <header>
-  <h1>Student Progress Learning Profiles</h1>
-  <p>Upload CSV data from the Dynamic Checklist platform and match to your class roll</p>
+  <h1>Dynamic Checklist &mdash; Student Analytics</h1>
+  <p>Radar profiles, progress timelines, and auto-generated comments for every student</p>
 </header>
 
 <div class="container">
@@ -705,7 +692,7 @@
 
     <!-- Collapsible interpretation guide -->
     <div class="guide-toggle" id="guideToggle">
-      <button class="guide-toggle-btn" onclick="toggleGuide()">
+      <button class="guide-toggle-btn" id="guideBtn" onclick="toggleGuide()">
         How to Read These Charts
         <span class="arrow">&#9660;</span>
       </button>
@@ -716,7 +703,7 @@
           A value at the centre means the student is at the class minimum for that metric; the outer ring means class maximum.
           The <strong>raw values</strong> (e.g. 86%, 92 level-ups, 25 learning points) are shown at each data point so you can assess absolute performance.
           For <strong>Effort</strong>, each chart also shows how the student's questions and active time compare to the class median (e.g. "+20q, +5m" means 20 more questions and 5 more active minutes than the typical student).
-          The summary bar at the top shows the class median and full range for questions and time, so you can judge whether the class baseline itself is high or low.
+          The Class Summary panel shows the class median and full range for questions and time, so you can judge whether the class baseline itself is high or low.
           <strong>Key relationship &mdash; Accuracy vs Mastery:</strong> Accuracy is the proportion correct across <em>all</em> attempts. Mastery is accuracy in the student's <em>most recent</em> attempts only.
           When both are high, the student understood from the start.
           When Accuracy is lower than Mastery, the student has built understanding over time &mdash; that's real learning in action.
@@ -729,55 +716,107 @@
       </div>
     </div>
 
+    <!-- Collapsible: Class Summary (populated by JS) -->
+    <div class="guide-toggle" id="summaryToggle" style="display:none;">
+      <button class="guide-toggle-btn" id="summaryBtn" onclick="togglePanel('summary')">
+        Class Summary
+        <span class="arrow">&#9660;</span>
+      </button>
+      <div class="guide-body" id="summaryBody">
+        <div id="summaryBar" class="summary-bar"></div>
+      </div>
+    </div>
+
+    <!-- Collapsible: Metric Definitions -->
+    <div class="guide-toggle" id="definitionsToggle" style="display:none;">
+      <button class="guide-toggle-btn" id="definitionsBtn" onclick="togglePanel('definitions')">
+        Metric Definitions
+        <span class="arrow">&#9660;</span>
+      </button>
+      <div class="guide-body" id="definitionsBody">
+        <div class="def-grid">
+          <div class="def-item"><strong>Accuracy</strong><p>Proportion of questions answered correctly</p></div>
+          <div class="def-item"><strong>Progression</strong><p>Rate of advancing through Bloom's cognitive levels per question attempted</p></div>
+          <div class="def-item"><strong>Depth</strong><p>Total Bloom's cognitive levels achieved (raw level-up count)</p></div>
+          <div class="def-item"><strong>Breadth</strong><p>Number of distinct learning points engaged with</p></div>
+          <div class="def-item"><strong>Mastery</strong><p>Accuracy in the student's most recent attempts (final quarter). High Accuracy + High Mastery = understood from the start. Lower Accuracy + High Mastery = understanding has been built over time.</p></div>
+          <div class="def-item"><strong>Effort</strong><p>Combined measure of total questions attempted and active time invested, shown relative to the class. Check the Class Summary for absolute median and range values to judge the class baseline.</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Collapsible: Archetype Labels -->
+    <div class="guide-toggle" id="archetypeToggle" style="display:none;">
+      <button class="guide-toggle-btn" id="archetypeBtn" onclick="togglePanel('archetype')">
+        Archetype Labels &mdash; Quick Reference
+        <span class="arrow">&#9660;</span>
+      </button>
+      <div class="guide-body" id="archetypeBody">
+        <ul style="margin:0.4rem 0 0.4rem 1.2rem;padding:0;list-style:disc;font-size:0.8rem;line-height:1.5;color:var(--text-muted);">
+          <li><strong style="color:var(--text);">All-Rounder</strong> &mdash; strong across all six metrics; accurate, deep, broad, and putting in the work</li>
+          <li><strong style="color:var(--text);">Persistent</strong> &mdash; high effort and wide coverage; accuracy and progression are the next areas to develop</li>
+          <li><strong style="color:var(--text);">Focused</strong> &mdash; very accurate in the areas they've covered; broadening coverage is the next step</li>
+          <li><strong style="color:var(--text);">Rising</strong> &mdash; recent mastery is high, showing real learning has taken place since earlier attempts</li>
+          <li><strong style="color:var(--text);">Early Stage</strong> &mdash; beginning their learning journey; even small steps forward will show up clearly on the radar</li>
+          <li><strong style="color:var(--text);">Specialist</strong> &mdash; gone deep into a small number of topics, reaching high cognitive levels</li>
+          <li><strong style="color:var(--text);">Explorer</strong> &mdash; sampled many topics; ready to choose a few and go deeper</li>
+          <li><strong style="color:var(--text);">Rebuilding</strong> &mdash; earlier accuracy shows genuine capability; recent focus is on consolidating and regaining momentum</li>
+        </ul>
+        <p style="margin-top:0.5rem;font-size:0.8rem;color:var(--text-muted);line-height:1.5;">Each student is matched to the two closest profiles. These are <em>pattern suggestions, not diagnoses</em> &mdash; your knowledge of the student's circumstances will always matter more than an algorithm.</p>
+      </div>
+    </div>
+
     <div class="controls-row no-print" style="margin-bottom:1rem;">
-      <button class="btn btn-secondary" onclick="window.print()">Print Charts</button>
-      <label id="rollFilterToggle" style="display:none;font-size:0.85rem;font-weight:600;color:var(--text-muted);cursor:pointer;user-select:none;">
+      <button class="btn btn-secondary" onclick="window.print()" title="Print or save as PDF using your browser's print dialog">Print Charts</button>
+      <label id="rollFilterToggle" style="display:none;font-size:0.85rem;font-weight:600;color:var(--text-muted);cursor:pointer;user-select:none;" title="When checked, only students on the uploaded class roll are shown">
         <input type="checkbox" id="rollFilterCb" checked onchange="handleRollFilterToggle()" style="margin-right:0.35rem;vertical-align:middle;">
         Roll students only
       </label>
-      <label style="font-size:0.85rem;font-weight:600;color:var(--text-muted);cursor:pointer;user-select:none;">
+      <label style="font-size:0.85rem;font-weight:600;color:var(--text-muted);cursor:pointer;user-select:none;" title="Show per-student cumulative progress and trajectory charts below each radar">
         <input type="checkbox" id="timelineCb" onchange="handleTimelineToggle()" style="margin-right:0.35rem;vertical-align:middle;">
         Timeline charts
       </label>
       <span style="border-left:1px solid var(--border);height:1.5rem;margin:0 0.25rem;"></span>
+      <span style="font-size:0.78rem;font-weight:600;color:var(--text-muted);">Sort:</span>
+      <select id="sortField" onchange="handleSortChange()" title="Choose which metric to sort student cards by" style="font-size:0.78rem;padding:0.3rem 0.5rem;border:1px solid var(--border);border-radius:5px;background:white;color:var(--text);cursor:pointer;">
+        <option value="overallScore">Overall</option>
+        <option value="accuracy">Accuracy</option>
+        <option value="progression">Progression</option>
+        <option value="depth">Depth</option>
+        <option value="breadth">Breadth</option>
+        <option value="mastery">Mastery</option>
+        <option value="effort">Effort</option>
+      </select>
+      <div class="pill-group" id="sortDirPills" title="Toggle between highest-first (descending) and lowest-first (ascending) sort order">
+        <label class="pill-active"><input type="radio" name="sortDir" value="desc" checked onchange="handleSortChange()">Highest first</label>
+        <label><input type="radio" name="sortDir" value="asc" onchange="handleSortChange()">Lowest first</label>
+      </div>
+      <span style="border-left:1px solid var(--border);height:1.5rem;margin:0 0.25rem;"></span>
       <span style="font-size:0.78rem;font-weight:600;color:var(--text-muted);">Tone:</span>
-      <div class="pill-group" id="tonePills">
+      <div class="pill-group" id="tonePills" title="Set the voice of generated comments: Student (you), Parent (their child), or Teacher (concise shorthand)">
         <label class="pill-active"><input type="radio" name="commentTone" value="student" checked>Student</label>
         <label><input type="radio" name="commentTone" value="parent">Parent</label>
         <label><input type="radio" name="commentTone" value="teacher">Teacher</label>
       </div>
       <span style="font-size:0.78rem;font-weight:600;color:var(--text-muted);">Length:</span>
-      <div class="pill-group" id="lengthPills">
+      <div class="pill-group" id="lengthPills" title="Brief covers key metrics only; Detailed adds progression, breadth, and effort commentary">
         <label class="pill-active"><input type="radio" name="commentLength" value="brief" checked>Brief</label>
         <label><input type="radio" name="commentLength" value="detailed">Detailed</label>
       </div>
       <span style="font-size:0.78rem;font-weight:600;color:var(--text-muted);">Focus:</span>
-      <div class="pill-group" id="focusPills">
+      <div class="pill-group" id="focusPills" title="Knowledge leads with current understanding; Growth leads with the learning trajectory over time">
         <label class="pill-active"><input type="radio" name="commentFocus" value="knowledge" checked>Knowledge</label>
         <label><input type="radio" name="commentFocus" value="growth">Growth</label>
       </div>
-      <button class="btn btn-secondary" style="font-size:0.78rem;padding:0.35rem 0.75rem;" onclick="scrollToCopyAll()">&#128203; Copy All</button>
+      <button class="btn btn-secondary" style="font-size:0.78rem;padding:0.35rem 0.75rem;" onclick="scrollToCopyAll()" title="Scroll to the combined comments panel for all students">&#128203; Copy All</button>
     </div>
 
-    <div id="summaryBar" class="summary-bar" style="display:none;"></div>
     <div id="chartGrid" class="chart-grid"></div>
 
     <div class="copy-all-panel" id="copyAllPanel" style="display:none;">
       <h2>All Student Comments</h2>
       <div class="copy-all-content" id="copyAllContent"></div>
       <button class="btn btn-green no-print" onclick="copyAllComments()">&#128203; Copy All to Clipboard</button>
-    </div>
-
-    <div class="definitions" id="definitions" style="display:none;">
-      <h2>Metric Definitions</h2>
-      <div class="def-grid">
-        <div class="def-item"><strong>Accuracy</strong><p>Proportion of questions answered correctly</p></div>
-        <div class="def-item"><strong>Progression</strong><p>Rate of advancing through Bloom's cognitive levels per question attempted</p></div>
-        <div class="def-item"><strong>Depth</strong><p>Total Bloom's cognitive levels achieved (raw level-up count)</p></div>
-        <div class="def-item"><strong>Breadth</strong><p>Number of distinct learning points engaged with</p></div>
-        <div class="def-item"><strong>Mastery</strong><p>Accuracy in the student's most recent attempts (final quarter). High Accuracy + High Mastery = understood from the start. Lower Accuracy + High Mastery = understanding has been built over time.</p></div>
-        <div class="def-item"><strong>Effort</strong><p>Combined measure of total questions attempted and active time invested, shown relative to the class. Check the summary bar for absolute median and range values to judge the class baseline.</p></div>
-      </div>
     </div>
   </div>
 
@@ -1134,6 +1173,31 @@ function handleRollFilterToggle() {
   applyFilter();
 }
 
+// ══════════════════════════════════════
+//  SORT CONTROLS
+// ══════════════════════════════════════
+function getSortField() {
+  return document.getElementById('sortField')?.value || 'overallScore';
+}
+function getSortDesc() {
+  const el = document.querySelector('input[name="sortDir"]:checked');
+  return !el || el.value === 'desc';
+}
+function sortMetrics(metrics) {
+  const field = getSortField();
+  const desc = getSortDesc();
+  metrics.sort((a, b) => desc ? b[field] - a[field] : a[field] - b[field]);
+  return metrics;
+}
+function handleSortChange() {
+  if (!lastRenderedMetrics || !lastRenderedBenchmarks) return;
+  sortMetrics(lastRenderedMetrics);
+  renderCharts(lastRenderedMetrics, lastRenderedBenchmarks);
+  if (document.getElementById('timelineCb')?.checked && lastTimeSeriesData) {
+    renderTimelineCharts(lastRenderedMetrics, lastTimeSeriesData);
+  }
+}
+
 function applyFilter() {
   if (!parsedData) return;
   const classCode = document.getElementById('classFilter').value;
@@ -1148,6 +1212,7 @@ function applyFilter() {
   const useRoll = rollOnlyNameMap && rollFilterCb && rollFilterCb.checked;
   const nameMap = useRoll ? rollOnlyNameMap : null;
   const metrics = computeMetrics(rows, nameMap);
+  sortMetrics(metrics);
   // Compute class benchmarks for Effort context
   const classBenchmarks = computeClassBenchmarks(metrics);
   // Build time-series data from the same filtered rows
@@ -1893,7 +1958,7 @@ function renderCharts(metrics, benchmarks) {
   const grid = document.getElementById('chartGrid');
   grid.innerHTML = '';
 
-  const summaryBar = document.getElementById('summaryBar');
+  // Populate and show collapsible panels
   const totalStudents = metrics.length;
   const totalQuestions = metrics.reduce((s, m) => s + m.totalQuestions, 0);
   const avgAccuracy = metrics.length > 0
@@ -1901,7 +1966,7 @@ function renderCharts(metrics, benchmarks) {
   const avgMastery = metrics.length > 0
     ? (metrics.reduce((s, m) => s + m.mastery, 0) / metrics.length * 100).toFixed(1) : 0;
   const bm = benchmarks || { medianQ: 0, medianM: 0, maxQ: 0, maxM: 0, minQ: 0, minM: 0 };
-  summaryBar.style.display = 'flex';
+  const summaryBar = document.getElementById('summaryBar');
   summaryBar.innerHTML = `
     <div class="summary-stat"><div class="val">${totalStudents}</div><div class="lbl">Students</div></div>
     <div class="summary-stat"><div class="val">${totalQuestions.toLocaleString()}</div><div class="lbl">Total Questions</div></div>
@@ -1912,30 +1977,9 @@ function renderCharts(metrics, benchmarks) {
     <div class="summary-stat"><div class="val">${bm.minQ}&#8211;${bm.maxQ}</div><div class="lbl">Questions Range</div></div>
     <div class="summary-stat"><div class="val">${bm.minM}&#8211;${bm.maxM}m</div><div class="lbl">Time Range</div></div>
   `;
-
-  document.getElementById('definitions').style.display = 'block';
-
-  // Archetype disclaimer
-  let disclaimer = document.getElementById('archetypeDisclaimer');
-  if (!disclaimer) {
-    disclaimer = document.createElement('div');
-    disclaimer.id = 'archetypeDisclaimer';
-    disclaimer.style.cssText = 'background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:0.7rem 1rem;margin-bottom:1.25rem;font-size:0.8rem;color:#92400e;line-height:1.5;';
-    grid.parentNode.insertBefore(disclaimer, grid);
-  }
-  disclaimer.innerHTML = '<strong>Archetype labels &mdash; quick reference:</strong>'
-    + '<ul style="margin:0.4rem 0 0.4rem 1.2rem;padding:0;list-style:disc;">'
-    + '<li><strong>All-Rounder</strong> &mdash; strong across all six metrics; accurate, deep, broad, and putting in the work</li>'
-    + '<li><strong>Persistent</strong> &mdash; high effort and wide coverage; accuracy and progression are the next areas to develop</li>'
-    + '<li><strong>Focused</strong> &mdash; very accurate in the areas they\'ve covered; broadening coverage is the next step</li>'
-    + '<li><strong>Rising</strong> &mdash; recent mastery is high, showing real learning has taken place since earlier attempts</li>'
-    + '<li><strong>Untapped</strong> &mdash; just getting started; engagement is the key opportunity</li>'
-    + '<li><strong>Specialist</strong> &mdash; gone deep into a small number of topics, reaching high cognitive levels</li>'
-    + '<li><strong>Explorer</strong> &mdash; sampled many topics; ready to choose a few and go deeper</li>'
-    + '<li><strong>Coasting</strong> &mdash; earlier accuracy shows capability; recent results suggest an opportunity to rebuild momentum</li>'
-    + '</ul>'
-    + '<p style="margin-top:0.5rem;">Each student is matched to the two closest profiles. These are <em>pattern suggestions, not diagnoses</em> &mdash; '
-    + 'your knowledge of the student\'s circumstances will always matter more than an algorithm.</p>';
+  document.getElementById('summaryToggle').style.display = '';
+  document.getElementById('definitionsToggle').style.display = '';
+  document.getElementById('archetypeToggle').style.display = '';
 
   if (metrics.length === 0) {
     grid.innerHTML = '<p style="padding:2rem;text-align:center;color:var(--text-muted);">No student data found for the selected filter.</p>';
@@ -2115,15 +2159,20 @@ function renderCharts(metrics, benchmarks) {
 }
 
 // ══════════════════════════════════════
-//  GUIDE TOGGLE + ARCHETYPE CHARTS
+//  COLLAPSIBLE PANEL TOGGLES
 // ══════════════════════════════════════
-function toggleGuide() {
-  const btn = document.querySelector('.guide-toggle-btn');
-  const body = document.getElementById('guideBody');
+function togglePanel(id) {
+  const btn = document.getElementById(id + 'Btn');
+  const body = document.getElementById(id + 'Body');
+  if (!btn || !body) return;
   btn.classList.toggle('open');
   body.classList.toggle('open');
+}
 
+function toggleGuide() {
+  togglePanel('guide');
   // Render archetype mini-charts once when first opened
+  const body = document.getElementById('guideBody');
   if (body.classList.contains('open') && !body._rendered) {
     body._rendered = true;
     renderArchetypes();
@@ -2186,12 +2235,12 @@ const ARCHETYPES = [
     action: 'Reinforce their progress explicitly \u2014 the gap between their Accuracy and Mastery IS the evidence of learning. This student responds well to persistence.'
   },
   {
-    name: 'Untapped',
+    name: 'Early Stage',
     data: [0.15, 0.05, 0.05, 0.15, 0.1, 0.1],
     colour: '#ef4444',
-    pattern: 'Small shape near the centre — just getting started',
-    means: 'Engagement is still in its earliest stages across all metrics. This student may be finding their feet, or may benefit from support to get started.',
-    action: 'Prioritise a supportive conversation. Identify what would help them get started. Set a small, achievable first goal and check in regularly.'
+    pattern: 'Small shape near the centre — beginning their learning journey',
+    means: 'This student is at the start of their journey across all metrics. Even small steps forward will show up clearly on the radar, making early progress very visible and rewarding.',
+    action: 'Start with a supportive conversation. Help them pick one topic and set a small, achievable first goal. Early wins build confidence quickly.'
   },
   {
     name: 'Specialist',
@@ -2210,11 +2259,11 @@ const ARCHETYPES = [
     action: 'Guide them to pick 2\u20133 topics and commit to mastering those. Model what \u201cfinishing a topic\u201d looks like in the platform. Their curiosity is an asset.'
   },
   {
-    name: 'Coasting',
+    name: 'Rebuilding',
     data: [0.6, 0.5, 0.5, 0.5, 0.3, 0.6],
     colour: '#d946ef',
-    pattern: 'Accuracy higher than Mastery \u2014 earlier capability shown',
-    means: 'Overall accuracy shows real capability, and there is an opportunity to bring recent performance back to that level. May benefit from revisiting recent material.',
+    pattern: 'Accuracy higher than Mastery — earlier capability evident, now consolidating',
+    means: 'Overall accuracy shows genuine capability, and recent focus is on consolidating and regaining momentum. The foundation is strong — it just needs refreshing.',
     action: 'Check in about their experience. Suggest revisiting earlier content to rebuild confidence and momentum before moving into new material.'
   },
 ];
@@ -2401,7 +2450,7 @@ const COMMENT_BANK = {
       parent: 'The gap between $NAME\'s earlier and recent accuracy is clear evidence of real learning — please encourage them to continue.',
       teacher: 'Positive trend. Reinforce progress explicitly.',
     },
-    'Untapped': {
+    'Early Stage': {
       student: 'A great place to start is choosing one topic and having a go — even a small amount of focused engagement will make a real difference.',
       parent: 'We encourage $NAME to choose one topic and get started — even a small amount of focused engagement will make a real difference.',
       teacher: 'Action: encourage a starting point. One topic, achievable first goal.',
@@ -2411,7 +2460,7 @@ const COMMENT_BANK = {
       parent: 'We recommend $NAME pick 2–3 topics and commit to mastering those — the curiosity is an asset, and focusing it will build deeper understanding.',
       teacher: 'Action: focus curiosity on 2–3 topics for deeper mastery.',
     },
-    'Coasting': {
+    'Rebuilding': {
       student: 'Revisiting some earlier material would be a good way to rebuild confidence and momentum before moving into new content.',
       parent: 'Revisiting some earlier material would help $NAME rebuild confidence and momentum before moving into new content.',
       teacher: 'Action: revisit earlier content to rebuild momentum.',
