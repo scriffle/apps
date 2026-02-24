@@ -186,6 +186,52 @@
     .connection-dot--offline { background: var(--color-danger); }
     .connection-dot--local { background: var(--color-muted); }
 
+    /* ─── Phase Countdown Bar ──────────────────────────────────────── */
+    .countdown-bar {
+      display: none;
+      margin-bottom: var(--space-4);
+    }
+    .countdown-bar--visible {
+      display: block;
+    }
+    .countdown-bar-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: var(--space-2);
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--color-text-secondary);
+    }
+    .countdown-bar-time {
+      font-size: var(--font-size-lg);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--color-text);
+    }
+    .countdown-bar-track {
+      height: 12px;
+      background: var(--color-border);
+      border-radius: 6px;
+      overflow: hidden;
+      position: relative;
+    }
+    .countdown-bar-fill {
+      height: 100%;
+      border-radius: 6px;
+      transition: width 0.15s linear;
+      will-change: width;
+    }
+    .countdown-bar--guessing .countdown-bar-fill {
+      background: var(--color-accent);
+    }
+    .countdown-bar--reveal .countdown-bar-fill {
+      background: var(--color-warning);
+    }
+    .countdown-bar--danger .countdown-bar-fill {
+      background: var(--color-danger);
+    }
+
     /* ─── Tab Navigation ───────────────────────────────────────────── */
     .tab-nav {
       background: var(--color-surface);
@@ -972,6 +1018,15 @@
   <main class="tab-panels" id="main-content">
     <!-- Pick Tab -->
     <section class="tab-panel" id="panel-pick" role="tabpanel" aria-labelledby="tab-pick" aria-hidden="false">
+      <div class="countdown-bar countdown-bar--guessing" id="guessingCountdown" role="progressbar" aria-label="Guessing time remaining">
+        <div class="countdown-bar-label">
+          <span>Guessing</span>
+          <span class="countdown-bar-time" id="guessingCountdownTime">—</span>
+        </div>
+        <div class="countdown-bar-track">
+          <div class="countdown-bar-fill" id="guessingCountdownFill" style="width:100%"></div>
+        </div>
+      </div>
       <div class="player-name-section">
         <label for="playerNameInput" class="name-label">Your Name</label>
         <div class="name-input-row">
@@ -993,6 +1048,15 @@
 
     <!-- Results Tab -->
     <section class="tab-panel" id="panel-results" role="tabpanel" aria-labelledby="tab-results" aria-hidden="true">
+      <div class="countdown-bar countdown-bar--reveal" id="revealCountdown" role="progressbar" aria-label="Reveal time remaining">
+        <div class="countdown-bar-label">
+          <span>Next round in</span>
+          <span class="countdown-bar-time" id="revealCountdownTime">—</span>
+        </div>
+        <div class="countdown-bar-track">
+          <div class="countdown-bar-fill" id="revealCountdownFill" style="width:100%"></div>
+        </div>
+      </div>
       <div class="results-container" id="resultsContainer">
         <div id="resultsContent">
           <div class="placeholder-panel" id="resultsPlaceholder">
@@ -1186,6 +1250,12 @@
         els.roundInfo = document.getElementById('roundInfo');
         els.phaseBadge = document.getElementById('phaseBadge');
         els.timerDisplay = document.getElementById('timerDisplay');
+        els.guessingCountdown = document.getElementById('guessingCountdown');
+        els.guessingCountdownTime = document.getElementById('guessingCountdownTime');
+        els.guessingCountdownFill = document.getElementById('guessingCountdownFill');
+        els.revealCountdown = document.getElementById('revealCountdown');
+        els.revealCountdownTime = document.getElementById('revealCountdownTime');
+        els.revealCountdownFill = document.getElementById('revealCountdownFill');
         els.numberGrid = document.getElementById('numberGrid');
         els.playerNameInput = document.getElementById('playerNameInput');
         els.yourPickNumber = document.getElementById('yourPickNumber');
@@ -1558,7 +1628,8 @@
       function startTimer() {
         stopTimer();
         renderTimer();
-        timerInterval = setInterval(renderTimer, 1000);
+        // Tick every 100ms for smooth progress bar, but only update text each second
+        timerInterval = setInterval(renderTimer, 100);
       }
 
       function stopTimer() {
@@ -1583,26 +1654,114 @@
         return Math.max(0, (endMs - Date.now()) / 1000);
       }
 
-      var timerExpiredPollDone = false;
+      /**
+       * Get the total duration of the current phase in seconds.
+       */
+      function getCurrentPhaseDuration() {
+        if (state.currentPhase === 'guessing') return state.config.guessingDuration;
+        if (state.currentPhase === 'reveal') return state.config.revealDuration;
+        return 0;
+      }
+
+      var lastRenderedSecond = -1;
 
       function renderTimer() {
         var remaining = getTimeRemaining();
+
+        // Update countdown bars in Pick and Results panels
+        renderCountdownBars(remaining);
+
         if (remaining < 0) {
           els.timerDisplay.textContent = '\u2014';
+          lastRenderedSecond = -1;
           return;
         }
-        els.timerDisplay.textContent = formatTime(remaining);
 
-        // When timer hits 0, trigger an immediate poll to pick up the phase transition
-        // The server's getGameState auto-transitions when deadlines pass
-        if (remaining <= 0 && !timerExpiredPollDone && state.currentPhase !== 'idle') {
-          timerExpiredPollDone = true;
-          pollGameState();
+        // Only update text display once per second to avoid flicker
+        var currentSecond = Math.ceil(remaining);
+        if (currentSecond !== lastRenderedSecond) {
+          lastRenderedSecond = currentSecond;
+          els.timerDisplay.textContent = formatTime(remaining);
         }
 
-        // Reset the flag when a new phase starts (remaining > 0 again)
-        if (remaining > 0) {
-          timerExpiredPollDone = false;
+        // Deterministic local phase advance when timer hits 0
+        if (remaining <= 0 && state.currentPhase !== 'idle') {
+          localPhaseAdvance();
+        }
+      }
+
+      /**
+       * Update both countdown bars (guessing bar in Pick tab, reveal bar in Results tab).
+       */
+      function renderCountdownBars(remaining) {
+        var phase = state.currentPhase;
+
+        // ── Guessing countdown bar (Pick tab) ──
+        if (phase === 'guessing' && remaining >= 0) {
+          els.guessingCountdown.classList.add('countdown-bar--visible');
+          var gTotal = state.config.guessingDuration;
+          var gPct = gTotal > 0 ? (remaining / gTotal) * 100 : 0;
+          els.guessingCountdownFill.style.width = Math.max(0, Math.min(100, gPct)) + '%';
+          els.guessingCountdownTime.textContent = formatTime(remaining);
+          // Turn red in last 10 seconds
+          if (remaining <= 10) {
+            els.guessingCountdown.classList.add('countdown-bar--danger');
+          } else {
+            els.guessingCountdown.classList.remove('countdown-bar--danger');
+          }
+        } else {
+          els.guessingCountdown.classList.remove('countdown-bar--visible');
+          els.guessingCountdown.classList.remove('countdown-bar--danger');
+        }
+
+        // ── Reveal countdown bar (Results tab) ──
+        if (phase === 'reveal' && state.revealEndsAt) {
+          var revealEndMs = new Date(state.revealEndsAt).getTime();
+          var revealRemaining = Math.max(0, (revealEndMs - Date.now()) / 1000);
+          els.revealCountdown.classList.add('countdown-bar--visible');
+          var rTotal = state.config.revealDuration;
+          var rPct = rTotal > 0 ? (revealRemaining / rTotal) * 100 : 0;
+          els.revealCountdownFill.style.width = Math.max(0, Math.min(100, rPct)) + '%';
+          els.revealCountdownTime.textContent = formatTime(revealRemaining);
+        } else {
+          els.revealCountdown.classList.remove('countdown-bar--visible');
+        }
+      }
+
+      /**
+       * Deterministic local phase advance.
+       * The client knows the full schedule — switch phases locally
+       * on the clock, then poll the server in the background.
+       */
+      function localPhaseAdvance() {
+        var prevPhase = state.currentPhase;
+        var prevRound = state.currentRoundId;
+
+        if (prevPhase === 'guessing' && state.revealEndsAt) {
+          // Guessing ended → switch to reveal locally
+          state.currentPhase = 'reveal';
+          onPhaseChange(prevPhase, 'reveal', prevRound, state.currentRoundId);
+          renderHeader();
+          renderPickTabState();
+          // Poll server to get evaluated results
+          pollGameState();
+
+        } else if (prevPhase === 'reveal') {
+          // Reveal ended → next round starts
+          // We know the next round's times will tile from revealEndsAt,
+          // but we need server data for the new timestamps.
+          // Optimistically advance the UI, then poll.
+          state.currentPhase = 'guessing';
+          state.currentRoundId = prevRound + 1;
+          state.player.currentPick = null;
+          state.guessingEndsAt = '';  // cleared until server confirms
+          state.revealEndsAt = '';
+          onPhaseChange(prevPhase, 'guessing', prevRound, state.currentRoundId);
+          renderHeader();
+          renderPickTabState();
+          renderNumberGrid();
+          // Poll server for the authoritative next-round timestamps
+          pollGameState();
         }
       }
 
@@ -2326,15 +2485,16 @@
       function handleAdminError(data) {
         var msg = (data && data.error) || 'An error occurred';
         if (msg === 'Invalid passphrase') {
-          // Kick back to passphrase gate
+          // Revoke admin access and kick back to pick tab
           state.adminAuthenticated = false;
           state.adminPassphrase = '';
           try { sessionStorage.removeItem('lun_admin'); } catch (e) {}
           els.adminPanel.style.display = 'none';
           els.passphraseGate.style.display = '';
-          els.passphraseError.textContent = 'Passphrase was incorrect. Please try again.';
           els.passphraseInput.value = '';
-          els.passphraseInput.focus();
+          announce('Passphrase was incorrect.');
+          alert('Passphrase was incorrect.');
+          switchTab('pick');
         } else {
           announce('Admin error: ' + msg);
         }
@@ -2397,6 +2557,12 @@
       // ─── Tab Navigation ─────────────────────────────────────────────
 
       function switchTab(tabId) {
+        // Block admin tab until passphrase is confirmed
+        if (tabId === 'admin' && !state.adminAuthenticated) {
+          promptAdminPassphrase();
+          return;
+        }
+
         state.activeTab = tabId;
 
         els.tabBtns.forEach(function(btn) {
@@ -2420,6 +2586,38 @@
         } else if (tabId === 'admin') {
           updateAdminStatus();
         }
+      }
+
+      /**
+       * Prompt for admin passphrase before allowing access to the admin tab.
+       * Uses a simple prompt dialog — if correct, stores it and switches to admin.
+       */
+      function promptAdminPassphrase() {
+        var input = prompt('Enter admin passphrase:');
+        if (!input || !input.trim()) return;
+
+        var passphrase = input.trim();
+
+        // Verify against the server with a lightweight admin action
+        setBtnLoading(els.btnStartGame, false); // no-op safety
+        apiPost('setConfig', { passphrase: passphrase })
+          .then(function(data) {
+            if (data && data.error === 'Invalid passphrase') {
+              announce('Incorrect passphrase.');
+              alert('Incorrect passphrase.');
+            } else {
+              // Passphrase accepted (setConfig with no keys returns 'No valid config keys' but NOT 'Invalid passphrase')
+              state.adminPassphrase = passphrase;
+              state.adminAuthenticated = true;
+              try { sessionStorage.setItem('lun_admin', passphrase); } catch (e) {}
+              showAdminPanel();
+              switchTab('admin');
+            }
+          })
+          .catch(function() {
+            announce('Could not verify passphrase. Check your connection.');
+            alert('Could not verify passphrase. Check your connection.');
+          });
       }
 
       function handleTabClick(e) {
