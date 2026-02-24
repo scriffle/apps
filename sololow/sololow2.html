@@ -1,0 +1,3353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sololow - Lowest Unique Number Game</title>
+  <style>
+    /* ===== CSS VARIABLES & RESET ===== */
+    :root {
+      /* Light theme colors */
+      --bg-primary: #f4f6f9;
+      --bg-secondary: #ffffff;
+      --text-primary: #1a1a2e;
+      --text-secondary: #4a4a6a;
+      --border-color: #e0e0f0;
+      --accent-blue: #2563eb;
+      --accent-amber: #f59e0b;
+      --accent-green: #10b981;
+      --accent-red: #ef4444;
+      --idle-color: #9ca3af;
+      --guessing-color: #2563eb;
+      --gathering-color: #f59e0b;
+      --reveal-color: #f59e0b;
+      --winner-color: #fbbf24;
+      --unique-color: #10b981;
+      --duplicate-color: #ef4444;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+      --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+      --radius: 8px;
+      --spacing-xs: 4px;
+      --spacing-sm: 8px;
+      --spacing-md: 16px;
+      --spacing-lg: 24px;
+      --spacing-xl: 32px;
+      --transition: 0.25s ease-in-out;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      --font-size-sm: clamp(12px, 2vw, 14px);
+      --font-size-base: clamp(14px, 2.5vw, 16px);
+      --font-size-lg: clamp(16px, 3vw, 20px);
+      --font-size-xl: clamp(20px, 4vw, 28px);
+      --font-size-2xl: clamp(28px, 6vw, 36px);
+    }
+
+    html[data-theme="dark"] {
+      --bg-primary: #121220;
+      --bg-secondary: #1e1e32;
+      --text-primary: #e4e4f0;
+      --text-secondary: #b0b0d0;
+      --border-color: #2a2a42;
+      --accent-blue: #3b82f6;
+      --accent-amber: #fbbf24;
+      --accent-green: #34d399;
+      --accent-red: #f87171;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: var(--font-size-base);
+      color: var(--text-primary);
+      background-color: var(--bg-primary);
+      transition: background-color var(--transition), color var(--transition);
+      line-height: 1.5;
+    }
+
+    /* ===== SKIP LINK ===== */
+    .skip-link {
+      position: absolute;
+      top: -40px;
+      left: 0;
+      background: var(--accent-blue);
+      color: white;
+      padding: var(--spacing-sm) var(--spacing-md);
+      text-decoration: none;
+      z-index: 100;
+      border-radius: 0 0 var(--radius) 0;
+    }
+
+    .skip-link:focus {
+      top: 0;
+    }
+
+    /* ===== HEADER ===== */
+    header {
+      background-color: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .header-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: var(--spacing-md);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: var(--spacing-md);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      min-width: 0;
+    }
+
+    .header-title {
+      font-size: var(--font-size-2xl);
+      font-weight: 700;
+      color: var(--accent-blue);
+      white-space: nowrap;
+    }
+
+    .header-info {
+      display: flex;
+      gap: var(--spacing-md);
+      align-items: center;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .round-info {
+      font-size: var(--font-size-sm);
+      color: var(--text-secondary);
+    }
+
+    .round-name {
+      opacity: 0.7;
+      font-style: italic;
+    }
+
+    .player-emojis {
+      letter-spacing: -2px;
+      font-size: 0.85em;
+    }
+
+    .phase-badge {
+      display: inline-block;
+      padding: 4px var(--spacing-sm);
+      border-radius: var(--radius);
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .phase-badge.idle {
+      background-color: var(--idle-color);
+      color: white;
+    }
+
+    .phase-badge.guessing {
+      background-color: var(--guessing-color);
+      color: white;
+    }
+
+    .phase-badge.gathering {
+      background-color: var(--gathering-color);
+      color: white;
+    }
+
+    .phase-badge.reveal {
+      background-color: var(--reveal-color);
+      color: white;
+    }
+
+    .timer-display {
+      font-size: var(--font-size-lg);
+      font-weight: 700;
+      font-family: 'Monaco', 'Menlo', monospace;
+      min-width: 60px;
+      text-align: right;
+    }
+
+    .header-controls {
+      display: flex;
+      gap: var(--spacing-sm);
+      align-items: center;
+    }
+
+    button.icon-btn {
+      background: none;
+      border: none;
+      font-size: var(--font-size-xl);
+      cursor: pointer;
+      padding: var(--spacing-sm);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px;
+      min-height: 44px;
+      transition: background-color var(--transition), transform var(--transition);
+    }
+
+    button.icon-btn:hover {
+      background-color: var(--border-color);
+      transform: scale(1.05);
+    }
+
+    button.icon-btn:active {
+      transform: scale(0.95);
+    }
+
+    .timer-bar-container {
+      width: 100%;
+      height: 4px;
+      background-color: var(--border-color);
+      position: relative;
+    }
+
+    .timer-bar-fill {
+      height: 100%;
+      background-color: var(--guessing-color);
+      transition: background-color var(--transition);
+      width: 100%;
+    }
+
+    .timer-bar-fill.low {
+      background-color: var(--accent-amber);
+    }
+
+    .timer-bar-fill.critical {
+      background-color: var(--duplicate-color);
+    }
+
+    /* ===== TAB NAVIGATION ===== */
+    .tab-nav {
+      display: flex;
+      gap: 0;
+      border-bottom: 2px solid var(--border-color);
+      background-color: var(--bg-secondary);
+      overflow-x: auto;
+      scroll-behavior: smooth;
+    }
+
+    .tab-nav::-webkit-scrollbar {
+      height: 4px;
+    }
+
+    .tab-nav::-webkit-scrollbar-track {
+      background: var(--bg-primary);
+    }
+
+    .tab-nav::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 2px;
+    }
+
+    .tab-button {
+      flex: 1;
+      min-width: 100px;
+      padding: var(--spacing-md) var(--spacing-sm);
+      border: none;
+      background: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: var(--font-size-base);
+      font-weight: 500;
+      transition: color var(--transition), border-color var(--transition);
+      border-bottom: 3px solid transparent;
+      position: relative;
+      white-space: nowrap;
+    }
+
+    .tab-button:hover {
+      color: var(--text-primary);
+    }
+
+    .tab-button[aria-selected="true"] {
+      color: var(--accent-blue);
+      border-bottom-color: var(--accent-blue);
+    }
+
+    /* ===== TAB PANELS ===== */
+    .tab-panels {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: var(--spacing-md);
+    }
+
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel[aria-selected="true"] {
+      display: block;
+      animation: fadeIn 0.25s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* ===== PICK TAB ===== */
+    .player-name-input {
+      width: 100%;
+      max-width: 300px;
+      padding: var(--spacing-sm) var(--spacing-md);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      font-size: var(--font-size-base);
+      color: var(--text-primary);
+      background-color: var(--bg-secondary);
+      transition: border-color var(--transition);
+    }
+
+    .player-name-input:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .pick-top-row {
+      display: flex;
+      gap: var(--spacing-md);
+      align-items: flex-start;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .pick-top-left {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .player-section {
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .player-label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: var(--spacing-sm);
+      font-size: var(--font-size-base);
+    }
+
+    .player-name-container {
+      display: flex;
+      gap: var(--spacing-sm);
+      align-items: center;
+    }
+
+    .your-pick-display {
+      background-color: var(--bg-secondary);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: var(--spacing-md);
+      text-align: center;
+      margin-bottom: var(--spacing-md);
+      transition: all var(--transition);
+    }
+
+    .your-pick-display.confirmed {
+      border-color: var(--unique-color);
+      background-color: rgba(16, 185, 129, 0.05);
+    }
+
+    .pick-number {
+      font-size: var(--font-size-2xl);
+      font-weight: 700;
+      color: var(--accent-blue);
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .pick-status {
+      font-size: var(--font-size-sm);
+      color: var(--text-secondary);
+    }
+
+    .pick-status.confirmed {
+      color: var(--unique-color);
+      font-weight: 600;
+    }
+
+    .pick-status.sending {
+      color: var(--accent-amber);
+      font-weight: 600;
+    }
+
+    .pick-status.pending {
+      color: var(--accent-amber);
+      font-weight: 600;
+    }
+
+    .pick-status.failed {
+      color: var(--duplicate-color);
+      font-weight: 600;
+    }
+
+    .your-pick-display.pending {
+      border-color: var(--accent-amber);
+      background-color: rgba(245, 158, 11, 0.05);
+      animation: pending-pulse 1.2s ease-in-out infinite;
+    }
+
+    .your-pick-display.failed {
+      border-color: var(--duplicate-color);
+      background-color: rgba(239, 68, 68, 0.05);
+    }
+
+    @keyframes pending-pulse {
+      0%, 100% { border-color: var(--accent-amber); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.3); }
+      50% { border-color: var(--accent-amber); box-shadow: 0 0 8px 2px rgba(245, 158, 11, 0.25); }
+    }
+
+    .status-message {
+      background-color: rgba(37, 99, 235, 0.1);
+      border-left: 4px solid var(--accent-blue);
+      padding: var(--spacing-md);
+      border-radius: var(--radius);
+      margin-bottom: var(--spacing-md);
+      color: var(--text-primary);
+      font-size: var(--font-size-sm);
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+    }
+
+    .status-message.error {
+      background-color: rgba(239, 68, 68, 0.1);
+      border-left-color: var(--duplicate-color);
+      color: var(--duplicate-color);
+    }
+
+    .status-message.success {
+      background-color: rgba(16, 185, 129, 0.1);
+      border-left-color: var(--unique-color);
+      color: var(--unique-color);
+    }
+
+    .status-message.warning {
+      background-color: rgba(245, 158, 11, 0.1);
+      border-left-color: var(--accent-amber);
+      color: var(--accent-amber);
+    }
+
+    .number-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(50px, 1fr));
+      gap: var(--spacing-sm);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    @media (min-width: 768px) {
+      .number-grid {
+        grid-template-columns: repeat(10, 1fr);
+      }
+    }
+
+    .number-btn {
+      aspect-ratio: 1;
+      border: 2px solid var(--border-color);
+      background-color: var(--bg-secondary);
+      color: var(--text-primary);
+      font-size: var(--font-size-base);
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: var(--radius);
+      transition: all var(--transition);
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .number-btn:hover:not(:disabled) {
+      border-color: var(--accent-blue);
+      background-color: rgba(37, 99, 235, 0.05);
+    }
+
+    .number-btn:active:not(:disabled) {
+      transform: scale(0.95);
+    }
+
+    .number-btn.selected {
+      background-color: var(--accent-blue);
+      color: white;
+      border-color: var(--accent-blue);
+    }
+
+    .number-btn.disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .number-btn.disabled:hover {
+      transform: none;
+      box-shadow: none;
+    }
+
+    .number-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* ===== SHUFFLE WIDGET (Mini, inline right) ===== */
+    .shuffle-widget {
+      background-color: var(--bg-secondary);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 8px;
+      width: 160px;
+      flex-shrink: 0;
+    }
+
+    .shuffle-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .shuffle-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .shuffle-score {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--accent-amber);
+    }
+
+    .shuffle-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+
+    .shuffle-tile {
+      aspect-ratio: 1;
+      background-color: var(--bg-primary);
+      border: 1.5px solid var(--border-color);
+      border-radius: 6px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition);
+      min-height: 0;
+      user-select: none;
+    }
+
+    .shuffle-tile:hover:not(.glow-pulse) {
+      background-color: var(--border-color);
+      transform: translateY(-1px);
+    }
+
+    .shuffle-tile.selected {
+      background-color: var(--accent-blue);
+      color: white;
+      border-color: var(--accent-blue);
+    }
+
+    .shuffle-tile.swap-target {
+      border-color: var(--accent-blue);
+      background-color: rgba(37, 99, 235, 0.1);
+      box-shadow: 0 0 4px rgba(37, 99, 235, 0.3);
+    }
+
+    .shuffle-tile.swapped {
+      background-color: var(--accent-amber);
+      color: white;
+      border-color: var(--accent-amber);
+      transition: all 0.15s;
+    }
+
+    .shuffle-tile.letter-highlight {
+      background-color: var(--accent-amber);
+      color: white;
+      border-color: var(--accent-amber);
+      box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+      transition: all 0.12s ease-in;
+    }
+
+    .shuffle-tile.glow-pulse {
+      animation: glowPulse 1.2s ease-in-out;
+    }
+
+    @keyframes glowPulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+      }
+      50% {
+        box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+      }
+    }
+
+    .shuffle-button {
+      width: 100%;
+      padding: 6px;
+      background-color: var(--accent-blue);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .shuffle-button:hover:not(:disabled) {
+      background-color: var(--accent-blue);
+      filter: brightness(1.1);
+    }
+
+    .shuffle-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .word-found {
+      position: fixed;
+      pointer-events: none;
+      font-size: var(--font-size-xl);
+      font-weight: 700;
+      color: var(--accent-amber);
+      animation: floatUp 1.3s ease-out forwards;
+      z-index: 1000;
+    }
+
+    @keyframes floatUp {
+      0% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      100% {
+        opacity: 0;
+        transform: translateY(-60px);
+      }
+    }
+
+    /* ===== RESULTS TAB ===== */
+    .winner-banner {
+      background: linear-gradient(135deg, var(--accent-amber) 0%, var(--accent-blue) 100%);
+      color: white;
+      padding: var(--spacing-lg);
+      border-radius: var(--radius);
+      text-align: center;
+      margin-bottom: var(--spacing-lg);
+      font-size: var(--font-size-xl);
+      font-weight: 700;
+    }
+
+    .no-winner-banner {
+      background-color: var(--bg-secondary);
+      border: 2px dashed var(--border-color);
+      color: var(--text-secondary);
+      padding: var(--spacing-lg);
+      border-radius: var(--radius);
+      text-align: center;
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .results-stale-banner {
+      background-color: rgba(245, 158, 11, 0.1);
+      border: 2px solid var(--accent-amber);
+      color: var(--accent-amber);
+      padding: var(--spacing-md);
+      border-radius: var(--radius);
+      text-align: center;
+      margin-bottom: var(--spacing-md);
+      font-weight: 600;
+      font-size: var(--font-size-sm);
+    }
+
+    .number-slots {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+      gap: var(--spacing-md);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    @media (min-width: 768px) {
+      .number-slots {
+        grid-template-columns: repeat(10, 1fr);
+      }
+    }
+
+    .number-slot {
+      background-color: var(--bg-secondary);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: var(--spacing-sm);
+      text-align: center;
+      transition: all var(--transition);
+    }
+
+    .number-slot.unpicked {
+      opacity: 0.3;
+    }
+
+    .number-slot.unique {
+      border-color: var(--accent-amber);
+      background-color: rgba(245, 158, 11, 0.08);
+    }
+
+    .number-slot.duplicate {
+      border-color: var(--duplicate-color);
+      background-color: rgba(239, 68, 68, 0.05);
+    }
+
+    .number-slot.winner {
+      border-color: var(--unique-color);
+      background-color: rgba(16, 185, 129, 0.12);
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+    }
+
+    .slot-number {
+      font-size: var(--font-size-lg);
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .slot-icon {
+      font-size: var(--font-size-lg);
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .slot-players {
+      font-size: var(--font-size-sm);
+      color: var(--text-secondary);
+      word-break: break-word;
+      line-height: 1.3;
+    }
+
+    .stats-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: var(--spacing-md);
+      margin-top: var(--spacing-lg);
+    }
+
+    .stat-card {
+      background-color: var(--bg-secondary);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: var(--spacing-md);
+      text-align: center;
+    }
+
+    .stat-label {
+      font-size: var(--font-size-sm);
+      color: var(--text-secondary);
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .stat-value {
+      font-size: var(--font-size-2xl);
+      font-weight: 700;
+      color: var(--accent-blue);
+    }
+
+    /* ===== LEADERBOARD TAB ===== */
+    .leaderboard-subtitle {
+      font-size: var(--font-size-sm);
+      color: var(--text-secondary);
+      margin-bottom: var(--spacing-md);
+    }
+
+    .leaderboard-table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: var(--bg-secondary);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .leaderboard-table thead {
+      background-color: var(--border-color);
+    }
+
+    .leaderboard-table th {
+      padding: var(--spacing-md);
+      text-align: left;
+      font-weight: 600;
+      color: var(--text-primary);
+      font-size: var(--font-size-sm);
+    }
+
+    .leaderboard-table td {
+      padding: var(--spacing-md);
+      border-top: 1px solid var(--border-color);
+      font-size: var(--font-size-sm);
+    }
+
+    .leaderboard-table tbody tr:hover {
+      background-color: var(--bg-primary);
+    }
+
+    .leaderboard-table tbody tr.current-player {
+      background-color: rgba(37, 99, 235, 0.1);
+      font-weight: 600;
+    }
+
+    .medal {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 24px;
+      margin-right: var(--spacing-sm);
+      font-weight: 700;
+    }
+
+    .medal.gold {
+      background-color: #fbbf24;
+      color: #78350f;
+    }
+
+    .medal.silver {
+      background-color: #d1d5db;
+      color: #374151;
+    }
+
+    .medal.bronze {
+      background-color: #d97706;
+      color: white;
+    }
+
+    /* ===== HISTORY TAB ===== */
+    .history-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: var(--spacing-md);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .frequency-chart {
+      background-color: var(--bg-secondary);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: var(--spacing-md);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .chart-title {
+      font-weight: 600;
+      margin-bottom: var(--spacing-md);
+      font-size: var(--font-size-base);
+    }
+
+    .chart-container {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-around;
+      height: 120px;
+      gap: var(--spacing-xs);
+    }
+
+    .chart-bar {
+      flex: 1;
+      background-color: var(--accent-blue);
+      border-radius: var(--radius) var(--radius) 0 0;
+      min-height: 4px;
+      transition: background-color var(--transition), height var(--transition);
+      position: relative;
+      cursor: pointer;
+    }
+
+    .chart-bar:hover {
+      background-color: var(--accent-amber);
+    }
+
+    .chart-bar-label {
+      position: absolute;
+      bottom: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      white-space: nowrap;
+      color: var(--text-secondary);
+    }
+
+    .recent-rounds-table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: var(--bg-secondary);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .recent-rounds-table thead {
+      background-color: var(--border-color);
+    }
+
+    .recent-rounds-table th {
+      padding: var(--spacing-md);
+      text-align: left;
+      font-weight: 600;
+      color: var(--text-primary);
+      font-size: var(--font-size-sm);
+    }
+
+    .recent-rounds-table td {
+      padding: var(--spacing-md);
+      border-top: 1px solid var(--border-color);
+      font-size: var(--font-size-sm);
+    }
+
+    /* ===== ADMIN TAB ===== */
+    .admin-gate {
+      background-color: var(--bg-secondary);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: var(--spacing-lg);
+      text-align: center;
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .admin-gate-label {
+      display: block;
+      margin-bottom: var(--spacing-md);
+      font-weight: 600;
+    }
+
+    .admin-passphrase-input {
+      width: 100%;
+      max-width: 300px;
+      padding: var(--spacing-sm) var(--spacing-md);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      font-size: var(--font-size-base);
+      color: var(--text-primary);
+      background-color: var(--bg-primary);
+      transition: border-color var(--transition);
+    }
+
+    .admin-passphrase-input:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+    }
+
+    .admin-passphrase-input.invalid {
+      border-color: var(--duplicate-color);
+    }
+
+    .admin-content {
+      display: none;
+    }
+
+    .admin-content.unlocked {
+      display: block;
+    }
+
+    .admin-section {
+      background-color: var(--bg-secondary);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: var(--spacing-md);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .admin-section-title {
+      font-size: var(--font-size-lg);
+      font-weight: 700;
+      margin-bottom: var(--spacing-md);
+      color: var(--text-primary);
+    }
+
+    .admin-buttons {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: var(--spacing-md);
+      margin-bottom: var(--spacing-md);
+    }
+
+    .admin-btn {
+      padding: var(--spacing-md);
+      border: none;
+      border-radius: var(--radius);
+      font-size: var(--font-size-base);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .admin-btn-primary {
+      background-color: var(--accent-blue);
+      color: white;
+    }
+
+    .admin-btn-primary:hover:not(:disabled) {
+      filter: brightness(1.1);
+    }
+
+    .admin-btn-warning {
+      background-color: var(--accent-amber);
+      color: white;
+    }
+
+    .admin-btn-warning:hover:not(:disabled) {
+      filter: brightness(1.1);
+    }
+
+    .admin-btn-danger {
+      background-color: var(--duplicate-color);
+      color: white;
+    }
+
+    .admin-btn-danger:hover:not(:disabled) {
+      filter: brightness(1.1);
+    }
+
+    .admin-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .admin-btn.loading {
+      position: relative;
+    }
+
+    .admin-btn.loading::after {
+      content: '';
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      top: 50%;
+      right: var(--spacing-sm);
+      margin-top: -7px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .form-group {
+      margin-bottom: var(--spacing-md);
+    }
+
+    .form-label {
+      display: block;
+      margin-bottom: var(--spacing-sm);
+      font-weight: 600;
+      font-size: var(--font-size-sm);
+    }
+
+    .form-input {
+      width: 100%;
+      padding: var(--spacing-sm) var(--spacing-md);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      font-size: var(--font-size-base);
+      color: var(--text-primary);
+      background-color: var(--bg-primary);
+      transition: border-color var(--transition);
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+    }
+
+    .reset-confirm {
+      background-color: rgba(239, 68, 68, 0.1);
+      border: 2px solid var(--duplicate-color);
+      border-radius: var(--radius);
+      padding: var(--spacing-md);
+      text-align: center;
+      display: none;
+    }
+
+    .reset-confirm.active {
+      display: block;
+    }
+
+    .reset-confirm-text {
+      margin-bottom: var(--spacing-md);
+      font-weight: 600;
+    }
+
+    .reset-confirm-buttons {
+      display: flex;
+      gap: var(--spacing-md);
+      justify-content: center;
+    }
+
+    .admin-status {
+      background-color: var(--bg-secondary);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: var(--spacing-md);
+      font-size: var(--font-size-sm);
+      color: var(--text-secondary);
+    }
+
+    /* ===== FOOTER ===== */
+    footer {
+      background-color: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      padding: var(--spacing-md);
+      margin-top: var(--spacing-xl);
+    }
+
+    .footer-status {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      font-size: var(--font-size-sm);
+      color: var(--text-secondary);
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .status-dot.online {
+      background-color: var(--unique-color);
+    }
+
+    .status-dot.offline {
+      background-color: var(--duplicate-color);
+      animation: none;
+    }
+
+    .status-dot.local {
+      background-color: var(--accent-amber);
+      animation: none;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.5;
+      }
+    }
+
+    /* ===== ONBOARDING OVERLAY ===== */
+    .onboarding-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      padding: var(--spacing-md);
+      display: none;
+    }
+
+    .onboarding-overlay.active {
+      display: flex;
+    }
+
+    .onboarding-modal {
+      background-color: var(--bg-secondary);
+      border-radius: var(--radius);
+      padding: var(--spacing-lg);
+      max-width: 500px;
+      width: 100%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .onboarding-header {
+      font-size: var(--font-size-xl);
+      font-weight: 700;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .onboarding-section {
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .onboarding-section-title {
+      font-weight: 600;
+      margin-bottom: var(--spacing-sm);
+      color: var(--accent-blue);
+    }
+
+    .onboarding-text {
+      font-size: var(--font-size-sm);
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    .scoring-list {
+      list-style: none;
+      padding: 0;
+      margin: var(--spacing-md) 0;
+    }
+
+    .scoring-list li {
+      padding: var(--spacing-xs) 0;
+      font-size: var(--font-size-sm);
+      color: var(--text-secondary);
+    }
+
+    .hints-section {
+      margin-top: var(--spacing-md);
+    }
+
+    .hints-toggle {
+      background: none;
+      border: none;
+      color: var(--accent-blue);
+      cursor: pointer;
+      font-weight: 600;
+      padding: 0;
+      font-size: var(--font-size-sm);
+      text-decoration: underline;
+    }
+
+    .hints-content {
+      display: none;
+      margin-top: var(--spacing-md);
+      padding: var(--spacing-md);
+      background-color: var(--bg-primary);
+      border-radius: var(--radius);
+    }
+
+    .hints-content.active {
+      display: block;
+    }
+
+    .hint-item {
+      margin-bottom: var(--spacing-md);
+      padding-bottom: var(--spacing-md);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .hint-item:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .hint-title {
+      font-weight: 600;
+      color: var(--accent-blue);
+      font-size: var(--font-size-sm);
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .hint-text {
+      font-size: var(--font-size-sm);
+      color: var(--text-secondary);
+    }
+
+    .onboarding-buttons {
+      display: flex;
+      gap: var(--spacing-md);
+      margin-top: var(--spacing-lg);
+    }
+
+    .onboarding-btn {
+      flex: 1;
+      padding: var(--spacing-md);
+      border: none;
+      border-radius: var(--radius);
+      font-size: var(--font-size-base);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .onboarding-btn-primary {
+      background-color: var(--accent-blue);
+      color: white;
+    }
+
+    .onboarding-btn-primary:hover {
+      filter: brightness(1.1);
+    }
+
+    .onboarding-btn-secondary {
+      background-color: var(--border-color);
+      color: var(--text-primary);
+    }
+
+    .onboarding-btn-secondary:hover {
+      background-color: var(--bg-primary);
+    }
+
+    /* ===== LIVE REGION ===== */
+    .live-region {
+      position: absolute;
+      left: -10000px;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+    }
+
+    /* ===== UTILITIES ===== */
+    .hidden {
+      display: none !important;
+    }
+
+    .text-center {
+      text-align: center;
+    }
+
+    .mt-lg {
+      margin-top: var(--spacing-lg);
+    }
+
+    .mb-lg {
+      margin-bottom: var(--spacing-lg);
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+      .header-content {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-sm);
+      }
+
+      .header-left {
+        flex-direction: column;
+      }
+
+      .header-info {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .tab-button {
+        min-width: 80px;
+        padding: var(--spacing-sm) var(--spacing-xs);
+        font-size: var(--font-size-sm);
+      }
+
+      .pick-top-row {
+        flex-direction: column;
+      }
+
+      .shuffle-widget {
+        width: 100% !important;
+        max-width: 200px;
+      }
+
+      .player-name-container {
+        flex-direction: column;
+      }
+
+      .player-name-input {
+        max-width: 100%;
+      }
+
+      .number-grid {
+        grid-template-columns: repeat(5, 1fr);
+      }
+
+      .stats-cards {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .shuffle-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+
+      .leaderboard-table {
+        font-size: var(--font-size-xs);
+      }
+
+      .admin-buttons {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a href="#main" class="skip-link">Skip to main content</a>
+
+  <header>
+    <div class="header-content">
+      <div class="header-left">
+        <div class="header-title">Sololow</div>
+        <div class="header-info">
+          <div class="round-info">
+            Round <span id="current-round">0</span> <span id="round-name" class="round-name"></span> •
+            <span id="players-count">0</span> <span id="player-emojis" class="player-emojis"></span>
+          </div>
+          <span class="phase-badge" id="phase-badge" data-phase="idle">Idle</span>
+          <div class="timer-display" id="timer-display">0:00</div>
+        </div>
+      </div>
+      <div class="header-controls">
+        <button class="icon-btn" id="help-btn" title="Help" aria-label="Help">?</button>
+        <button class="icon-btn" id="theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+      </div>
+    </div>
+    <div class="timer-bar-container">
+      <div class="timer-bar-fill" id="timer-bar"></div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div role="tablist" class="tab-nav" id="tab-nav">
+      <button role="tab" aria-selected="true" aria-controls="pick-panel" id="pick-tab" class="tab-button">Pick</button>
+      <button role="tab" aria-selected="false" aria-controls="results-panel" id="results-tab" class="tab-button">Results</button>
+      <button role="tab" aria-selected="false" aria-controls="board-panel" id="board-tab" class="tab-button">Board</button>
+      <button role="tab" aria-selected="false" aria-controls="history-panel" id="history-tab" class="tab-button">History</button>
+      <button role="tab" aria-selected="false" aria-controls="admin-panel" id="admin-tab" class="tab-button">Admin</button>
+    </div>
+
+    <div class="status-message" id="status-message" style="display: none;"></div>
+
+    <div class="tab-panels">
+      <!-- PICK TAB -->
+      <div role="tabpanel" id="pick-panel" aria-labelledby="pick-tab" aria-selected="true" class="tab-panel">
+        <div class="pick-top-row">
+          <div class="pick-top-left">
+            <div class="player-section">
+              <label class="player-label">Your Name</label>
+              <div class="player-name-container">
+                <input type="text" id="player-name-input" class="player-name-input" placeholder="Enter your name" maxlength="30">
+              </div>
+            </div>
+
+            <div class="your-pick-display" id="your-pick-display">
+              <div class="pick-number" id="pick-number">Tap a number</div>
+              <div class="pick-status" id="pick-status">Not yet</div>
+            </div>
+          </div>
+
+          <div class="shuffle-widget" id="shuffle-widget" style="display: none;">
+            <div class="shuffle-header">
+              <div class="shuffle-title">Shuffle</div>
+              <div class="shuffle-score" id="shuffle-score">0</div>
+            </div>
+            <div class="shuffle-grid" id="shuffle-grid"></div>
+            <button class="shuffle-button" id="shuffle-new-btn">New Tiles</button>
+          </div>
+        </div>
+
+        <div class="number-grid" id="number-grid" role="grid" aria-label="Number selection grid"></div>
+      </div>
+
+      <!-- RESULTS TAB -->
+      <div role="tabpanel" id="results-panel" aria-labelledby="results-tab" aria-selected="false" class="tab-panel">
+        <div id="results-stale-banner" class="results-stale-banner" style="display:none;"></div>
+        <div id="winner-section"></div>
+        <div id="number-slots-container" class="number-slots"></div>
+        <div id="results-stats" class="stats-cards"></div>
+      </div>
+
+      <!-- LEADERBOARD TAB -->
+      <div role="tabpanel" id="board-panel" aria-labelledby="board-tab" aria-selected="false" class="tab-panel">
+        <p class="leaderboard-subtitle">Lower winning numbers score more points</p>
+        <table class="leaderboard-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Player</th>
+              <th>Pts</th>
+              <th>Wins</th>
+              <th>Played</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboard-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- HISTORY TAB -->
+      <div role="tabpanel" id="history-panel" aria-labelledby="history-tab" aria-selected="false" class="tab-panel">
+        <div class="history-stats" id="history-stats"></div>
+        <div class="frequency-chart">
+          <div class="chart-title">Number Frequency (Last 50 Rounds)</div>
+          <div class="chart-container" id="frequency-chart"></div>
+        </div>
+        <table class="recent-rounds-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Winner</th>
+              <th>Win #</th>
+              <th>Guesses</th>
+              <th>Unique</th>
+            </tr>
+          </thead>
+          <tbody id="recent-rounds-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- ADMIN TAB -->
+      <div role="tabpanel" id="admin-panel" aria-labelledby="admin-tab" aria-selected="false" class="tab-panel">
+        <div class="admin-gate">
+          <label class="admin-gate-label">Admin Passphrase</label>
+          <input type="password" id="admin-passphrase-input" class="admin-passphrase-input" placeholder="Enter passphrase">
+        </div>
+
+        <div class="admin-content" id="admin-content">
+          <div class="admin-section">
+            <div class="admin-section-title">Game Controls</div>
+            <div class="admin-buttons">
+              <button class="admin-btn admin-btn-primary" id="admin-start-btn">Start</button>
+              <button class="admin-btn admin-btn-warning" id="admin-pause-btn">Pause</button>
+              <button class="admin-btn admin-btn-warning" id="admin-next-phase-btn">Next Phase</button>
+            </div>
+          </div>
+
+          <div class="admin-section">
+            <div class="admin-section-title">Configuration</div>
+            <div class="form-group">
+              <label class="form-label">Max Number</label>
+              <input type="number" id="config-max-number" class="form-input" min="5" max="200">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Guessing Duration (s)</label>
+              <input type="number" id="config-guessing-duration" class="form-input" min="10" max="600">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Gathering Duration (s)</label>
+              <input type="number" id="config-gathering-duration" class="form-input" min="5" max="120">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Reveal Duration (s)</label>
+              <input type="number" id="config-reveal-duration" class="form-input" min="5" max="120">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Min Players</label>
+              <input type="number" id="config-min-players" class="form-input" min="2" max="100">
+            </div>
+            <button class="admin-btn admin-btn-primary" id="admin-save-config-btn" style="width: 100%;">Save Config</button>
+          </div>
+
+          <div class="admin-section">
+            <div class="admin-section-title">Scores</div>
+            <button class="admin-btn admin-btn-danger" id="admin-clear-scores-btn" style="width: 100%;">Clear All Scores</button>
+            <div class="reset-confirm" id="clear-scores-confirm">
+              <div class="reset-confirm-text">Clear all player scores? This cannot be undone.</div>
+              <div class="reset-confirm-buttons">
+                <button class="admin-btn admin-btn-danger" id="clear-scores-confirm-btn">Confirm</button>
+                <button class="admin-btn admin-btn-primary" id="clear-scores-cancel-btn">Cancel</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-section">
+            <div class="admin-section-title">Game Reset</div>
+            <button class="admin-btn admin-btn-danger" id="admin-reset-btn" style="width: 100%;">Reset Game</button>
+            <div class="reset-confirm" id="reset-confirm">
+              <div class="reset-confirm-text">This will reset everything. Are you sure?</div>
+              <div class="reset-confirm-buttons">
+                <button class="admin-btn admin-btn-danger" id="reset-confirm-btn">Confirm Reset</button>
+                <button class="admin-btn admin-btn-primary" id="reset-cancel-btn">Cancel</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-status" id="admin-status">
+            <div>Phase: <strong id="admin-phase">Idle</strong></div>
+            <div>Round: <strong id="admin-round">0</strong></div>
+            <div>Connection: <strong id="admin-connection">Local</strong></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-status">
+      <span class="status-dot online" id="status-dot"></span>
+      <span id="connection-status-label">Connecting...</span>
+    </div>
+  </footer>
+
+  <div class="onboarding-overlay" id="onboarding-overlay">
+    <div class="onboarding-modal">
+      <div class="onboarding-header">🤔 Welcome to Sololow</div>
+      <div class="onboarding-section">
+        <div class="onboarding-section-title">How to Play</div>
+        <div class="onboarding-text">
+          <ol class="scoring-list">
+            <li><strong>Enter your name</strong> at the top</li>
+            <li><strong>Pick a number</strong> from 1 to the max (lowest wins)</li>
+            <li><strong>Win with the lowest unique number</strong> (no duplicates)</li>
+          </ol>
+        </div>
+      </div>
+      <div class="onboarding-section">
+        <div class="onboarding-section-title">Scoring</div>
+        <div class="onboarding-text">
+          <ul class="scoring-list">
+            <li><strong>1st unique:</strong> 10 points</li>
+            <li><strong>2nd unique:</strong> 7 points</li>
+            <li><strong>3rd unique:</strong> 6 points</li>
+            <li><strong>5th unique:</strong> 4 points</li>
+            <li><strong>10+ unique:</strong> 1 point</li>
+          </ul>
+        </div>
+      </div>
+      <div class="hints-section">
+        <button class="hints-toggle" id="hints-toggle">💡 Strategy Hints</button>
+        <div class="hints-content" id="hints-content">
+          <div class="hint-item">
+            <div class="hint-title">🎯 Yolo 1</div>
+            <div class="hint-text">Always pick 1. Risky but highest points if unique.</div>
+          </div>
+          <div class="hint-item">
+            <div class="hint-title">🎲 Sweet Spot</div>
+            <div class="hint-text">Pick around 1/3 of max. Others avoid very low numbers.</div>
+          </div>
+          <div class="hint-item">
+            <div class="hint-title">👥 Read the Room</div>
+            <div class="hint-text">Watch patterns. Avoid duplicates from previous rounds.</div>
+          </div>
+          <div class="hint-item">
+            <div class="hint-title">🌀 Chaos Mode</div>
+            <div class="hint-text">Pick randomly. Sometimes unpredictable wins.</div>
+          </div>
+          <div class="hint-item">
+            <div class="hint-title">👻 Shadow</div>
+            <div class="hint-text">Pick just above or below the winner. Learn patterns.</div>
+          </div>
+        </div>
+      </div>
+      <div class="onboarding-buttons">
+        <button class="onboarding-btn onboarding-btn-primary" id="onboarding-dismiss-btn">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="live-region" id="live-region" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <script>
+    'use strict';
+
+    (function() {
+      /* ===== CONSTANTS ===== */
+      const API_URL = 'https://script.google.com/macros/s/AKfycbz8yzDRBd1WZpPNarVaUMg_SBMyjpXprrYREOlocAItuMmPVNYz9kVtOlUvXmIQXoWr/exec';
+      const POLLING_INTERVALS = {
+        visible: 5000,
+        idle: 15000,
+        hidden: 20000
+      };
+      const TIMER_INTERVAL = 1000;
+      const TIMER_GRACE_PERIOD = 5000;
+      const SHUFFLE_WORD_DICT = new Set([
+        "ace", "act", "add", "ado", "ads", "aft", "age", "ago", "aha", "aid", "ail", "aim", "air", "all", "amp", "and", "ant", "any", "ape", "apt", "arc", "are", "ark", "arm", "art", "ash", "ask", "asp", "ate", "awe",
+        "axe", "aye", "bad", "bag", "ban", "bar", "bat", "bay", "bed", "bee", "bet", "bid", "big", "bin", "bit", "boa", "bog", "bow", "box", "boy", "bud", "bug", "bun", "bus", "but", "buy", "cab", "can", "cap",
+        "car", "cat", "cow", "cry", "cub", "cup", "cut", "dab", "dad", "dam", "day", "den", "dew", "did", "die", "dig", "dim", "dip", "dog", "dot", "dry", "dub", "dud", "due", "dug", "dye", "ear", "eat", "ebb",
+        "eel", "egg", "ego", "elf", "elk", "elm", "emu", "end", "era", "err", "eve", "eye", "fab", "fad", "fan", "far", "fat", "fax", "fed", "fee", "few", "fig", "fin", "fir", "fit", "fix", "fly", "foe", "fog",
+        "for", "fox", "fry", "fun", "fur", "gab", "gag", "gap", "gas", "gay", "gel", "gem", "get", "gin", "gnu", "god", "got", "gum", "gun", "gut", "guy", "gym", "had", "hag", "ham", "has", "hat", "hay", "hem",
+        "hen", "her", "hew", "hex", "hey", "hid", "him", "hip", "his", "hit", "hog", "hop", "hot", "how", "hub", "hue", "hug", "hum", "hut", "ice", "icy", "ill", "imp", "ink", "inn", "ion", "ire", "irk", "its",
+        "ivy", "jab", "jam", "jar", "jaw", "jay", "jet", "job", "jog", "joy", "jug", "ken", "key", "kid", "kin", "kit", "lab", "lad", "lag", "lap", "law", "lay", "lea", "led", "leg", "let", "lid", "lie", "lip",
+        "lit", "log", "lot", "low", "lug", "mac", "mad", "man", "map", "mar", "mat", "max", "may", "men", "met", "mid", "mix", "mob", "mom", "mop", "mud", "mug", "nag", "nap", "nay", "net", "new", "nod", "nor",
+        "not", "now", "nub", "nun", "nut", "oak", "oar", "oat", "odd", "ode", "off", "oft", "oil", "old", "one", "opt", "our", "out", "ova", "owe", "owl", "own", "pad", "pal", "pan", "pap", "par", "pat", "paw",
+        "pay", "pea", "peg", "pen", "pep", "pet", "pew", "pie", "pig", "pin", "pit", "ply", "pod", "pop", "pot", "pox", "pry", "pub", "pug", "pun", "pup", "pus", "put", "rad", "rag", "ram", "ran", "rap", "rat",
+        "raw", "ray", "red", "ref", "rep", "rib", "rid", "rig", "rim", "rip", "rob", "rod", "roe", "rot", "row", "rub", "rug", "run", "rut", "rye", "sac", "sad", "sag", "sap", "sat", "saw", "say", "sea", "see",
+        "set", "sew", "she", "shy", "sin", "sip", "sir", "sis", "sit", "six", "ski", "sky", "sly", "sob", "sod", "son", "sop", "sot", "sow", "sox", "soy", "spa", "spy", "sub", "sum", "sun", "tab", "tad", "tag",
+        "tan", "tap", "tar", "tat", "tax", "tea", "ten", "the", "thy", "tic", "tie", "tin", "tip", "toe", "ton", "too", "top", "tot", "tow", "toy", "try", "tub", "tug", "two", "ugh", "ump", "use", "van", "vat",
+        "vet", "vex", "via", "vie", "vow", "wad", "wag", "war", "was", "wax", "way", "web", "wed", "wee", "wet", "who", "why", "wig", "win", "wit", "woe", "wok", "won", "woo", "wow", "yak", "yam", "yap", "yaw",
+        "yea", "yes", "yet", "yew", "yin", "you", "zap", "zen", "zip", "zoo",
+        "able", "arch", "area", "army", "atom", "aunt", "auto", "back", "bail", "bait", "bake", "ball", "band", "bank", "bare", "bark", "barn", "base", "bath", "bead", "beam", "bean", "bear", "beat", "been", "beer",
+        "bell", "belt", "bend", "bent", "best", "bias", "bike", "bile", "bill", "bind", "bird", "bite", "blow", "blue", "boar", "boat", "body", "boil", "bold", "bolt", "bomb", "bond", "bone", "book", "boom", "boot",
+        "born", "both", "bowl", "bulk", "bull", "burn", "bush", "busy", "cage", "cake", "call", "calm", "came", "camp", "cane", "cape", "card", "care", "cart", "case", "cast", "cave", "cell", "cent", "chin", "chip",
+        "chop", "city", "clap", "clay", "clip", "club", "coal", "coat", "code", "coil", "coin", "cold", "come", "cone", "cook", "cool", "cope", "copy", "cord", "core", "corn", "cost", "crew", "crop", "crow", "cube",
+        "curb", "cure", "curl", "cute", "damp", "dare", "dark", "dash", "data", "date", "dawn", "dead", "deal", "dear", "deck", "deep", "deny", "desk", "dial", "dice", "diet", "dime", "dire", "dirt", "disc", "dish",
+        "dive", "dock", "does", "dome", "done", "door", "dose", "dove", "down", "drag", "draw", "drew", "drip", "drop", "drum", "dual", "duck", "duke", "dump", "dunk", "dusk", "dust", "duty", "dyer", "each", "earl",
+        "earn", "ease", "east", "easy", "echo", "edge", "edit", "else", "emit", "epic", "euro", "even", "ever", "evil", "exam", "exit", "face", "fact", "fail", "fair", "fall", "fame", "fare", "farm", "fast", "fate",
+        "fear", "feat", "feel", "feet", "fell", "felt", "fern", "file", "fill", "film", "find", "fine", "fire", "firm", "fish", "fist", "flag", "flap", "flat", "flee", "flew", "flip", "flop", "flow", "fold", "folk",
+        "fond", "food", "fool", "foot", "fork", "form", "fort", "foul", "four", "fowl", "free", "from", "fuel", "full", "fuse", "gain", "gale", "game", "gang", "gate", "gave", "gear", "gift", "gill", "girl", "give",
+        "glad", "glow", "glue", "goat", "goal", "goer", "gold", "golf", "gone", "good", "grab", "grad", "gray", "grew", "grey", "grid", "grim", "grip", "grit", "grow", "gulf", "gust", "hair", "half", "hall", "hand",
+        "hang", "hard", "harm", "hate", "have", "hawk", "head", "heal", "heap", "hear", "heat", "heed", "heel", "heir", "held", "hell", "help", "herb", "herd", "here", "hero", "hide", "high", "hike", "hill", "hind",
+        "hint", "hire", "hive", "hold", "hole", "holy", "home", "hood", "hoof", "hook", "hoop", "hope", "horn", "host", "hour", "huge", "hunt", "hurt", "hymn", "ibis", "icon", "idea", "idle", "inch", "into", "iron",
+        "isle", "item", "jade", "jail", "jazz", "jean", "jerk", "jest", "joke", "july", "jump", "june", "junk", "jury", "just", "kale", "keen", "keep", "kept", "kick", "kill", "kilt", "kind", "king", "kiss", "knee",
+        "knew", "knit", "knot", "know", "lace", "lack", "lady", "lake", "lamb", "lame", "lamp", "land", "lane", "lard", "lash", "lass", "last", "late", "lawn", "lazy", "lead", "leaf", "leak", "lean", "leap", "leer",
+        "left", "lend", "lens", "lent", "less", "liar", "lice", "lick", "life", "lift", "like", "lime", "limp", "line", "link", "lint", "lion", "live", "load", "loaf", "loan", "lock", "loft", "lone", "long", "look",
+        "loop", "lord", "lore", "lose", "loss", "lost", "loud", "love", "luck", "luke", "lump", "lung", "lure", "lurk", "lush", "lust", "lynx", "lyre", "mace", "made", "maid", "mail", "main", "make", "male", "mall",
+        "malt", "mane", "many", "mark", "mars", "mash", "mask", "mass", "mast", "mate", "math", "maze", "mead", "meal", "mean", "meat", "meek", "meet", "melt", "memo", "mend", "menu", "meow", "mere", "mesa", "mesh",
+        "mess", "mica", "mice", "mild", "mile", "milk", "mill", "mime", "mind", "mine", "mint", "miss", "mist", "mite", "mitt", "moan", "mock", "mode", "mold", "mole", "molt", "monk", "mood", "moon", "moor", "mope",
+        "more", "moss", "most", "moth", "move", "much", "mule", "muse", "myth", "nail", "name", "navy", "near", "neat", "neck", "need", "neon", "nest", "news", "newt", "next", "nice", "nick", "nine", "node", "none",
+        "noon", "nose", "note", "noun", "null", "numb", "oath", "obey", "oboe", "omen", "omit", "once", "only", "onto", "ooze", "open", "oral", "orca", "oven", "over", "pace", "pack", "page", "paid", "pail", "pain",
+        "pair", "pale", "palm", "pane", "pang", "pant", "park", "part", "pass", "past", "path", "pave", "pawn", "peak", "peal", "pear", "peat", "peck", "peek", "peel", "peer", "pelt", "pend", "pike", "pile", "pill",
+        "pine", "ping", "pink", "pint", "pipe", "pith", "plan", "play", "plea", "plod", "plop", "plot", "plow", "plum", "poem", "poet", "pole", "poll", "pond", "pony", "pool", "poor", "pore", "pork", "port", "pose",
+        "post", "pour", "pray", "prep", "prey", "prim", "prop", "prey", "puff", "pull", "pulp", "puma", "pump", "punk", "pure", "push", "quit", "race", "rack", "raft", "rage", "raid", "rail", "rain", "rake", "ramp",
+        "rang", "rank", "rare", "rash", "rasp", "rate", "rave", "raze", "read", "real", "ream", "reap", "rear", "reed", "reef", "reek", "reel", "rely", "rend", "rent", "rest", "rice", "rich", "ride", "rife", "rift",
+        "rind", "ring", "rink", "riot", "ripe", "rise", "risk", "rite", "road", "roam", "roar", "robe", "rock", "rode", "role", "roll", "romp", "roof", "room", "root", "rope", "rose", "rosy", "rote", "rout", "rove",
+        "ruin", "rule", "rung", "runt", "ruse", "rush", "rust", "ruth", "sack", "safe", "saga", "sage", "said", "sail", "sake", "sale", "salt", "same", "sand", "sane", "sang", "sank", "sash", "save", "seal", "seam",
+        "sean", "sear", "seas", "seat", "sect", "seed", "seek", "seem", "seen", "seep", "self", "sell", "semi", "send", "sent", "sept", "shed", "ship", "shoe", "shop", "shot", "show", "shut", "sick", "side", "sift",
+        "sigh", "sign", "silk", "sill", "silt", "sine", "sing", "sink", "site", "size", "skew", "skid", "skip", "slam", "slap", "slat", "slay", "sled", "slew", "slid", "slim", "slip", "slow", "slug", "smog", "snap",
+        "snow", "snub", "snug", "soak", "soap", "soar", "sock", "sofa", "soft", "soil", "sold", "sole", "some", "song", "soon", "soot", "sore", "sort", "soul", "soup", "sour", "spot", "stab", "stag", "star", "stay",
+        "stem", "step", "stew", "stir", "stop", "stun", "such", "suit", "sulk", "sunk", "sure", "surf", "swab", "swam", "swap", "swat", "sway", "swim", "swum", "tail", "take", "tale", "talk", "tall", "tame", "tank",
+        "tape", "tarp", "task", "team", "tear", "tease", "teen", "tell", "temp", "tend", "tent", "term", "test", "text", "than", "that", "them", "then", "they", "thin", "this", "thou", "thus", "tick", "tide", "tidy",
+        "tied", "tier", "tile", "tilt", "time", "tine", "tiny", "tire", "toad", "toes", "tomb", "tone", "took", "tool", "toot", "torn", "toss", "tour", "tout", "town", "trap", "tray", "tree", "trek", "trey", "trim",
+        "trio", "trip", "trod", "trot", "true", "tuba", "tube", "tuck", "tuft", "tune", "turf", "turn", "tusk", "tutu", "twas", "twig", "twin", "twit", "type", "ugly", "undo", "unit", "upon", "urea", "urge", "used",
+        "user", "vain", "vale", "vane", "vary", "vase", "vast", "veal", "veil", "vein", "vent", "verb", "very", "vest", "vice", "view", "vine", "visa", "void", "volt", "vote", "wade", "wage", "wail", "wait", "wake",
+        "walk", "wall", "wand", "want", "ward", "ware", "warm", "warn", "warp", "wash", "wasp", "watt", "wave", "wavy", "weak", "wear", "weep", "weld", "well", "went", "were", "west", "what", "when", "whey", "whim",
+        "whip", "whiz", "whom", "wick", "wide", "wife", "wild", "will", "wilt", "wind", "wine", "wing", "wink", "wire", "wise", "wish", "with", "woke", "wolf", "womb", "wood", "wool", "word", "wore", "work", "worn",
+        "wrap", "writ", "yard", "yarn", "yawn", "year", "yell", "yoga", "yoke", "yolk", "zone",
+        "abide", "about", "abuse", "acorn", "adapt", "added", "adept", "admit", "adopt", "adult",
+        "after", "again", "agent", "agile", "aging", "agree", "ahead", "aisle", "alarm", "album",
+        "alert", "algae", "alien", "align", "aloft", "alone", "along", "aloof", "alpha", "alter",
+        "ample", "amuse", "angel", "anger", "angle", "anime", "antic", "apart", "apple", "arena",
+        "argue", "arise", "armor", "aroma", "arose", "aside", "asset", "atlas", "attic", "audio",
+        "audit", "badge", "bagel", "basic", "basin", "basis", "batch", "beach", "beard", "beast",
+        "begin", "being", "bench", "birth", "blade", "blame", "bland", "blast", "bleed", "blend",
+        "bless", "blind", "bliss", "blond", "blood", "bloom", "bluff", "blunt", "blurt", "board",
+        "boast", "bonus", "booth", "bound", "brace", "braid", "brain", "brand", "brass", "bread",
+        "breed", "bride", "brief", "bring", "broad", "broil", "broth", "brunt", "brush", "build",
+        "built", "bunch", "burst", "cabin", "cable", "camel", "cargo", "catch", "cater", "cause",
+        "cedar", "chain", "chair", "champ", "chant", "charm", "chart", "chase", "cheap", "cheat",
+        "cheer", "chess", "chest", "chief", "child", "chill", "china", "choir", "chose", "churn",
+        "cider", "cigar", "cinch", "circa", "claim", "clamp", "clash", "clasp", "class", "clean",
+        "clear", "cliff", "climb", "cling", "clone", "close", "cloth", "cloud", "coach", "coast",
+        "color", "comet", "comic", "coral", "corps", "couch", "could", "count", "court", "craft",
+        "cramp", "crane", "crash", "crate", "cream", "creed", "creep", "crest", "crime", "crisp",
+        "cross", "crude", "cruel", "crush", "crust", "dance", "dealt", "debug", "decor", "delta",
+        "demon", "dense", "depot", "depth", "deter", "digit", "diner", "ditch", "dodge", "doing",
+        "donor", "doubt", "dough", "draft", "drain", "drama", "drape", "dread", "dream", "dress",
+        "dried", "drift", "drill", "drone", "drool", "droop", "drops", "eager", "earth", "edict",
+        "eight", "elder", "elect", "elite", "ember", "enact", "ended", "enter", "epoch", "erase",
+        "erode", "error", "erupt", "ethic", "fable", "facet", "faint", "faith", "fatal", "fault",
+        "feast", "feign", "fence", "fetch", "fiber", "field", "fiend", "fifth", "fight", "filth",
+        "final", "first", "flame", "flare", "flash", "fleet", "flesh", "fling", "flint", "float",
+        "flood", "floor", "flora", "floss", "flour", "flout", "fluid", "flung", "flush", "flute",
+        "focus", "force", "forge", "forth", "forum", "found", "frame", "fraud", "fresh", "friar",
+        "front", "frost", "fruit", "fungi", "gauge", "gaunt", "ghost", "giant", "gland", "glare",
+        "glass", "gleam", "glide", "globe", "gloom", "gloss", "going", "grace", "grade", "graft",
+        "grain", "grand", "grant", "grape", "graph", "grasp", "grass", "grate", "great", "greed",
+        "green", "greet", "grief", "grill", "grind", "gripe", "groan", "groom", "grope", "gross",
+        "group", "guard", "guess", "guide", "guild", "guilt", "guise", "habit", "harsh", "haste",
+        "hatch", "haunt", "heist", "hello", "hence", "herbs", "hinge", "hitch", "hoist", "honor",
+        "horse", "hotel", "hound", "house", "human", "humid", "humor", "ideal", "image", "incur",
+        "indie", "inept", "inert", "infer", "ingot", "inner", "input", "intel", "inter", "intro",
+        "ionic", "irate", "issue", "label", "labor", "laden", "lance", "large", "laser", "latch",
+        "later", "laugh", "leach", "learn", "lease", "least", "ledge", "legal", "lemon", "light",
+        "limit", "linen", "liner", "lingo", "liter", "lodge", "logic", "login", "loose", "lotus",
+        "lucid", "lunar", "lunch", "lunge", "lurch", "magic", "manor", "maple", "march", "marsh",
+        "mason", "match", "medal", "media", "melon", "merge", "merit", "metal", "meter", "midst",
+        "might", "mimic", "mince", "minor", "minus", "mirth", "model", "modem", "moist", "month",
+        "moose", "moral", "morph", "motel", "motor", "mound", "mount", "mourn", "mouse", "mouth",
+        "mulch", "mural", "music", "named", "nasal", "night", "ninth", "noble", "noise", "north",
+        "notch", "noted", "nudge", "nurse", "oasis", "ocean", "offer", "often", "onset", "opera",
+        "orbit", "order", "organ", "other", "outer", "paint", "panel", "panic", "paste", "patch",
+        "pause", "peace", "peach", "pearl", "pedal", "perch", "peril", "petal", "phase", "phone",
+        "photo", "piano", "piece", "pilot", "pinch", "place", "plaid", "plain", "plane", "plant",
+        "plate", "plead", "pleat", "plied", "plier", "plumb", "plume", "plump", "point", "polar",
+        "porch", "poser", "pouch", "pound", "press", "price", "pride", "prime", "print", "prior",
+        "prism", "probe", "prone", "proof", "prose", "proud", "prude", "prune", "psalm", "pulse",
+        "punch", "pupil", "purge", "purse", "racer", "radar", "radio", "raise", "ranch", "range",
+        "rapid", "reach", "react", "realm", "rebel", "refer", "reign", "remit", "repel", "rerun",
+        "reset", "resin", "rider", "ridge", "rifle", "rigid", "rigor", "rinse", "ripen", "risen",
+        "roast", "robin", "robot", "rogue", "roots", "rouge", "rough", "round", "route", "ruler",
+        "rumor", "rural", "saint", "salad", "salon", "sauce", "sauna", "scale", "scare", "scarf",
+        "scene", "scent", "scope", "score", "scout", "scram", "scrap", "scrub", "sense", "setup",
+        "shade", "shaft", "shape", "share", "sharp", "shear", "sheen", "sheep", "sheer", "sheet",
+        "shelf", "shell", "shift", "shire", "shirt", "shore", "short", "shout", "shrub", "siege",
+        "sight", "sigma", "since", "siren", "slain", "slang", "slant", "slash", "slate", "sleep",
+        "sleet", "slice", "slide", "slime", "sling", "slope", "sloth", "smart", "smell", "smile",
+        "smite", "smith", "snail", "snare", "snore", "sonic", "sound", "south", "space", "spare",
+        "spear", "speed", "spend", "spent", "spice", "spill", "spine", "spite", "split", "spoon",
+        "sport", "spree", "staff", "stage", "stain", "stair", "stale", "stall", "stamp", "stand",
+        "start", "stash", "state", "steal", "steam", "steel", "steep", "steer", "stern", "stiff",
+        "still", "sting", "stoic", "stole", "stomp", "stone", "stood", "stool", "stoop", "store",
+        "storm", "stout", "strap", "strip", "stuff", "stump", "stung", "stunt", "sugar", "suite",
+        "super", "surge", "table", "tacit", "taint", "taper", "taste", "taunt", "teeth", "tempo",
+        "tense", "tenth", "tepid", "their", "theme", "there", "these", "thick", "thief", "thigh",
+        "thing", "third", "thorn", "those", "three", "thumb", "tiger", "tight", "timer", "timid",
+        "tired", "titan", "title", "toast", "tonic", "topic", "torch", "total", "touch", "tough",
+        "trace", "trade", "trail", "train", "trait", "trash", "tread", "treat", "trend", "trial",
+        "tribe", "tried", "trite", "troll", "troop", "trope", "trout", "trump", "trust", "truth",
+        "tulip", "tumor", "tunic", "turns", "tutor", "ultra", "uncle", "under", "undue", "unfit",
+        "union", "unite", "until", "upper", "upset", "urban", "usage", "usher", "usual", "utter"
+      ]);
+
+      /* ===== STATE ===== */
+      let state = {
+        currentPhase: 'idle',
+        guessingEndsAt: null,
+        gatheringEndsAt: null,
+        revealEndsAt: null,
+        currentRoundId: 0,
+        guessCount: 0,
+        lastRoundResult: null,
+        config: { maxNumber: 50, guessingDuration: 45, gatheringDuration: 10, revealDuration: 30, minPlayers: 5, replayDurationRatio: 0.67 },
+        player: { id: '', name: '', currentPick: null, confirmedPick: null, pickStatus: 'none', failedPick: null },
+        activeTab: 'pick',
+        connectionStatus: 'local',
+        consecutiveErrors: 0,
+        adminAuthenticated: false,
+        adminPassphrase: '',
+        resetConfirmPending: false,
+        leaderboardData: null,
+        leaderboardLastFetch: 0,
+        historyData: null,
+        historyLastFetch: 0
+      };
+
+      /* ===== DOM REFS ===== */
+      const dom = {
+        // Header
+        headerTitle: document.querySelector('.header-title'),
+        currentRound: document.getElementById('current-round'),
+        roundName: document.getElementById('round-name'),
+        playersCount: document.getElementById('players-count'),
+        playerEmojis: document.getElementById('player-emojis'),
+        phaseBadge: document.getElementById('phase-badge'),
+        timerDisplay: document.getElementById('timer-display'),
+        timerBar: document.getElementById('timer-bar'),
+        helpBtn: document.getElementById('help-btn'),
+        themeToggle: document.getElementById('theme-toggle'),
+        // Tabs
+        tabNav: document.getElementById('tab-nav'),
+        tabButtons: Array.from(document.querySelectorAll('[role="tab"]')),
+        tabPanels: Array.from(document.querySelectorAll('[role="tabpanel"]')),
+        pickTab: document.getElementById('pick-tab'),
+        resultsTab: document.getElementById('results-tab'),
+        boardTab: document.getElementById('board-tab'),
+        historyTab: document.getElementById('history-tab'),
+        adminTab: document.getElementById('admin-tab'),
+        // Pick tab
+        playerNameInput: document.getElementById('player-name-input'),
+        yourPickDisplay: document.getElementById('your-pick-display'),
+        pickNumber: document.getElementById('pick-number'),
+        pickStatus: document.getElementById('pick-status'),
+        statusMessage: document.getElementById('status-message'),
+        numberGrid: document.getElementById('number-grid'),
+        shuffleWidget: document.getElementById('shuffle-widget'),
+        shuffleGrid: document.getElementById('shuffle-grid'),
+        shuffleScore: document.getElementById('shuffle-score'),
+        shuffleNewBtn: document.getElementById('shuffle-new-btn'),
+        // Results tab
+        resultsStaleBanner: document.getElementById('results-stale-banner'),
+        winnerSection: document.getElementById('winner-section'),
+        numberSlotsContainer: document.getElementById('number-slots-container'),
+        resultsStats: document.getElementById('results-stats'),
+        // Leaderboard
+        leaderboardTbody: document.getElementById('leaderboard-tbody'),
+        // History
+        historyStats: document.getElementById('history-stats'),
+        frequencyChart: document.getElementById('frequency-chart'),
+        recentRoundsTbody: document.getElementById('recent-rounds-tbody'),
+        // Admin
+        adminContent: document.getElementById('admin-content'),
+        adminPassphraseInput: document.getElementById('admin-passphrase-input'),
+        adminStartBtn: document.getElementById('admin-start-btn'),
+        adminPauseBtn: document.getElementById('admin-pause-btn'),
+        adminNextPhaseBtn: document.getElementById('admin-next-phase-btn'),
+        configMaxNumber: document.getElementById('config-max-number'),
+        configGuessingDuration: document.getElementById('config-guessing-duration'),
+        configGatheringDuration: document.getElementById('config-gathering-duration'),
+        configRevealDuration: document.getElementById('config-reveal-duration'),
+        configMinPlayers: document.getElementById('config-min-players'),
+        adminSaveConfigBtn: document.getElementById('admin-save-config-btn'),
+        adminClearScoresBtn: document.getElementById('admin-clear-scores-btn'),
+        clearScoresConfirm: document.getElementById('clear-scores-confirm'),
+        clearScoresConfirmBtn: document.getElementById('clear-scores-confirm-btn'),
+        clearScoresCancelBtn: document.getElementById('clear-scores-cancel-btn'),
+        adminResetBtn: document.getElementById('admin-reset-btn'),
+        resetConfirm: document.getElementById('reset-confirm'),
+        resetConfirmBtn: document.getElementById('reset-confirm-btn'),
+        resetCancelBtn: document.getElementById('reset-cancel-btn'),
+        adminStatus: document.getElementById('admin-status'),
+        // Footer
+        statusDot: document.getElementById('status-dot'),
+        connectionStatusLabel: document.getElementById('connection-status-label'),
+        // Onboarding
+        onboardingOverlay: document.getElementById('onboarding-overlay'),
+        onboardingDismissBtn: document.getElementById('onboarding-dismiss-btn'),
+        hintsToggle: document.getElementById('hints-toggle'),
+        hintsContent: document.getElementById('hints-content'),
+        // Utility
+        liveRegion: document.getElementById('live-region')
+      };
+
+      /* ===== UTILITIES ===== */
+      function sanitizeString(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+      }
+
+      function generateUUID() {
+        if (typeof crypto.randomUUID === 'function') {
+          return crypto.randomUUID();
+        }
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          const r = Math.random() * 16 | 0;
+          const v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        });
+      }
+
+      function getDeviceFingerprint() {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.textBaseline = "top";
+        ctx.font = "14px Arial";
+        ctx.textBaseline = "alphabetic";
+        ctx.fillStyle = "#f60";
+        ctx.fillRect(125, 1, 62, 20);
+        ctx.fillStyle = "#069";
+        ctx.fillText("Browser Fingerprint", 2, 15);
+        const dataUrl = canvas.toDataURL();
+
+        const fingerprint = {
+          screenWidth: window.screen.width,
+          screenHeight: window.screen.height,
+          colorDepth: window.screen.colorDepth,
+          timezone: new Date().getTimezoneOffset(),
+          language: navigator.language,
+          hardwareConcurrency: navigator.hardwareConcurrency || 1,
+          maxTouchPoints: navigator.maxTouchPoints || 0,
+          platform: navigator.platform
+        };
+
+        // Simple djb2 hash
+        let hash = 5381;
+        const str = JSON.stringify(fingerprint) + dataUrl;
+        for (let i = 0; i < str.length; i++) {
+          hash = ((hash << 5) + hash) + str.charCodeAt(i);
+          hash = hash & hash; // Convert to 32-bit integer
+        }
+        return Math.abs(hash).toString(36);
+      }
+
+      /* ===== STORAGE ===== */
+      function getLocalPlayer() {
+        try {
+          const stored = localStorage.getItem('lun_player');
+          if (stored) return JSON.parse(stored);
+        } catch (e) {}
+        return null;
+      }
+
+      function setLocalPlayer(player) {
+        localStorage.setItem('lun_player', JSON.stringify(player));
+      }
+
+      function getSessionPlayerId() {
+        return sessionStorage.getItem('lun_pid');
+      }
+
+      function setSessionPlayerId(pid) {
+        sessionStorage.setItem('lun_pid', pid);
+      }
+
+      function setCookie(name, value, days = 30) {
+        const date = new Date();
+        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+        document.cookie = name + "=" + encodeURIComponent(value) + ";expires=" + date.toUTCString() + ";path=/";
+      }
+
+      function getCookie(name) {
+        const nameEQ = name + "=";
+        const cookies = document.cookie.split(';');
+        for (let c of cookies) {
+          c = c.trim();
+          if (c.indexOf(nameEQ) === 0) return decodeURIComponent(c.substring(nameEQ.length));
+        }
+        return null;
+      }
+
+      /* ===== PLAYER IDENTITY ===== */
+      function initializePlayer() {
+        let player = getLocalPlayer();
+        let sessionPid = getSessionPlayerId();
+        let cookiePid = getCookie('lun_pid');
+
+        if (!player || !player.id) {
+          // Generate new player
+          const newId = generateUUID();
+          const fingerprint = getDeviceFingerprint();
+          player = {
+            id: newId,
+            name: '',
+            fingerprint: fingerprint
+          };
+          setLocalPlayer(player);
+          setSessionPlayerId(newId);
+          setCookie('lun_pid', newId, 30);
+        } else if (sessionPid && sessionPid !== player.id) {
+          // Restore from session or cookie
+          player.id = sessionPid || cookiePid || player.id;
+          setLocalPlayer(player);
+        }
+
+        state.player.id = player.id;
+        state.player.name = player.name || '';
+        return player;
+      }
+
+      /* ===== API ===== */
+      function apiPost(action, body) {
+        body = body || {};
+        const payload = encodeURIComponent(JSON.stringify(body));
+        const url = API_URL + '?action=' + encodeURIComponent(action) + '&payload=' + payload;
+        return fetch(url, { method: 'GET' })
+          .then(function(resp) {
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            return resp.json();
+          });
+      }
+
+      function apiGet(action, params) {
+        let url = API_URL + '?action=' + encodeURIComponent(action);
+        if (params) {
+          for (const k in params) {
+            if (params.hasOwnProperty(k)) url += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+          }
+        }
+        return fetch(url, { method: 'GET' })
+          .then(function(resp) {
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            return resp.json();
+          });
+      }
+
+      function fetchLeaderboard() {
+        dom.leaderboardTbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;">Loading...</td></tr>';
+        return apiGet('getLeaderboard', { scoreType: 'strategy' }).then(function(data) {
+          if (data && data.success !== false) {
+            state.leaderboardData = data;
+            renderLeaderboard();
+          }
+        }).catch(function(err) {
+          console.error('fetchLeaderboard error:', err);
+          dom.leaderboardTbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:red;">Error loading leaderboard</td></tr>';
+        });
+      }
+
+      function fetchHistory() {
+        dom.historyStats.innerHTML = '<div style="text-align:center;padding:20px;">Loading...</div>';
+        return apiGet('getRoundHistory', { limit: 50 }).then(function(data) {
+          if (data && data.success !== false) {
+            state.historyData = data;
+            renderHistory();
+          }
+        }).catch(function(err) {
+          console.error('fetchHistory error:', err);
+          dom.historyStats.innerHTML = '<div style="text-align:center;padding:20px;color:red;">Error loading history</div>';
+        });
+      }
+
+      /* ===== POLLING ===== */
+      let pollingInterval = null;
+      let timerIntervalId = null;
+      let lastPhaseChangeTime = 0;
+      let lastCheckPhaseExpiry = 0;
+
+      function determinePhase(now) {
+        if (!state.guessingEndsAt) return 'idle';
+        const guessing = now < state.guessingEndsAt;
+        const gathering = now >= state.guessingEndsAt && now < state.gatheringEndsAt;
+        const reveal = now >= state.gatheringEndsAt && now < state.revealEndsAt;
+
+        if (guessing) return 'guessing';
+        if (gathering) return 'gathering';
+        if (reveal) return 'reveal';
+        return 'idle';
+      }
+
+      function getGameState() {
+        return apiPost('getGameState', {
+          playerId: state.player.id,
+          maxNumber: state.config.maxNumber
+        }).then(function(data) {
+          if (!data) return;
+          // Update basic state
+          state.guessCount = data.guessCount || 0;
+          state.currentRoundId = data.currentRoundId || 0;
+          state.config = data.config || state.config;
+          state.leaderboardData = data.leaderboardData || null;
+          state.historyData = data.historyData || null;
+          if (data.config && state.adminAuthenticated) {
+            populateConfigForm();
+          }
+
+          // Update timestamps — clear them if server returns empty (idle state)
+          state.guessingEndsAt = data.guessingEndsAt ? new Date(data.guessingEndsAt).getTime() : null;
+          state.gatheringEndsAt = data.gatheringEndsAt ? new Date(data.gatheringEndsAt).getTime() : null;
+          state.revealEndsAt = data.revealEndsAt ? new Date(data.revealEndsAt).getTime() : null;
+
+          if (data.lastRoundResult) {
+            state.lastRoundResult = data.lastRoundResult;
+          }
+
+          if (data.playerData) {
+            state.player.confirmedPick = data.playerData.confirmedPick;
+            state.player.pickStatus = data.playerData.pickStatus || 'none';
+          }
+
+          const now = Date.now();
+          const newPhase = determinePhase(now);
+          if (newPhase !== state.currentPhase) {
+            const prevPhase = state.currentPhase;
+            state.currentPhase = newPhase;
+            lastPhaseChangeTime = now;
+            handlePhaseChange(prevPhase, newPhase);
+          }
+
+          state.connectionStatus = 'online';
+          state.consecutiveErrors = 0;
+          renderHeader();
+          renderStatusMessage();
+          refreshActiveTab();
+        }).catch(function(err) {
+          console.error('getGameState error:', err);
+          state.consecutiveErrors++;
+          if (state.consecutiveErrors >= 3) {
+            state.connectionStatus = 'offline';
+          }
+          renderHeader();
+        });
+      }
+
+      function checkPhaseExpiry() {
+        const now = Date.now();
+        const newPhase = determinePhase(now);
+
+        if (newPhase !== state.currentPhase) {
+          const prevPhase = state.currentPhase;
+          state.currentPhase = newPhase;
+          lastPhaseChangeTime = now;
+          handlePhaseChange(prevPhase, newPhase);
+        }
+      }
+
+      function handlePhaseChange(prevPhase, newPhase) {
+        // Phase transition
+
+        // Detect uncommitted pick when leaving guessing phase
+        if (prevPhase === 'guessing' && state.player.currentPick !== null) {
+          // A pick change was pending but never confirmed by server
+          if (guessDebounceTimer) { clearTimeout(guessDebounceTimer); guessDebounceTimer = null; }
+          if (state.player.confirmedPick !== null) {
+            // They had a confirmed pick and were changing — revert to confirmed
+            state.statusMessageText = 'Change to #' + state.player.currentPick + ' didn\'t go through — your original pick #' + state.player.confirmedPick + ' stands.';
+            state.player.pickStatus = 'error';
+            state.player.currentPick = null;
+            setTimeout(() => { state.player.pickStatus = 'none'; state.statusMessageText = ''; renderStatusMessage(); }, 8000);
+          } else {
+            // No confirmed pick at all — total failure
+            state.player.failedPick = state.player.currentPick;
+            state.player.pickStatus = 'failed';
+            state.player.currentPick = null;
+            setTimeout(() => {
+              if (state.player.pickStatus === 'failed') {
+                state.player.pickStatus = 'none';
+                state.player.failedPick = null;
+                renderPick();
+                renderStatusMessage();
+              }
+            }, 8000);
+          }
+          renderPick();
+          renderStatusMessage();
+        }
+
+        if (newPhase === 'gathering' || newPhase === 'reveal') {
+          setActiveTab('results');
+        } else if (newPhase === 'guessing') {
+          // New round — clear pick state
+          state.player.confirmedPick = null;
+          state.player.pickStatus = 'none';
+          state.player.currentPick = null;
+          state.player.failedPick = null;
+          setActiveTab('pick');
+        }
+
+        if (newPhase === 'idle') {
+          state.player.confirmedPick = null;
+          state.player.pickStatus = 'none';
+          state.player.currentPick = null;
+          state.player.failedPick = null;
+        }
+
+        renderPick();
+        renderStatusMessage();
+      }
+
+      function startPolling() {
+        if (pollingInterval) clearInterval(pollingInterval);
+
+        const doPoll = () => {
+          const interval = state.currentPhase === 'idle' ? POLLING_INTERVALS.idle :
+                          document.hidden ? POLLING_INTERVALS.hidden :
+                          POLLING_INTERVALS.visible;
+          pollingInterval = setTimeout(function() {
+            getGameState().then(doPoll).catch(doPoll);
+          }, interval);
+        };
+
+        doPoll();
+      }
+
+      function startTimer() {
+        if (timerIntervalId) clearInterval(timerIntervalId);
+
+        timerIntervalId = setInterval(function() {
+          const now = Date.now();
+          updateTimerDisplay(now);
+          checkPhaseExpiry();
+        }, TIMER_INTERVAL);
+
+        updateTimerDisplay(Date.now());
+      }
+
+      /* ===== TIMER ===== */
+      function updateTimerDisplay(now) {
+        const phase = state.currentPhase;
+        let endsAt = null;
+        let durationMs = 0;
+
+        if (phase === 'guessing') {
+          endsAt = state.guessingEndsAt;
+          durationMs = state.config.guessingDuration * 1000;
+        } else if (phase === 'gathering') {
+          endsAt = state.gatheringEndsAt;
+          durationMs = state.config.gatheringDuration * 1000;
+        } else if (phase === 'reveal') {
+          endsAt = state.revealEndsAt;
+          durationMs = state.config.revealDuration * 1000;
+        }
+
+        if (!endsAt) {
+          dom.timerDisplay.textContent = '0:00';
+          dom.timerBar.style.width = '100%';
+          dom.timerBar.classList.remove('low', 'critical');
+          return;
+        }
+
+        const remaining = Math.max(0, endsAt - now);
+        const seconds = Math.floor(remaining / 1000);
+        const minutes = Math.floor(seconds / 60);
+        dom.timerDisplay.textContent = minutes + ':' + (seconds % 60).toString().padStart(2, '0');
+
+        const graceDurationMs = durationMs + TIMER_GRACE_PERIOD;
+        const percent = (remaining / graceDurationMs) * 100;
+        dom.timerBar.style.width = Math.max(0, Math.min(100, percent)) + '%';
+
+        // Color states
+        const twentyPercentThreshold = durationMs * 0.2;
+        dom.timerBar.classList.remove('low', 'critical');
+        if (remaining > twentyPercentThreshold) {
+          dom.timerBar.classList.remove('low', 'critical');
+        } else if (remaining > 0 && remaining <= twentyPercentThreshold) {
+          dom.timerBar.classList.add('low');
+        } else if (remaining <= 0) {
+          dom.timerBar.classList.add('critical');
+        }
+      }
+
+      /* ===== RENDER: HEADER ===== */
+      let cachedWordArray = null;
+
+      function generateRoundName(roundId) {
+        if (!cachedWordArray) {
+          cachedWordArray = Array.from(SHUFFLE_WORD_DICT);
+        }
+        const len = cachedWordArray.length;
+        let hash = roundId;
+        const word1 = cachedWordArray[(hash * 73856093) % len];
+        hash = (hash * 19349663) % 2147483647;
+        const word2 = cachedWordArray[(hash * 83492791) % len];
+        hash = (hash * 45678901) % 2147483647;
+        const word3 = cachedWordArray[(hash * 39916801) % len];
+        return word1 + '-' + word2 + '-' + word3;
+      }
+
+      function renderHeader() {
+        dom.currentRound.textContent = state.currentRoundId;
+        dom.playersCount.textContent = state.guessCount || 0;
+        const guessCount = state.guessCount || 0;
+        var PLAYER_FACES = ['😀','😊','😎','🤓','😄','🥳','😁','🤗','😺','🧑','👩','👨','🧑‍🦱','👩‍🦰','👨‍🦳','🧕','👲','👳','👸','🤴','🧔','👧','👦','🧒','👵','👴','🙂','😏','🤠','🥸'];
+        var emojiStr = '';
+        for (var ei = 0; ei < Math.min(guessCount, 30); ei++) {
+          emojiStr += PLAYER_FACES[ei % PLAYER_FACES.length];
+        }
+        dom.playerEmojis.textContent = emojiStr;
+        if (state.currentRoundId > 0) {
+          dom.roundName.textContent = generateRoundName(state.currentRoundId);
+        } else {
+          dom.roundName.textContent = '';
+        }
+
+        const phaseLower = (state.currentPhase || 'idle').toLowerCase();
+        dom.phaseBadge.setAttribute('data-phase', phaseLower);
+        dom.phaseBadge.className = 'phase-badge ' + phaseLower;
+        const phaseLabels = { idle: 'Waiting', guessing: 'Pick', gathering: 'Locking In', reveal: 'Results' };
+        dom.phaseBadge.textContent = phaseLabels[phaseLower] || phaseLower.charAt(0).toUpperCase() + phaseLower.slice(1);
+
+        updateTimerDisplay(Date.now());
+
+        // Status dot
+        dom.statusDot.className = 'status-dot ' + state.connectionStatus;
+        const statusLabels = { online: 'Connected', offline: 'Offline', local: 'Local' };
+        dom.connectionStatusLabel.textContent = statusLabels[state.connectionStatus] || 'Connecting...';
+
+        // Update admin status if authenticated
+        if (state.adminAuthenticated) {
+          updateAdminStatus();
+        }
+      }
+
+      /* ===== RENDER: STATUS MESSAGE ===== */
+      function renderStatusMessage() {
+        const phase = state.currentPhase;
+        let message = '';
+        let type = 'info';
+
+        if (phase === 'guessing') {
+          const count = state.guessCount || 0;
+          const min = state.config.minPlayers || 5;
+          if (state.player.confirmedPick !== null) {
+            message = 'Pick locked in. ' + count + ' player' + (count !== 1 ? 's' : '') + ' so far.';
+            type = 'success';
+          } else {
+            const needed = Math.max(0, min - count);
+            message = count + ' player' + (count !== 1 ? 's' : '') + ' guessed' + (needed > 0 ? ' — ' + needed + ' more needed' : '') + '. Pick a number.';
+            type = 'info';
+          }
+        } else if (phase === 'gathering') {
+          if (state.player.confirmedPick !== null) {
+            message = 'Your pick #' + state.player.confirmedPick + ' is locked in. Gathering all votes...';
+          } else {
+            message = 'Too late. Gathering votes...';
+          }
+          type = 'warning';
+        } else if (phase === 'reveal') {
+          message = 'Results are in.';
+          type = 'success';
+        } else {
+          // Idle — dynamic contextual message
+          if (state.connectionStatus === 'online') {
+            if (state.lastRoundResult) {
+              const prevWinner = state.lastRoundResult.winnerName || state.lastRoundResult.winner || null;
+              if (prevWinner) {
+                message = 'Last round: ' + sanitizeString(prevWinner) + ' won with #' + state.lastRoundResult.winningNumber + '. Waiting for next game...';
+              } else {
+                message = 'Last round had no winner. Waiting for next game...';
+              }
+            } else {
+              message = 'Connected. Waiting for the teacher to start the game.';
+            }
+          } else if (state.connectionStatus === 'local') {
+            message = 'Connecting to server...';
+          } else {
+            message = 'Connection lost — trying to reconnect...';
+            type = 'error';
+          }
+          if (type === 'info') type = 'info';
+        }
+
+        if (state.player.pickStatus === 'failed') {
+          message = 'Pick #' + (state.player.failedPick || '?') + ' was not submitted — time ran out.';
+          type = 'error';
+        } else if (state.player.pickStatus === 'error') {
+          message = state.statusMessageText || 'Error submitting pick';
+          type = 'error';
+        }
+
+        dom.statusMessage.textContent = message;
+        dom.statusMessage.className = 'status-message ' + type;
+        if (message) {
+          dom.statusMessage.style.display = 'flex';
+        } else {
+          dom.statusMessage.style.display = 'none';
+        }
+      }
+
+      /* ===== RENDER: PICK TAB ===== */
+      function renderPick() {
+        // Player name
+        dom.playerNameInput.value = state.player.name;
+
+        // Your Pick display
+        dom.yourPickDisplay.classList.remove('confirmed', 'pending', 'failed');
+        if (state.player.pickStatus === 'failed') {
+          dom.pickNumber.textContent = state.player.failedPick || '?';
+          dom.pickStatus.textContent = 'Not submitted — time ran out.';
+          dom.pickStatus.className = 'pick-status failed';
+          dom.yourPickDisplay.classList.add('failed');
+        } else if (state.player.confirmedPick !== null) {
+          dom.pickNumber.textContent = state.player.confirmedPick;
+          if (state.player.currentPick !== null && state.player.currentPick !== state.player.confirmedPick) {
+            // Changing from a confirmed pick to a new one — pending
+            dom.pickNumber.textContent = state.player.currentPick;
+            dom.pickStatus.textContent = 'Changing to ' + state.player.currentPick + '...';
+            dom.pickStatus.className = 'pick-status pending';
+            dom.yourPickDisplay.classList.add('pending');
+          } else {
+            dom.pickStatus.textContent = 'Confirmed \u2713';
+            dom.pickStatus.className = 'pick-status confirmed';
+            dom.yourPickDisplay.classList.add('confirmed');
+          }
+        } else if (state.player.currentPick !== null) {
+          dom.pickNumber.textContent = state.player.currentPick;
+          dom.pickStatus.textContent = state.player.pickStatus === 'sending' ? 'Sending...' : 'Pending...';
+          dom.pickStatus.className = 'pick-status pending';
+          dom.yourPickDisplay.classList.add('pending');
+        } else {
+          if (state.currentPhase === 'idle') {
+            dom.pickNumber.textContent = '\u23f3';
+            dom.pickStatus.textContent = 'Game not started';
+            dom.pickStatus.className = 'pick-status';
+          } else if (state.currentPhase === 'guessing') {
+            dom.pickNumber.textContent = 'Tap a number';
+            dom.pickStatus.textContent = 'Pick before time runs out.';
+            dom.pickStatus.className = 'pick-status';
+          } else {
+            dom.pickNumber.textContent = '\u2014';
+            dom.pickStatus.textContent = 'No pick this round';
+            dom.pickStatus.className = 'pick-status';
+          }
+        }
+
+        // Number grid — hide entirely during idle
+        dom.numberGrid.innerHTML = '';
+        if (state.currentPhase === 'idle') {
+          dom.numberGrid.style.display = 'none';
+        } else {
+          dom.numberGrid.style.display = '';
+        }
+        const maxNum = state.config.maxNumber;
+        const canPick = state.currentPhase === 'guessing';
+        for (let i = 1; i <= maxNum; i++) {
+          const btn = document.createElement('button');
+          btn.className = 'number-btn';
+          if (i === state.player.confirmedPick || i === state.player.currentPick) {
+            btn.classList.add('selected');
+          }
+          if (!canPick) {
+            btn.classList.add('disabled');
+            btn.setAttribute('aria-disabled', 'true');
+          }
+          btn.textContent = i;
+          btn.setAttribute('aria-label', 'Pick number ' + i);
+          btn.addEventListener('click', () => handleNumberPick(i));
+          dom.numberGrid.appendChild(btn);
+        }
+
+        // Shuffle widget — show when player has a pick and phase is guessing
+        var showShuffle = state.currentPhase === 'guessing' &&
+          (state.player.confirmedPick !== null || state.player.currentPick !== null);
+        dom.shuffleWidget.style.display = showShuffle ? '' : 'none';
+        if (showShuffle && !dom.shuffleGrid.children.length) {
+          initializeShuffle();
+        }
+      }
+
+      /* ===== SHUFFLE MINI-GAME (Swap Mechanic) ===== */
+      let shuffleState = {
+        tiles: [],       // array of { letter: 'A' }
+        firstPick: null, // index of first tile clicked (or null)
+        score: 0,
+        foundWords: new Set(),
+        scanning: false  // true while word-removal animation is running
+      };
+
+      function saveShuffle() {
+        try {
+          localStorage.setItem('lun_shuffle', JSON.stringify({
+            score: shuffleState.score,
+            foundWords: Array.from(shuffleState.foundWords),
+            tiles: shuffleState.tiles
+          }));
+        } catch (e) {}
+      }
+
+      function loadShuffle() {
+        try {
+          const stored = localStorage.getItem('lun_shuffle');
+          if (stored) {
+            const data = JSON.parse(stored);
+            shuffleState.score = data.score || 0;
+            shuffleState.foundWords = new Set(data.foundWords || []);
+            if (data.tiles && data.tiles.length === 16) {
+              shuffleState.tiles = data.tiles;
+            }
+            dom.shuffleScore.textContent = shuffleState.score;
+          }
+        } catch (e) {}
+      }
+
+      function generateShuffleTiles() {
+        const tiles = [];
+        const vowels = 'AEIOU'.split('');
+        const consonants = 'BCDFGHLMNPRST'.split('');
+        for (let i = 0; i < 16; i++) {
+          var isVowel = Math.random() < 0.4;
+          var letter = isVowel ? vowels[Math.floor(Math.random() * vowels.length)] : consonants[Math.floor(Math.random() * consonants.length)];
+          tiles.push({ letter: letter });
+        }
+        return tiles;
+      }
+
+      function randomLetter() {
+        var vowels = 'AEIOU'.split('');
+        var consonants = 'BCDFGHLMNPRST'.split('');
+        var isVowel = Math.random() < 0.4;
+        return isVowel ? vowels[Math.floor(Math.random() * vowels.length)] : consonants[Math.floor(Math.random() * consonants.length)];
+      }
+
+      function initializeShuffle() {
+        loadShuffle();
+        if (!shuffleState.tiles || shuffleState.tiles.length !== 16) {
+          shuffleState.tiles = generateShuffleTiles();
+        }
+        shuffleState.firstPick = null;
+        renderShuffleGrid();
+        // Do an initial scan in case the board has words (no points)
+        setTimeout(function() { scanAndRemoveWords(false); }, 300);
+      }
+
+      function isAdjacentShuffle(idx1, idx2) {
+        var row1 = Math.floor(idx1 / 4), col1 = idx1 % 4;
+        var row2 = Math.floor(idx2 / 4), col2 = idx2 % 4;
+        return Math.abs(row1 - row2) + Math.abs(col1 - col2) === 1; // orthogonal only
+      }
+
+      function renderShuffleGrid() {
+        dom.shuffleGrid.innerHTML = '';
+        shuffleState.tiles.forEach(function(tile, i) {
+          var btn = document.createElement('div');
+          btn.className = 'shuffle-tile';
+          btn.textContent = tile.letter;
+          btn.dataset.index = i;
+          if (shuffleState.firstPick === i) {
+            btn.classList.add('selected');
+          } else if (shuffleState.firstPick !== null && isAdjacentShuffle(shuffleState.firstPick, i)) {
+            btn.classList.add('swap-target');
+          }
+          btn.addEventListener('click', function() { handleShuffleTileClick(i); });
+          dom.shuffleGrid.appendChild(btn);
+        });
+        dom.shuffleScore.textContent = shuffleState.score;
+      }
+
+      function handleShuffleTileClick(index) {
+        if (shuffleState.scanning) return; // ignore clicks during animation
+
+        if (shuffleState.firstPick === null) {
+          // First click — select this tile
+          shuffleState.firstPick = index;
+          renderShuffleGrid();
+        } else if (shuffleState.firstPick === index) {
+          // Clicked the same tile — deselect
+          shuffleState.firstPick = null;
+          renderShuffleGrid();
+        } else if (isAdjacentShuffle(shuffleState.firstPick, index)) {
+          // Second click on adjacent tile — SWAP
+          var a = shuffleState.firstPick;
+          var b = index;
+          var temp = shuffleState.tiles[a].letter;
+          shuffleState.tiles[a].letter = shuffleState.tiles[b].letter;
+          shuffleState.tiles[b].letter = temp;
+          shuffleState.firstPick = null;
+          saveShuffle();
+
+          // Brief highlight on swapped tiles
+          renderShuffleGrid();
+          var tileA = dom.shuffleGrid.children[a];
+          var tileB = dom.shuffleGrid.children[b];
+          if (tileA) tileA.classList.add('swapped');
+          if (tileB) tileB.classList.add('swapped');
+          setTimeout(function() {
+            if (tileA) tileA.classList.remove('swapped');
+            if (tileB) tileB.classList.remove('swapped');
+          }, 300);
+
+          // Scan for words after the swap — player gets points
+          setTimeout(function() { scanAndRemoveWords(true); }, 350);
+        } else {
+          // Not adjacent — switch selection to this tile
+          shuffleState.firstPick = index;
+          renderShuffleGrid();
+        }
+      }
+
+      // Scan all rows and columns for valid words (3-4 letters)
+      function scanForWords() {
+        var found = []; // array of { word, indices }
+
+        // Check all horizontal runs (rows of 4)
+        for (var row = 0; row < 4; row++) {
+          var rowLetters = '';
+          var rowIndices = [];
+          for (var col = 0; col < 4; col++) {
+            var idx = row * 4 + col;
+            rowLetters += shuffleState.tiles[idx].letter.toLowerCase();
+            rowIndices.push(idx);
+          }
+          // Check 4-letter word (full row)
+          if (SHUFFLE_WORD_DICT.has(rowLetters)) {
+            found.push({ word: rowLetters, indices: rowIndices.slice() });
+          }
+          // Check 3-letter substrings
+          for (var s = 0; s <= 1; s++) {
+            var sub = rowLetters.substring(s, s + 3);
+            if (SHUFFLE_WORD_DICT.has(sub)) {
+              found.push({ word: sub, indices: rowIndices.slice(s, s + 3) });
+            }
+          }
+        }
+
+        // Check all vertical runs (columns of 4)
+        for (var col2 = 0; col2 < 4; col2++) {
+          var colLetters = '';
+          var colIndices = [];
+          for (var row2 = 0; row2 < 4; row2++) {
+            var idx2 = row2 * 4 + col2;
+            colLetters += shuffleState.tiles[idx2].letter.toLowerCase();
+            colIndices.push(idx2);
+          }
+          // Check 4-letter word (full column)
+          if (SHUFFLE_WORD_DICT.has(colLetters)) {
+            found.push({ word: colLetters, indices: colIndices.slice() });
+          }
+          // Check 3-letter substrings
+          for (var s2 = 0; s2 <= 1; s2++) {
+            var sub2 = colLetters.substring(s2, s2 + 3);
+            if (SHUFFLE_WORD_DICT.has(sub2)) {
+              found.push({ word: sub2, indices: colIndices.slice(s2, s2 + 3) });
+            }
+          }
+        }
+
+        return found;
+      }
+
+      // Process one word: highlight letters sequentially, float word, replace tiles, then callback
+      function animateWord(entry, awardPoints, onDone) {
+        var indices = entry.indices;
+        var word = entry.word;
+        var letterDelay = 180; // ms between each letter highlight
+
+        // Step 1: highlight each letter one at a time
+        indices.forEach(function(idx, step) {
+          setTimeout(function() {
+            var tile = dom.shuffleGrid.children[idx];
+            if (tile) tile.classList.add('letter-highlight');
+          }, step * letterDelay);
+        });
+
+        // Step 2: after all letters highlighted, float the word up
+        var afterLetters = indices.length * letterDelay + 100;
+        setTimeout(function() {
+          // Score only if player-triggered
+          if (awardPoints) {
+            var points = word.length * 15;
+            shuffleState.score += points;
+            dom.shuffleScore.textContent = shuffleState.score;
+          }
+          shuffleState.foundWords.add(word);
+
+          // Float word
+          var foundMsg = document.createElement('div');
+          foundMsg.className = 'word-found';
+          foundMsg.textContent = word.toUpperCase();
+          var rect = dom.shuffleGrid.getBoundingClientRect();
+          foundMsg.style.left = (rect.left + rect.width / 2 - 40) + 'px';
+          foundMsg.style.top = (rect.top + rect.height / 2) + 'px';
+          document.body.appendChild(foundMsg);
+          setTimeout(function() { foundMsg.remove(); }, 1100);
+        }, afterLetters);
+
+        // Step 3: after float, replace tiles with new letters and re-render
+        var afterFloat = afterLetters + 900;
+        setTimeout(function() {
+          indices.forEach(function(idx) {
+            shuffleState.tiles[idx] = { letter: randomLetter() };
+          });
+          saveShuffle();
+          renderShuffleGrid();
+          // Brief pause then callback for next word
+          setTimeout(function() { onDone(); }, 250);
+        }, afterFloat);
+      }
+
+      function scanAndRemoveWords(playerTriggered) {
+        var found = scanForWords();
+        if (found.length === 0) {
+          shuffleState.scanning = false;
+          return;
+        }
+
+        shuffleState.scanning = true;
+
+        // Process words one at a time, sequentially
+        var wordIndex = 0;
+        function processNext() {
+          if (wordIndex >= found.length) {
+            // All words done — chain re-scan (auto, no points) in case new tiles formed words
+            setTimeout(function() { scanAndRemoveWords(false); }, 300);
+            return;
+          }
+          var entry = found[wordIndex];
+          wordIndex++;
+          // Only award points on the first scan after a player swap
+          animateWord(entry, playerTriggered, processNext);
+        }
+        processNext();
+      }
+
+      /* ===== GUESS SUBMISSION ===== */
+      let guessDebounceTimer = null;
+
+      function handleNumberPick(num) {
+        if (state.currentPhase !== 'guessing') {
+          state.statusMessageText = 'Too late. Your previous pick is locked in.';
+          state.player.pickStatus = 'error';
+          renderStatusMessage();
+          setTimeout(() => {
+            state.player.pickStatus = 'none';
+            renderStatusMessage();
+          }, 6000);
+          return;
+        }
+
+        state.player.currentPick = num;
+        renderPick();
+
+        // Debounce
+        if (guessDebounceTimer) clearTimeout(guessDebounceTimer);
+        guessDebounceTimer = setTimeout(() => {
+          state.player.pickStatus = 'sending';
+          renderStatusMessage();
+          renderPick();
+
+          apiPost('submitGuess', {
+            playerId: state.player.id,
+            playerName: state.player.name,
+            number: num,
+            roundId: state.currentRoundId,
+            deviceFingerprint: getDeviceFingerprint()
+          }).then(function(data) {
+            if (data.success) {
+              state.player.confirmedPick = num;
+              state.player.pickStatus = 'confirmed';
+              state.player.currentPick = null;
+            } else {
+              state.player.currentPick = null;
+              state.player.pickStatus = 'error';
+              state.statusMessageText = data.message || 'Failed to submit pick';
+              setTimeout(() => {
+                state.player.pickStatus = 'none';
+              }, 6000);
+            }
+            renderStatusMessage();
+            renderPick();
+          }).catch(function(err) {
+            state.player.currentPick = null;
+            state.player.pickStatus = 'error';
+            state.statusMessageText = 'Network error';
+            setTimeout(() => {
+              state.player.pickStatus = 'none';
+            }, 6000);
+            renderStatusMessage();
+            renderPick();
+          });
+        }, 1000);
+      }
+
+      /* ===== RENDER: RESULTS TAB ===== */
+      function buildResultsFromGuesses(result) {
+        // Server provides raw guesses array; build per-number breakdown for display
+        const guesses = result.guesses || [];
+        const maxNum = state.config.maxNumber || 50;
+        const slots = [];
+
+        for (let i = 0; i < maxNum; i++) {
+          slots.push({ count: 0, players: [] });
+        }
+
+        guesses.forEach(function(g) {
+          const num = g.number;
+          if (num >= 1 && num <= maxNum) {
+            slots[num - 1].count++;
+            slots[num - 1].players.push(g.playerName || g.playerId);
+          }
+        });
+
+        return slots;
+      }
+
+      function renderResults() {
+        const result = state.lastRoundResult;
+        const resultRoundId = result ? (result.roundId || 0) : 0;
+
+        // Check if results are from the current gathering/reveal cycle or from a previous round
+        // "Current" means the result roundId matches (currentRoundId - 1 for guessing, or currentRoundId for gathering/reveal)
+        const phase = state.currentPhase;
+        const isCurrentCycle = result && (
+          (phase === 'gathering' || phase === 'reveal') && resultRoundId === state.currentRoundId ||
+          phase === 'guessing' && resultRoundId === state.currentRoundId - 1
+        );
+        const isStale = result && phase === 'guessing' && resultRoundId < state.currentRoundId;
+        const noResultsForThisPhase = !result || ((phase === 'gathering' || phase === 'reveal') && resultRoundId < state.currentRoundId);
+
+        if (isStale) {
+          dom.resultsStaleBanner.textContent = '\u26a0 Showing results from Round ' + resultRoundId + ' — Round ' + state.currentRoundId + ' is now in progress.';
+          dom.resultsStaleBanner.style.display = 'block';
+        } else {
+          dom.resultsStaleBanner.style.display = 'none';
+        }
+
+        if (noResultsForThisPhase) {
+          dom.resultsStaleBanner.style.display = 'none';
+          dom.winnerSection.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-secondary);">No results for this round yet.</div>';
+          dom.numberSlotsContainer.innerHTML = '';
+          dom.resultsStats.innerHTML = '';
+          return;
+        }
+
+        if (!result) {
+          dom.winnerSection.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-secondary);">No results yet — play a round.</div>';
+          dom.numberSlotsContainer.innerHTML = '';
+          dom.resultsStats.innerHTML = '';
+          return;
+        }
+
+        // Winner banner — server uses winnerName, not winner
+        const winnerName = result.winnerName || result.winner || null;
+        if (winnerName && result.winningNumber !== null) {
+          dom.winnerSection.innerHTML = '<div class="winner-banner">\ud83c\udf89 ' + sanitizeString(winnerName) + ' won with ' + result.winningNumber + '.</div>';
+        } else {
+          dom.winnerSection.innerHTML = '<div class="no-winner-banner">No winner this round...</div>';
+        }
+
+        // Build per-number results from raw guesses
+        const slots = buildResultsFromGuesses(result);
+        const maxNum = slots.length;
+
+        // Number slots
+        dom.numberSlotsContainer.innerHTML = '';
+        for (let num = 1; num <= maxNum; num++) {
+          const slot = document.createElement('div');
+          slot.className = 'number-slot';
+
+          const numData = slots[num - 1];
+
+          if (numData.count === 0) {
+            slot.classList.add('unpicked');
+          } else if (numData.count === 1) {
+            slot.classList.add('unique');
+          } else {
+            slot.classList.add('duplicate');
+          }
+
+          if (num === result.winningNumber) {
+            slot.classList.add('winner');
+          }
+
+          let html = '<div class="slot-number">' + num + '</div>';
+          if (num === result.winningNumber && numData.count === 1) {
+            html += '<div class="slot-icon">\u2605</div>';
+          } else if (numData.count === 1) {
+            html += '<div class="slot-icon">\u2713</div>';
+          } else if (numData.count > 1) {
+            html += '<div class="slot-icon">\u2717</div>';
+          }
+
+          if (numData.players.length > 0) {
+            const playerNames = numData.players.map(p => sanitizeString(p)).join(', ');
+            html += '<div class="slot-players">' + playerNames + '</div>';
+          }
+
+          slot.innerHTML = html;
+          dom.numberSlotsContainer.appendChild(slot);
+        }
+
+        // Stats
+        dom.resultsStats.innerHTML = '';
+        const uniqueCount = result.uniqueCount || slots.filter(s => s.count === 1).length;
+        const statsList = [
+          { label: 'Guesses', value: result.totalGuesses || result.guessCount || 0 },
+          { label: 'Unique', value: uniqueCount },
+          { label: 'Winning #', value: result.winningNumber !== null ? result.winningNumber : 'N/A' },
+          { label: 'Round', value: result.roundId || 0 }
+        ];
+
+        statsList.forEach(stat => {
+          const card = document.createElement('div');
+          card.className = 'stat-card';
+          card.innerHTML = '<div class="stat-label">' + stat.label + '</div><div class="stat-value">' + stat.value + '</div>';
+          dom.resultsStats.appendChild(card);
+        });
+      }
+
+      /* ===== RENDER: LEADERBOARD ===== */
+      function renderLeaderboard() {
+        dom.leaderboardTbody.innerHTML = '';
+        if (!state.leaderboardData || !state.leaderboardData.players || state.leaderboardData.players.length === 0) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td colspan="5" style="text-align:center; padding:2rem; color:var(--text-secondary);">No scores yet — play a round to see the leaderboard.</td>';
+          dom.leaderboardTbody.appendChild(tr);
+          return;
+        }
+
+        // Server returns: playerId, playerName, totalWins, simpleScore, strategyScore, roundsPlayed
+        const players = (state.leaderboardData.players || []).sort((a, b) => (b.strategyScore || 0) - (a.strategyScore || 0));
+
+        players.forEach((p, i) => {
+          const tr = document.createElement('tr');
+          if ((p.playerId || p.id) === state.player.id) {
+            tr.classList.add('current-player');
+          }
+
+          const medals = ['gold', 'silver', 'bronze'];
+          const medalHtml = i < 3 ? '<span class="medal ' + medals[i] + '">' + (i + 1) + '</span>' : (i + 1);
+
+          tr.innerHTML = '<td>' + medalHtml + '</td>' +
+                        '<td>' + sanitizeString(p.playerName || p.name || '') + '</td>' +
+                        '<td>' + (p.strategyScore || p.score || 0) + '</td>' +
+                        '<td>' + (p.totalWins || p.wins || 0) + '</td>' +
+                        '<td>' + (p.roundsPlayed || p.gamesPlayed || 0) + '</td>';
+          dom.leaderboardTbody.appendChild(tr);
+        });
+      }
+
+      /* ===== RENDER: HISTORY ===== */
+      function renderHistory() {
+        // Server returns { rounds: [{ roundId, winnerName, winningNumber, totalGuesses, uniqueCount, guesses }] }
+        const rounds = state.historyData ? (state.historyData.rounds || state.historyData.recentRounds || []) : [];
+
+        if (!state.historyData || rounds.length === 0) {
+          dom.historyStats.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-secondary); grid-column:1/-1;">No rounds played yet — start a game to see history.</div>';
+          dom.frequencyChart.innerHTML = '';
+          dom.recentRoundsTbody.innerHTML = '';
+          return;
+        }
+
+        // Compute stats from rounds data
+        const frequency = {};
+        let totalWinningNumbers = 0;
+        rounds.forEach(r => {
+          if (r.winningNumber !== null && r.winningNumber !== '') {
+            const wn = parseInt(r.winningNumber, 10);
+            frequency[wn] = (frequency[wn] || 0) + 1;
+            totalWinningNumbers++;
+          }
+          // Also parse guesses for full frequency if available
+          try {
+            const guesses = typeof r.guesses === 'string' ? JSON.parse(r.guesses) : (r.guesses || []);
+            guesses.forEach(g => {
+              const n = g.number;
+              if (n) frequency[n] = (frequency[n] || 0) + 1;
+            });
+          } catch (e) {}
+        });
+
+        const freqKeys = Object.keys(frequency).sort((a, b) => frequency[b] - frequency[a]);
+        const mostPicked = freqKeys.length > 0 ? freqKeys[0] : 'N/A';
+        const leastPicked = freqKeys.length > 0 ? freqKeys[freqKeys.length - 1] : 'N/A';
+
+        // Stats cards
+        dom.historyStats.innerHTML = '';
+        const stats = [
+          { label: 'Rounds Played', value: rounds.length },
+          { label: 'Most Picked', value: mostPicked },
+          { label: 'Least Picked', value: leastPicked },
+          { label: 'Avg Guesses', value: rounds.length > 0 ? Math.round(rounds.reduce((s, r) => s + (r.totalGuesses || 0), 0) / rounds.length) : 0 }
+        ];
+
+        stats.forEach(s => {
+          const card = document.createElement('div');
+          card.className = 'stat-card';
+          card.innerHTML = '<div class="stat-label">' + s.label + '</div><div class="stat-value">' + s.value + '</div>';
+          dom.historyStats.appendChild(card);
+        });
+
+        // Frequency chart
+        dom.frequencyChart.innerHTML = '';
+        if (Object.keys(frequency).length > 0) {
+          const maxFreq = Math.max(...Object.values(frequency));
+          const numbers = Object.keys(frequency).sort((a, b) => parseInt(a) - parseInt(b));
+
+          numbers.forEach(num => {
+            const count = frequency[num] || 0;
+            const height = (count / maxFreq) * 100;
+            const bar = document.createElement('div');
+            bar.className = 'chart-bar';
+            bar.style.height = height + '%';
+            bar.title = 'Number ' + num + ': ' + count + ' times';
+            const label = document.createElement('div');
+            label.className = 'chart-bar-label';
+            label.textContent = num;
+            bar.appendChild(label);
+            dom.frequencyChart.appendChild(bar);
+          });
+        }
+
+        // Recent rounds table
+        dom.recentRoundsTbody.innerHTML = '';
+        rounds.forEach(round => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + (round.roundId || 0) + '</td>' +
+                        '<td>' + sanitizeString(round.winnerName || round.winner || 'N/A') + '</td>' +
+                        '<td>' + (round.winningNumber !== null && round.winningNumber !== '' ? round.winningNumber : 'N/A') + '</td>' +
+                        '<td>' + (round.totalGuesses || round.guessCount || 0) + '</td>' +
+                        '<td>' + (round.uniqueCount || 0) + '</td>';
+          dom.recentRoundsTbody.appendChild(tr);
+        });
+      }
+
+      /* ===== TAB MANAGEMENT ===== */
+      function refreshActiveTab() {
+        const tab = state.activeTab;
+        if (tab === 'pick') { renderPick(); }
+        if (tab === 'results') { renderResults(); }
+        if (tab === 'board') { renderLeaderboard(); }
+        if (tab === 'history') { renderHistory(); }
+      }
+
+      function setActiveTab(tabName) {
+        // Update state
+        state.activeTab = tabName;
+
+        // Update buttons
+        dom.tabButtons.forEach(btn => {
+          const tabId = btn.getAttribute('aria-controls');
+          const isActive = tabId === (tabName + '-panel');
+          btn.setAttribute('aria-selected', isActive);
+        });
+
+        // Update panels
+        dom.tabPanels.forEach(panel => {
+          const isActive = panel.id === (tabName + '-panel');
+          panel.setAttribute('aria-selected', isActive);
+          if (isActive) {
+            if (tabName === 'pick') { renderPick(); renderStatusMessage(); }
+            if (tabName === 'results') renderResults();
+            if (tabName === 'board') { fetchLeaderboard(); }
+            if (tabName === 'history') { fetchHistory(); }
+          }
+        });
+      }
+
+      /* ===== ADMIN TAB ===== */
+      function handleAdminPassphrase() {
+        const passphrase = dom.adminPassphraseInput.value;
+        if (!passphrase) return;
+        // Validate passphrase by attempting a benign admin action (getConfig is public,
+        // so we test with pauseGame-style call that requires passphrase)
+        // Actually, just store and verify on first real admin action
+        state.adminPassphrase = passphrase;
+        state.adminAuthenticated = true;
+        dom.adminContent.classList.add('unlocked');
+        dom.adminPassphraseInput.parentElement.style.display = 'none';
+        populateConfigForm();
+        updateAdminStatus();
+      }
+
+      function populateConfigForm() {
+        if (state.config) {
+          dom.configMaxNumber.value = state.config.maxNumber || 50;
+          dom.configGuessingDuration.value = state.config.guessingDuration || 45;
+          dom.configGatheringDuration.value = state.config.gatheringDuration || 10;
+          dom.configRevealDuration.value = state.config.revealDuration || 30;
+          dom.configMinPlayers.value = state.config.minPlayers || 5;
+        }
+      }
+
+      function updateAdminStatus() {
+        const adminPhase = document.getElementById('admin-phase');
+        const adminRound = document.getElementById('admin-round');
+        const adminConnection = document.getElementById('admin-connection');
+        if (adminPhase) adminPhase.textContent = (state.currentPhase || 'idle').charAt(0).toUpperCase() + (state.currentPhase || 'idle').slice(1);
+        if (adminRound) adminRound.textContent = state.currentRoundId || 0;
+        if (adminConnection) adminConnection.textContent = state.connectionStatus === 'online' ? 'Connected' : state.connectionStatus === 'offline' ? 'Offline' : 'Local';
+      }
+
+      // Map client admin action names to server action names
+      const ADMIN_ACTION_MAP = {
+        'ADMIN_START': 'startGame',
+        'ADMIN_PAUSE': 'pauseGame',
+        'ADMIN_NEXT_PHASE': 'advancePhase',
+        'ADMIN_UPDATE_CONFIG': 'setConfig',
+        'ADMIN_CLEAR_SCORES': 'clearScores',
+        'ADMIN_RESET': 'resetGame'
+      };
+
+      function adminAction(action, body) {
+        body = body || {};
+        body.passphrase = state.adminPassphrase;
+        const serverAction = ADMIN_ACTION_MAP[action] || action;
+        return apiPost(serverAction, body).then(function(data) {
+          if (data.success) {
+            showAdminMessage('Action completed', 'success');
+          } else if (data.error) {
+            showAdminMessage(data.error, 'error');
+            if (data.error === 'Invalid passphrase') {
+              state.adminAuthenticated = false;
+              state.adminPassphrase = '';
+              dom.adminContent.classList.remove('unlocked');
+              dom.adminPassphraseInput.parentElement.style.display = '';
+              dom.adminPassphraseInput.value = '';
+            }
+          }
+          return data;
+        });
+      }
+
+      function showAdminMessage(msg, type) {
+        const status = dom.adminStatus;
+        status.textContent = msg;
+        status.style.color = type === 'error' ? 'var(--duplicate-color)' : 'var(--text-secondary)';
+      }
+
+      /* ===== THEME TOGGLE ===== */
+      function initTheme() {
+        const saved = localStorage.getItem('lun_theme');
+        const isDark = saved === 'dark' || (saved === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        setTheme(isDark ? 'dark' : 'light');
+      }
+
+      function setTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('lun_theme', theme);
+        dom.themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+      }
+
+      /* ===== ONBOARDING ===== */
+      function initOnboarding() {
+        const shown = localStorage.getItem('lun_onboarded');
+        if (!shown) {
+          dom.onboardingOverlay.classList.add('active');
+        }
+      }
+
+      function dismissOnboarding() {
+        localStorage.setItem('lun_onboarded', 'true');
+        dom.onboardingOverlay.classList.remove('active');
+      }
+
+      /* ===== EVENT SETUP ===== */
+      function setupEvents() {
+        // Player name
+        dom.playerNameInput.addEventListener('change', () => {
+          state.player.name = dom.playerNameInput.value.slice(0, 30);
+          const stored = getLocalPlayer();
+          if (stored) {
+            stored.name = state.player.name;
+            setLocalPlayer(stored);
+          }
+        });
+
+        // Tabs
+        dom.tabButtons.forEach(btn => {
+          btn.addEventListener('click', () => {
+            const tabPanel = btn.getAttribute('aria-controls');
+            const tabName = tabPanel.replace('-panel', '');
+            // Reset admin auth when entering admin tab
+            if (tabName === 'admin') {
+              state.adminAuthenticated = false;
+              state.adminPassphrase = '';
+              dom.adminContent.classList.remove('unlocked');
+              dom.adminPassphraseInput.parentElement.style.display = '';
+              dom.adminPassphraseInput.value = '';
+            }
+            setActiveTab(tabName);
+          });
+        });
+
+        // Help button
+        dom.helpBtn.addEventListener('click', () => {
+          dom.onboardingOverlay.classList.add('active');
+        });
+
+        // Theme toggle
+        dom.themeToggle.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme') || 'light';
+          setTheme(current === 'dark' ? 'light' : 'dark');
+        });
+
+        // Shuffle new button
+        dom.shuffleNewBtn.addEventListener('click', () => {
+          shuffleState.tiles = generateShuffleTiles();
+          shuffleState.firstPick = null;
+          shuffleState.scanning = false;
+          renderShuffleGrid();
+          setTimeout(function() { scanAndRemoveWords(false); }, 300);
+        });
+
+        // Admin passphrase
+        dom.adminPassphraseInput.addEventListener('keyup', (e) => {
+          if (e.key === 'Enter') {
+            handleAdminPassphrase();
+          }
+        });
+        dom.adminPassphraseInput.addEventListener('change', handleAdminPassphrase);
+
+        // Admin buttons
+        dom.adminStartBtn.addEventListener('click', () => {
+          dom.adminStartBtn.classList.add('loading');
+          adminAction('ADMIN_START').then(() => {
+            dom.adminStartBtn.classList.remove('loading');
+            getGameState();
+          });
+        });
+
+        dom.adminPauseBtn.addEventListener('click', () => {
+          dom.adminPauseBtn.classList.add('loading');
+          adminAction('ADMIN_PAUSE').then(() => {
+            dom.adminPauseBtn.classList.remove('loading');
+            getGameState();
+          });
+        });
+
+        dom.adminNextPhaseBtn.addEventListener('click', () => {
+          dom.adminNextPhaseBtn.classList.add('loading');
+          adminAction('ADMIN_NEXT_PHASE').then(() => {
+            dom.adminNextPhaseBtn.classList.remove('loading');
+            getGameState();
+          });
+        });
+
+        dom.adminSaveConfigBtn.addEventListener('click', () => {
+          const config = {
+            maxNumber: parseInt(dom.configMaxNumber.value),
+            guessingDuration: parseInt(dom.configGuessingDuration.value),
+            gatheringDuration: parseInt(dom.configGatheringDuration.value),
+            revealDuration: parseInt(dom.configRevealDuration.value),
+            minPlayers: parseInt(dom.configMinPlayers.value)
+          };
+          dom.adminSaveConfigBtn.classList.add('loading');
+          adminAction('ADMIN_UPDATE_CONFIG', config).then(() => {
+            dom.adminSaveConfigBtn.classList.remove('loading');
+            state.config = config;
+            renderPick();
+            getGameState();
+          });
+        });
+
+        // Clear scores
+        dom.adminClearScoresBtn.addEventListener('click', () => {
+          dom.clearScoresConfirm.classList.add('active');
+        });
+
+        dom.clearScoresConfirmBtn.addEventListener('click', () => {
+          dom.clearScoresConfirmBtn.classList.add('loading');
+          adminAction('ADMIN_CLEAR_SCORES').then(() => {
+            dom.clearScoresConfirmBtn.classList.remove('loading');
+            dom.clearScoresConfirm.classList.remove('active');
+            getGameState();
+          });
+        });
+
+        dom.clearScoresCancelBtn.addEventListener('click', () => {
+          dom.clearScoresConfirm.classList.remove('active');
+        });
+
+        // Reset game
+        dom.adminResetBtn.addEventListener('click', () => {
+          if (!state.resetConfirmPending) {
+            state.resetConfirmPending = true;
+            dom.resetConfirm.classList.add('active');
+            setTimeout(() => {
+              state.resetConfirmPending = false;
+              dom.resetConfirm.classList.remove('active');
+            }, 5000);
+          }
+        });
+
+        dom.resetConfirmBtn.addEventListener('click', () => {
+          dom.resetConfirmBtn.classList.add('loading');
+          adminAction('ADMIN_RESET').then(() => {
+            dom.resetConfirmBtn.classList.remove('loading');
+            dom.resetConfirm.classList.remove('active');
+            state.resetConfirmPending = false;
+            getGameState();
+          });
+        });
+
+        dom.resetCancelBtn.addEventListener('click', () => {
+          dom.resetConfirm.classList.remove('active');
+          state.resetConfirmPending = false;
+        });
+
+        // Onboarding
+        dom.onboardingDismissBtn.addEventListener('click', dismissOnboarding);
+        dom.onboardingOverlay.addEventListener('click', (e) => {
+          if (e.target === dom.onboardingOverlay) {
+            dismissOnboarding();
+          }
+        });
+
+        dom.hintsToggle.addEventListener('click', () => {
+          dom.hintsContent.classList.toggle('active');
+        });
+      }
+
+      /* ===== INITIALIZATION ===== */
+      function init() {
+        initializePlayer();
+        initTheme();
+        initOnboarding();
+        setupEvents();
+
+        // Load initial state
+        renderHeader();
+        renderPick();
+        setActiveTab('pick');
+
+        // Start polling and timer
+        startPolling();
+        startTimer();
+
+        // Announce to screen readers
+        dom.liveRegion.textContent = 'Sololow game loaded. Ready to play.';
+
+        console.log('Sololow initialized');
+      }
+
+      // Init when DOM ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
+</body>
+</html>
