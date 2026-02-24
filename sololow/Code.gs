@@ -1,4 +1,4 @@
-/**
+å/**
  * Lowest Unique Number — Google Apps Script Backend
  *
  * Deployed as a web app to serve as the game server.
@@ -24,10 +24,11 @@ var DEFAULT_CONFIG = {
   minPlayers: 5,
   adminPassphrase: 'teacher',
   currentPhase: 'idle',
-  phaseStartTime: '',
+  guessingEndsAt: '',
+  revealEndsAt: '',
+  roundEvaluated: 'false',
   currentRoundId: 0,
-  currentGuesses: '[]',
-  replayDurationRatio: 0.67
+  currentGuesses: '[]'
 };
 
 // ─── HTTP Handlers ───────────────────────────────────────────────────────────
@@ -185,6 +186,28 @@ function writeConfigValues(obj) {
 
 function getGameState() {
   var config = readConfigMap();
+  var currentPhase = config.currentPhase || 'idle';
+
+  // Auto-transition: if a deadline has passed, transition inline before returning
+  if (currentPhase !== 'idle') {
+    var nowMs = new Date().getTime();
+    var guessingEnd = config.guessingEndsAt ? new Date(config.guessingEndsAt).getTime() : 0;
+    var revealEnd = config.revealEndsAt ? new Date(config.revealEndsAt).getTime() : 0;
+
+    if (currentPhase === 'guessing' && guessingEnd && nowMs > guessingEnd && config.roundEvaluated !== 'true') {
+      performPhaseTransition();
+      config = readConfigMap();
+      currentPhase = config.currentPhase || 'idle';
+      // Check if reveal also expired (e.g. server was unreachable for a while)
+      revealEnd = config.revealEndsAt ? new Date(config.revealEndsAt).getTime() : 0;
+    }
+    if (currentPhase === 'reveal' && revealEnd && nowMs > revealEnd) {
+      performPhaseTransition();
+      config = readConfigMap();
+      currentPhase = config.currentPhase || 'idle';
+    }
+  }
+
   var guesses = [];
   try {
     guesses = JSON.parse(config.currentGuesses || '[]');
@@ -203,8 +226,9 @@ function getGameState() {
 
   return {
     success: true,
-    currentPhase: config.currentPhase || 'idle',
-    phaseStartTime: config.phaseStartTime || '',
+    currentPhase: currentPhase,
+    guessingEndsAt: config.guessingEndsAt || '',
+    revealEndsAt: config.revealEndsAt || '',
     currentRoundId: parseInt(config.currentRoundId, 10) || 0,
     guessCount: guesses.length,
     lastRoundResult: lastRoundResult,
@@ -212,8 +236,7 @@ function getGameState() {
       maxNumber: parseInt(config.maxNumber, 10) || 50,
       guessingDuration: parseInt(config.guessingDuration, 10) || 120,
       revealDuration: parseInt(config.revealDuration, 10) || 30,
-      minPlayers: parseInt(config.minPlayers, 10) || 5,
-      replayDurationRatio: parseFloat(config.replayDurationRatio) || 0.67
+      minPlayers: parseInt(config.minPlayers, 10) || 5
     }
   };
 }
@@ -244,6 +267,11 @@ function submitGuess(body) {
 
   if (config.currentPhase !== 'guessing') {
     return { success: false, error: 'Not in guessing phase' };
+  }
+
+  // Hard deadline: reject guesses after guessingEndsAt
+  if (config.guessingEndsAt && new Date().getTime() > new Date(config.guessingEndsAt).getTime()) {
+    return { success: false, error: 'Guessing time has ended' };
   }
 
   var maxNumber = parseInt(config.maxNumber, 10) || 50;
@@ -322,10 +350,17 @@ function startGame(body) {
   }
 
   var roundId = (parseInt(config.currentRoundId, 10) || 0) + 1;
+  var guessingDuration = parseInt(config.guessingDuration, 10) || 120;
+  var revealDuration = parseInt(config.revealDuration, 10) || 30;
+  var now = new Date();
+  var guessingEndsAt = new Date(now.getTime() + guessingDuration * 1000).toISOString();
+  var revealEndsAt = new Date(now.getTime() + (guessingDuration + revealDuration) * 1000).toISOString();
 
   writeConfigValues({
     currentPhase: 'guessing',
-    phaseStartTime: new Date().toISOString(),
+    guessingEndsAt: guessingEndsAt,
+    revealEndsAt: revealEndsAt,
+    roundEvaluated: 'false',
     currentRoundId: roundId,
     currentGuesses: '[]'
   });
@@ -341,7 +376,8 @@ function pauseGame(body) {
 
   writeConfigValues({
     currentPhase: 'idle',
-    phaseStartTime: ''
+    guessingEndsAt: '',
+    revealEndsAt: ''
   });
 
   return { success: true, phase: 'idle' };
@@ -392,13 +428,21 @@ function transitionToReveal(config) {
   var minPlayers = parseInt(config.minPlayers, 10) || 5;
   var roundId = parseInt(config.currentRoundId, 10) || 1;
 
+  var guessingDuration = parseInt(config.guessingDuration, 10) || 120;
+  var revealDuration = parseInt(config.revealDuration, 10) || 30;
+
   // Check minimum players
   if (guesses.length < minPlayers) {
-    // Void round — skip directly to next guessing phase
+    // Void round — skip reveal, tile next round from guessingEndsAt (no gap)
     var nextRoundId = roundId + 1;
+    var tileFrom = config.guessingEndsAt ? new Date(config.guessingEndsAt) : new Date();
+    var nextGuessingEndsAt = new Date(tileFrom.getTime() + guessingDuration * 1000).toISOString();
+    var nextRevealEndsAt = new Date(tileFrom.getTime() + (guessingDuration + revealDuration) * 1000).toISOString();
     writeConfigValues({
       currentPhase: 'guessing',
-      phaseStartTime: new Date().toISOString(),
+      guessingEndsAt: nextGuessingEndsAt,
+      revealEndsAt: nextRevealEndsAt,
+      roundEvaluated: 'false',
       currentRoundId: nextRoundId,
       currentGuesses: '[]'
     });
@@ -437,9 +481,10 @@ function transitionToReveal(config) {
   updateRoundsPlayed(guesses);
 
   // Store last round result in config for clients to read during reveal
+  // revealEndsAt was already computed at round start — no recalculation needed
   writeConfigValues({
     currentPhase: 'reveal',
-    phaseStartTime: new Date().toISOString(),
+    roundEvaluated: 'true',
     lastRoundResult: JSON.stringify({
       roundId: roundId,
       winningNumber: result.winningNumber,
@@ -463,10 +508,19 @@ function transitionToReveal(config) {
 
 function transitionToGuessing(config) {
   var nextRoundId = (parseInt(config.currentRoundId, 10) || 0) + 1;
+  var guessingDuration = parseInt(config.guessingDuration, 10) || 120;
+  var revealDuration = parseInt(config.revealDuration, 10) || 30;
+
+  // Tile seamlessly from previous revealEndsAt — zero gap between rounds
+  var tileFrom = config.revealEndsAt ? new Date(config.revealEndsAt) : new Date();
+  var guessingEndsAt = new Date(tileFrom.getTime() + guessingDuration * 1000).toISOString();
+  var revealEndsAt = new Date(tileFrom.getTime() + (guessingDuration + revealDuration) * 1000).toISOString();
 
   writeConfigValues({
     currentPhase: 'guessing',
-    phaseStartTime: new Date().toISOString(),
+    guessingEndsAt: guessingEndsAt,
+    revealEndsAt: revealEndsAt,
+    roundEvaluated: 'false',
     currentRoundId: nextRoundId,
     currentGuesses: '[]'
   });
@@ -643,7 +697,7 @@ function setConfig(body) {
     return { success: false, error: 'Invalid passphrase' };
   }
 
-  var allowedKeys = ['maxNumber', 'guessingDuration', 'revealDuration', 'minPlayers', 'adminPassphrase', 'replayDurationRatio'];
+  var allowedKeys = ['maxNumber', 'guessingDuration', 'revealDuration', 'minPlayers', 'adminPassphrase'];
   var updates = {};
 
   for (var i = 0; i < allowedKeys.length; i++) {
@@ -682,7 +736,9 @@ function resetGame(body) {
   // Reset game state in config
   writeConfigValues({
     currentPhase: 'idle',
-    phaseStartTime: '',
+    guessingEndsAt: '',
+    revealEndsAt: '',
+    roundEvaluated: 'false',
     currentRoundId: 0,
     currentGuesses: '[]',
     lastRoundResult: ''
@@ -714,25 +770,16 @@ function checkPhaseExpiry() {
 
   if (currentPhase === 'idle') return;
 
-  var phaseStartTime = config.phaseStartTime;
-  if (!phaseStartTime) return;
-
-  var startMs = new Date(phaseStartTime).getTime();
   var nowMs = new Date().getTime();
 
-  var durationSec;
-  if (currentPhase === 'guessing') {
-    durationSec = parseInt(config.guessingDuration, 10) || 120;
-  } else if (currentPhase === 'reveal') {
-    durationSec = parseInt(config.revealDuration, 10) || 30;
-  } else {
-    return;
-  }
-
-  var elapsedSec = (nowMs - startMs) / 1000;
-
-  if (elapsedSec >= durationSec) {
-    performPhaseTransition();
+  if (currentPhase === 'guessing' && config.guessingEndsAt) {
+    if (nowMs > new Date(config.guessingEndsAt).getTime()) {
+      performPhaseTransition();
+    }
+  } else if (currentPhase === 'reveal' && config.revealEndsAt) {
+    if (nowMs > new Date(config.revealEndsAt).getTime()) {
+      performPhaseTransition();
+    }
   }
 }
 
