@@ -134,14 +134,15 @@
       transition: width 1s ease-out;
     }
 
-    /* Sparkler canvas overlay */
+    /* Sparkler canvas overlay - full viewport */
     .sparkler-canvas {
-      position: absolute;
-      top: 50%;
+      position: fixed;
+      top: 0;
       left: 0;
-      transform: translateY(-50%);
+      width: 100vw;
+      height: 100vh;
       pointer-events: none;
-      z-index: 10;
+      z-index: 9999;
     }
 
     .progress-bar-large {
@@ -606,7 +607,6 @@
     <div class="progress-bar-container">
       <div class="progress-bar" id="progress-bar">
         <div class="progress-fill" id="year-progress-fill" style="width: 0%;"></div>
-        <canvas class="sparkler-canvas" id="sparkler-canvas"></canvas>
       </div>
     </div>
   </section>
@@ -724,15 +724,20 @@
     // ============================================
     const HARDCODED_KEY_DATES = [
       { date: '2026-02-27', description: 'Formal', position: 'above' },
+      { date: '2026-04-02', description: 'T1 End', position: 'below' },
+      { date: '2026-04-20', description: 'T2 Start', position: 'above' },
       { date: '2026-05-30', description: 'Free Day', position: 'below' },
       { date: '2026-06-16', description: 'GAT', position: 'above' },
-      { date: '2026-10-01', description: 'Trials', position: 'below' },
-      { date: '2026-10-05', description: 'Orals', position: 'above2' },
-      { date: '2026-10-16', description: 'Last Day', position: 'above' },
+      { date: '2026-06-26', description: 'T2 End', position: 'below2' },
+      { date: '2026-07-20', description: 'T3 Start', position: 'above' },
+      { date: '2026-09-18', description: 'T3 End', position: 'below' },
+      { date: '2026-10-01', description: 'Trials', position: 'above' },
+      { date: '2026-10-05', description: 'T4 Start', position: 'below' },
+      { date: '2026-10-16', description: 'Last Day', position: 'above2' },
       { date: '2026-10-19', description: 'Final', position: 'below' },
       { date: '2026-10-20', description: 'SWOT', position: 'below2' },
-      { date: '2026-10-27', description: 'Exams', position: 'above' },
-      { date: '2026-11-10', description: 'Exams', position: 'below' },
+      { date: '2026-10-27', description: 'Exams Begin', position: 'above' },
+      { date: '2026-11-10', description: 'Exams End', position: 'below' },
       { date: '2026-11-18', description: 'Done!', position: 'above' },
     ];
 
@@ -800,7 +805,7 @@
       yearProgressFill: document.getElementById('year-progress-fill'),
       yearProgressPercent: document.getElementById('year-progress-percent'),
       progressBar: document.getElementById('progress-bar'),
-      sparklerCanvas: document.getElementById('sparkler-canvas'),
+      sparklerCanvas: null,
       mainContent: document.getElementById('main-content'),
       currentDisplay: document.getElementById('current-display'),
       timeDisplay: document.getElementById('time-display'),
@@ -965,51 +970,47 @@
     }
 
     // ============================================
-    // SPARKLER ANIMATION
+    // SPARKLER ANIMATION (optimised for iPad)
     // ============================================
     const sparks = [];
+    const MAX_SPARKS = 80;
     let sparklerCtx = null;
-    let currentYearProgress = 0;
     let sparklerStartTime = Date.now();
 
     function initSparkler() {
+      if (!elements.sparklerCanvas) {
+        elements.sparklerCanvas = document.getElementById('sparkler-canvas');
+      }
       const canvas = elements.sparklerCanvas;
-      const progressBar = elements.progressBar;
-
-      const barRect = progressBar.getBoundingClientRect();
-      const barHeight = barRect.height;
-
-      const maxCanvasHeight = barHeight * 6;
-      canvas.width = barRect.width;
-      canvas.height = maxCanvasHeight;
-      canvas.style.height = `${maxCanvasHeight}px`;
-      canvas.style.width = `${barRect.width}px`;
-
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
       sparklerCtx = canvas.getContext('2d');
       sparklerStartTime = Date.now();
     }
 
     function getPulseMultiplier() {
       const elapsed = (Date.now() - sparklerStartTime) / 1000;
-      const period = 10;
-      const sineValue = Math.sin((elapsed / period) * Math.PI * 2);
+      const sineValue = Math.sin((elapsed / 10) * Math.PI * 2);
       return 1 + 4.5 * (sineValue + 1);
     }
 
-    function createSpark(x, progress, pulseMultiplier) {
-      const intensityScale = 1 + (progress / 100) * 2;
-      const canvasHeight = elements.sparklerCanvas.height;
-      const centerY = canvasHeight / 2;
+    function getSparkOrigin(progress) {
+      const barRect = elements.progressBar.getBoundingClientRect();
+      return {
+        x: barRect.left + (progress / 100) * barRect.width,
+        y: barRect.top + barRect.height / 2
+      };
+    }
 
+    function createSpark(x, y) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = (2 + Math.random() * 4) * intensityScale;
-      const size = (1 + Math.random() * 2) * intensityScale;
-
+      const speed = 2 + Math.random() * 4;
+      const size = 1 + Math.random() * 2;
       const isWhite = Math.random() < 0.4;
 
       return {
         x: x,
-        y: centerY,
+        y: y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         size: size,
@@ -1023,18 +1024,14 @@
     function updateSparkler(progress) {
       if (!sparklerCtx) return;
 
-      currentYearProgress = progress;
-
-      const canvas = elements.sparklerCanvas;
-      const sparkX = (progress / 100) * canvas.width;
+      const origin = getSparkOrigin(progress);
       const pulseMultiplier = getPulseMultiplier();
-
-      const baseSpawnRate = (1 + (progress / 100) * 4) * 10;
-      const spawnRate = Math.floor(baseSpawnRate * pulseMultiplier);
+      const spawnRate = Math.floor(5 * pulseMultiplier);
 
       for (let i = 0; i < spawnRate; i++) {
+        if (sparks.length >= MAX_SPARKS) break;
         if (Math.random() < 0.7) {
-          sparks.push(createSpark(sparkX, progress, pulseMultiplier));
+          sparks.push(createSpark(origin.x, origin.y));
         }
       }
     }
@@ -1047,7 +1044,8 @@
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      for (let i = sparks.length - 1; i >= 0; i--) {
+      let writeIdx = 0;
+      for (let i = 0; i < sparks.length; i++) {
         const spark = sparks[i];
 
         spark.x += spark.vx;
@@ -1055,42 +1053,21 @@
         spark.vy += 0.1;
         spark.life -= spark.decay;
 
-        if (spark.life <= 0) {
-          sparks.splice(i, 1);
-          continue;
-        }
+        if (spark.life <= 0) continue;
+
+        sparks[writeIdx++] = spark;
 
         const alpha = spark.life * 0.35;
         ctx.beginPath();
         ctx.arc(spark.x, spark.y, spark.size, 0, Math.PI * 2);
-
-        const gradient = ctx.createRadialGradient(
-          spark.x, spark.y, 0,
-          spark.x, spark.y, spark.size
-        );
-
         if (spark.isWhite) {
-          gradient.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);
-          gradient.addColorStop(0.4, `rgba(240, 240, 255, ${alpha * 0.8})`);
-          gradient.addColorStop(1, `rgba(200, 200, 255, 0)`);
+          ctx.fillStyle = `rgba(255,255,255,${alpha})`;
         } else {
-          gradient.addColorStop(0, `hsla(${spark.hue}, 100%, 90%, ${alpha})`);
-          gradient.addColorStop(0.4, `hsla(${spark.hue}, 100%, 65%, ${alpha * 0.8})`);
-          gradient.addColorStop(1, `hsla(${spark.hue}, 100%, 50%, 0)`);
-        }
-
-        ctx.fillStyle = gradient;
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.arc(spark.x, spark.y, spark.size * 2, 0, Math.PI * 2);
-        if (spark.isWhite) {
-          ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.3})`;
-        } else {
-          ctx.fillStyle = `hsla(${spark.hue}, 100%, 75%, ${alpha * 0.3})`;
+          ctx.fillStyle = `hsla(${spark.hue},100%,75%,${alpha})`;
         }
         ctx.fill();
       }
+      sparks.length = writeIdx;
 
       requestAnimationFrame(renderSparkler);
     }
@@ -2804,5 +2781,6 @@
     // Start the app
     init();
   </script>
+  <canvas class="sparkler-canvas" id="sparkler-canvas"></canvas>
 </body>
 </html>
