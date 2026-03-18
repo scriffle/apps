@@ -1,0 +1,2045 @@
+<!DOCTYPE html>
+<html lang="en" data-version="1.0.0">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Interactive Electric Field Simulator for VCE Physics — visualise field vectors, equipotential lines, streamlines and particle motion.">
+<title>Electric Field Lab — VCE Physics Simulator</title>
+<style>
+/* ===== Reset & Variables ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #080c16;
+  --bg-sidebar: #101828;
+  --bg-card: #1a2240;
+  --border: #2a3568;
+  --text: #dde2f0;
+  --text-dim: #8a94b8;
+  --text-bright: #f4f6ff;
+  --accent: #5a9eff;
+  --positive: #ff6677;
+  --negative: #5a9eff;
+  --test-q: #ffe066;
+  --electron: #b0ffc0;
+  --sidebar-w: 270px;
+  --status-h: 36px;
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  --radius: 6px;
+  --transition: 0.2s ease;
+}
+
+body {
+  font-family: var(--font-mono);
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ===== Layout ===== */
+.app-container {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ===== Sidebar ===== */
+.sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  z-index: 10;
+}
+
+.sidebar-header {
+  padding: 16px 14px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-header h1 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-bright);
+  letter-spacing: 0.5px;
+}
+
+.sidebar-header .subtitle {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 3px;
+}
+
+.section {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--accent);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+/* Tool Buttons */
+.tool-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.tool-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-bright);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 10px 6px;
+  cursor: pointer;
+  transition: all var(--transition);
+  text-align: center;
+  position: relative;
+  font-weight: 500;
+}
+
+.tool-btn:hover { background: #222a50; border-color: var(--accent); color: #fff; }
+.tool-btn.active { background: #1e2d5a; border-color: var(--accent); color: var(--accent); box-shadow: 0 0 12px rgba(90,158,255,0.3); }
+.tool-btn .key-hint {
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  font-size: 9px;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
+.tool-btn.full-width { grid-column: 1 / -1; }
+
+/* Sliders */
+.slider-group {
+  margin-bottom: 10px;
+}
+
+.slider-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.slider-label .val {
+  color: var(--text-bright);
+  font-weight: 600;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 5px;
+  background: var(--border);
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+/* Toggle Switches */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  font-size: 12px;
+  color: var(--text-bright);
+}
+
+.toggle-switch {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  left: 3px;
+  top: 3px;
+  background: var(--text-dim);
+  border-radius: 50%;
+  transition: all var(--transition);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--accent);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(16px);
+  background: #fff;
+}
+
+/* Action Buttons */
+.action-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-bright);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: all var(--transition);
+  width: 100%;
+  margin-top: 6px;
+}
+
+.action-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.action-btn.danger:hover { border-color: var(--positive); color: var(--positive); }
+
+.btn-row {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-row .action-btn { flex: 1; margin-top: 0; }
+
+/* ===== Canvas Area ===== */
+.canvas-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+canvas {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+#gridCanvas { z-index: 1; }
+#voltCanvas { z-index: 2; }
+#mainCanvas { z-index: 3; }
+
+/* ===== Status Bar ===== */
+.status-bar {
+  height: var(--status-h);
+  background: var(--bg-sidebar);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  font-size: 11px;
+  color: var(--text);
+  gap: 16px;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.status-bar .chip {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 2px 10px;
+  color: var(--text-bright);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.status-bar .e-field {
+  color: var(--accent);
+}
+
+.status-bar .coords {
+  margin-left: auto;
+  color: var(--text-dim);
+}
+
+/* ===== Scenarios Modal ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 8, 20, 0.85);
+  z-index: 100;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.modal-overlay.open { display: flex; }
+
+.modal {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: 90vw;
+  max-width: 900px;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.modal h2 {
+  font-size: 16px;
+  color: var(--text-bright);
+  margin-bottom: 20px;
+}
+
+.modal .category {
+  margin-bottom: 20px;
+}
+
+.modal .category h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.scenario-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.scenario-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.scenario-card:hover {
+  border-color: var(--accent);
+  background: #1a2248;
+  transform: translateY(-1px);
+}
+
+.scenario-card .icon {
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.modal .close-btn {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.modal-wrapper {
+  position: relative;
+}
+
+/* ===== Keyboard Shortcut Overlay ===== */
+.shortcuts-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 8, 20, 0.85);
+  z-index: 101;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.shortcuts-overlay.open { display: flex; }
+
+.shortcuts-panel {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px;
+  max-width: 460px;
+  width: 90vw;
+}
+
+.shortcuts-panel h2 {
+  font-size: 14px;
+  color: var(--text-bright);
+  margin-bottom: 14px;
+}
+
+.shortcut-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 11px;
+}
+
+.shortcut-row kbd {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent);
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #2a3060; }
+
+/* ===== Reduced Motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ===== Canvas Cursors ===== */
+#mainCanvas { cursor: crosshair; }
+#mainCanvas.grab { cursor: grab; }
+#mainCanvas.grabbing { cursor: grabbing; }
+#mainCanvas.drawing { cursor: crosshair; }
+
+/* ===== Focus ===== */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+</style>
+</head>
+<body>
+
+<div class="app-container">
+  <!-- Sidebar -->
+  <aside class="sidebar" role="complementary" aria-label="Controls">
+    <div class="sidebar-header">
+      <h1>Electric Field Lab</h1>
+      <div class="subtitle">VCE Physics Simulator</div>
+    </div>
+
+    <!-- Tools -->
+    <div class="section">
+      <div class="section-title">Tools</div>
+      <div class="tool-grid">
+        <button class="tool-btn active" data-tool="posQ" aria-label="Place positive charge">
+          <span class="key-hint">1</span>+Q
+        </button>
+        <button class="tool-btn" data-tool="negQ" aria-label="Place negative charge">
+          <span class="key-hint">2</span>&minus;Q
+        </button>
+        <button class="tool-btn" data-tool="testQ" aria-label="Place test particle">
+          <span class="key-hint">3</span>Test q
+        </button>
+        <button class="tool-btn" data-tool="testE" aria-label="Place test electron">
+          <span class="key-hint">4</span>Test e⁻
+        </button>
+        <button class="tool-btn" data-tool="eGun" aria-label="Place electron source">
+          <span class="key-hint">5</span>e⁻ gun
+        </button>
+        <button class="tool-btn" data-tool="erase" aria-label="Erase objects">
+          <span class="key-hint">6</span>Erase
+        </button>
+        <button class="tool-btn full-width" data-tool="drawPath" aria-label="Draw path for charge solver">
+          <span class="key-hint">7</span>Draw Path
+        </button>
+      </div>
+    </div>
+
+    <!-- Charge Magnitude -->
+    <div class="section">
+      <div class="section-title">Charge Magnitude</div>
+      <div class="slider-group">
+        <div class="slider-label">
+          <span>Q</span>
+          <span class="val" id="qMagVal">5 µC</span>
+        </div>
+        <input type="range" id="qMagSlider" min="1" max="10" value="5" aria-label="Charge magnitude">
+      </div>
+    </div>
+
+    <!-- Display -->
+    <div class="section">
+      <div class="section-title">Display</div>
+      <div class="toggle-row">
+        <span>Voltage shading</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="togVoltage" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span>Field vectors</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="togVectors" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span>Field streamlines</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="togStreamlines" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span>Animate particles</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="togParticles" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="slider-group" style="margin-top: 10px;">
+        <div class="slider-label">
+          <span>Vector density</span>
+          <span class="val" id="densityVal">20</span>
+        </div>
+        <input type="range" id="densitySlider" min="8" max="40" value="20" aria-label="Vector grid density">
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-label">
+          <span>Sim speed</span>
+          <span class="val" id="speedVal">1.0×</span>
+        </div>
+        <input type="range" id="speedSlider" min="2" max="40" value="10" aria-label="Simulation speed">
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="section">
+      <div class="section-title">Actions</div>
+      <div class="btn-row">
+        <button class="action-btn" id="btnUndo" aria-label="Undo">Undo</button>
+        <button class="action-btn" id="btnRedo" aria-label="Redo">Redo</button>
+      </div>
+      <button class="action-btn" id="btnScenarios">Scenarios [P]</button>
+      <button class="action-btn" id="btnShortcuts">Shortcuts [?]</button>
+      <button class="action-btn danger" id="btnClear">Clear All [C]</button>
+    </div>
+  </aside>
+
+  <!-- Canvas -->
+  <main class="canvas-wrap" role="main" aria-label="Electric field canvas">
+    <canvas id="gridCanvas"></canvas>
+    <canvas id="voltCanvas"></canvas>
+    <canvas id="mainCanvas"></canvas>
+  </main>
+</div>
+
+<!-- Status Bar -->
+<div class="status-bar" role="status" aria-live="polite">
+  <span id="statusTool">+Q: Click to place positive charge</span>
+  <span class="chip" id="statusCharges">0 charges</span>
+  <span class="e-field" id="statusE">E: — N/C</span>
+  <span class="coords" id="statusCoords">—, —</span>
+</div>
+
+<!-- Scenarios Modal -->
+<div class="modal-overlay" id="scenariosModal" role="dialog" aria-label="Scenarios">
+  <div class="modal-wrapper">
+    <div class="modal">
+      <h2>Scenarios</h2>
+      <button class="close-btn" id="closeScenarios" aria-label="Close">&times;</button>
+
+      <div class="category">
+        <h3>&#8853; Monopoles</h3>
+        <div class="scenario-grid" id="scenMonopoles"></div>
+      </div>
+      <div class="category">
+        <h3>&#8853;&#8854; Dipoles</h3>
+        <div class="scenario-grid" id="scenDipoles"></div>
+      </div>
+      <div class="category">
+        <h3>&#10022; Symmetric Arrangements</h3>
+        <div class="scenario-grid" id="scenSymmetric"></div>
+      </div>
+      <div class="category">
+        <h3>&#9644;&#9644; Parallel Plates</h3>
+        <div class="scenario-grid" id="scenPlates"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Shortcuts Overlay -->
+<div class="shortcuts-overlay" id="shortcutsOverlay">
+  <div class="shortcuts-panel">
+    <h2>Keyboard Shortcuts</h2>
+    <div class="shortcut-row"><span>Place +Q</span><kbd>1</kbd></div>
+    <div class="shortcut-row"><span>Place &minus;Q</span><kbd>2</kbd></div>
+    <div class="shortcut-row"><span>Test particle</span><kbd>3</kbd></div>
+    <div class="shortcut-row"><span>Test electron</span><kbd>4</kbd></div>
+    <div class="shortcut-row"><span>Electron gun</span><kbd>5</kbd></div>
+    <div class="shortcut-row"><span>Erase tool</span><kbd>6</kbd></div>
+    <div class="shortcut-row"><span>Draw path</span><kbd>7</kbd></div>
+    <div class="shortcut-row"><span>Clear all</span><kbd>C</kbd></div>
+    <div class="shortcut-row"><span>Toggle voltage</span><kbd>V</kbd></div>
+    <div class="shortcut-row"><span>Toggle vectors</span><kbd>F</kbd></div>
+    <div class="shortcut-row"><span>Toggle streamlines</span><kbd>L</kbd></div>
+    <div class="shortcut-row"><span>Scenarios</span><kbd>P</kbd></div>
+    <div class="shortcut-row"><span>Pause / Resume</span><kbd>Space</kbd></div>
+    <div class="shortcut-row"><span>Undo</span><kbd>Ctrl+Z</kbd></div>
+    <div class="shortcut-row"><span>Redo</span><kbd>Ctrl+Y</kbd></div>
+    <div class="shortcut-row"><span>Close panel</span><kbd>Esc</kbd></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* ============================================================
+   ELECTRIC FIELD LAB — Main Application Script
+   ============================================================ */
+
+// ===== Constants =====
+const K = 8.99e9;
+const CHARGE_SCALE = 1e-5;
+const TEST_CHARGE = 1.6e-19;
+const TEST_MASS = 1e-26;
+const ELECTRON_SCALE = 6e4;
+const EMIT_RATE = 0.4;
+const MAX_ELECTRONS = 120;
+const SPEED_CAP = 300;
+const HALF_LIFE = 10;
+const LAMBDA = Math.LN2 / HALF_LIFE;
+
+// ===== DOM =====
+const gridCanvas = document.getElementById('gridCanvas');
+const voltCanvas = document.getElementById('voltCanvas');
+const mainCanvas = document.getElementById('mainCanvas');
+const gridCtx = gridCanvas.getContext('2d');
+const voltCtx = voltCanvas.getContext('2d');
+const ctx = mainCanvas.getContext('2d');
+
+const statusTool = document.getElementById('statusTool');
+const statusCharges = document.getElementById('statusCharges');
+const statusE = document.getElementById('statusE');
+const statusCoords = document.getElementById('statusCoords');
+
+const qMagSlider = document.getElementById('qMagSlider');
+const qMagVal = document.getElementById('qMagVal');
+const densitySlider = document.getElementById('densitySlider');
+const densityVal = document.getElementById('densityVal');
+const speedSlider = document.getElementById('speedSlider');
+const speedVal = document.getElementById('speedVal');
+
+const togVoltage = document.getElementById('togVoltage');
+const togVectors = document.getElementById('togVectors');
+const togStreamlines = document.getElementById('togStreamlines');
+const togParticles = document.getElementById('togParticles');
+
+const scenariosModal = document.getElementById('scenariosModal');
+const shortcutsOverlay = document.getElementById('shortcutsOverlay');
+
+// ===== State =====
+let W = 0, H = 0;
+let charges = [];
+let testParticle = null;
+let testElectron = null;
+let electronSources = [];
+let electrons = [];
+let nextId = 1;
+
+let currentTool = 'posQ';
+let qMagnitude = 5;
+let vectorDensity = 20;
+let simSpeed = 1.0;
+let showVoltage = true;
+let showVectors = true;
+let showStreamlines = true;
+let animateParticles = true;
+let paused = false;
+
+let voltDirty = true;
+let voltImageData = null;
+
+let mouseX = 0, mouseY = 0;
+let dragging = null;
+let dragOffsetX = 0, dragOffsetY = 0;
+
+let undoStack = [];
+let redoStack = [];
+
+let emitTimer = 0;
+let lastTime = 0;
+
+let drawingPath = false;
+let rawPathPoints = [];
+
+// Konami
+let konamiSeq = [];
+const KONAMI = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','KeyB','KeyA'];
+
+const TOOL_HINTS = {
+  posQ: '+Q: Click to place positive charge',
+  negQ: '\u2212Q: Click to place negative charge',
+  testQ: 'Test q: Click to place test particle',
+  testE: 'Test e\u207B: Click to place test electron',
+  eGun: 'e\u207B gun: Click to place electron source',
+  erase: 'Erase: Click on object to remove',
+  drawPath: 'Draw Path: Draw a curve, charges will be computed',
+};
+
+// ===== Resize =====
+function resize() {
+  const wrap = mainCanvas.parentElement;
+  W = wrap.clientWidth;
+  H = wrap.clientHeight;
+  const dpr = window.devicePixelRatio || 1;
+  [gridCanvas, voltCanvas, mainCanvas].forEach(c => {
+    c.width = W * dpr;
+    c.height = H * dpr;
+    c.style.width = W + 'px';
+    c.style.height = H + 'px';
+    c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+  });
+  drawGrid();
+  voltDirty = true;
+}
+
+function drawGrid() {
+  const g = gridCtx;
+  g.clearRect(0, 0, W, H);
+  g.strokeStyle = 'rgba(50, 65, 120, 0.4)';
+  g.lineWidth = 0.6;
+  const spacing = 40;
+  for (let x = spacing; x < W; x += spacing) {
+    g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke();
+  }
+  for (let y = spacing; y < H; y += spacing) {
+    g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke();
+  }
+}
+
+window.addEventListener('resize', resize);
+
+// ===== Physics =====
+function electricField(px, py) {
+  let ex = 0, ey = 0;
+  for (const c of charges) {
+    const dx = px - c.x;
+    const dy = py - c.y;
+    const r2 = dx * dx + dy * dy;
+    if (r2 < 100) continue; // 10px singularity guard
+    const r = Math.sqrt(r2);
+    const mag = K * (c.q * CHARGE_SCALE) / r2;
+    ex += mag * dx / r;
+    ey += mag * dy / r;
+  }
+  return { x: ex, y: ey };
+}
+
+function electricPotential(px, py) {
+  let v = 0;
+  for (const c of charges) {
+    const dx = px - c.x;
+    const dy = py - c.y;
+    const r = Math.sqrt(dx * dx + dy * dy);
+    if (r < 5) return Infinity;
+    v += K * (c.q * CHARGE_SCALE) / r;
+  }
+  return v;
+}
+
+// ===== Voltage Heatmap =====
+function computeVoltageMap() {
+  if (charges.length === 0) {
+    voltCtx.clearRect(0, 0, W, H);
+    voltDirty = false;
+    return;
+  }
+  const step = 2;
+  const cols = Math.ceil(W / step);
+  const rows = Math.ceil(H / step);
+  const imgData = voltCtx.createImageData(cols, rows);
+  const data = imgData.data;
+
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) {
+      const px = i * step + step / 2;
+      const py = j * step + step / 2;
+      let v = electricPotential(px, py);
+      const idx = (j * cols + i) * 4;
+
+      if (v === Infinity || v === -Infinity || isNaN(v)) {
+        data[idx] = 0; data[idx+1] = 0; data[idx+2] = 0; data[idx+3] = 0;
+        continue;
+      }
+
+      // Map to color: normalize with atan for bounded range
+      const norm = Math.atan(v / 3e3) * 2 / Math.PI; // -1 to 1, sensitive to typical voltages
+      const intensity = Math.abs(norm);
+      // Use pow to spread colors across more of the range
+      const spread = Math.pow(intensity, 0.6);
+      let r, g, b;
+      if (norm > 0) {
+        // Positive: vivid warm red-orange
+        r = Math.floor(255 * spread);
+        g = Math.floor(50 * spread);
+        b = Math.floor(10 * spread);
+      } else {
+        // Negative: vivid cool blue
+        r = Math.floor(10 * spread);
+        g = Math.floor(70 * spread);
+        b = Math.floor(255 * spread);
+      }
+      data[idx] = Math.min(255, r);
+      data[idx+1] = Math.min(255, g);
+      data[idx+2] = Math.min(255, b);
+      data[idx+3] = Math.floor(80 + 175 * spread);
+    }
+  }
+
+  // Draw scaled
+  const offscreen = document.createElement('canvas');
+  offscreen.width = cols;
+  offscreen.height = rows;
+  offscreen.getContext('2d').putImageData(imgData, 0, 0);
+
+  voltCtx.clearRect(0, 0, W, H);
+  voltCtx.imageSmoothingEnabled = true;
+  voltCtx.drawImage(offscreen, 0, 0, W, H);
+  voltDirty = false;
+}
+
+// ===== Field Streamlines =====
+function drawStreamlines() {
+  if (charges.length === 0) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(180, 210, 255, 0.3)';
+  ctx.lineWidth = 1.2;
+
+  const numLines = 16;
+  for (const c of charges) {
+    if (c.q <= 0) continue; // start from positive charges
+    for (let i = 0; i < numLines; i++) {
+      const angle = (i / numLines) * 2 * Math.PI;
+      let x = c.x + Math.cos(angle) * 15;
+      let y = c.y + Math.sin(angle) * 15;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      for (let s = 0; s < 800; s++) {
+        const e = electricField(x, y);
+        const mag = Math.sqrt(e.x * e.x + e.y * e.y);
+        if (mag < 1e-2) break;
+        x += (e.x / mag) * 4;
+        y += (e.y / mag) * 4;
+        if (x < -20 || x > W + 20 || y < -20 || y > H + 20) break;
+        // Check if hit a negative charge
+        let hitNeg = false;
+        for (const nc of charges) {
+          if (nc.q < 0) {
+            const dx = x - nc.x; const dy = y - nc.y;
+            if (dx*dx + dy*dy < 144) { hitNeg = true; break; }
+          }
+        }
+        ctx.lineTo(x, y);
+        if (hitNeg) break;
+      }
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+// ===== Field Vectors =====
+function drawFieldVectors() {
+  if (charges.length === 0) return;
+  const cols = vectorDensity;
+  const spacing = W / cols;
+  const rows = Math.ceil(H / spacing);
+  const arrowLen = spacing * 0.35;
+
+  ctx.save();
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) {
+      const px = (i + 0.5) * spacing;
+      const py = (j + 0.5) * spacing;
+      const e = electricField(px, py);
+      const mag = Math.sqrt(e.x * e.x + e.y * e.y);
+      if (mag < 1) continue;
+
+      const nx = e.x / mag;
+      const ny = e.y / mag;
+      const alpha = Math.min(0.95, 0.2 + 0.2 * Math.log10(mag + 1));
+
+      ctx.strokeStyle = `rgba(140, 180, 255, ${alpha})`;
+      ctx.fillStyle = `rgba(140, 180, 255, ${alpha})`;
+      ctx.lineWidth = 1;
+
+      const x1 = px - nx * arrowLen * 0.5;
+      const y1 = py - ny * arrowLen * 0.5;
+      const x2 = px + nx * arrowLen * 0.5;
+      const y2 = py + ny * arrowLen * 0.5;
+
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+
+      // Arrowhead
+      const headLen = arrowLen * 0.3;
+      const ax = x2 - nx * headLen;
+      const ay = y2 - ny * headLen;
+      ctx.beginPath();
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(ax - ny * headLen * 0.4, ay + nx * headLen * 0.4);
+      ctx.lineTo(ax + ny * headLen * 0.4, ay - nx * headLen * 0.4);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+// ===== Draw Charges =====
+function drawCharges() {
+  for (const c of charges) {
+    const radius = 14 + Math.abs(c.q) * 1.0;
+    const color = c.q > 0 ? '#ff6677' : '#5a9eff';
+
+    // Glow
+    const grad = ctx.createRadialGradient(c.x, c.y, radius * 0.3, c.x, c.y, radius * 2);
+    grad.addColorStop(0, color);
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, radius * 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Body
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Label
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px ' + getComputedStyle(document.body).fontFamily;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText((c.q > 0 ? '+' : '\u2212'), c.x, c.y);
+  }
+}
+
+// ===== Draw Test Particle =====
+function drawTestParticle() {
+  if (!testParticle) return;
+  const tp = testParticle;
+
+  // Trail
+  if (tp.trail.length > 1) {
+    ctx.save();
+    for (let i = 1; i < tp.trail.length; i++) {
+      const alpha = i / tp.trail.length * 0.7;
+      ctx.strokeStyle = `rgba(255, 220, 80, ${alpha})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(tp.trail[i-1].x, tp.trail[i-1].y);
+      ctx.lineTo(tp.trail[i].x, tp.trail[i].y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Glow
+  const grad = ctx.createRadialGradient(tp.x, tp.y, 3, tp.x, tp.y, 22);
+  grad.addColorStop(0, '#ffe066');
+  grad.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(tp.x, tp.y, 22, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Body
+  ctx.fillStyle = '#ffe066';
+  ctx.beginPath();
+  ctx.arc(tp.x, tp.y, 11, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#000';
+  ctx.font = 'bold 11px ' + getComputedStyle(document.body).fontFamily;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('q', tp.x, tp.y);
+}
+
+// ===== Draw Test Electron =====
+function drawTestElectron() {
+  if (!testElectron) return;
+  const te = testElectron;
+
+  // Trail
+  if (te.trail.length > 1) {
+    ctx.save();
+    for (let i = 1; i < te.trail.length; i++) {
+      const alpha = i / te.trail.length * 0.7;
+      ctx.strokeStyle = `rgba(176, 255, 200, ${alpha})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(te.trail[i-1].x, te.trail[i-1].y);
+      ctx.lineTo(te.trail[i].x, te.trail[i].y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Glow
+  const grad = ctx.createRadialGradient(te.x, te.y, 3, te.x, te.y, 22);
+  grad.addColorStop(0, '#b0ffc0');
+  grad.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(te.x, te.y, 22, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Body
+  ctx.fillStyle = '#b0ffc0';
+  ctx.beginPath();
+  ctx.arc(te.x, te.y, 11, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#000';
+  ctx.font = 'bold 10px ' + getComputedStyle(document.body).fontFamily;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('e\u207B', te.x, te.y);
+}
+
+// ===== Draw Electron Sources & Electrons =====
+function drawElectronSources(time) {
+  for (const es of electronSources) {
+    const pulse = 0.65 + 0.35 * Math.sin(time * 2);
+    ctx.strokeStyle = `rgba(176, 255, 200, ${pulse})`;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(es.x, es.y, 15, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(100, 220, 130, 0.35)';
+    ctx.beginPath();
+    ctx.arc(es.x, es.y, 15, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#b0ffc0';
+    ctx.font = '12px ' + getComputedStyle(document.body).fontFamily;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('e\u0304', es.x, es.y);
+  }
+}
+
+function drawElectrons() {
+  for (const el of electrons) {
+    // Trail
+    if (el.trail.length > 1) {
+      ctx.save();
+      for (let i = 1; i < el.trail.length; i++) {
+        const alpha = (i / el.trail.length) * 0.55 * el.alpha;
+        ctx.strokeStyle = `rgba(176, 255, 200, ${alpha})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(el.trail[i-1].x, el.trail[i-1].y);
+        ctx.lineTo(el.trail[i].x, el.trail[i].y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    ctx.fillStyle = `rgba(176, 255, 200, ${el.alpha})`;
+    ctx.beginPath();
+    ctx.arc(el.x, el.y, 8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ===== Collision Check =====
+function hitsCharge(px, py) {
+  for (const c of charges) {
+    const dx = px - c.x, dy = py - c.y;
+    const r = 12 + Math.abs(c.q) * 0.8;
+    if (dx * dx + dy * dy < r * r) return true;
+  }
+  return false;
+}
+
+// ===== Physics Update =====
+function updatePhysics(dt) {
+  if (paused || !animateParticles) return;
+  const sDt = dt;
+
+  // Test particle
+  if (testParticle) {
+    const tp = testParticle;
+    const e = electricField(tp.x, tp.y);
+    const fx = TEST_CHARGE * e.x * simSpeed;
+    const fy = TEST_CHARGE * e.y * simSpeed;
+    tp.vx += fx / TEST_MASS * sDt;
+    tp.vy += fy / TEST_MASS * sDt;
+    // Speed cap
+    const spd = Math.sqrt(tp.vx * tp.vx + tp.vy * tp.vy);
+    if (spd > SPEED_CAP) { tp.vx *= SPEED_CAP / spd; tp.vy *= SPEED_CAP / spd; }
+    tp.x += tp.vx * sDt;
+    tp.y += tp.vy * sDt;
+    tp.trail.push({ x: tp.x, y: tp.y });
+    if (tp.trail.length > 120) tp.trail.shift();
+    // Remove if far outside or hits a charge
+    if (tp.x < -30 || tp.x > W + 30 || tp.y < -30 || tp.y > H + 30 || hitsCharge(tp.x, tp.y)) {
+      testParticle = null;
+    }
+  }
+
+  // Test electron (same as test particle but force is negated)
+  if (testElectron) {
+    const te = testElectron;
+    const e = electricField(te.x, te.y);
+    const fx = -TEST_CHARGE * e.x * simSpeed;
+    const fy = -TEST_CHARGE * e.y * simSpeed;
+    te.vx += fx / TEST_MASS * sDt;
+    te.vy += fy / TEST_MASS * sDt;
+    const spd = Math.sqrt(te.vx * te.vx + te.vy * te.vy);
+    if (spd > SPEED_CAP) { te.vx *= SPEED_CAP / spd; te.vy *= SPEED_CAP / spd; }
+    te.x += te.vx * sDt;
+    te.y += te.vy * sDt;
+    te.trail.push({ x: te.x, y: te.y });
+    if (te.trail.length > 120) te.trail.shift();
+    if (te.x < -30 || te.x > W + 30 || te.y < -30 || te.y > H + 30 || hitsCharge(te.x, te.y)) {
+      testElectron = null;
+    }
+  }
+
+  // Electron emission
+  emitTimer += sDt;
+  while (emitTimer >= EMIT_RATE && electrons.length < MAX_ELECTRONS) {
+    emitTimer -= EMIT_RATE;
+    for (const es of electronSources) {
+      if (electrons.length >= MAX_ELECTRONS) break;
+      const angle = Math.random() * Math.PI * 2;
+      const speed = ELECTRON_SCALE * (0.01 + Math.random() * Math.random() * 18.0);
+      electrons.push({
+        x: es.x, y: es.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        trail: [{ x: es.x, y: es.y }],
+        age: 0,
+        alpha: 0,
+      });
+    }
+  }
+
+  // Update electrons
+  for (let i = electrons.length - 1; i >= 0; i--) {
+    const el = electrons[i];
+    const e = electricField(el.x, el.y);
+    const fx = -TEST_CHARGE * e.x * simSpeed;
+    const fy = -TEST_CHARGE * e.y * simSpeed;
+    el.vx += fx / TEST_MASS * sDt;
+    el.vy += fy / TEST_MASS * sDt;
+    const spd = Math.sqrt(el.vx * el.vx + el.vy * el.vy);
+    if (spd > SPEED_CAP) { el.vx *= SPEED_CAP / spd; el.vy *= SPEED_CAP / spd; }
+    el.x += el.vx * sDt;
+    el.y += el.vy * sDt;
+    el.age += sDt;
+    el.trail.push({ x: el.x, y: el.y });
+    if (el.trail.length > 40) el.trail.shift();
+
+    // Alpha: fade in, decay
+    el.alpha = Math.min(1, el.age / 0.3) * Math.max(0.2, Math.exp(-el.age * 0.03));
+
+    // Remove if hits a charge
+    if (hitsCharge(el.x, el.y)) {
+      electrons.splice(i, 1);
+      continue;
+    }
+    // Remove if outside
+    if (el.x < -20 || el.x > W + 20 || el.y < -20 || el.y > H + 20) {
+      electrons.splice(i, 1);
+      continue;
+    }
+    // Probabilistic removal (half-life)
+    if (Math.random() > Math.exp(-LAMBDA * sDt)) {
+      electrons.splice(i, 1);
+    }
+  }
+}
+
+// ===== Main Render Loop =====
+function frame(timestamp) {
+  const dt = lastTime ? Math.min((timestamp - lastTime) / 1000, 0.05) : 1/60;
+  lastTime = timestamp;
+
+  updatePhysics(dt);
+
+  // Voltage heatmap
+  if (voltDirty && showVoltage) {
+    computeVoltageMap();
+  } else if (!showVoltage) {
+    voltCtx.clearRect(0, 0, W, H);
+  }
+
+  // Main canvas
+  ctx.clearRect(0, 0, W, H);
+
+  if (showStreamlines) drawStreamlines();
+  if (showVectors) drawFieldVectors();
+  drawCharges();
+  drawElectronSources(timestamp / 1000);
+  drawElectrons();
+  drawTestParticle();
+  drawTestElectron();
+
+  // Draw path preview while drawing
+  if (drawingPath && rawPathPoints.length > 1) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 200, 80, 0.7)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(rawPathPoints[0].x, rawPathPoints[0].y);
+    for (let i = 1; i < rawPathPoints.length; i++) {
+      ctx.lineTo(rawPathPoints[i].x, rawPathPoints[i].y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Start dot
+    ctx.fillStyle = '#ffd54f';
+    ctx.beginPath();
+    ctx.arc(rawPathPoints[0].x, rawPathPoints[0].y, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Status: E at mouse
+  if (charges.length > 0) {
+    const e = electricField(mouseX, mouseY);
+    const mag = Math.sqrt(e.x * e.x + e.y * e.y);
+    statusE.textContent = 'E: ' + formatE(mag) + ' N/C';
+  } else {
+    statusE.textContent = 'E: \u2014 N/C';
+  }
+
+  statusCharges.textContent = charges.length + ' charge' + (charges.length !== 1 ? 's' : '');
+
+  requestAnimationFrame(frame);
+}
+
+function formatE(mag) {
+  if (mag > 1e6) return (mag / 1e6).toFixed(1) + 'M';
+  if (mag > 1e3) return (mag / 1e3).toFixed(1) + 'k';
+  return mag.toFixed(1);
+}
+
+// ===== Interaction =====
+function getCanvasPos(e) {
+  const rect = mainCanvas.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+function findObjectAt(px, py) {
+  // Test particle
+  if (testParticle) {
+    const dx = px - testParticle.x, dy = py - testParticle.y;
+    if (dx*dx + dy*dy < 400) return { type: 'test', obj: testParticle };
+  }
+  // Test electron
+  if (testElectron) {
+    const dx = px - testElectron.x, dy = py - testElectron.y;
+    if (dx*dx + dy*dy < 400) return { type: 'testE', obj: testElectron };
+  }
+  // Electron sources
+  for (const es of electronSources) {
+    const dx = px - es.x, dy = py - es.y;
+    if (dx*dx + dy*dy < 400) return { type: 'esource', obj: es };
+  }
+  // Charges
+  for (const c of charges) {
+    const r = 12 + Math.abs(c.q) * 0.8 + 5;
+    const dx = px - c.x, dy = py - c.y;
+    if (dx*dx + dy*dy < r*r) return { type: 'charge', obj: c };
+  }
+  return null;
+}
+
+function findChargeOrSourceAt(px, py) {
+  for (const es of electronSources) {
+    const dx = px - es.x, dy = py - es.y;
+    if (dx*dx + dy*dy < 400) return { type: 'esource', obj: es };
+  }
+  for (const c of charges) {
+    const r = 12 + Math.abs(c.q) * 0.8 + 5;
+    const dx = px - c.x, dy = py - c.y;
+    if (dx*dx + dy*dy < r*r) return { type: 'charge', obj: c };
+  }
+  return null;
+}
+
+mainCanvas.addEventListener('pointerdown', (e) => {
+  const pos = getCanvasPos(e);
+
+  // Draw path tool
+  if (currentTool === 'drawPath') {
+    drawingPath = true;
+    rawPathPoints = [{ x: pos.x, y: pos.y }];
+    mainCanvas.setPointerCapture(e.pointerId);
+    return;
+  }
+
+  // Direct drag: any tool except erase — if cursor is over a charge or esource, start dragging
+  if (currentTool !== 'erase') {
+    const dragTarget = findChargeOrSourceAt(pos.x, pos.y);
+    if (dragTarget) {
+      dragging = dragTarget;
+      dragOffsetX = pos.x - dragTarget.obj.x;
+      dragOffsetY = pos.y - dragTarget.obj.y;
+      pushUndo();
+      mainCanvas.setPointerCapture(e.pointerId);
+      mainCanvas.classList.add('grabbing');
+      return;
+    }
+  }
+
+  if (currentTool === 'posQ') {
+    pushUndo();
+    charges.push({ id: nextId++, x: pos.x, y: pos.y, q: qMagnitude });
+    voltDirty = true;
+    saveState();
+  } else if (currentTool === 'negQ') {
+    pushUndo();
+    charges.push({ id: nextId++, x: pos.x, y: pos.y, q: -qMagnitude });
+    voltDirty = true;
+    saveState();
+  } else if (currentTool === 'testQ') {
+    pushUndo();
+    testParticle = { x: pos.x, y: pos.y, vx: 0, vy: 0, trail: [{ x: pos.x, y: pos.y }] };
+    saveState();
+  } else if (currentTool === 'testE') {
+    pushUndo();
+    testElectron = { x: pos.x, y: pos.y, vx: 0, vy: 0, trail: [{ x: pos.x, y: pos.y }] };
+    saveState();
+  } else if (currentTool === 'eGun') {
+    if (electronSources.length >= 4) return; // max 4 guns
+    pushUndo();
+    electronSources.push({ id: nextId++, x: pos.x, y: pos.y });
+    saveState();
+  } else if (currentTool === 'erase') {
+    const hit = findObjectAt(pos.x, pos.y);
+    if (hit) {
+      pushUndo();
+      if (hit.type === 'charge') {
+        charges = charges.filter(c => c !== hit.obj);
+        voltDirty = true;
+      } else if (hit.type === 'test') {
+        testParticle = null;
+      } else if (hit.type === 'testE') {
+        testElectron = null;
+      } else if (hit.type === 'esource') {
+        electronSources = electronSources.filter(es => es !== hit.obj);
+      }
+      saveState();
+    }
+  }
+});
+
+mainCanvas.addEventListener('pointermove', (e) => {
+  const pos = getCanvasPos(e);
+  mouseX = pos.x;
+  mouseY = pos.y;
+  statusCoords.textContent = Math.round(pos.x) + ', ' + Math.round(pos.y);
+
+  // Record path drawing
+  if (drawingPath) {
+    rawPathPoints.push({ x: pos.x, y: pos.y });
+    return;
+  }
+
+  // Update cursor: show grab when hovering a charge or esource
+  if (!dragging) {
+    const hover = findChargeOrSourceAt(pos.x, pos.y);
+    mainCanvas.classList.toggle('grab', !!hover && currentTool !== 'erase');
+  }
+
+  if (dragging) {
+    dragging.obj.x = pos.x - dragOffsetX;
+    dragging.obj.y = pos.y - dragOffsetY;
+    if (dragging.type === 'charge') voltDirty = true;
+  }
+});
+
+mainCanvas.addEventListener('pointerup', () => {
+  if (drawingPath) {
+    drawingPath = false;
+    if (rawPathPoints.length >= 4) {
+      pathToCharges(rawPathPoints);
+    }
+    rawPathPoints = [];
+    return;
+  }
+  if (dragging) {
+    saveState();
+    dragging = null;
+    mainCanvas.classList.remove('grabbing');
+  }
+});
+
+// ===== Tool Selection =====
+document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+  btn.addEventListener('click', () => selectTool(btn.dataset.tool));
+});
+
+function selectTool(tool) {
+  currentTool = tool;
+  document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.remove('active'));
+  const active = document.querySelector(`.tool-btn[data-tool="${tool}"]`);
+  if (active) active.classList.add('active');
+  statusTool.textContent = TOOL_HINTS[tool] || '';
+}
+
+// ===== Sliders =====
+qMagSlider.addEventListener('input', () => {
+  qMagnitude = parseInt(qMagSlider.value);
+  qMagVal.textContent = qMagnitude + ' \u00b5C';
+});
+
+densitySlider.addEventListener('input', () => {
+  vectorDensity = parseInt(densitySlider.value);
+  densityVal.textContent = vectorDensity;
+});
+
+speedSlider.addEventListener('input', () => {
+  simSpeed = parseInt(speedSlider.value) / 10;
+  speedVal.textContent = simSpeed.toFixed(1) + '\u00d7';
+});
+
+// ===== Toggles =====
+togVoltage.addEventListener('change', () => { showVoltage = togVoltage.checked; if (showVoltage) voltDirty = true; });
+togVectors.addEventListener('change', () => { showVectors = togVectors.checked; });
+togStreamlines.addEventListener('change', () => { showStreamlines = togStreamlines.checked; });
+togParticles.addEventListener('change', () => { animateParticles = togParticles.checked; });
+
+// ===== Undo / Redo =====
+function snapshot() {
+  return JSON.parse(JSON.stringify({ charges, testParticle, testElectron, electronSources }));
+}
+
+function restoreSnapshot(s) {
+  charges = s.charges;
+  testParticle = s.testParticle;
+  testElectron = s.testElectron || null;
+  electronSources = s.electronSources;
+  electrons = [];
+  voltDirty = true;
+  saveState();
+}
+
+function pushUndo() {
+  undoStack.push(snapshot());
+  if (undoStack.length > 100) undoStack.shift();
+  redoStack = [];
+}
+
+function undo() {
+  if (undoStack.length === 0) return;
+  redoStack.push(snapshot());
+  restoreSnapshot(undoStack.pop());
+}
+
+function redo() {
+  if (redoStack.length === 0) return;
+  undoStack.push(snapshot());
+  restoreSnapshot(redoStack.pop());
+}
+
+document.getElementById('btnUndo').addEventListener('click', undo);
+document.getElementById('btnRedo').addEventListener('click', redo);
+
+// ===== Clear =====
+function clearAll() {
+  pushUndo();
+  charges = [];
+  testParticle = null;
+  testElectron = null;
+  electronSources = [];
+  electrons = [];
+  voltDirty = true;
+  saveState();
+}
+
+document.getElementById('btnClear').addEventListener('click', clearAll);
+
+// ===== Persistence =====
+function saveState() {
+  try {
+    localStorage.setItem('eflab_charges', JSON.stringify(charges));
+    localStorage.setItem('eflab_test', JSON.stringify(testParticle));
+    localStorage.setItem('eflab_teste', JSON.stringify(testElectron));
+    localStorage.setItem('eflab_esources', JSON.stringify(electronSources));
+    localStorage.setItem('eflab_settings', JSON.stringify({
+      currentTool, qMagnitude, vectorDensity, simSpeed,
+      showVoltage, showVectors, showStreamlines, animateParticles
+    }));
+  } catch(e) { /* quota exceeded, silently ignore */ }
+}
+
+function loadState() {
+  try {
+    const c = localStorage.getItem('eflab_charges');
+    if (c) charges = JSON.parse(c);
+    const t = localStorage.getItem('eflab_test');
+    if (t) testParticle = JSON.parse(t);
+    const te = localStorage.getItem('eflab_teste');
+    if (te) testElectron = JSON.parse(te);
+    const es = localStorage.getItem('eflab_esources');
+    if (es) electronSources = JSON.parse(es);
+    const s = localStorage.getItem('eflab_settings');
+    if (s) {
+      const st = JSON.parse(s);
+      if (st.currentTool) selectTool(st.currentTool);
+      if (st.qMagnitude) { qMagnitude = st.qMagnitude; qMagSlider.value = qMagnitude; qMagVal.textContent = qMagnitude + ' \u00b5C'; }
+      if (st.vectorDensity) { vectorDensity = st.vectorDensity; densitySlider.value = vectorDensity; densityVal.textContent = vectorDensity; }
+      if (st.simSpeed != null) { simSpeed = st.simSpeed; speedSlider.value = simSpeed * 10; speedVal.textContent = simSpeed.toFixed(1) + '\u00d7'; }
+      if (st.showVoltage != null) { showVoltage = st.showVoltage; togVoltage.checked = showVoltage; }
+      if (st.showVectors != null) { showVectors = st.showVectors; togVectors.checked = showVectors; }
+      if (st.showStreamlines != null) { showStreamlines = st.showStreamlines; togStreamlines.checked = showStreamlines; }
+      if (st.animateParticles != null) { animateParticles = st.animateParticles; togParticles.checked = animateParticles; }
+    }
+    // Update nextId
+    for (const ch of charges) if (ch.id >= nextId) nextId = ch.id + 1;
+    for (const e of electronSources) if (e.id >= nextId) nextId = e.id + 1;
+    voltDirty = true;
+  } catch(e) { /* corrupted data, start fresh */ }
+}
+
+// ===== Scenarios =====
+const scenarios = {
+  monopoles: [
+    { name: 'Single +Q', fn: (w,h) => ({ charges: [{id:1,x:w/2,y:h/2,q:5}], tp: {x:w*0.2,y:h/2,vx:20,vy:30} }) },
+    { name: 'Single \u2212Q', fn: (w,h) => ({ charges: [{id:1,x:w/2,y:h/2,q:-5}], tp: {x:w*0.8,y:h*0.3,vx:-15,vy:20} }) },
+    { name: 'Large +Q', fn: (w,h) => ({ charges: [{id:1,x:w/2,y:h/2,q:10}], tp: {x:w*0.15,y:h*0.5,vx:30,vy:-10} }) },
+  ],
+  dipoles: [
+    { name: 'Horizontal dipole', fn: (w,h) => ({ charges: [{id:1,x:w*0.35,y:h/2,q:5},{id:2,x:w*0.65,y:h/2,q:-5}], tp: {x:w*0.5,y:h*0.2,vx:10,vy:15} }) },
+    { name: 'Vertical dipole', fn: (w,h) => ({ charges: [{id:1,x:w/2,y:h*0.35,q:5},{id:2,x:w/2,y:h*0.65,q:-5}], tp: {x:w*0.3,y:h*0.5,vx:15,vy:0} }) },
+    { name: 'Linear tripole (+\u2212+)', fn: (w,h) => ({ charges: [{id:1,x:w*0.3,y:h/2,q:5},{id:2,x:w*0.5,y:h/2,q:-5},{id:3,x:w*0.7,y:h/2,q:5}], tp: {x:w*0.5,y:h*0.2,vx:5,vy:20} }) },
+  ],
+  symmetric: [
+    { name: 'Two +Q', fn: (w,h) => ({ charges: [{id:1,x:w*0.35,y:h/2,q:5},{id:2,x:w*0.65,y:h/2,q:5}], tp: {x:w*0.5,y:h*0.15,vx:0,vy:20} }) },
+    { name: 'Two \u2212Q', fn: (w,h) => ({ charges: [{id:1,x:w*0.35,y:h/2,q:-5},{id:2,x:w*0.65,y:h/2,q:-5}], tp: {x:w*0.5,y:h*0.15,vx:10,vy:15} }) },
+    { name: 'Square ++++', fn: (w,h) => {
+      const d = Math.min(w,h)*0.2;
+      return { charges: [{id:1,x:w/2-d,y:h/2-d,q:5},{id:2,x:w/2+d,y:h/2-d,q:5},{id:3,x:w/2+d,y:h/2+d,q:5},{id:4,x:w/2-d,y:h/2+d,q:5}], tp: {x:w/2,y:h/2,vx:10,vy:10} };
+    }},
+    { name: 'Square +\u2212+\u2212', fn: (w,h) => {
+      const d = Math.min(w,h)*0.2;
+      return { charges: [{id:1,x:w/2-d,y:h/2-d,q:5},{id:2,x:w/2+d,y:h/2-d,q:-5},{id:3,x:w/2+d,y:h/2+d,q:5},{id:4,x:w/2-d,y:h/2+d,q:-5}], tp: {x:w/2,y:h*0.15,vx:10,vy:15} };
+    }},
+    { name: 'Triangle +++', fn: (w,h) => {
+      const r = Math.min(w,h)*0.2;
+      return { charges: [0,1,2].map((i,idx) => ({id:idx+1,x:w/2+r*Math.cos(i*2*Math.PI/3-Math.PI/2),y:h/2+r*Math.sin(i*2*Math.PI/3-Math.PI/2),q:5})), tp: {x:w/2,y:h/2,vx:5,vy:5} };
+    }},
+    { name: 'Hexagon +\u2212\u00d76', fn: (w,h) => {
+      const r = Math.min(w,h)*0.22;
+      return { charges: [0,1,2,3,4,5].map((i,idx) => ({id:idx+1,x:w/2+r*Math.cos(i*Math.PI/3),y:h/2+r*Math.sin(i*Math.PI/3),q:i%2===0?5:-5})), tp: {x:w/2,y:h/2,vx:10,vy:0} };
+    }},
+    { name: 'Ring of 8\u00d7+', fn: (w,h) => {
+      const r = Math.min(w,h)*0.25;
+      return { charges: Array.from({length:8},(_, i) => ({id:i+1,x:w/2+r*Math.cos(i*Math.PI/4),y:h/2+r*Math.sin(i*Math.PI/4),q:5})), tp: {x:w/2,y:h/2,vx:15,vy:10} };
+    }},
+  ],
+  plates: [
+    { name: 'Uniform field (8 pairs)', fn: (w,h) => {
+      const ch = [];
+      const n = 8;
+      for (let i = 0; i < n; i++) {
+        const y = h*0.2 + (h*0.6)*i/(n-1);
+        ch.push({id:ch.length+1,x:w*0.3,y,q:5});
+        ch.push({id:ch.length+1,x:w*0.7,y,q:-5});
+      }
+      return { charges: ch, tp: {x:w*0.35,y:h/2,vx:20,vy:5} };
+    }},
+    { name: 'Wide plates (12 pairs)', fn: (w,h) => {
+      const ch = [];
+      const n = 12;
+      for (let i = 0; i < n; i++) {
+        const y = h*0.1 + (h*0.8)*i/(n-1);
+        ch.push({id:ch.length+1,x:w*0.25,y,q:5});
+        ch.push({id:ch.length+1,x:w*0.75,y,q:-5});
+      }
+      return { charges: ch, tp: {x:w*0.3,y:h/2,vx:25,vy:0} };
+    }},
+    { name: 'Angled deflector', fn: (w,h) => {
+      const ch = [];
+      const n = 8;
+      for (let i = 0; i < n; i++) {
+        const t = i / (n-1);
+        const x1 = w*0.3 + t*w*0.15;
+        const y1 = h*0.25 + t*h*0.25;
+        const x2 = w*0.45 + t*w*0.15;
+        const y2 = h*0.35 + t*h*0.25;
+        ch.push({id:ch.length+1,x:x1,y:y1,q:5});
+        ch.push({id:ch.length+1,x:x2,y:y2,q:-5});
+      }
+      return { charges: ch, tp: {x:w*0.2,y:h*0.4,vx:40,vy:20} };
+    }},
+  ]
+};
+
+function loadScenario(config) {
+  const result = config.fn(W, H);
+  pushUndo();
+  charges = result.charges;
+  // Fix IDs
+  charges.forEach((c, i) => c.id = i + 1);
+  nextId = charges.length + 1;
+  testParticle = result.tp ? { ...result.tp, trail: [{ x: result.tp.x, y: result.tp.y }] } : null;
+  electronSources = [];
+  electrons = [];
+  voltDirty = true;
+  saveState();
+  scenariosModal.classList.remove('open');
+}
+
+function populateScenarios() {
+  const sections = {
+    scenMonopoles: scenarios.monopoles,
+    scenDipoles: scenarios.dipoles,
+    scenSymmetric: scenarios.symmetric,
+    scenPlates: scenarios.plates,
+  };
+
+  for (const [containerId, items] of Object.entries(sections)) {
+    const container = document.getElementById(containerId);
+    for (const sc of items) {
+      const card = document.createElement('button');
+      card.className = 'scenario-card';
+      card.textContent = sc.name;
+      card.addEventListener('click', () => loadScenario(sc));
+      container.appendChild(card);
+    }
+  }
+}
+
+document.getElementById('btnScenarios').addEventListener('click', () => scenariosModal.classList.add('open'));
+document.getElementById('closeScenarios').addEventListener('click', () => scenariosModal.classList.remove('open'));
+scenariosModal.addEventListener('click', (e) => { if (e.target === scenariosModal) scenariosModal.classList.remove('open'); });
+
+document.getElementById('btnShortcuts').addEventListener('click', () => shortcutsOverlay.classList.add('open'));
+shortcutsOverlay.addEventListener('click', (e) => { if (e.target === shortcutsOverlay) shortcutsOverlay.classList.remove('open'); });
+
+// ===== Keyboard Shortcuts =====
+document.addEventListener('keydown', (e) => {
+  // Skip if typing in input
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+  // Konami code
+  konamiSeq.push(e.code);
+  if (konamiSeq.length > KONAMI.length) konamiSeq.shift();
+  if (konamiSeq.length === KONAMI.length && konamiSeq.every((k, i) => k === KONAMI[i])) {
+    konamiSeq = [];
+    plasmaStorm();
+    return;
+  }
+
+  if (e.key === 'Escape') {
+    scenariosModal.classList.remove('open');
+    shortcutsOverlay.classList.remove('open');
+    return;
+  }
+
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); redo(); return; }
+
+  switch (e.key) {
+    case '1': selectTool('posQ'); break;
+    case '2': selectTool('negQ'); break;
+    case '3': selectTool('testQ'); break;
+    case '4': selectTool('testE'); break;
+    case '5': selectTool('eGun'); break;
+    case '6': selectTool('erase'); break;
+    case '7': selectTool('drawPath'); break;
+    case 'c': case 'C': clearAll(); break;
+    case 'v': case 'V': togVoltage.checked = !togVoltage.checked; togVoltage.dispatchEvent(new Event('change')); break;
+    case 'f': case 'F': togVectors.checked = !togVectors.checked; togVectors.dispatchEvent(new Event('change')); break;
+    case 'l': case 'L': togStreamlines.checked = !togStreamlines.checked; togStreamlines.dispatchEvent(new Event('change')); break;
+    case 'p': case 'P': scenariosModal.classList.toggle('open'); break;
+    case '?': shortcutsOverlay.classList.toggle('open'); break;
+    case ' ': e.preventDefault(); paused = !paused; break;
+  }
+});
+
+// ===== EASTER EGG: Plasma Storm =====
+function plasmaStorm() {
+  pushUndo();
+  charges = [];
+  for (let i = 0; i < 16; i++) {
+    charges.push({
+      id: nextId++,
+      x: Math.random() * W * 0.8 + W * 0.1,
+      y: Math.random() * H * 0.8 + H * 0.1,
+      q: (Math.random() < 0.5 ? 1 : -1) * (Math.floor(Math.random() * 10) + 1)
+    });
+  }
+  testParticle = { x: W/2, y: H/2, vx: 20, vy: 15, trail: [{ x: W/2, y: H/2 }] };
+  testElectron = null;
+  electronSources = [];
+  electrons = [];
+  voltDirty = true;
+  saveState();
+}
+
+// ===== Path-to-Charges Solver =====
+
+function pathToCharges(raw) {
+  // Stage 1: Smooth with Chaikin corner-cutting (3 passes)
+  let pts = raw.slice();
+  for (let pass = 0; pass < 3; pass++) {
+    const next = [pts[0]];
+    for (let i = 0; i < pts.length - 1; i++) {
+      next.push({
+        x: pts[i].x * 0.75 + pts[i+1].x * 0.25,
+        y: pts[i].y * 0.75 + pts[i+1].y * 0.25
+      });
+      next.push({
+        x: pts[i].x * 0.25 + pts[i+1].x * 0.75,
+        y: pts[i].y * 0.25 + pts[i+1].y * 0.75
+      });
+    }
+    next.push(pts[pts.length - 1]);
+    pts = next;
+  }
+
+  // Compute cumulative arc length
+  const arcLen = [0];
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i].x - pts[i-1].x, dy = pts[i].y - pts[i-1].y;
+    arcLen.push(arcLen[i-1] + Math.sqrt(dx*dx + dy*dy));
+  }
+  const totalLen = arcLen[arcLen.length - 1];
+  if (totalLen < 40) return; // Too short
+
+  // Resample at equal intervals
+  const N = Math.max(30, Math.min(80, Math.round(totalLen / 8)));
+  const sampled = [];
+  let j = 0;
+  for (let i = 0; i < N; i++) {
+    const targetLen = (i / (N - 1)) * totalLen;
+    while (j < arcLen.length - 2 && arcLen[j+1] < targetLen) j++;
+    const segLen = arcLen[j+1] - arcLen[j];
+    const t = segLen > 0 ? (targetLen - arcLen[j]) / segLen : 0;
+    sampled.push({
+      x: pts[j].x + t * (pts[j+1].x - pts[j].x),
+      y: pts[j].y + t * (pts[j+1].y - pts[j].y)
+    });
+  }
+
+  // Stage 2: Compute tangent, normal, curvature
+  const tangents = [];
+  const normals = [];
+  const curvatures = [];
+  for (let i = 0; i < N; i++) {
+    const prev = sampled[Math.max(0, i-1)];
+    const next = sampled[Math.min(N-1, i+1)];
+    const tx = next.x - prev.x, ty = next.y - prev.y;
+    const tLen = Math.sqrt(tx*tx + ty*ty) || 1;
+    tangents.push({ x: tx/tLen, y: ty/tLen });
+    normals.push({ x: -ty/tLen, y: tx/tLen }); // left-pointing normal
+  }
+
+  const ds = totalLen / (N - 1);
+  for (let i = 0; i < N; i++) {
+    if (i === 0 || i === N - 1) { curvatures.push(0); continue; }
+    const p0 = sampled[i-1], p1 = sampled[i], p2 = sampled[i+1];
+    const d1x = p1.x - p0.x, d1y = p1.y - p0.y;
+    const d2x = p2.x - p1.x, d2y = p2.y - p1.y;
+    const cross = d2x * d1y - d2y * d1x;
+    const len1 = Math.sqrt(d1x*d1x + d1y*d1y) || 1;
+    const len2 = Math.sqrt(d2x*d2x + d2y*d2y) || 1;
+    const len12 = Math.sqrt((p2.x-p0.x)**2 + (p2.y-p0.y)**2) || 1;
+    let kappa = 2 * cross / (len1 * len2 * len12);
+    // Clamp curvature
+    kappa = Math.max(-0.15, Math.min(0.15, kappa));
+    curvatures.push(kappa);
+  }
+
+  // Stage 3: Select candidate charge positions
+  // Compute curvature-weighted indices sorted by |curvature|
+  const indexed = curvatures.map((k, i) => ({ i, absK: Math.abs(k) }));
+  indexed.sort((a, b) => b.absK - a.absK);
+
+  const minSpacing = totalLen / 20;
+  const anchors = [];
+  for (const entry of indexed) {
+    if (entry.absK < 0.002) continue;
+    const si = entry.i * ds; // arc position
+    let tooClose = false;
+    for (const a of anchors) {
+      if (Math.abs(si - a.arcPos) < minSpacing) { tooClose = true; break; }
+    }
+    if (!tooClose) {
+      anchors.push({ idx: entry.i, arcPos: si });
+    }
+    if (anchors.length >= 15) break;
+  }
+
+  // Also add a few evenly-spaced anchors to help guide straight segments
+  for (let i = 0; i < N; i += Math.floor(N / 5)) {
+    const si = i * ds;
+    let tooClose = false;
+    for (const a of anchors) {
+      if (Math.abs(si - a.arcPos) < minSpacing * 0.6) { tooClose = true; break; }
+    }
+    if (!tooClose && anchors.length < 20) {
+      anchors.push({ idx: i, arcPos: si });
+    }
+  }
+
+  // Generate candidate positions offset along normals
+  const candidates = [];
+  for (const a of anchors) {
+    const i = a.idx;
+    const k = curvatures[i];
+    const signK = k >= 0 ? 1 : -1;
+    const R = Math.abs(k) > 0.001 ? 1 / Math.abs(k) : 1000;
+    const d = Math.max(50, Math.min(200, 0.35 * R));
+
+    // Place charge on the side of the center of curvature
+    const cx = sampled[i].x + signK * normals[i].x * d;
+    const cy = sampled[i].y + signK * normals[i].y * d;
+    // Clamp to canvas
+    const px = Math.max(20, Math.min(W - 20, cx));
+    const py = Math.max(20, Math.min(H - 20, cy));
+    candidates.push({ x: px, y: py });
+
+    // Also place one on the opposite side for flexibility
+    if (anchors.length < 12) {
+      const ox = sampled[i].x - signK * normals[i].x * d;
+      const oy = sampled[i].y - signK * normals[i].y * d;
+      candidates.push({
+        x: Math.max(20, Math.min(W - 20, ox)),
+        y: Math.max(20, Math.min(H - 20, oy))
+      });
+    }
+  }
+
+  // Deduplicate nearby candidates
+  const deduped = [];
+  for (const c of candidates) {
+    let dup = false;
+    for (const d of deduped) {
+      if ((c.x-d.x)**2 + (c.y-d.y)**2 < 900) { dup = true; break; } // 30px
+    }
+    if (!dup) deduped.push(c);
+  }
+  const M = deduped.length;
+  if (M === 0) return;
+
+  // Stage 4: Linear least squares for charge magnitudes
+  // Desired field at each sample point: primarily tangential (along path)
+  // with a small centripetal component at curves to steer the particle
+  const fieldStrength = 5e-4;
+  const desiredE = [];
+  for (let i = 0; i < N; i++) {
+    const k = curvatures[i];
+    // Dominant tangential component — this is what makes the field follow the path
+    const tMag = fieldStrength;
+    // Small centripetal nudge at curves, capped to never exceed tangential
+    const cMag = Math.min(tMag * 0.5, fieldStrength * Math.abs(k) * 15);
+    const signK = k >= 0 ? 1 : -1;
+    desiredE.push({
+      x: tangents[i].x * tMag + signK * normals[i].x * cMag,
+      y: tangents[i].y * tMag + signK * normals[i].y * cMag
+    });
+  }
+
+  // Build A matrix (2N x M) and b vector (2N x 1)
+  // A[2i][j] = field_x from unit charge at candidate j at sample point i
+  // A[2i+1][j] = field_y
+  const A = [];
+  const b = [];
+  for (let i = 0; i < N; i++) {
+    const w = Math.sqrt(0.1 + Math.abs(curvatures[i])); // curvature weighting
+    const rowX = [];
+    const rowY = [];
+    for (let jj = 0; jj < M; jj++) {
+      const dx = sampled[i].x - deduped[jj].x;
+      const dy = sampled[i].y - deduped[jj].y;
+      const r2 = dx*dx + dy*dy;
+      const r = Math.sqrt(r2);
+      if (r < 20) {
+        rowX.push(0); rowY.push(0);
+      } else {
+        const coeff = K * CHARGE_SCALE / (r2 * r); // per unit charge
+        rowX.push(coeff * dx * w);
+        rowY.push(coeff * dy * w);
+      }
+    }
+    A.push(rowX);
+    A.push(rowY);
+    b.push(desiredE[i].x * w);
+    b.push(desiredE[i].y * w);
+  }
+
+  // Normal equations: (A^T A + lambda I) q = A^T b
+  const rows = 2 * N;
+  const AtA = Array.from({ length: M }, () => new Float64Array(M));
+  const Atb = new Float64Array(M);
+
+  for (let jj = 0; jj < M; jj++) {
+    for (let k = 0; k < M; k++) {
+      let sum = 0;
+      for (let i = 0; i < rows; i++) sum += A[i][jj] * A[i][k];
+      AtA[jj][k] = sum;
+    }
+    let sum = 0;
+    for (let i = 0; i < rows; i++) sum += A[i][jj] * b[i];
+    Atb[jj] = sum;
+  }
+
+  // Tikhonov regularization
+  let trace = 0;
+  for (let jj = 0; jj < M; jj++) trace += AtA[jj][jj];
+  const lambda = 0.01 * trace / M;
+  for (let jj = 0; jj < M; jj++) AtA[jj][jj] += lambda;
+
+  // Gaussian elimination with partial pivoting
+  const aug = AtA.map((row, i) => [...row, Atb[i]]);
+  for (let col = 0; col < M; col++) {
+    // Pivot
+    let maxRow = col, maxVal = Math.abs(aug[col][col]);
+    for (let row = col + 1; row < M; row++) {
+      if (Math.abs(aug[row][col]) > maxVal) {
+        maxVal = Math.abs(aug[row][col]);
+        maxRow = row;
+      }
+    }
+    [aug[col], aug[maxRow]] = [aug[maxRow], aug[col]];
+    if (Math.abs(aug[col][col]) < 1e-15) continue;
+    for (let row = col + 1; row < M; row++) {
+      const factor = aug[row][col] / aug[col][col];
+      for (let k = col; k <= M; k++) aug[row][k] -= factor * aug[col][k];
+    }
+  }
+  // Back substitution
+  const q = new Float64Array(M);
+  for (let i = M - 1; i >= 0; i--) {
+    let sum = aug[i][M];
+    for (let k = i + 1; k < M; k++) sum -= aug[i][k] * q[k];
+    q[i] = Math.abs(aug[i][i]) > 1e-15 ? sum / aug[i][i] : 0;
+  }
+
+  // Stage 5: Scale and round magnitudes
+  let maxQ = 0;
+  for (let jj = 0; jj < M; jj++) maxQ = Math.max(maxQ, Math.abs(q[jj]));
+  if (maxQ < 1e-20) return; // No solution found
+
+  const scale = 10 / maxQ;
+  const newCharges = [];
+  for (let jj = 0; jj < M; jj++) {
+    const rounded = Math.round(q[jj] * scale);
+    if (rounded !== 0) {
+      newCharges.push({
+        id: nextId++,
+        x: Math.round(deduped[jj].x),
+        y: Math.round(deduped[jj].y),
+        q: Math.max(-10, Math.min(10, rounded))
+      });
+    }
+  }
+
+  if (newCharges.length === 0) return;
+
+  // Apply: push undo, set charges, place test particle at path start
+  pushUndo();
+  charges = newCharges;
+  electronSources = [];
+  electrons = [];
+  testElectron = null;
+
+  // Place test particle at start of path with velocity along tangent
+  const startSpeed = v;
+  testParticle = {
+    x: sampled[0].x,
+    y: sampled[0].y,
+    vx: tangents[0].x * startSpeed,
+    vy: tangents[0].y * startSpeed,
+    trail: [{ x: sampled[0].x, y: sampled[0].y }]
+  };
+
+  voltDirty = true;
+  saveState();
+}
+
+// ===== Init =====
+function init() {
+  populateScenarios();
+  loadState();
+  resize();
+  requestAnimationFrame(frame);
+}
+
+init();
+</script>
+</body>
+</html>
