@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Where Am I</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#f5f3ef; --surface:#ffffff; --surface2:#ece9e3; --border:#c8c4bc;
+  --accent:#c04f00; --accent-glow:rgba(192,79,0,0.12);
+  --text:#1a1714; --dim:#3d3830; --muted:#6b6560;
+  --success:#1a6e3a; --error:#b81c00; --warning:#9a5c00;
+  --tab-h:52px; --status-h:34px;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;}
+::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-track{background:var(--surface2);}::-webkit-scrollbar-thumb{background:var(--border);}
+#app{display:grid;grid-template-rows:var(--tab-h) 1fr var(--status-h);height:100dvh;width:100%;}
+
+/* TAB BAR */
+#tab-bar{display:flex;background:var(--surface);border-bottom:1px solid var(--border);z-index:10;}
+.tab-btn{flex:1;background:none;border:none;cursor:pointer;color:var(--dim);font-family:'JetBrains Mono',monospace;font-size:clamp(10px,2.5vw,12px);font-weight:700;letter-spacing:0.12em;text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;position:relative;transition:color 0.2s,background 0.2s;}
+.tab-btn .tab-icon{font-size:14px;transition:transform 0.2s;}
+.tab-btn.active{color:var(--accent);}
+.tab-btn.active .tab-icon{transform:scale(1.2);}
+.tab-btn::after{content:'';position:absolute;bottom:0;left:15%;right:15%;height:2px;background:var(--accent);transform:scaleX(0);transition:transform 0.25s;}
+.tab-btn.active::after{transform:scaleX(1);}
+.tab-btn:hover:not(.active){background:rgba(255,255,255,0.03);color:var(--text);}
+
+/* TAB PANELS */
+#tab-content{overflow:hidden;position:relative;}
+.tab-panel{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;opacity:0;pointer-events:none;transition:opacity 0.2s;}
+.tab-panel.active{opacity:1;pointer-events:all;}
+
+/* STATUS BAR */
+#status-bar{background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:8px;font-size:11px;color:var(--dim);letter-spacing:0.06em;}
+#status-dot{width:6px;height:6px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background 0.4s;}
+#status-dot.searching{background:var(--warning);animation:blink 1.4s infinite;}
+#status-dot.found{background:var(--success);}
+#status-dot.error{background:var(--error);}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+
+/* LIVE TAB */
+#tab-live{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:clamp(24px,6vh,64px) clamp(16px,5vw,48px);gap:clamp(10px,2.5vh,20px);text-align:center;position:relative;}
+.scan-wrap{position:absolute;width:min(260px,70vw);height:min(260px,70vw);pointer-events:none;opacity:0;transition:opacity 0.6s;}
+.scan-wrap.active{opacity:1;}
+.scan-ring{position:absolute;inset:0;border-radius:50%;border:1px solid var(--border);animation:scanPulse 2.2s ease-in-out infinite;}
+.scan-ring:nth-child(2){inset:18%;border-color:rgba(192,79,0,0.25);animation-delay:0.5s;}
+.scan-ring:nth-child(3){inset:36%;border-color:rgba(192,79,0,0.15);animation-delay:1s;}
+@keyframes scanPulse{0%,100%{transform:scale(0.94);opacity:0.4}50%{transform:scale(1.06);opacity:1}}
+
+#suburb-label{font-size:clamp(10px,2.2vw,12px);letter-spacing:0.35em;text-transform:uppercase;color:var(--dim);font-weight:400;position:relative;z-index:1;}
+#suburb-display{font-family:'Bebas Neue',cursive;font-size:clamp(52px,16vw,170px);line-height:0.88;color:var(--accent);letter-spacing:0.03em;word-break:break-word;max-width:100%;position:relative;z-index:1;transition:color 0.3s;cursor:default;}
+#suburb-display.placeholder{color:var(--border);font-size:clamp(36px,11vw,100px);}
+#suburb-display.flash{animation:suburbReveal 0.55s cubic-bezier(0.16,1,0.3,1) forwards;}
+@keyframes suburbReveal{0%{opacity:0;transform:translateY(16px) scale(0.96)}100%{opacity:1;transform:translateY(0) scale(1)}}
+
+#region-display{font-size:clamp(11px,2.8vw,16px);color:var(--dim);letter-spacing:0.18em;text-transform:uppercase;position:relative;z-index:1;min-height:1.2em;}
+#coords-display{font-size:clamp(10px,2.2vw,12px);color:var(--muted);letter-spacing:0.06em;font-weight:300;font-style:italic;position:relative;z-index:1;}
+#accuracy-display{font-size:10px;color:var(--muted);letter-spacing:0.06em;position:relative;z-index:1;}
+.live-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:8px;position:relative;z-index:1;}
+
+/* BUTTONS */
+.btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;padding:10px 20px;min-height:44px;display:flex;align-items:center;gap:6px;transition:all 0.2s;}
+.btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent);}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#000;font-weight:700;}
+.btn.primary:hover{background:transparent;color:var(--accent);}
+.btn:disabled{opacity:0.3;cursor:not-allowed;}
+
+/* HISTORY TAB */
+#tab-history{padding:clamp(14px,4vw,28px);}
+.section-header{font-size:10px;letter-spacing:0.3em;text-transform:uppercase;color:var(--dim);padding-bottom:10px;margin-bottom:2px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+.section-header .hdr-action{background:none;border:none;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;color:var(--error);min-height:44px;padding:0 4px;transition:color 0.2s;}
+.section-header .hdr-action:hover{color:var(--text);}
+.history-list{display:flex;flex-direction:column;gap:1px;margin-top:10px;}
+.history-item{background:var(--surface);padding:13px 16px;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;border-left:2px solid transparent;transition:background 0.15s;}
+.history-item.current{border-left-color:var(--accent);}
+.history-item:hover{background:var(--surface2);}
+.hi-suburb{font-family:'Bebas Neue',cursive;font-size:clamp(20px,5vw,26px);letter-spacing:0.04em;color:var(--text);}
+.history-item.current .hi-suburb{color:var(--accent);}
+.hi-meta{font-size:10px;color:var(--dim);letter-spacing:0.04em;margin-top:2px;}
+.hi-time{font-size:11px;color:var(--dim);text-align:right;white-space:nowrap;}
+.hi-dur{font-size:10px;color:var(--muted);text-align:right;margin-top:2px;}
+.empty-state{text-align:center;padding:clamp(40px,12vh,80px) 20px;color:var(--muted);font-size:12px;letter-spacing:0.1em;}
+.empty-icon{font-size:36px;margin-bottom:16px;opacity:0.4;}
+
+/* SETTINGS TAB */
+#tab-settings{padding:clamp(14px,4vw,28px);display:flex;flex-direction:column;gap:28px;}
+.settings-group{display:flex;flex-direction:column;gap:1px;}
+.settings-group .section-header{margin-bottom:8px;}
+.setting-row{background:var(--surface);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:54px;flex-wrap:wrap;}
+.setting-info{flex:1;min-width:120px;}
+.setting-label{font-size:13px;color:var(--text);}
+.setting-sub{font-size:10px;color:var(--dim);margin-top:3px;letter-spacing:0.04em;}
+.setting-ctrl{flex-shrink:0;}
+
+/* Toggle */
+.toggle{position:relative;width:44px;height:24px;cursor:pointer;display:block;}
+.toggle input{opacity:0;width:0;height:0;position:absolute;}
+.tog-track{position:absolute;inset:0;border-radius:12px;background:var(--border);transition:background 0.2s;}
+.tog-thumb{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--muted);transition:transform 0.2s,background 0.2s;}
+.toggle input:checked + .tog-track{background:var(--accent);}
+.toggle input:checked ~ .tog-thumb{transform:translateX(20px);background:#fff;}
+
+select{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;padding:8px 10px;outline:none;cursor:pointer;min-height:36px;max-width:180px;transition:border-color 0.2s;}
+select:focus{border-color:var(--accent);}
+.range-group{display:flex;align-items:center;gap:10px;}
+input[type="range"]{-webkit-appearance:none;appearance:none;width:110px;height:3px;background:var(--muted);border:none;outline:none;cursor:pointer;}
+input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);cursor:pointer;}
+input[type="range"]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--accent);border:none;cursor:pointer;}
+.range-val{font-size:12px;color:var(--accent);min-width:36px;text-align:right;}
+
+.text-input{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;padding:10px 12px;outline:none;transition:border-color 0.2s;min-height:44px;width:100%;}
+.text-input:focus{border-color:var(--accent);}
+.text-input::placeholder{color:var(--muted);}
+.coord-row{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+.coord-row .text-input{flex:1;min-width:120px;}
+
+/* TOAST */
+#toast-container{position:fixed;bottom:calc(var(--status-h) + 12px);left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;z-index:1000;pointer-events:none;width:min(88vw,340px);}
+.toast{background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--accent);color:var(--text);font-size:11px;letter-spacing:0.05em;padding:10px 14px;animation:toastIn 0.3s ease,toastOut 0.3s ease 2.7s forwards;}
+.toast.error{border-left-color:var(--error);}
+.toast.success{border-left-color:var(--success);}
+@keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toastOut{from{opacity:1}to{opacity:0}}
+
+
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="tab-bar" role="tablist">
+    <button class="tab-btn active" data-tab="live" role="tab" aria-selected="true">
+      <span class="tab-icon">⬤</span> Live
+    </button>
+    <button class="tab-btn" data-tab="history" role="tab" aria-selected="false">
+      <span class="tab-icon">◎</span> History
+    </button>
+    <button class="tab-btn" data-tab="settings" role="tab" aria-selected="false">
+      <span class="tab-icon">⊞</span> Settings
+    </button>
+  </div>
+
+  <div id="tab-content">
+
+    <!-- LIVE -->
+    <div id="tab-live" class="tab-panel active" role="tabpanel">
+      <div class="scan-wrap" id="scan-wrap">
+        <div class="scan-ring"></div>
+        <div class="scan-ring"></div>
+        <div class="scan-ring"></div>
+      </div>
+      <div id="suburb-label">You are in</div>
+      <div id="suburb-display" class="placeholder">Locating</div>
+      <div id="region-display"></div>
+      <div id="coords-display">—</div>
+      <div id="accuracy-display"></div>
+      <div class="live-actions">
+        <button class="btn primary" id="btn-start" onclick="startWatching()">&#x25B6; Start Locating</button>
+        <button class="btn" id="btn-speak" onclick="announceNow()" disabled>&#x266A; Speak Again</button>
+      </div>
+    </div>
+
+    <!-- HISTORY -->
+    <div id="tab-history" class="tab-panel" role="tabpanel">
+      <div class="section-header">
+        Suburb History
+        <button class="hdr-action" id="btn-clear" onclick="clearHistory()">Clear All</button>
+      </div>
+      <div id="history-list" class="history-list">
+        <div class="empty-state"><div class="empty-icon">&#x25CE;</div>No suburbs visited yet</div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div id="tab-settings" class="tab-panel" role="tabpanel">
+
+      <div class="settings-group">
+        <div class="section-header">Voice &amp; Speech</div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Announce on Entry</div>
+            <div class="setting-sub">Speak suburb name when entering new area</div>
+          </div>
+          <div class="setting-ctrl">
+            <label class="toggle">
+              <input type="checkbox" id="set-announce" checked onchange="saveSettings()">
+              <div class="tog-track"></div><div class="tog-thumb"></div>
+            </label>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Voice</div>
+            <div class="setting-sub">Text-to-speech engine</div>
+          </div>
+          <div class="setting-ctrl">
+            <select id="set-voice" onchange="saveSettings()"><option value="">Default</option></select>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-label">Speech Rate</div></div>
+          <div class="setting-ctrl">
+            <div class="range-group">
+              <input type="range" id="set-rate" min="0.5" max="2" step="0.1" value="1"
+                oninput="document.getElementById('v-rate').textContent=parseFloat(this.value).toFixed(1);saveSettings()">
+              <span class="range-val" id="v-rate">1.0</span>
+            </div>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-label">Pitch</div></div>
+          <div class="setting-ctrl">
+            <div class="range-group">
+              <input type="range" id="set-pitch" min="0.5" max="2" step="0.1" value="1"
+                oninput="document.getElementById('v-pitch').textContent=parseFloat(this.value).toFixed(1);saveSettings()">
+              <span class="range-val" id="v-pitch">1.0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="section-header">Detection</div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Movement Threshold</div>
+            <div class="setting-sub">Metres before re-querying geocoder</div>
+          </div>
+          <div class="setting-ctrl">
+            <div class="range-group">
+              <input type="range" id="set-thresh" min="20" max="500" step="10" value="100"
+                oninput="document.getElementById('v-thresh').textContent=this.value+'m';saveSettings()">
+              <span class="range-val" id="v-thresh">100m</span>
+            </div>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">High Accuracy GPS</div>
+            <div class="setting-sub">More precise, higher battery use</div>
+          </div>
+          <div class="setting-ctrl">
+            <label class="toggle">
+              <input type="checkbox" id="set-highgps" checked onchange="restartWatching()">
+              <div class="tog-track"></div><div class="tog-thumb"></div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="section-header">Test Coordinates</div>
+        <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:8px;">
+          <div class="coord-row">
+            <input class="text-input" id="test-lat" type="number" placeholder="Latitude  e.g. -37.8136" step="0.0001">
+            <input class="text-input" id="test-lon" type="number" placeholder="Longitude e.g. 144.9631" step="0.0001">
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn" onclick="testCoords()" style="flex:1">Look Up</button>
+            <button class="btn" onclick="prefillMyLocation()" style="flex:1">Use My Location</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="section-header">Data</div>
+        <div class="setting-row" style="flex-wrap:wrap;gap:10px;">
+          <div class="setting-label">Export / Import</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn" onclick="exportJSON()">Export JSON</button>
+            <button class="btn" onclick="document.getElementById('file-import').click()">Import</button>
+            <input type="file" id="file-import" accept=".json" style="display:none" onchange="importJSON(event)">
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Reset Everything</div>
+            <div class="setting-sub">Clear all history and preferences</div>
+          </div>
+          <div class="setting-ctrl">
+            <button class="btn" id="btn-reset" onclick="resetApp()">Reset</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="status-bar">
+    <div id="status-dot"></div>
+    <span id="status-text">Ready — tap Start Locating</span>
+  </div>
+</div>
+<div id="toast-container"></div>
+
+<script>
+'use strict';
+
+let state = {
+  suburb:null, region:null, coords:null, accuracy:null,
+  lastQuery:null, lastGeoTime:0, lastEntry:null, history:[], isWatching:false
+};
+
+let cfg = {
+  announce:true, voice:'', rate:1.0, pitch:1.0, threshold:100, highGPS:true
+};
+
+let watchId=null, voices=[], undoStack=[], redoStack=[], geocodePending=false;
+const LS_STATE='whereami_state', LS_CFG='whereami_cfg';
+
+function init() {
+  loadCfg(); loadState(); setupTabs(); setupKeys(); loadVoices();
+  renderHistory(); restoreDisplay();
+  if (state.isWatching) startWatching();
+}
+
+function setupTabs() {
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.addEventListener('click', () => switchTab(b.dataset.tab));
+  });
+}
+
+function switchTab(id) {
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    const on = b.dataset.tab === id;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.classList.toggle('active', p.id === 'tab-' + id);
+  });
+}
+
+function setupKeys() {
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); undo(); }
+    if ((e.ctrlKey||e.metaKey) && e.key==='y') { e.preventDefault(); redo(); }
+    if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (e.key==='1') switchTab('live');
+      if (e.key==='2') switchTab('history');
+      if (e.key==='3') switchTab('settings');
+    }
+  });
+}
+
+function startWatching() {
+  if (!navigator.geolocation) {
+    setStatus('error','Geolocation not supported'); toast('Geolocation unavailable','error'); return;
+  }
+  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  const opts = { enableHighAccuracy:cfg.highGPS, maximumAge:10000, timeout:20000 };
+  setStatus('searching','Acquiring location...');
+  setScanring(true);
+  setPlaceholder('Scanning');
+  const btn = document.getElementById('btn-start');
+  btn.innerHTML = '&#x25FC; Stop';
+  btn.onclick = stopWatching;
+  btn.classList.remove('primary');
+  watchId = navigator.geolocation.watchPosition(onPosition, onGeoError, opts);
+  state.isWatching = true;
+  persist();
+}
+
+function stopWatching() {
+  if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  state.isWatching = false;
+  setScanring(false);
+  const btn = document.getElementById('btn-start');
+  btn.innerHTML = '&#x25B6; Start Locating';
+  btn.onclick = startWatching;
+  btn.classList.add('primary');
+  setStatus('ready','Stopped');
+  persist();
+}
+
+function restartWatching() {
+  saveSettings();
+  if (state.isWatching) { stopWatching(); setTimeout(startWatching, 400); }
+}
+
+function onPosition(pos) {
+  const { latitude:lat, longitude:lon, accuracy } = pos.coords;
+  state.coords = { lat, lon };
+  state.accuracy = accuracy;
+  document.getElementById('coords-display').textContent = lat.toFixed(5) + ', ' + lon.toFixed(5);
+  document.getElementById('accuracy-display').textContent = '\u00b1' + Math.round(accuracy) + ' m accuracy';
+  const now = Date.now();
+  // Gate: must have moved threshold distance AND 10 seconds must have elapsed
+  if (state.lastQuery) {
+    const d = haversine(lat, lon, state.lastQuery.lat, state.lastQuery.lon);
+    const elapsed = now - state.lastGeoTime;
+    if (d < cfg.threshold || elapsed < 10000) {
+      setStatus('found', state.suburb ? 'In ' + state.suburb : 'Located'); return;
+    }
+  }
+  state.lastQuery = { lat, lon };
+  state.lastGeoTime = now;
+  reverseGeocode(lat, lon);
+}
+
+function onGeoError(err) {
+  const msgs = {1:'Permission denied — please allow location access',2:'Position unavailable',3:'Request timed out'};
+  const msg = msgs[err.code] || 'Location error';
+  setStatus('error', msg); toast(msg, 'error'); setScanring(false);
+}
+
+async function reverseGeocode(lat, lon) {
+  if (geocodePending) return;
+  geocodePending = true;
+  try {
+    setStatus('searching','Looking up suburb...');
+    const url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lon + '&zoom=16&addressdetails=1';
+    const res = await fetch(url, { headers:{'Accept-Language':'en'} });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const a = data.address || {};
+    const suburb = a.suburb || a.town || a.village || a.hamlet ||
+                   a.city_district || a.neighbourhood || a.locality ||
+                   a.municipality || a.county || a.city || 'Unknown Area';
+    const region = [a.state, a.country_code ? a.country_code.toUpperCase() : ''].filter(Boolean).join(' \u00b7 ');
+    onSuburbDetected(suburb, region, lat, lon);
+  } catch(err) {
+    setStatus('error','Geocoding failed — check connection');
+    console.warn('Geocode error:', err);
+  } finally {
+    setTimeout(() => { geocodePending = false; }, 1100);
+  }
+}
+
+function onSuburbDetected(suburb, region, lat, lon) {
+  const changed = suburb !== state.suburb;
+  if (state.lastEntry && state.history.length > 0) {
+    state.history[0].duration = Date.now() - state.lastEntry;
+  }
+  if (changed) {
+    pushUndo();
+    state.suburb = suburb;
+    state.region = region;
+    state.history.unshift({ suburb, region, lat, lon, timestamp:Date.now(), duration:null });
+    if (state.history.length > 300) state.history.length = 300;
+    state.lastEntry = Date.now();
+    renderHistory();
+    if (cfg.announce) speak('You have entered ' + suburb);
+    setStatus('found','Now in ' + suburb);
+    toast('Entered ' + suburb);
+  } else {
+    setStatus('found','In ' + suburb);
+  }
+  setScanring(false);
+  const el = document.getElementById('suburb-display');
+  el.className = '';
+  el.textContent = suburb;
+  void el.offsetWidth;
+  el.classList.add('flash');
+  document.getElementById('region-display').textContent = region;
+  document.getElementById('btn-speak').disabled = false;
+  persist();
+}
+
+function loadVoices() {
+  function populate() {
+    voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+    const sel = document.getElementById('set-voice');
+    sel.innerHTML = '<option value="">Default</option>';
+    voices.forEach((v,i) => {
+      const o = document.createElement('option');
+      o.value = i; o.textContent = v.name + ' (' + v.lang + ')';
+      if (String(i) === String(cfg.voice)) o.selected = true;
+      sel.appendChild(o);
+    });
+  }
+  if (window.speechSynthesis) { window.speechSynthesis.onvoiceschanged = populate; populate(); }
+}
+
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = cfg.rate; u.pitch = cfg.pitch;
+  const vi = parseInt(cfg.voice);
+  if (!isNaN(vi) && voices[vi]) u.voice = voices[vi];
+  speechSynthesis.speak(u);
+}
+
+function announceNow() {
+  if (!state.suburb) return;
+  speak('You are in ' + state.suburb);
+  toast('Speaking: ' + state.suburb);
+}
+
+function renderHistory() {
+  const list = document.getElementById('history-list');
+  if (!state.history.length) {
+    list.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x25CE;</div>No suburbs visited yet</div>';
+    return;
+  }
+  list.innerHTML = state.history.map((h,i) => {
+    const d = new Date(h.timestamp);
+    const time = d.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'});
+    const date = d.toLocaleDateString('en-AU',{day:'numeric',month:'short'});
+    const dur = h.duration ? fmtDur(h.duration) : (i===0 ? 'Now' : '\u2014');
+    return '<div class="history-item' + (i===0?' current':'') + '">' +
+      '<div><div class="hi-suburb">' + h.suburb + '</div>' +
+      '<div class="hi-meta">' + (h.region||'') + ' \u00b7 ' + h.lat.toFixed(4) + ', ' + h.lon.toFixed(4) + '</div></div>' +
+      '<div><div class="hi-time">' + time + '</div>' +
+      '<div class="hi-time" style="font-size:10px;color:var(--muted)">' + date + '</div>' +
+      '<div class="hi-dur">' + dur + '</div></div></div>';
+  }).join('');
+}
+
+function fmtDur(ms) {
+  const s = Math.floor(ms/1000);
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s/60) + 'm';
+  return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
+}
+
+function clearHistory() {
+  const btn = document.getElementById('btn-clear');
+  if (btn.dataset.confirm) {
+    pushUndo();
+    state.history = []; state.lastEntry = null;
+    renderHistory(); persist();
+    toast('History cleared','success');
+    btn.textContent = 'Clear All'; delete btn.dataset.confirm;
+  } else {
+    btn.textContent = 'Confirm?'; btn.dataset.confirm = true;
+    setTimeout(() => { btn.textContent = 'Clear All'; delete btn.dataset.confirm; }, 3000);
+  }
+}
+
+function loadCfg() {
+  try { const s = localStorage.getItem(LS_CFG); if (s) cfg = {...cfg,...JSON.parse(s)}; } catch(e) {}
+  applyCfg();
+}
+
+function applyCfg() {
+  document.getElementById('set-announce').checked = cfg.announce;
+  document.getElementById('set-rate').value = cfg.rate;
+  document.getElementById('v-rate').textContent = parseFloat(cfg.rate).toFixed(1);
+  document.getElementById('set-pitch').value = cfg.pitch;
+  document.getElementById('v-pitch').textContent = parseFloat(cfg.pitch).toFixed(1);
+  document.getElementById('set-thresh').value = cfg.threshold;
+  document.getElementById('v-thresh').textContent = cfg.threshold + 'm';
+  document.getElementById('set-highgps').checked = cfg.highGPS;
+}
+
+function saveSettings() {
+  cfg.announce  = document.getElementById('set-announce').checked;
+  cfg.voice     = document.getElementById('set-voice').value;
+  cfg.rate      = parseFloat(document.getElementById('set-rate').value);
+  cfg.pitch     = parseFloat(document.getElementById('set-pitch').value);
+  cfg.threshold = parseInt(document.getElementById('set-thresh').value);
+  cfg.highGPS   = document.getElementById('set-highgps').checked;
+  localStorage.setItem(LS_CFG, JSON.stringify(cfg));
+}
+
+function persist() {
+  try {
+    localStorage.setItem(LS_STATE, JSON.stringify({
+      suburb:state.suburb, region:state.region, history:state.history, isWatching:state.isWatching
+    }));
+  } catch(e) {}
+}
+
+function loadState() {
+  try {
+    const s = localStorage.getItem(LS_STATE);
+    if (!s) return;
+    const d = JSON.parse(s);
+    state.suburb = d.suburb||null; state.region = d.region||null;
+    state.history = d.history||[]; state.isWatching = d.isWatching||false;
+  } catch(e) {}
+}
+
+function restoreDisplay() {
+  if (state.suburb) {
+    const el = document.getElementById('suburb-display');
+    el.className = ''; el.textContent = state.suburb;
+    document.getElementById('region-display').textContent = state.region||'';
+    document.getElementById('btn-speak').disabled = false;
+  }
+}
+
+window.addEventListener('beforeunload', persist);
+document.addEventListener('visibilitychange', () => { if (document.hidden) persist(); });
+
+function pushUndo() {
+  undoStack.push(JSON.stringify({suburb:state.suburb,region:state.region,history:state.history}));
+  if (undoStack.length > 100) undoStack.shift();
+  redoStack = [];
+}
+
+function undo() {
+  if (!undoStack.length) { toast('Nothing to undo'); return; }
+  redoStack.push(JSON.stringify({suburb:state.suburb,region:state.region,history:state.history}));
+  const d = JSON.parse(undoStack.pop());
+  Object.assign(state, d); renderHistory(); restoreDisplay(); toast('Undone');
+}
+
+function redo() {
+  if (!redoStack.length) { toast('Nothing to redo'); return; }
+  undoStack.push(JSON.stringify({suburb:state.suburb,region:state.region,history:state.history}));
+  const d = JSON.parse(redoStack.pop());
+  Object.assign(state, d); renderHistory(); restoreDisplay(); toast('Redone');
+}
+
+function testCoords() {
+  const lat = parseFloat(document.getElementById('test-lat').value);
+  const lon = parseFloat(document.getElementById('test-lon').value);
+  if (isNaN(lat)||isNaN(lon)||lat<-90||lat>90||lon<-180||lon>180) {
+    toast('Enter valid lat/lon values','error'); return;
+  }
+  state.lastQuery = null;
+  state.coords = { lat, lon };
+  document.getElementById('coords-display').textContent = lat.toFixed(5) + ', ' + lon.toFixed(5);
+  document.getElementById('accuracy-display').textContent = '';
+  switchTab('live');
+  reverseGeocode(lat, lon);
+}
+
+function prefillMyLocation() {
+  if (!state.coords) { toast('No location yet — start locating first','error'); return; }
+  document.getElementById('test-lat').value = state.coords.lat.toFixed(5);
+  document.getElementById('test-lon').value = state.coords.lon.toFixed(5);
+  toast('Coordinates prefilled');
+}
+
+function exportJSON() {
+  const blob = new Blob([JSON.stringify({cfg,history:state.history,exportedAt:new Date().toISOString()},null,2)],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'whereami-' + Date.now() + '.json';
+  a.click(); toast('Exported','success');
+}
+
+function importJSON(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    try {
+      const d = JSON.parse(ev.target.result);
+      if (Array.isArray(d.history)) {
+        pushUndo();
+        state.history = [...d.history,...state.history].slice(0,300);
+        renderHistory(); persist();
+        toast('Imported ' + d.history.length + ' entries','success');
+      } else { toast('No history found in file','error'); }
+    } catch { toast('Invalid JSON file','error'); }
+  };
+  r.readAsText(file); e.target.value = '';
+}
+
+function resetApp() {
+  const btn = document.getElementById('btn-reset');
+  if (btn.dataset.confirm) {
+    stopWatching();
+    localStorage.removeItem(LS_STATE); localStorage.removeItem(LS_CFG);
+    state = {suburb:null,region:null,coords:null,accuracy:null,lastQuery:null,lastEntry:null,history:[],isWatching:false};
+    cfg = {announce:true,voice:'',rate:1.0,pitch:1.0,threshold:100,highGPS:true};
+    applyCfg(); renderHistory(); setPlaceholder('Locating');
+    document.getElementById('region-display').textContent = '';
+    document.getElementById('coords-display').textContent = '\u2014';
+    document.getElementById('accuracy-display').textContent = '';
+    document.getElementById('btn-speak').disabled = true;
+    setStatus('ready','Ready \u2014 tap Start Locating');
+    toast('App reset','success');
+    btn.textContent = 'Reset'; delete btn.dataset.confirm;
+  } else {
+    btn.textContent = 'Confirm?'; btn.dataset.confirm = true;
+    setTimeout(() => { btn.textContent = 'Reset'; delete btn.dataset.confirm; }, 3000);
+  }
+}
+
+function setStatus(type, text) {
+  document.getElementById('status-dot').className = type;
+  document.getElementById('status-text').textContent = text;
+}
+
+function setScanring(on) {
+  document.getElementById('scan-wrap').classList.toggle('active', on);
+}
+
+function setPlaceholder(text) {
+  const el = document.getElementById('suburb-display');
+  el.className = 'placeholder'; el.textContent = text;
+}
+
+function toast(msg, type='') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3100);
+}
+
+function haversine(lat1,lon1,lat2,lon2) {
+  const R=6371000;
+  const df=(lat2-lat1)*Math.PI/180;
+  const dl=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(df/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dl/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+// EASTER EGG: Tap suburb display 5x quickly for an emphatic announcement
+let tapCount=0, tapTimer=null;
+document.getElementById('suburb-display').addEventListener('click', () => {
+  if (!state.suburb) return;
+  tapCount++; clearTimeout(tapTimer);
+  tapTimer = setTimeout(() => { tapCount=0; }, 1500);
+  if (tapCount >= 5) {
+    tapCount = 0;
+    const u = new SpeechSynthesisUtterance(
+      state.suburb + '! ' + state.suburb + '! You are absolutely, definitely, without any doubt, in ' + state.suburb + '!'
+    );
+    u.rate = 1.9; u.pitch = 1.7;
+    if (window.speechSynthesis) { speechSynthesis.cancel(); speechSynthesis.speak(u); }
+    toast('Confirmed. Very confirmed.', 'success');
+  }
+});
+
+init();
+</script>
+</body>
+</html>
