@@ -194,8 +194,20 @@ input[type="range"]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;b
         </div>
         <div class="setting-row">
           <div class="setting-info">
+            <div class="setting-label">Say "You are in..."</div>
+            <div class="setting-sub">Prepend phrase, or just speak suburb name</div>
+          </div>
+          <div class="setting-ctrl">
+            <label class="toggle">
+              <input type="checkbox" id="set-prepend" checked onchange="saveSettings()">
+              <div class="tog-track"></div><div class="tog-thumb"></div>
+            </label>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
             <div class="setting-label">Voice</div>
-            <div class="setting-sub">Text-to-speech engine</div>
+            <div class="setting-sub">Enhanced/Premium voices only</div>
           </div>
           <div class="setting-ctrl">
             <select id="set-voice" onchange="saveSettings()"><option value="">Default</option></select>
@@ -306,7 +318,7 @@ let state = {
 };
 
 let cfg = {
-  announce:true, voice:'', rate:1.0, pitch:1.0, threshold:100, highGPS:true
+  announce:true, prepend:true, voice:'', rate:1.0, pitch:1.0, threshold:100, highGPS:true
 };
 
 let watchId=null, voices=[], undoStack=[], redoStack=[], geocodePending=false;
@@ -347,12 +359,17 @@ function setupKeys() {
   });
 }
 
+const POLL_INTERVAL = 15000; // ms between active geocode polls
+let pollTimer = null;
+
 function startWatching() {
   if (!navigator.geolocation) {
     setStatus('error','Geolocation not supported'); toast('Geolocation unavailable','error'); return;
   }
-  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-  const opts = { enableHighAccuracy:cfg.highGPS, maximumAge:10000, timeout:20000 };
+  // Clear any existing watchers/timers
+  if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  if (pollTimer !== null) { clearInterval(pollTimer); pollTimer = null; }
+
   setStatus('searching','Acquiring location...');
   setScanring(true);
   setPlaceholder('Scanning');
@@ -360,13 +377,23 @@ function startWatching() {
   btn.innerHTML = '&#x25FC; Stop';
   btn.onclick = stopWatching;
   btn.classList.remove('primary');
-  watchId = navigator.geolocation.watchPosition(onPosition, onGeoError, opts);
   state.isWatching = true;
+
+  // watchPosition: live coord display only, low maximumAge for freshness
+  const watchOpts = { enableHighAccuracy: cfg.highGPS, maximumAge: 3000, timeout: 15000 };
+  watchId = navigator.geolocation.watchPosition(onPositionDisplay, onGeoError, watchOpts);
+
+  // Interval: primary geocode driver — our own clock, not the browser's
+  // Fire immediately on start, then every POLL_INTERVAL
+  runGeocodePoll();
+  pollTimer = setInterval(runGeocodePoll, POLL_INTERVAL);
+
   persist();
 }
 
 function stopWatching() {
   if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  if (pollTimer !== null) { clearInterval(pollTimer); pollTimer = null; }
   state.isWatching = false;
   setScanring(false);
   const btn = document.getElementById('btn-start');
@@ -382,24 +409,43 @@ function restartWatching() {
   if (state.isWatching) { stopWatching(); setTimeout(startWatching, 400); }
 }
 
-function onPosition(pos) {
+// Called by watchPosition — updates display coords only, no geocoding decision
+function onPositionDisplay(pos) {
   const { latitude:lat, longitude:lon, accuracy } = pos.coords;
   state.coords = { lat, lon };
   state.accuracy = accuracy;
   document.getElementById('coords-display').textContent = lat.toFixed(5) + ', ' + lon.toFixed(5);
   document.getElementById('accuracy-display').textContent = '\u00b1' + Math.round(accuracy) + ' m accuracy';
-  const now = Date.now();
-  // Gate: must have moved threshold distance AND 10 seconds must have elapsed
-  if (state.lastQuery) {
-    const d = haversine(lat, lon, state.lastQuery.lat, state.lastQuery.lon);
-    const elapsed = now - state.lastGeoTime;
-    if (d < cfg.threshold || elapsed < 10000) {
-      setStatus('found', state.suburb ? 'In ' + state.suburb : 'Located'); return;
+}
+
+// Called by our interval — actively requests a fresh position and decides whether to geocode
+function runGeocodePoll() {
+  if (!state.isWatching) return;
+  const pollOpts = { enableHighAccuracy: cfg.highGPS, maximumAge: 5000, timeout: 12000 };
+  navigator.geolocation.getCurrentPosition(pos => {
+    const { latitude:lat, longitude:lon, accuracy } = pos.coords;
+    // Update display too, in case watchPosition is slow
+    state.coords = { lat, lon };
+    state.accuracy = accuracy;
+    document.getElementById('coords-display').textContent = lat.toFixed(5) + ', ' + lon.toFixed(5);
+    document.getElementById('accuracy-display').textContent = '\u00b1' + Math.round(accuracy) + ' m accuracy';
+
+    // Distance gate: only re-geocode if moved beyond threshold
+    if (state.lastQuery) {
+      const d = haversine(lat, lon, state.lastQuery.lat, state.lastQuery.lon);
+      if (d < cfg.threshold) {
+        setStatus('found', state.suburb ? 'In ' + state.suburb : 'Located');
+        return;
+      }
     }
-  }
-  state.lastQuery = { lat, lon };
-  state.lastGeoTime = now;
-  reverseGeocode(lat, lon);
+    state.lastQuery = { lat, lon };
+    state.lastGeoTime = Date.now();
+    reverseGeocode(lat, lon);
+  }, err => {
+    // Non-fatal: log but don't surface to user unless it's a permission issue
+    if (err.code === 1) { onGeoError(err); }
+    else { console.warn('Poll position error:', err.message); }
+  }, pollOpts);
 }
 
 function onGeoError(err) {
@@ -444,7 +490,7 @@ function onSuburbDetected(suburb, region, lat, lon) {
     if (state.history.length > 300) state.history.length = 300;
     state.lastEntry = Date.now();
     renderHistory();
-    if (cfg.announce) speak('You have entered ' + suburb);
+    if (cfg.announce) speak(buildAnnouncement(suburb));
     setStatus('found','Now in ' + suburb);
     toast('Entered ' + suburb);
   } else {
@@ -463,15 +509,45 @@ function onSuburbDetected(suburb, region, lat, lon) {
 
 function loadVoices() {
   function populate() {
-    voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+    const all = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+
+    // Quality tiers - prefer Enhanced/Premium, then any English, then fall back to all
+    const isHighQuality = v => /enhanced|premium|neural|natural/i.test(v.name);
+    const isEnglish = v => v.lang.startsWith('en');
+    const isAustralian = v => v.lang === 'en-AU' || /australia/i.test(v.name);
+
+    let filtered = all.filter(v => isEnglish(v) && isHighQuality(v));
+    // If fewer than 2 high-quality english voices, widen to all english
+    if (filtered.length < 2) filtered = all.filter(isEnglish);
+    // If still nothing, show all
+    if (filtered.length === 0) filtered = all;
+
+    // Sort: AU first, then GB, then US, then rest
+    filtered.sort((a, b) => {
+      const rank = v => isAustralian(v) ? 0 : v.lang==='en-GB' ? 1 : v.lang==='en-US' ? 2 : 3;
+      return rank(a) - rank(b);
+    });
+
+    voices = filtered;
     const sel = document.getElementById('set-voice');
-    sel.innerHTML = '<option value="">Default</option>';
-    voices.forEach((v,i) => {
+    sel.innerHTML = '';
+    if (filtered.length === 0) { sel.innerHTML = '<option value="">Default</option>'; return; }
+
+    filtered.forEach((v, i) => {
       const o = document.createElement('option');
-      o.value = i; o.textContent = v.name + ' (' + v.lang + ')';
+      o.value = i;
+      // Clean up display name: strip redundant OS prefixes
+      const cleanName = v.name.replace(/^(com\.apple\.|Microsoft |Google )/i,'');
+      o.textContent = cleanName + ' · ' + v.lang;
       if (String(i) === String(cfg.voice)) o.selected = true;
       sel.appendChild(o);
     });
+
+    // Auto-select best AU voice if nothing saved
+    if (!cfg.voice || cfg.voice === '') {
+      const auIdx = filtered.findIndex(isAustralian);
+      if (auIdx >= 0) { sel.selectedIndex = auIdx; cfg.voice = String(auIdx); }
+    }
   }
   if (window.speechSynthesis) { window.speechSynthesis.onvoiceschanged = populate; populate(); }
 }
@@ -486,9 +562,13 @@ function speak(text) {
   speechSynthesis.speak(u);
 }
 
+function buildAnnouncement(suburb) {
+  return cfg.prepend ? 'You are in ' + suburb : suburb;
+}
+
 function announceNow() {
   if (!state.suburb) return;
-  speak('You are in ' + state.suburb);
+  speak(buildAnnouncement(state.suburb));
   toast('Speaking: ' + state.suburb);
 }
 
@@ -540,6 +620,7 @@ function loadCfg() {
 
 function applyCfg() {
   document.getElementById('set-announce').checked = cfg.announce;
+  document.getElementById('set-prepend').checked = cfg.prepend !== false;
   document.getElementById('set-rate').value = cfg.rate;
   document.getElementById('v-rate').textContent = parseFloat(cfg.rate).toFixed(1);
   document.getElementById('set-pitch').value = cfg.pitch;
@@ -551,6 +632,7 @@ function applyCfg() {
 
 function saveSettings() {
   cfg.announce  = document.getElementById('set-announce').checked;
+  cfg.prepend   = document.getElementById('set-prepend').checked;
   cfg.voice     = document.getElementById('set-voice').value;
   cfg.rate      = parseFloat(document.getElementById('set-rate').value);
   cfg.pitch     = parseFloat(document.getElementById('set-pitch').value);
@@ -587,7 +669,14 @@ function restoreDisplay() {
 }
 
 window.addEventListener('beforeunload', persist);
-document.addEventListener('visibilitychange', () => { if (document.hidden) persist(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    persist();
+  } else {
+    // User returned to tab — trigger an immediate poll so we don't wait for the next interval
+    if (state.isWatching) runGeocodePoll();
+  }
+});
 
 function pushUndo() {
   undoStack.push(JSON.stringify({suburb:state.suburb,region:state.region,history:state.history}));
@@ -661,7 +750,7 @@ function resetApp() {
     stopWatching();
     localStorage.removeItem(LS_STATE); localStorage.removeItem(LS_CFG);
     state = {suburb:null,region:null,coords:null,accuracy:null,lastQuery:null,lastEntry:null,history:[],isWatching:false};
-    cfg = {announce:true,voice:'',rate:1.0,pitch:1.0,threshold:100,highGPS:true};
+    cfg = {announce:true, prepend:true, voice:'', rate:1.0, pitch:1.0, threshold:100, highGPS:true};
     applyCfg(); renderHistory(); setPlaceholder('Locating');
     document.getElementById('region-display').textContent = '';
     document.getElementById('coords-display').textContent = '\u2014';
