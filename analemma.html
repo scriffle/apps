@@ -1,0 +1,1703 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0b0f17">
+<meta name="description" content="Visualize the Sun's analemma — the figure-8 path it traces in the sky over a year — for your location.">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/svg+xml" href="./icon.svg">
+<link rel="apple-touch-icon" href="./icon.svg">
+<title>Analemma — Sun's path across the year</title>
+<style>
+  :root {
+    --bg: #0b0f17;
+    --panel: #131a26;
+    --panel-2: #1b2433;
+    --ink: #f5f7fa;
+    --ink-dim: #c9d2e0;
+    --accent: #e8d18a;
+    --accent-ink: #0b0f17;
+    --curve: #6ec8ff;
+    --curve-strong: #a8e0ff;
+    --marker: #ff5a5f;
+    --marker-ring: #ffffff;
+    --grid: #2c3849;
+    --grid-strong: #4a5b73;
+    --focus: #e8d18a;
+    --danger: #ff5a5f;
+    --ok: #4ade80;
+    --r-lg: 14px;
+    --r-md: 10px;
+    --shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  :root[data-theme="light"] {
+    --bg: #f4f7fb;
+    --panel: #ffffff;
+    --panel-2: #eef2f8;
+    --ink: #0b0f17;
+    --ink-dim: #2b3648;
+    --curve: #0b6ab6;
+    --curve-strong: #06416f;
+    --marker: #c11d2a;
+    --marker-ring: #0b0f17;
+    --grid: #c8d2e0;
+    --grid-strong: #8a99b1;
+    --shadow: 0 8px 24px rgba(20,30,50,0.12);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0f17;
+    --panel: #131a26;
+    --panel-2: #1b2433;
+    --ink: #f5f7fa;
+    --ink-dim: #c9d2e0;
+    --curve: #6ec8ff;
+    --curve-strong: #a8e0ff;
+    --marker: #ff5a5f;
+    --marker-ring: #ffffff;
+    --grid: #2c3849;
+    --grid-strong: #4a5b73;
+    --shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme]) {
+      --bg: #f4f7fb;
+      --panel: #ffffff;
+      --panel-2: #eef2f8;
+      --ink: #0b0f17;
+      --ink-dim: #2b3648;
+      --curve: #0b6ab6;
+      --curve-strong: #06416f;
+      --marker: #c11d2a;
+      --marker-ring: #0b0f17;
+      --grid: #c8d2e0;
+      --grid-strong: #8a99b1;
+      --shadow: 0 8px 24px rgba(20,30,50,0.12);
+    }
+  }
+  @media (prefers-contrast: more) {
+    :root {
+      --grid: #6a7a90;
+      --grid-strong: #aebbcd;
+      --curve: #ffffff;
+      --curve-strong: #ffffff;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-size: clamp(18px, 1.2vw + 14px, 22px);
+    line-height: 1.4;
+    min-height: 100dvh;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  header {
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid var(--grid);
+    flex-wrap: wrap;
+  }
+  h1 {
+    font-size: clamp(22px, 2.2vw + 12px, 32px);
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .tabs {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .tab {
+    background: var(--panel);
+    color: var(--ink);
+    border: 2px solid var(--grid);
+    border-radius: var(--r-md);
+    padding: 0.75rem 1.1rem;
+    font-size: 1rem;
+    min-height: 56px;
+    min-width: 56px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .tab[aria-selected="true"] {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-color: var(--accent);
+  }
+  .tab:disabled { opacity: 0.45; cursor: not-allowed; }
+  .tab:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    min-height: 0;
+  }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .stage {
+    background: var(--panel);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow);
+    padding: 0.75rem;
+    min-height: 60dvh;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .stage svg { width: 100%; height: 100%; flex: 1; display: block; }
+
+  .controls {
+    background: var(--panel);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+    max-height: calc(100dvh - 8rem);
+  }
+  fieldset {
+    border: 2px solid var(--grid);
+    border-radius: var(--r-md);
+    padding: 0.75rem 1rem 1rem;
+    margin: 0;
+  }
+  legend {
+    font-weight: 700;
+    padding: 0 0.4rem;
+    font-size: 0.95rem;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+  label + label { margin-top: 0.75rem; }
+  .row { display: flex; gap: 0.6rem; align-items: center; }
+  .row > * { flex: 1; min-width: 0; }
+  input[type="number"], input[type="date"], input[type="time"], select {
+    background: var(--panel-2);
+    color: var(--ink);
+    border: 2px solid var(--grid);
+    border-radius: var(--r-md);
+    padding: 0.7rem 0.8rem;
+    font-size: 1.05rem;
+    min-height: 56px;
+    width: 100%;
+    font-variant-numeric: tabular-nums;
+  }
+  button.primary, button.ghost {
+    border-radius: var(--r-md);
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    min-height: 56px;
+    font-weight: 700;
+    cursor: pointer;
+    border: 2px solid transparent;
+  }
+  button.primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-color: var(--accent);
+  }
+  button.ghost {
+    background: transparent;
+    color: var(--ink);
+    border-color: var(--grid);
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .scrubber {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: var(--panel-2);
+    border-radius: var(--r-md);
+  }
+  .scrubber .row { gap: 0.75rem; }
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 56px;
+    background: transparent;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 12px;
+    background: var(--grid);
+    border-radius: 6px;
+  }
+  input[type="range"]::-moz-range-track {
+    height: 12px;
+    background: var(--grid);
+    border-radius: 6px;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 3px solid var(--ink);
+    margin-top: -12px;
+    cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 3px solid var(--ink);
+    cursor: pointer;
+  }
+
+  .hud {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem 1rem;
+    font-variant-numeric: tabular-nums;
+    font-size: 1rem;
+  }
+  .hud div { display: flex; justify-content: space-between; gap: 0.5rem; }
+  .hud .k { color: var(--ink-dim); font-weight: 600; }
+  .hud .v { font-weight: 700; }
+
+  footer {
+    padding: 0.75rem 1.25rem;
+    border-top: 1px solid var(--grid);
+    color: var(--ink-dim);
+    font-size: 0.9rem;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
+
+  .muted { color: var(--ink-dim); font-weight: 500; font-size: 0.95rem; }
+
+  /* SVG visual classes */
+  .grid-line { stroke: var(--grid); stroke-width: 1; }
+  .grid-strong { stroke: var(--grid-strong); stroke-width: 1.5; }
+  .axis-label { fill: var(--ink-dim); font-size: 14px; font-weight: 600; }
+  .curve { fill: none; stroke: var(--curve); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+  .month-tick { fill: var(--curve-strong); }
+  .month-label { fill: var(--ink); font-size: 18px; font-weight: 700; }
+  .solstice { fill: var(--accent); stroke: var(--ink); stroke-width: 2; }
+  .equinox { fill: var(--ink); stroke: var(--accent); stroke-width: 2; }
+  .marker { fill: var(--marker); stroke: var(--marker-ring); stroke-width: 3; }
+  .horizon { stroke: var(--grid-strong); stroke-width: 2; stroke-dasharray: 6 6; }
+  .horizon-label { fill: var(--ink-dim); font-size: 16px; font-weight: 700; }
+  .sun-arc { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 4 5; opacity: 0.85; }
+
+  /* Settings drawer */
+  .drawer-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 10;
+  }
+  .drawer-backdrop[data-open="true"] { opacity: 1; pointer-events: auto; }
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: min(420px, 92vw);
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    z-index: 11;
+    display: flex; flex-direction: column;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0;
+  }
+  .drawer[data-open="true"] { transform: translateX(0); }
+  @media (prefers-reduced-motion: reduce) {
+    .drawer, .drawer-backdrop { transition: none; }
+  }
+  .drawer header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--grid);
+  }
+  .drawer .body {
+    overflow-y: auto; padding: 1rem 1.25rem;
+    display: flex; flex-direction: column; gap: 1rem;
+  }
+  .toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem; padding: 0.5rem 0;
+    min-height: 56px;
+    cursor: pointer;
+  }
+  .toggle input[type="checkbox"] {
+    appearance: none; -webkit-appearance: none;
+    width: 56px; height: 32px; border-radius: 16px;
+    background: var(--grid); border: 2px solid var(--grid-strong);
+    position: relative; cursor: pointer; flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .toggle input[type="checkbox"]::after {
+    content: ''; position: absolute;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--ink); top: 2px; left: 2px;
+    transition: transform 0.15s;
+  }
+  .toggle input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+  .toggle input[type="checkbox"]:checked::after { transform: translateX(24px); background: var(--accent-ink); }
+  .toggle span.label { font-weight: 600; flex: 1; }
+
+  /* Welcome banner */
+  .welcome-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center;
+    padding: 1rem;
+    z-index: 20;
+  }
+  .welcome {
+    background: var(--panel);
+    color: var(--ink);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow);
+    max-width: 560px; width: 100%;
+    padding: 1.5rem;
+    display: flex; flex-direction: column; gap: 1rem;
+  }
+  .welcome h2 { margin: 0; font-size: clamp(22px, 2vw + 14px, 30px); }
+  .welcome p { margin: 0; line-height: 1.5; }
+  .welcome .actions {
+    display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.5rem;
+  }
+  .welcome .actions button { flex: 1; min-width: 160px; }
+
+  /* AR view */
+  #ar-stage {
+    position: relative;
+    flex: 1;
+    background: #000;
+    border-radius: var(--r-md);
+    overflow: hidden;
+    min-height: 60dvh;
+  }
+  #ar-video {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+  #ar-overlay {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+  #ar-hud {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 1rem;
+    display: flex; flex-direction: column; gap: 0.75rem;
+    background: linear-gradient(transparent, rgba(0,0,0,0.7));
+    color: #fff;
+  }
+  #ar-readout {
+    font-variant-numeric: tabular-nums;
+    font-size: 1rem; font-weight: 700;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+  }
+  #ar-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  #ar-actions button { flex: 1; min-width: 200px; }
+  #ar-fallback {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 1rem; background: rgba(0,0,0,0.85); color: #fff;
+    z-index: 2;
+  }
+  .ar-fallback-card {
+    background: var(--panel); color: var(--ink);
+    padding: 1.5rem; border-radius: var(--r-lg);
+    max-width: 480px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 0.75rem;
+  }
+  .ar-fallback-card h3 { margin: 0; font-size: 1.3rem; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .marker-pulse { animation: none !important; }
+  }
+  @keyframes pulse {
+    0%, 100% { r: 9; }
+    50% { r: 12; }
+  }
+  .marker-pulse { animation: pulse 2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+</style>
+</head>
+<body>
+<a href="#stage" class="sr-only">Skip to plot</a>
+
+<header>
+  <h1>Analemma</h1>
+  <nav class="tabs" role="tablist" aria-label="View modes">
+    <button class="tab" role="tab" aria-selected="true" data-tab="simple">Simple</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="dome">Sky dome</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="horizon">Horizon</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="ar">AR</button>
+    <button class="tab" id="open-settings" type="button" aria-haspopup="dialog" aria-controls="drawer">⚙ Settings</button>
+  </nav>
+</header>
+
+<div id="welcome-root" hidden>
+  <div class="welcome-backdrop" role="dialog" aria-modal="true" aria-labelledby="welcome-title" aria-describedby="welcome-desc">
+    <div class="welcome">
+      <h2 id="welcome-title">Welcome to Analemma</h2>
+      <p id="welcome-desc">
+        This app draws the <strong>analemma</strong> — the figure-8 path the Sun traces in the sky when you photograph it at the same clock time every day for a year. Today's Sun position is highlighted on the year's curve, and you can scrub through the year to watch it move.
+      </p>
+      <p>To draw it for <em>your</em> sky, the app needs your location. Nothing is sent anywhere — coordinates stay on your device.</p>
+      <div class="actions">
+        <button id="welcome-allow" class="primary" type="button">Use my location</button>
+        <button id="welcome-skip" class="ghost" type="button">Skip — use Melbourne</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="drawer-backdrop" id="drawer-backdrop" data-open="false"></div>
+<aside class="drawer" id="drawer" data-open="false" role="dialog" aria-modal="true" aria-labelledby="drawer-title" tabindex="-1">
+  <header>
+    <h2 id="drawer-title" style="margin:0; font-size:1.4rem;">Settings</h2>
+    <button id="close-settings" class="ghost" type="button" aria-label="Close settings">✕ Close</button>
+  </header>
+  <div class="body">
+    <fieldset>
+      <legend>Theme</legend>
+      <label>
+        <select id="theme">
+          <option value="auto">Auto (system)</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Layers</legend>
+      <label class="toggle"><span class="label">Horizon line</span><input type="checkbox" id="lyr-horizon" checked></label>
+      <label class="toggle"><span class="label">Cardinals (N/E/S/W)</span><input type="checkbox" id="lyr-cardinals" checked></label>
+      <label class="toggle"><span class="label">Altitude grid</span><input type="checkbox" id="lyr-grid" checked></label>
+      <label class="toggle"><span class="label">Month markers</span><input type="checkbox" id="lyr-months" checked></label>
+      <label class="toggle"><span class="label">Solstice / equinox icons</span><input type="checkbox" id="lyr-seq" checked></label>
+      <label class="toggle"><span class="label">Sunrise / sunset arcs</span><input type="checkbox" id="lyr-sunarc"></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Astronomy</legend>
+      <label class="toggle"><span class="label">Atmospheric refraction</span><input type="checkbox" id="opt-refraction" checked></label>
+      <label>Year
+        <input id="year" type="number" step="1" min="1900" max="2200">
+      </label>
+      <button id="snap-noon" class="ghost" type="button">Snap clock to mean solar noon</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>Reset</legend>
+      <button id="reset" class="ghost" type="button">Reset all to defaults</button>
+    </fieldset>
+  </div>
+</aside>
+
+<main>
+  <section id="stage" class="stage" aria-label="Analemma plot">
+    <svg id="plot" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="plot-title plot-desc">
+      <title id="plot-title">Analemma plot</title>
+      <desc id="plot-desc">A figure-eight curve showing the Sun's position at the same civil time across the year, with today's position highlighted.</desc>
+    </svg>
+    <div id="ar-stage" hidden>
+      <video id="ar-video" playsinline muted autoplay></video>
+      <svg id="ar-overlay" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid slice" aria-hidden="true"></svg>
+      <div id="ar-hud">
+        <div id="ar-readout" aria-live="polite"></div>
+        <div id="ar-actions">
+          <button id="ar-calibrate" class="primary" type="button">🎯 Calibrate (point at Sun)</button>
+          <button id="ar-recalibrate" class="ghost" type="button" hidden>Recalibrate</button>
+        </div>
+      </div>
+      <div id="ar-fallback" hidden>
+        <div class="ar-fallback-card">
+          <h3 id="ar-fallback-title">AR view unavailable</h3>
+          <p id="ar-fallback-msg"></p>
+          <button id="ar-retry" class="ghost" type="button">Try again</button>
+        </div>
+      </div>
+    </div>
+    <div class="scrubber" role="group" aria-label="Year scrubber">
+      <label for="scrub">
+        <span>Date: <span id="scrub-label" class="v">—</span></span>
+      </label>
+      <input id="scrub" type="range" min="0" max="365" step="1" value="0" aria-describedby="scrub-label">
+      <div class="row">
+        <button id="play" class="primary" aria-pressed="false">▶ Play year</button>
+        <button id="today" class="ghost">Today</button>
+      </div>
+    </div>
+  </section>
+
+  <aside class="controls" aria-label="Settings">
+    <fieldset>
+      <legend>Location</legend>
+      <div class="row">
+        <button id="geo" class="primary" type="button">Use my location</button>
+      </div>
+      <label>Latitude (°)
+        <input id="lat" type="number" step="0.0001" min="-90" max="90" value="-37.8136">
+      </label>
+      <label>Longitude (°)
+        <input id="lon" type="number" step="0.0001" min="-180" max="180" value="144.9631">
+      </label>
+      <p class="muted" id="loc-name">Melbourne, Australia (default)</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Sample time</legend>
+      <label>Civil clock time (local standard)
+        <input id="clock" type="time" value="12:00" step="60">
+      </label>
+      <label>UTC offset (hours)
+        <input id="tz" type="number" step="0.25" min="-14" max="14" value="10">
+      </label>
+      <p class="muted">Standard time only — DST is intentionally ignored so the figure-8 reflects the Equation of Time.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Today</legend>
+      <div class="hud" id="hud">
+        <div><span class="k">Date</span><span class="v" id="hud-date">—</span></div>
+        <div><span class="k">Altitude</span><span class="v" id="hud-alt">—</span></div>
+        <div><span class="k">Azimuth</span><span class="v" id="hud-az">—</span></div>
+        <div><span class="k">Declination</span><span class="v" id="hud-dec">—</span></div>
+        <div><span class="k">EoT</span><span class="v" id="hud-eot">—</span></div>
+        <div><span class="k">Solar noon</span><span class="v" id="hud-noon">—</span></div>
+      </div>
+    </fieldset>
+  </aside>
+</main>
+
+<footer>
+  <span>Phase 1 · Simple view · v0.1</span>
+  <span aria-live="polite" id="status">Ready</span>
+</footer>
+
+<script>
+"use strict";
+
+/* =========================================================================
+ * SOLAR POSITION
+ * Low-precision NOAA/Meeus algorithm. Accurate to ~1 arcminute, plenty for
+ * visualization. All angles internal in radians unless suffixed _deg.
+ * ========================================================================= */
+
+const D2R = Math.PI / 180;
+const R2D = 180 / Math.PI;
+
+function julianDay(date) {
+  // date is a JS Date in UTC. JD at given instant.
+  return date.getTime() / 86400000 + 2440587.5;
+}
+
+function solarPosition(date, latDeg, lonDeg, opts = {}) {
+  const useRefraction = opts.refraction !== false;
+  const jd = julianDay(date);
+  const n = jd - 2451545.0;            // days since J2000.0 TT (close enough)
+  const L = (280.460 + 0.9856474 * n) % 360;       // mean longitude, deg
+  const g = ((357.528 + 0.9856003 * n) % 360) * D2R; // mean anomaly, rad
+  const lambda = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * D2R; // ecliptic lon
+  const epsilon = (23.439 - 0.0000004 * n) * D2R;  // obliquity
+
+  const sinDec = Math.sin(epsilon) * Math.sin(lambda);
+  const dec = Math.asin(sinDec);
+  const ra = Math.atan2(Math.cos(epsilon) * Math.sin(lambda), Math.cos(lambda));
+
+  // Equation of Time, in minutes
+  // EoT = 4 * (L - 0.0057183 - alpha_deg)
+  let raDeg = ra * R2D;
+  if (raDeg < 0) raDeg += 360;
+  let eotMin = 4 * (((L - 0.0057183 - raDeg) + 540) % 360 - 180);
+
+  // Greenwich Mean Sidereal Time (deg) — approximate
+  const utHours = ((date.getUTCHours()
+    + date.getUTCMinutes() / 60
+    + date.getUTCSeconds() / 3600));
+  const gmst = (18.697374558 + 24.06570982441908 * n) % 24; // hours
+  const lst = (gmst * 15 + lonDeg) * D2R;          // local sidereal time, rad
+  let H = lst - ra;                                // hour angle, rad
+  // wrap to [-pi, pi]
+  H = Math.atan2(Math.sin(H), Math.cos(H));
+
+  const phi = latDeg * D2R;
+  const sinAlt = Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H);
+  const alt = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
+  const cosAz = (Math.sin(dec) - Math.sin(alt) * Math.sin(phi)) / (Math.cos(alt) * Math.cos(phi));
+  let az = Math.acos(Math.max(-1, Math.min(1, cosAz)));
+  if (Math.sin(H) > 0) az = 2 * Math.PI - az;     // pre-noon -> west of north flip
+
+  // Atmospheric refraction (Bennett), only for alt > -1°
+  const altDeg = alt * R2D;
+  let refractionDeg = 0;
+  if (useRefraction && altDeg > -1) {
+    const a = altDeg + 7.31 / (altDeg + 4.4);
+    refractionDeg = 1 / Math.tan(a * D2R) / 60;    // arcminutes -> degrees
+  }
+
+  return {
+    altitude: altDeg + refractionDeg,
+    azimuth: (az * R2D + 360) % 360,
+    declination: dec * R2D,
+    rightAscension: raDeg,
+    eotMinutes: eotMin,
+  };
+}
+
+// Sample the analemma: one point per day at a fixed local civil time.
+function buildAnalemma(year, latDeg, lonDeg, clockHourLocal, tzOffsetHours, opts = {}) {
+  const points = [];
+  const start = new Date(Date.UTC(year, 0, 1));
+  const end = new Date(Date.UTC(year + 1, 0, 1));
+  const days = Math.round((end - start) / 86400000);
+  for (let d = 0; d < days; d++) {
+    const utcHour = clockHourLocal - tzOffsetHours;
+    const ms = Date.UTC(year, 0, 1 + d, 0, 0, 0) + utcHour * 3600000;
+    const dt = new Date(ms);
+    const sp = solarPosition(dt, latDeg, lonDeg, opts);
+    points.push({ day: d, date: new Date(Date.UTC(year, 0, 1 + d)), ...sp });
+  }
+  return points;
+}
+
+// Sunrise/sunset arcs: for each day, find UTC instants where altitude = 0.
+// Two coarse-then-bisection passes per day.
+function buildSunArcs(year, latDeg, lonDeg, opts = {}) {
+  const rises = [], sets = [];
+  const start = Date.UTC(year, 0, 1);
+  for (let d = 0; d < 366; d++) {
+    if (d === 365 && new Date(Date.UTC(year, 11, 31)).getUTCFullYear() !== year) break;
+    const dayStart = start + d * 86400000;
+    let prevAlt = solarPosition(new Date(dayStart), latDeg, lonDeg, opts).altitude;
+    let prevT = dayStart;
+    let foundRise = null, foundSet = null;
+    for (let step = 1; step <= 96; step++) {        // every 15 min
+      const t = dayStart + step * 900000;
+      const alt = solarPosition(new Date(t), latDeg, lonDeg, opts).altitude;
+      if (prevAlt < 0 && alt >= 0 && !foundRise) foundRise = bisectAltZero(prevT, t, latDeg, lonDeg, opts);
+      if (prevAlt > 0 && alt <= 0 && !foundSet)  foundSet  = bisectAltZero(prevT, t, latDeg, lonDeg, opts);
+      prevAlt = alt; prevT = t;
+      if (foundRise && foundSet) break;
+    }
+    if (foundRise) rises.push(foundRise);
+    if (foundSet) sets.push(foundSet);
+  }
+  return { rises, sets };
+}
+function bisectAltZero(t0, t1, lat, lon, opts) {
+  for (let i = 0; i < 18; i++) {
+    const mid = (t0 + t1) / 2;
+    const a = solarPosition(new Date(mid), lat, lon, opts).altitude;
+    if (a > 0) { t1 = mid; } else { t0 = mid; }
+  }
+  const t = (t0 + t1) / 2;
+  return { ...solarPosition(new Date(t), lat, lon, opts), date: new Date(t) };
+}
+
+// Solar noon (local clock time) for a given date — when EoT and longitude
+// offset cancel. Returns minutes past local-standard midnight.
+function solarNoonMinutes(date, lonDeg, tzOffsetHours) {
+  // sample at 12:00 UTC to read EoT for the day
+  const probe = new Date(Date.UTC(
+    date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 12, 0, 0));
+  const sp = solarPosition(probe, 0, 0);
+  // Solar noon UTC = 12:00 - EoT - longitude/15
+  const noonUtcMin = 12 * 60 - sp.eotMinutes - (lonDeg * 4);
+  return noonUtcMin + tzOffsetHours * 60;
+}
+
+/* =========================================================================
+ * STATE & PERSISTENCE
+ * ========================================================================= */
+
+const state = {
+  lat: -37.8136,
+  lon: 144.9631,
+  clockMinutes: 12 * 60,           // local-standard
+  tzHours: 10,
+  year: new Date().getFullYear(),
+  scrubDay: dayOfYear(new Date()),
+  playing: false,
+  tab: 'simple',
+  theme: 'auto',
+  refraction: true,
+  layers: {
+    horizon: true, cardinals: true, grid: true,
+    months: true, seq: true, sunarc: false,
+  },
+  welcomed: false,
+  arFovDeg: 60,                  // estimated horizontal FOV of phone camera
+  arOffset: { dAz: 0, dAlt: 0 }, // calibration offset (radians? no — degrees)
+  arCalibrated: false,
+};
+const DEFAULTS = JSON.parse(JSON.stringify(state));
+
+function dayOfYear(d) {
+  const start = Date.UTC(d.getUTCFullYear(), 0, 1);
+  return Math.floor((d.getTime() - start) / 86400000);
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem('analemma:v1');
+    if (!raw) return;
+    Object.assign(state, JSON.parse(raw));
+  } catch {}
+}
+function saveState() {
+  try {
+    const { playing, ...persist } = state;
+    localStorage.setItem('analemma:v1', JSON.stringify(persist));
+  } catch {}
+}
+
+/* =========================================================================
+ * RENDERING — Simple 2D scatter
+ * ========================================================================= */
+
+const svg = document.getElementById('plot');
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const VBW = 1000, VBH = 700;
+const PAD = { l: 80, r: 40, t: 40, b: 70 };
+
+let analemmaCache = null;
+let cacheKey = '';
+let arcCache = null;
+let arcKey = '';
+
+function getAnalemma() {
+  const key = `${state.lat}|${state.lon}|${state.clockMinutes}|${state.tzHours}|${state.year}|${state.refraction}`;
+  if (key !== cacheKey) {
+    analemmaCache = buildAnalemma(
+      state.year, state.lat, state.lon,
+      state.clockMinutes / 60, state.tzHours,
+      { refraction: state.refraction }
+    );
+    cacheKey = key;
+  }
+  return analemmaCache;
+}
+function getSunArcs() {
+  const key = `${state.lat}|${state.lon}|${state.year}|${state.refraction}`;
+  if (key !== arcKey) {
+    arcCache = buildSunArcs(state.year, state.lat, state.lon, { refraction: state.refraction });
+    arcKey = key;
+  }
+  return arcCache;
+}
+
+function el(name, attrs = {}, text) {
+  const e = document.createElementNS(SVG_NS, name);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function clearSvg() {
+  [...svg.childNodes].forEach(n => {
+    if (n.nodeName !== 'title' && n.nodeName !== 'desc') svg.removeChild(n);
+  });
+}
+
+function monthMarker(cx, cy, m, label) {
+  if (!state.layers.months) return;
+  const isSolstice = (m === 5 || m === 11);
+  const isEquinox = (m === 2 || m === 8);
+  if (state.layers.seq && isSolstice) {
+    svg.appendChild(el('rect', { x: cx - 7, y: cy - 7, width: 14, height: 14, class: 'solstice' }));
+  } else if (state.layers.seq && isEquinox) {
+    svg.appendChild(el('polygon', {
+      points: `${cx},${cy-8} ${cx+8},${cy} ${cx},${cy+8} ${cx-8},${cy}`,
+      class: 'equinox'
+    }));
+  } else {
+    svg.appendChild(el('circle', { cx, cy, r: 4, class: 'month-tick' }));
+  }
+  if (label) {
+    svg.appendChild(el('text', {
+      x: cx + 10, y: cy + 4, class: 'month-label'
+    }, label));
+  }
+}
+
+function render() {
+  const pts = getAnalemma();
+  const arStage = document.getElementById('ar-stage');
+  const plotSvg = svg;
+  if (state.tab === 'ar') {
+    plotSvg.style.display = 'none';
+    arStage.hidden = false;
+    renderAR(pts);
+    updateHud(pts[Math.min(state.scrubDay, pts.length - 1)]);
+    return;
+  } else {
+    plotSvg.style.display = '';
+    arStage.hidden = true;
+    arStop();
+  }
+  clearSvg();
+  if (state.tab === 'dome') renderDome(pts);
+  else if (state.tab === 'horizon') renderHorizon(pts);
+  else renderSimple(pts);
+  updateHud(pts[Math.min(state.scrubDay, pts.length - 1)]);
+}
+
+/* ------- Simple view ------- */
+function renderSimple(pts) {
+  const azs = pts.map(p => p.azimuth);
+  const alts = pts.map(p => p.altitude);
+  const meanAz = circularMean(azs);
+  const azCentered = azs.map(a => wrapTo(a - meanAz, -180, 180));
+  const azMin = Math.min(...azCentered) - 5;
+  const azMax = Math.max(...azCentered) + 5;
+  const altMin = Math.min(...alts) - 5;
+  const altMax = Math.max(...alts) + 5;
+
+  const xScale = a => PAD.l + ((a - azMin) / (azMax - azMin)) * (VBW - PAD.l - PAD.r);
+  const yScale = h => VBH - PAD.b - ((h - altMin) / (altMax - altMin)) * (VBH - PAD.t - PAD.b);
+
+  drawAxes(xScale, yScale, azMin, azMax, altMin, altMax, meanAz);
+
+  if (state.layers.horizon && altMin < 0 && altMax > 0) {
+    const y = yScale(0);
+    svg.appendChild(el('line', { x1: PAD.l, x2: VBW - PAD.r, y1: y, y2: y, class: 'horizon' }));
+    svg.appendChild(el('text', { x: VBW - PAD.r - 6, y: y - 6, 'text-anchor': 'end', class: 'horizon-label' }, 'horizon'));
+  }
+
+  const d = pts.map((p, i) => {
+    const ax = wrapTo(p.azimuth - meanAz, -180, 180);
+    return `${i === 0 ? 'M' : 'L'} ${xScale(ax).toFixed(2)} ${yScale(p.altitude).toFixed(2)}`;
+  }).join(' ');
+  svg.appendChild(el('path', { d, class: 'curve' }));
+
+  for (let m = 0; m < 12; m++) {
+    const di = dayOfYear(new Date(Date.UTC(state.year, m, 1)));
+    const p = pts[di]; if (!p) continue;
+    const ax = wrapTo(p.azimuth - meanAz, -180, 180);
+    monthMarker(xScale(ax), yScale(p.altitude), m,
+      ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m]);
+  }
+
+  const cur = pts[Math.min(state.scrubDay, pts.length - 1)];
+  const cax = wrapTo(cur.azimuth - meanAz, -180, 180);
+  svg.appendChild(el('circle', { cx: xScale(cax), cy: yScale(cur.altitude), r: 10, class: 'marker marker-pulse' }));
+}
+
+/* ------- Sky dome (stereographic from zenith, looking up) -------
+ * The horizon is the outer circle, zenith is the center.
+ * North up, East right (observer facing north, looking up at sky).
+ * r = R * tan((90 - alt)/2 deg)  — stereographic
+ */
+function renderDome(pts) {
+  const cx = VBW / 2, cy = VBH / 2;
+  const R = Math.min(VBW, VBH) / 2 - 50;
+
+  const project = (altDeg, azDeg) => {
+    const z = (90 - altDeg) * D2R;       // zenith angle, rad
+    const r = R * Math.tan(z / 2) / Math.tan(45 * D2R); // normalize so horizon = R
+    const az = azDeg * D2R;
+    return { x: cx + r * Math.sin(az), y: cy - r * Math.cos(az) };
+  };
+
+  if (state.layers.grid) {
+    for (const altRing of [30, 60]) {
+      const z = (90 - altRing) * D2R;
+      const r = R * Math.tan(z / 2) / Math.tan(45 * D2R);
+      svg.appendChild(el('circle', { cx, cy, r, class: 'grid-line', fill: 'none' }));
+      svg.appendChild(el('text', { x: cx + 4, y: cy - r + 14, class: 'axis-label' }, altRing + '°'));
+    }
+    for (let a = 0; a < 360; a += 30) {
+      const p = project(0, a);
+      svg.appendChild(el('line', { x1: cx, y1: cy, x2: p.x, y2: p.y, class: 'grid-line' }));
+    }
+  }
+  if (state.layers.horizon) {
+    svg.appendChild(el('circle', { cx, cy, r: R, class: 'horizon', fill: 'none' }));
+  }
+  if (state.layers.cardinals) {
+    const cards = [['N',0],['E',90],['S',180],['W',270]];
+    for (const [lbl, az] of cards) {
+      const p = project(0, az);
+      const dx = (p.x - cx) * 1.07, dy = (p.y - cy) * 1.07;
+      svg.appendChild(el('text', {
+        x: cx + dx, y: cy + dy + 6, 'text-anchor': 'middle', class: 'horizon-label'
+      }, lbl));
+    }
+  }
+
+  if (state.layers.sunarc) {
+    const arcs = getSunArcs();
+    for (const set of [arcs.rises, arcs.sets]) {
+      const d = set.map((p, i) => {
+        const pt = project(Math.max(p.altitude, 0), p.azimuth);
+        return `${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(2)} ${pt.y.toFixed(2)}`;
+      }).join(' ');
+      if (d) svg.appendChild(el('path', { d, class: 'sun-arc' }));
+    }
+  }
+
+  // analemma — only points with alt >= -1° (otherwise below horizon)
+  let path = '', pen = false;
+  for (const p of pts) {
+    if (p.altitude < -1) { pen = false; continue; }
+    const pt = project(p.altitude, p.azimuth);
+    path += `${pen ? 'L' : 'M'} ${pt.x.toFixed(2)} ${pt.y.toFixed(2)} `;
+    pen = true;
+  }
+  if (path) svg.appendChild(el('path', { d: path, class: 'curve' }));
+
+  for (let m = 0; m < 12; m++) {
+    const di = dayOfYear(new Date(Date.UTC(state.year, m, 1)));
+    const p = pts[di]; if (!p || p.altitude < -1) continue;
+    const pt = project(p.altitude, p.azimuth);
+    monthMarker(pt.x, pt.y, m,
+      ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m]);
+  }
+
+  const cur = pts[Math.min(state.scrubDay, pts.length - 1)];
+  if (cur.altitude >= -1) {
+    const pt = project(cur.altitude, cur.azimuth);
+    svg.appendChild(el('circle', { cx: pt.x, cy: pt.y, r: 10, class: 'marker marker-pulse' }));
+  } else {
+    svg.appendChild(el('text', {
+      x: cx, y: cy, 'text-anchor': 'middle', class: 'horizon-label'
+    }, 'Sun below horizon at this time'));
+  }
+}
+
+/* ------- Horizon panorama (equirectangular) -------
+ * x = azimuth windowed around the analemma's mean azimuth (so we don't wrap)
+ * y = altitude
+ */
+function renderHorizon(pts) {
+  const azs = pts.map(p => p.azimuth);
+  const meanAz = circularMean(azs);
+  const azCentered = azs.map(a => wrapTo(a - meanAz, -180, 180));
+  const span = Math.max(60, Math.max(...azCentered) - Math.min(...azCentered) + 30);
+  const azMin = -span / 2, azMax = span / 2;
+  const altMin = Math.min(-15, Math.min(...pts.map(p => p.altitude)) - 5);
+  const altMax = Math.max(...pts.map(p => p.altitude)) + 10;
+
+  const xScale = a => PAD.l + ((a - azMin) / (azMax - azMin)) * (VBW - PAD.l - PAD.r);
+  const yScale = h => VBH - PAD.b - ((h - altMin) / (altMax - altMin)) * (VBH - PAD.t - PAD.b);
+
+  for (let h = Math.ceil(altMin / 10) * 10; h <= altMax; h += 10) {
+    const y = yScale(h);
+    if (h === 0) {
+      if (state.layers.horizon) {
+        svg.appendChild(el('line', { x1: PAD.l, x2: VBW - PAD.r, y1: y, y2: y, class: 'horizon' }));
+      }
+    } else if (state.layers.grid) {
+      svg.appendChild(el('line', { x1: PAD.l, x2: VBW - PAD.r, y1: y, y2: y, class: 'grid-line' }));
+    }
+    if (state.layers.grid || h === 0) {
+      svg.appendChild(el('text', {
+        x: PAD.l - 10, y: y + 5, 'text-anchor': 'end', class: 'axis-label'
+      }, h + '°'));
+    }
+  }
+  for (let a = -180; a <= 180; a += 10) {
+    if (a < azMin || a > azMax) continue;
+    const x = xScale(a);
+    const realAz = ((a + meanAz) % 360 + 360) % 360;
+    const strong = realAz % 30 < 0.5 || realAz % 30 > 29.5;
+    if (state.layers.grid) {
+      svg.appendChild(el('line', {
+        x1: x, x2: x, y1: PAD.t, y2: VBH - PAD.b,
+        class: strong ? 'grid-strong' : 'grid-line'
+      }));
+    }
+    if (strong && state.layers.cardinals) {
+      const card = nearestCardinal(realAz);
+      svg.appendChild(el('text', {
+        x, y: VBH - PAD.b + 24, 'text-anchor': 'middle', class: 'axis-label'
+      }, card || (realAz.toFixed(0) + '°')));
+    }
+  }
+
+  if (state.layers.sunarc) {
+    const arcs = getSunArcs();
+    for (const set of [arcs.rises, arcs.sets]) {
+      const d = set.map((p, i) => {
+        const ax = wrapTo(p.azimuth - meanAz, -180, 180);
+        if (ax < azMin || ax > azMax) return null;
+        return `${i === 0 ? 'M' : 'L'} ${xScale(ax).toFixed(2)} ${yScale(0).toFixed(2)}`;
+      }).filter(Boolean).join(' ');
+      if (d) svg.appendChild(el('path', { d, class: 'sun-arc' }));
+    }
+  }
+
+  // curve
+  const d = pts.map((p, i) => {
+    const ax = wrapTo(p.azimuth - meanAz, -180, 180);
+    return `${i === 0 ? 'M' : 'L'} ${xScale(ax).toFixed(2)} ${yScale(p.altitude).toFixed(2)}`;
+  }).join(' ');
+  svg.appendChild(el('path', { d, class: 'curve' }));
+
+  for (let m = 0; m < 12; m++) {
+    const di = dayOfYear(new Date(Date.UTC(state.year, m, 1)));
+    const p = pts[di]; if (!p) continue;
+    const ax = wrapTo(p.azimuth - meanAz, -180, 180);
+    monthMarker(xScale(ax), yScale(p.altitude), m,
+      ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m]);
+  }
+
+  const cur = pts[Math.min(state.scrubDay, pts.length - 1)];
+  const cax = wrapTo(cur.azimuth - meanAz, -180, 180);
+  svg.appendChild(el('circle', { cx: xScale(cax), cy: yScale(cur.altitude), r: 10, class: 'marker marker-pulse' }));
+
+  // axis titles
+  svg.appendChild(el('text', { x: VBW / 2, y: VBH - 18, 'text-anchor': 'middle', class: 'axis-label' }, 'Azimuth (compass direction)'));
+  svg.appendChild(el('text', {
+    x: 22, y: VBH / 2, 'text-anchor': 'middle', class: 'axis-label',
+    transform: `rotate(-90 22 ${VBH / 2})`
+  }, 'Altitude (° above horizon)'));
+}
+
+function nearestCardinal(azDeg) {
+  const cards = [['N',0],['NE',45],['E',90],['SE',135],['S',180],['SW',225],['W',270],['NW',315],['N',360]];
+  for (const [lbl, a] of cards) {
+    if (Math.abs(azDeg - a) < 1) return lbl;
+  }
+  return null;
+}
+
+function drawAxes(xScale, yScale, azMin, azMax, altMin, altMax, meanAz) {
+  // vertical gridlines every 2°, labels every 5°
+  for (let a = Math.ceil(azMin); a <= Math.floor(azMax); a++) {
+    if (a % 2 !== 0) continue;
+    const x = xScale(a);
+    const strong = a % 5 === 0;
+    svg.appendChild(el('line', {
+      x1: x, x2: x, y1: PAD.t, y2: VBH - PAD.b,
+      class: strong ? 'grid-strong' : 'grid-line'
+    }));
+    if (strong) {
+      const realAz = ((a + meanAz) % 360 + 360) % 360;
+      svg.appendChild(el('text', {
+        x, y: VBH - PAD.b + 24, 'text-anchor': 'middle', class: 'axis-label'
+      }, realAz.toFixed(0) + '°'));
+    }
+  }
+  for (let h = Math.ceil(altMin); h <= Math.floor(altMax); h++) {
+    if (h % 5 !== 0) continue;
+    const y = yScale(h);
+    svg.appendChild(el('line', {
+      x1: PAD.l, x2: VBW - PAD.r, y1: y, y2: y,
+      class: h % 10 === 0 ? 'grid-strong' : 'grid-line'
+    }));
+    if (h % 10 === 0) {
+      svg.appendChild(el('text', {
+        x: PAD.l - 10, y: y + 5, 'text-anchor': 'end', class: 'axis-label'
+      }, h + '°'));
+    }
+  }
+  // axis titles
+  svg.appendChild(el('text', {
+    x: VBW / 2, y: VBH - 18, 'text-anchor': 'middle', class: 'axis-label'
+  }, 'Azimuth (° from north, clockwise)'));
+  svg.appendChild(el('text', {
+    x: 22, y: VBH / 2, 'text-anchor': 'middle', class: 'axis-label',
+    transform: `rotate(-90 22 ${VBH / 2})`
+  }, 'Altitude (° above horizon)'));
+}
+
+/* =========================================================================
+ * HUD
+ * ========================================================================= */
+
+function fmtMinutes(min) {
+  const sign = min < 0 ? '−' : '+';
+  const m = Math.abs(min);
+  const whole = Math.floor(m);
+  const sec = Math.round((m - whole) * 60);
+  return `${sign}${whole}m ${String(sec).padStart(2,'0')}s`;
+}
+function fmtClock(min) {
+  let m = ((min % 1440) + 1440) % 1440;
+  const h = Math.floor(m / 60);
+  const mm = Math.floor(m % 60);
+  return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+}
+
+function updateHud(p) {
+  const dateStr = p.date.toUTCString().slice(5, 16);
+  document.getElementById('hud-date').textContent = dateStr;
+  document.getElementById('hud-alt').textContent = p.altitude.toFixed(2) + '°';
+  document.getElementById('hud-az').textContent = p.azimuth.toFixed(2) + '°';
+  document.getElementById('hud-dec').textContent = p.declination.toFixed(2) + '°';
+  document.getElementById('hud-eot').textContent = fmtMinutes(p.eotMinutes);
+  const noon = solarNoonMinutes(p.date, state.lon, state.tzHours);
+  document.getElementById('hud-noon').textContent = fmtClock(noon);
+  document.getElementById('scrub-label').textContent = dateStr;
+}
+
+/* =========================================================================
+ * UTILS
+ * ========================================================================= */
+
+function wrapTo(v, lo, hi) {
+  const range = hi - lo;
+  return ((((v - lo) % range) + range) % range) + lo;
+}
+function circularMean(degArr) {
+  let sx = 0, sy = 0;
+  for (const a of degArr) { sx += Math.cos(a * D2R); sy += Math.sin(a * D2R); }
+  return (Math.atan2(sy, sx) * R2D + 360) % 360;
+}
+
+/* =========================================================================
+ * UI WIRING
+ * ========================================================================= */
+
+const $ = id => document.getElementById(id);
+
+function bindInputs() {
+  $('lat').value = state.lat;
+  $('lon').value = state.lon;
+  $('tz').value = state.tzHours;
+  $('clock').value = fmtClock(state.clockMinutes);
+  $('scrub').value = state.scrubDay;
+
+  const onChange = () => {
+    state.lat = clamp(parseFloat($('lat').value) || 0, -90, 90);
+    state.lon = clamp(parseFloat($('lon').value) || 0, -180, 180);
+    state.tzHours = clamp(parseFloat($('tz').value) || 0, -14, 14);
+    const [h, m] = $('clock').value.split(':').map(Number);
+    state.clockMinutes = (h || 0) * 60 + (m || 0);
+    saveState();
+    render();
+  };
+  ['lat','lon','tz','clock'].forEach(id => $(id).addEventListener('change', onChange));
+
+  $('scrub').addEventListener('input', e => {
+    state.scrubDay = parseInt(e.target.value, 10);
+    saveState();
+    render();
+  });
+
+  $('today').addEventListener('click', () => {
+    state.scrubDay = dayOfYear(new Date());
+    $('scrub').value = state.scrubDay;
+    render();
+  });
+
+  $('play').addEventListener('click', togglePlay);
+
+  $('geo').addEventListener('click', () => requestLocation());
+
+  const setTab = name => {
+    document.querySelectorAll('.tab').forEach(x => {
+      x.setAttribute('aria-selected', String(x.dataset.tab === name));
+    });
+    state.tab = name;
+    location.hash = name;
+    saveState();
+    render();
+  };
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => { if (!t.disabled) setTab(t.dataset.tab); });
+  });
+  // restore from hash or state
+  const initialTab = (location.hash || '').replace('#','');
+  if (['simple','dome','horizon','ar'].includes(initialTab)) setTab(initialTab);
+  else setTab(state.tab || 'simple');
+
+  // keyboard: arrow keys scrub
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('input, select, textarea, button')) return;
+    if (e.key === 'ArrowLeft') {
+      state.scrubDay = Math.max(0, state.scrubDay - (e.shiftKey ? 7 : 1));
+      $('scrub').value = state.scrubDay; render();
+    } else if (e.key === 'ArrowRight') {
+      const max = getAnalemma().length - 1;
+      state.scrubDay = Math.min(max, state.scrubDay + (e.shiftKey ? 7 : 1));
+      $('scrub').value = state.scrubDay; render();
+    } else if (e.key === 'Home') {
+      state.scrubDay = 0; $('scrub').value = 0; render();
+    } else if (e.key === 'End') {
+      const max = getAnalemma().length - 1;
+      state.scrubDay = max; $('scrub').value = max; render();
+    } else if (e.key === ' ') {
+      e.preventDefault(); togglePlay();
+    }
+  });
+}
+
+let playTimer = null;
+function togglePlay() {
+  state.playing = !state.playing;
+  const btn = $('play');
+  btn.setAttribute('aria-pressed', String(state.playing));
+  btn.textContent = state.playing ? '❚❚ Pause' : '▶ Play year';
+  if (state.playing) {
+    playTimer = setInterval(() => {
+      const max = getAnalemma().length - 1;
+      state.scrubDay = (state.scrubDay + 1) % (max + 1);
+      $('scrub').value = state.scrubDay;
+      render();
+    }, 60);
+  } else {
+    clearInterval(playTimer);
+  }
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function setStatus(s) { $('status').textContent = s; }
+
+function requestLocation(onDone) {
+  if (!navigator.geolocation) { setStatus('Geolocation not available'); onDone && onDone(false); return; }
+  setStatus('Requesting location…');
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      state.lat = +pos.coords.latitude.toFixed(4);
+      state.lon = +pos.coords.longitude.toFixed(4);
+      state.tzHours = -new Date().getTimezoneOffset() / 60;
+      $('lat').value = state.lat;
+      $('lon').value = state.lon;
+      $('tz').value = state.tzHours;
+      $('loc-name').textContent = `${state.lat}°, ${state.lon}°`;
+      setStatus('Location set');
+      saveState();
+      render();
+      onDone && onDone(true);
+    },
+    err => { setStatus('Location denied: ' + err.message); onDone && onDone(false); }
+  );
+}
+
+/* ---- Settings drawer ---- */
+function bindDrawer() {
+  const drawer = $('drawer'), backdrop = $('drawer-backdrop');
+  let lastFocus = null;
+  const open = () => {
+    lastFocus = document.activeElement;
+    drawer.dataset.open = backdrop.dataset.open = 'true';
+    drawer.focus();
+  };
+  const close = () => {
+    drawer.dataset.open = backdrop.dataset.open = 'false';
+    lastFocus && lastFocus.focus && lastFocus.focus();
+  };
+  $('open-settings').addEventListener('click', open);
+  $('close-settings').addEventListener('click', close);
+  backdrop.addEventListener('click', close);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && drawer.dataset.open === 'true') close();
+  });
+
+  // Theme
+  $('theme').value = state.theme;
+  $('theme').addEventListener('change', e => {
+    state.theme = e.target.value; applyTheme(); saveState();
+  });
+
+  // Layers
+  for (const k of Object.keys(state.layers)) {
+    const cb = $('lyr-' + k);
+    if (!cb) continue;
+    cb.checked = state.layers[k];
+    cb.addEventListener('change', () => {
+      state.layers[k] = cb.checked; saveState(); render();
+    });
+  }
+
+  // Refraction
+  $('opt-refraction').checked = state.refraction;
+  $('opt-refraction').addEventListener('change', e => {
+    state.refraction = e.target.checked;
+    cacheKey = ''; arcKey = '';
+    saveState(); render();
+  });
+
+  // Year
+  $('year').value = state.year;
+  $('year').addEventListener('change', e => {
+    const y = parseInt(e.target.value, 10);
+    if (Number.isFinite(y) && y >= 1900 && y <= 2200) {
+      state.year = y;
+      const max = 365 + (new Date(y, 1, 29).getDate() === 29 ? 1 : 0);
+      state.scrubDay = Math.min(state.scrubDay, max - 1);
+      $('scrub').max = max - 1;
+      saveState(); render();
+    }
+  });
+
+  // Snap clock to mean solar noon at this longitude
+  $('snap-noon').addEventListener('click', () => {
+    // Mean solar noon UTC = 12:00 - lon/15 hours; in local-standard = 12:00 + (tz - lon/15) hours
+    const localMin = (12 - state.lon / 15 + state.tzHours) * 60;
+    state.clockMinutes = ((Math.round(localMin) % 1440) + 1440) % 1440;
+    $('clock').value = fmtClock(state.clockMinutes);
+    cacheKey = '';
+    saveState(); render();
+    setStatus('Clock snapped to mean solar noon');
+  });
+
+  // Reset
+  $('reset').addEventListener('click', () => {
+    if (!confirm('Reset all settings to defaults?')) return;
+    Object.assign(state, JSON.parse(JSON.stringify(DEFAULTS)));
+    state.welcomed = true;     // don't re-prompt
+    try { localStorage.removeItem('analemma:v1'); } catch {}
+    saveState();
+    location.reload();
+  });
+}
+
+/* ---- Theme ---- */
+function applyTheme() {
+  const m = state.theme;
+  if (m === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', m);
+}
+
+/* ---- First-run welcome ---- */
+function showWelcomeIfNeeded() {
+  if (state.welcomed) return;
+  const root = $('welcome-root');
+  root.hidden = false;
+  const finish = () => {
+    root.hidden = true;
+    state.welcomed = true;
+    saveState();
+  };
+  $('welcome-allow').addEventListener('click', () => {
+    requestLocation(() => finish());
+  }, { once: true });
+  $('welcome-skip').addEventListener('click', finish, { once: true });
+}
+
+/* =========================================================================
+ * AR VIEW
+ * Camera feed + DeviceOrientation -> overlay analemma in the sky.
+ * Projection: small-angle pinhole (accurate near look direction).
+ * Calibration: user points phone at the real Sun and taps; we record the
+ * offset between computed (alt, az) of the Sun and the device's reading.
+ * ========================================================================= */
+const ar = {
+  stream: null,
+  orientationHandler: null,
+  rafId: null,
+  raw: { az: 0, alt: 0, roll: 0 }, // last device pointing reading (deg)
+  hasOrientation: false,
+};
+
+async function arEnter() {
+  arShowFallback(false);
+  // Request camera (back camera if possible). Requires https or localhost.
+  try {
+    ar.stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } },
+      audio: false,
+    });
+    const video = $('ar-video');
+    video.srcObject = ar.stream;
+    await video.play().catch(() => {});
+  } catch (err) {
+    arShowFallback(true,
+      'Camera blocked',
+      `The AR view needs camera access. ${err.message || ''}\n` +
+      'On iOS, this also requires the page to be served over https.');
+    return;
+  }
+
+  // Request device orientation. iOS needs explicit permission via gesture.
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const res = await DeviceOrientationEvent.requestPermission();
+      if (res !== 'granted') throw new Error('Orientation permission denied');
+    }
+  } catch (err) {
+    arShowFallback(true,
+      'Orientation blocked',
+      `${err.message || 'Could not access device orientation.'}\n` +
+      'AR overlay needs the compass and tilt sensors.');
+    return;
+  }
+
+  ar.orientationHandler = e => {
+    // Prefer iOS true compass heading when available
+    const az = (typeof e.webkitCompassHeading === 'number')
+      ? e.webkitCompassHeading
+      : (e.alpha != null ? (360 - e.alpha) % 360 : 0);
+    // beta=90 when phone held upright, 0 when flat -> camera-look altitude:
+    const alt = (e.beta != null) ? (e.beta - 90) : 0;
+    const roll = (e.gamma != null) ? e.gamma : 0;
+    ar.raw = { az, alt, roll };
+    ar.hasOrientation = true;
+  };
+  window.addEventListener('deviceorientation', ar.orientationHandler, true);
+
+  // Render loop
+  const tick = () => {
+    drawARFrame();
+    ar.rafId = requestAnimationFrame(tick);
+  };
+  tick();
+}
+
+function arStop() {
+  if (ar.rafId) cancelAnimationFrame(ar.rafId), ar.rafId = null;
+  if (ar.orientationHandler) {
+    window.removeEventListener('deviceorientation', ar.orientationHandler, true);
+    ar.orientationHandler = null;
+  }
+  if (ar.stream) {
+    ar.stream.getTracks().forEach(t => t.stop());
+    ar.stream = null;
+  }
+  ar.hasOrientation = false;
+}
+
+function arShowFallback(show, title, msg) {
+  const fb = $('ar-fallback');
+  fb.hidden = !show;
+  if (show) {
+    $('ar-fallback-title').textContent = title || 'AR view unavailable';
+    $('ar-fallback-msg').textContent = msg || '';
+  }
+}
+
+function renderAR(pts) {
+  // First time entering AR? Kick off camera/orientation.
+  if (!ar.stream) arEnter();
+}
+
+function drawARFrame() {
+  const overlay = $('ar-overlay');
+  const pts = analemmaCache || getAnalemma();
+  const cur = pts[Math.min(state.scrubDay, pts.length - 1)];
+
+  // Apply calibration offset
+  const lookAz = ar.raw.az + state.arOffset.dAz;
+  const lookAlt = ar.raw.alt + state.arOffset.dAlt;
+  const fov = state.arFovDeg;
+  const VBW = 1000, VBH = 700;
+  const aspect = VBW / VBH;
+  const fovY = fov / aspect;
+  const cx = VBW / 2, cy = VBH / 2;
+
+  const project = (altDeg, azDeg) => {
+    const daz = wrapTo(azDeg - lookAz, -180, 180);
+    const dalt = altDeg - lookAlt;
+    if (Math.abs(daz) > 90 || Math.abs(dalt) > 80) return null; // behind / way off
+    const x = cx + (daz / fov) * VBW;
+    const y = cy - (dalt / fovY) * VBH;
+    if (x < -200 || x > VBW + 200 || y < -200 || y > VBH + 200) return null;
+    return { x, y };
+  };
+
+  // Clear overlay
+  while (overlay.firstChild) overlay.removeChild(overlay.firstChild);
+
+  // Roll the entire overlay group by -gamma so the curve rotates with the phone
+  const g = el('g', { transform: `rotate(${-ar.raw.roll} ${cx} ${cy})` });
+  overlay.appendChild(g);
+
+  // Compute path: break into segments where points project on-screen
+  let pathD = '', pen = false;
+  for (const p of pts) {
+    const pt = project(p.altitude, p.azimuth);
+    if (pt) {
+      pathD += `${pen ? 'L' : 'M'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)} `;
+      pen = true;
+    } else {
+      pen = false;
+    }
+  }
+  if (pathD) {
+    const path = el('path', { d: pathD, class: 'curve', stroke: '#ffd', 'stroke-width': 4, fill: 'none' });
+    g.appendChild(path);
+  }
+
+  // Month markers
+  if (state.layers.months) {
+    for (let m = 0; m < 12; m++) {
+      const di = dayOfYear(new Date(Date.UTC(state.year, m, 1)));
+      const p = pts[di]; if (!p) continue;
+      const pt = project(p.altitude, p.azimuth);
+      if (!pt) continue;
+      const lbl = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m];
+      const isSolstice = (m === 5 || m === 11);
+      const isEquinox = (m === 2 || m === 8);
+      if (state.layers.seq && isSolstice) {
+        g.appendChild(el('rect', { x: pt.x - 7, y: pt.y - 7, width: 14, height: 14, class: 'solstice' }));
+      } else if (state.layers.seq && isEquinox) {
+        g.appendChild(el('polygon', {
+          points: `${pt.x},${pt.y-8} ${pt.x+8},${pt.y} ${pt.x},${pt.y+8} ${pt.x-8},${pt.y}`,
+          class: 'equinox'
+        }));
+      } else {
+        g.appendChild(el('circle', { cx: pt.x, cy: pt.y, r: 4, class: 'month-tick' }));
+      }
+      g.appendChild(el('text', {
+        x: pt.x + 10, y: pt.y + 4, class: 'month-label', fill: '#fff',
+        style: 'paint-order:stroke;stroke:#000;stroke-width:3px'
+      }, lbl));
+    }
+  }
+
+  // Today marker
+  const sunPt = project(cur.altitude, cur.azimuth);
+  if (sunPt) {
+    g.appendChild(el('circle', { cx: sunPt.x, cy: sunPt.y, r: 14, class: 'marker marker-pulse' }));
+    // Crosshair indicator pointing at the Sun
+    g.appendChild(el('line', {
+      x1: sunPt.x - 24, y1: sunPt.y, x2: sunPt.x - 12, y2: sunPt.y,
+      stroke: '#fff', 'stroke-width': 2
+    }));
+    g.appendChild(el('line', {
+      x1: sunPt.x + 12, y1: sunPt.y, x2: sunPt.x + 24, y2: sunPt.y,
+      stroke: '#fff', 'stroke-width': 2
+    }));
+  } else {
+    // Show an off-screen arrow pointing toward where the Sun is
+    const daz = wrapTo(cur.azimuth - lookAz, -180, 180);
+    const dalt = cur.altitude - lookAlt;
+    const angle = Math.atan2(-dalt, daz);
+    const ex = cx + Math.cos(angle) * 380;
+    const ey = cy - Math.sin(angle) * 280;
+    g.appendChild(el('text', {
+      x: ex, y: ey, 'text-anchor': 'middle', class: 'horizon-label',
+      fill: '#ffd24a', style: 'paint-order:stroke;stroke:#000;stroke-width:3px;font-size:24px'
+    }, '☀ ' + (Math.abs(daz) > 90 ? 'turn around' : (daz < 0 ? '← left' : 'right →'))));
+  }
+
+  // HUD
+  const readout = $('ar-readout');
+  if (!ar.hasOrientation) {
+    readout.textContent = 'Waiting for compass / tilt sensors…';
+  } else {
+    readout.innerHTML =
+      `Pointing: ${lookAz.toFixed(0)}° az, ${lookAlt.toFixed(0)}° alt &nbsp;·&nbsp; ` +
+      `Sun: ${cur.azimuth.toFixed(0)}° az, ${cur.altitude.toFixed(0)}° alt` +
+      (state.arCalibrated ? ' &nbsp;·&nbsp; ✓ calibrated' : '');
+  }
+}
+
+function bindAR() {
+  $('ar-calibrate').addEventListener('click', arCalibrate);
+  $('ar-recalibrate').addEventListener('click', arCalibrate);
+  $('ar-retry').addEventListener('click', () => {
+    arShowFallback(false);
+    arEnter();
+  });
+}
+
+function arCalibrate() {
+  if (!ar.hasOrientation) {
+    setStatus('No orientation data yet — wave the phone in a figure-8 and try again');
+    return;
+  }
+  const pts = getAnalemma();
+  const cur = pts[Math.min(state.scrubDay, pts.length - 1)];
+  // Solve: cur.az = ar.raw.az + dAz  =>  dAz = cur.az - ar.raw.az
+  state.arOffset.dAz = wrapTo(cur.azimuth - ar.raw.az, -180, 180);
+  state.arOffset.dAlt = cur.altitude - ar.raw.alt;
+  state.arCalibrated = true;
+  saveState();
+  $('ar-calibrate').hidden = true;
+  $('ar-recalibrate').hidden = false;
+  setStatus('Calibrated — overlay aligned to the Sun');
+}
+
+/* =========================================================================
+ * BOOT
+ * ========================================================================= */
+
+loadState();
+applyTheme();
+bindInputs();
+bindDrawer();
+bindAR();
+render();
+showWelcomeIfNeeded();
+registerSW();
+
+function registerSW() {
+  if (!('serviceWorker' in navigator)) return;
+  // Only register over http(s); skip on file:// (preview/local opens)
+  if (!/^https?:$/.test(location.protocol)) return;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      reg.addEventListener('updatefound', () => {
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener('statechange', () => {
+          if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+            offerUpdate(sw);
+          }
+        });
+      });
+    }).catch(() => { /* silent — offline support is optional */ });
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      location.reload();
+    });
+  });
+}
+
+function offerUpdate(sw) {
+  const bar = document.createElement('div');
+  bar.setAttribute('role', 'status');
+  bar.style.cssText = `
+    position: fixed; left: 50%; bottom: 1rem; transform: translateX(-50%);
+    background: var(--panel); color: var(--ink); border: 2px solid var(--accent);
+    padding: 0.75rem 1rem; border-radius: var(--r-md); box-shadow: var(--shadow);
+    display: flex; gap: 0.75rem; align-items: center; z-index: 30; max-width: 92vw;
+  `;
+  bar.innerHTML = `<span style="font-weight:700">A new version is available.</span>`;
+  const btn = document.createElement('button');
+  btn.className = 'primary'; btn.style.minHeight = '44px'; btn.style.padding = '0.5rem 0.9rem';
+  btn.textContent = 'Reload';
+  btn.addEventListener('click', () => sw.postMessage('skipWaiting'));
+  const dismiss = document.createElement('button');
+  dismiss.className = 'ghost'; dismiss.style.minHeight = '44px'; dismiss.style.padding = '0.5rem 0.9rem';
+  dismiss.textContent = 'Later';
+  dismiss.addEventListener('click', () => bar.remove());
+  bar.append(btn, dismiss);
+  document.body.appendChild(bar);
+}
+</script>
+</body>
+</html>
