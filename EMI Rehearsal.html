@@ -1,0 +1,1891 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EMI Rehearsal — Induced Current Direction</title>
+<style>
+:root {
+  --bg: #f8f9fa;
+  --bg-card: #ffffff;
+  --fg: #1a1a2e;
+  --fg-muted: #6b7280;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --success: #10b981;
+  --success-bg: #d1fae5;
+  --error: #ef4444;
+  --error-bg: #fee2e2;
+  --border: #e5e7eb;
+  --coil-stroke: #1a1a2e;
+  --coil-fill: none;
+  --field-color: #6366f1;
+  --field-color-light: #a5b4fc;
+  --current-color: #f59e0b;
+  --dphi-color: #ec4899;
+  --induced-b-color: #10b981;
+  --magnet-n: #ef4444;
+  --magnet-s: #3b82f6;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.1);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,0.12);
+  --transition: 0.2s ease;
+  --font: system-ui, -apple-system, sans-serif;
+  --font-mono: 'SF Mono', 'Cascadia Code', monospace;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+}
+
+[data-theme="dark"] {
+  --bg: #0f172a;
+  --bg-card: #1e293b;
+  --fg: #e2e8f0;
+  --fg-muted: #94a3b8;
+  --accent: #60a5fa;
+  --accent-hover: #93bbfd;
+  --success: #34d399;
+  --success-bg: #064e3b;
+  --error: #f87171;
+  --error-bg: #7f1d1d;
+  --border: #334155;
+  --coil-stroke: #e2e8f0;
+  --field-color: #818cf8;
+  --field-color-light: #4f46e5;
+  --current-color: #fbbf24;
+  --dphi-color: #f472b6;
+  --induced-b-color: #34d399;
+  --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) {
+    --bg: #0f172a;
+    --bg-card: #1e293b;
+    --fg: #e2e8f0;
+    --fg-muted: #94a3b8;
+    --accent: #60a5fa;
+    --accent-hover: #93bbfd;
+    --success: #34d399;
+    --success-bg: #064e3b;
+    --error: #f87171;
+    --error-bg: #7f1d1d;
+    --border: #334155;
+    --coil-stroke: #e2e8f0;
+    --field-color: #818cf8;
+    --field-color-light: #4f46e5;
+    --current-color: #fbbf24;
+    --dphi-color: #f472b6;
+    --induced-b-color: #34d399;
+    --shadow: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-lg: 0 4px 12px rgba(0,0,0,0.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute; top: -40px; left: 0;
+  background: var(--accent); color: #fff;
+  padding: var(--space-2) var(--space-4);
+  z-index: 100; font-weight: 600;
+  text-decoration: none; border-radius: 0 0 var(--radius) 0;
+}
+.skip-link:focus { top: 0; }
+
+header {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-3) var(--space-5);
+  display: flex; align-items: center; gap: var(--space-4);
+  flex-wrap: wrap;
+  box-shadow: var(--shadow);
+  position: sticky; top: 0; z-index: 10;
+  justify-content: center;
+}
+
+.app-title {
+  font-size: 1.1rem; font-weight: 700;
+  white-space: nowrap;
+}
+
+.category-tabs {
+  display: flex; gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.cat-tab {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--fg);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  min-width: 44px;
+  text-align: center;
+}
+.cat-tab:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.cat-tab[aria-selected="true"] {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+}
+
+.header-controls {
+  margin-inline-start: auto;
+  display: flex; gap: var(--space-3); align-items: center;
+}
+
+.streak-badge {
+  font-size: 0.85rem; font-weight: 600;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  background: var(--success-bg);
+  color: var(--success);
+  display: flex; align-items: center; gap: var(--space-1);
+}
+
+.icon-btn {
+  width: 36px; height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem;
+  transition: all var(--transition);
+}
+.icon-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: start;
+  padding: var(--space-5) var(--space-5) var(--space-6);
+  gap: var(--space-4);
+  max-width: 560px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+@media (min-width: 900px) {
+  main { max-width: 520px; }
+}
+
+.prompt-text {
+  font-size: 1rem;
+  line-height: 1.5;
+  text-align: center;
+  max-width: 600px;
+  color: var(--fg);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.diagram-area {
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 1;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  margin: 0 auto;
+}
+
+.diagram-area svg {
+  width: 100%; height: 100%;
+  display: block;
+}
+
+.step-indicator {
+  display: flex; gap: var(--space-3); align-items: center;
+  font-size: 0.9rem;
+}
+
+.step-dot {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 0.75rem;
+  transition: all var(--transition);
+}
+.step-dot.active { border-color: var(--accent); color: var(--accent); }
+.step-dot.correct { border-color: var(--success); background: var(--success); color: #fff; }
+.step-dot.wrong { border-color: var(--error); background: var(--error); color: #fff; }
+
+.step-question {
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: center;
+  min-height: 1.5em;
+}
+
+.direction-buttons {
+  display: grid;
+  grid-template-areas:
+    ".    up   up    ."
+    "left into out   right"
+    ".    down down  .";
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: var(--space-2);
+  max-width: 340px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.dir-btn {
+  padding: var(--space-3) var(--space-2);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--fg);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  min-height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  gap: var(--space-1);
+}
+.dir-btn:hover { border-color: var(--accent); background: var(--accent); color: #fff; }
+.dir-btn[data-dir="UP"] { grid-area: up; }
+.dir-btn[data-dir="DOWN"] { grid-area: down; }
+.dir-btn[data-dir="LEFT"] { grid-area: left; }
+.dir-btn[data-dir="RIGHT"] { grid-area: right; }
+.dir-btn[data-dir="INTO"] { grid-area: into; }
+.dir-btn[data-dir="OUT"] { grid-area: out; }
+
+.dir-btn.correct-answer {
+  border-color: var(--success); background: var(--success); color: #fff;
+  animation: pulse-success 0.4s ease;
+}
+.dir-btn.wrong-answer {
+  border-color: var(--error); background: var(--error-bg); color: var(--error);
+}
+.dir-btn:disabled { opacity: 0.5; cursor: default; pointer-events: none; }
+
+@keyframes pulse-success {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+.binary-buttons {
+  display: flex; gap: var(--space-3);
+  justify-content: center;
+  max-width: 320px; width: 100%;
+}
+
+.binary-btn {
+  flex: 1;
+  padding: var(--space-4);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--fg);
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+  min-height: 56px;
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: var(--space-1);
+}
+.binary-btn:hover { border-color: var(--accent); background: var(--accent); color: #fff; }
+.binary-btn .btn-sub { font-size: 0.7rem; font-weight: 400; opacity: 0.7; }
+.binary-btn.correct-answer { border-color: var(--success); background: var(--success); color: #fff; }
+.binary-btn.wrong-answer { border-color: var(--error); background: var(--error-bg); color: var(--error); }
+
+.next-btn {
+  padding: var(--space-3) var(--space-6);
+  border: none;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  min-height: 44px;
+}
+.next-btn:hover { background: var(--accent-hover); }
+
+.summary-row {
+  display: flex; gap: var(--space-4); align-items: center; justify-content: center;
+}
+.summary-mark {
+  font-size: 1.5rem;
+}
+
+.progress-panel {
+  width: 100%; max-width: 420px;
+  display: grid; gap: var(--space-3);
+  margin: 0 auto;
+}
+
+.progress-row {
+  display: flex; align-items: center; gap: var(--space-3);
+}
+.progress-label {
+  font-size: 0.85rem; font-weight: 600;
+  width: 80px;
+}
+.progress-bar-bg {
+  flex: 1; height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--success);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+.progress-count {
+  font-size: 0.8rem; color: var(--fg-muted);
+  width: 50px; text-align: right;
+}
+
+#quiz-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.landscape-left,
+.landscape-right {
+  display: contents;
+}
+
+.loading-msg {
+  text-align: center;
+  color: var(--fg-muted);
+  padding: var(--space-7);
+  font-size: 1rem;
+}
+
+.error-msg {
+  text-align: center;
+  color: var(--error);
+  padding: var(--space-5);
+  background: var(--error-bg);
+  border-radius: var(--radius);
+  max-width: 500px;
+}
+
+.toast-container {
+  position: fixed; bottom: var(--space-5); right: var(--space-5);
+  display: flex; flex-direction: column-reverse; gap: var(--space-2);
+  z-index: 100; pointer-events: none;
+}
+.toast {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  font-size: 0.85rem;
+  animation: toast-in 0.3s ease;
+  pointer-events: auto;
+}
+.toast.success { border-color: var(--success); }
+.toast.error { border-color: var(--error); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.hidden { display: none !important; }
+
+.lenz-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  font-size: 0.85rem;
+  color: var(--fg-muted);
+  max-width: 400px;
+  text-align: center;
+  line-height: 1.4;
+}
+
+@media (max-width: 600px) {
+  header { padding: var(--space-2) var(--space-3); }
+  .app-title { font-size: 0.95rem; }
+  main { padding: var(--space-3); gap: var(--space-3); }
+  .diagram-area { max-width: 300px; }
+  .direction-buttons { max-width: 280px; }
+}
+
+/* ── Landscape: side-by-side, no scroll ── */
+@media (min-aspect-ratio: 1/1) and (min-width: 700px) {
+  body {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  header {
+    padding: var(--space-2) var(--space-4);
+    flex-wrap: nowrap;
+  }
+  .app-title { font-size: 0.95rem; }
+  .cat-tab { padding: var(--space-1) var(--space-3); font-size: 0.8rem; }
+  .streak-badge { font-size: 0.8rem; }
+
+  main {
+    flex: 1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    max-width: 100%;
+    padding: var(--space-3) var(--space-5);
+    gap: var(--space-5);
+    overflow: hidden;
+  }
+
+  #quiz-container {
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: center;
+    gap: var(--space-5);
+    height: 100%;
+    max-width: 960px;
+  }
+
+  .landscape-left {
+    display: flex;
+    flex: 0 1 50%;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: var(--space-3);
+    height: 100%;
+    min-width: 0;
+    max-width: 50%;
+  }
+
+  .landscape-left .prompt-text {
+    font-size: 0.85rem;
+    padding: var(--space-2) var(--space-3);
+    max-width: none;
+    flex-shrink: 0;
+  }
+
+  .landscape-left .diagram-area {
+    flex: 0 0 auto;
+    aspect-ratio: 1;
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(100% - 70px);
+    margin: 0;
+  }
+
+  .landscape-right {
+    display: flex;
+    flex: 0 1 auto;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 260px;
+    max-width: 380px;
+    height: 100%;
+    overflow-y: auto;
+  }
+
+  .landscape-right .step-indicator { gap: var(--space-2); }
+  .landscape-right .step-question { font-size: 0.9rem; min-height: 2.5em; }
+  .landscape-right .direction-buttons { max-width: 300px; gap: var(--space-1); }
+  .landscape-right .dir-btn { padding: var(--space-2); font-size: 0.85rem; min-height: 40px; }
+  .landscape-right .binary-btn { padding: var(--space-3); font-size: 1rem; }
+  .landscape-right .next-btn { padding: var(--space-2) var(--space-5); }
+
+  .progress-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-1) var(--space-4);
+    max-width: 360px;
+    font-size: 0.8rem;
+  }
+  .progress-row { gap: var(--space-2); }
+  .progress-label { width: 30px; font-size: 0.75rem; }
+  .progress-count { width: 40px; font-size: 0.75rem; }
+  .progress-bar-bg { height: 6px; }
+
+  .summary-row { gap: var(--space-2); }
+  .summary-mark { font-size: 1.2rem; }
+}
+</style>
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to content</a>
+
+<header>
+  <div class="app-title">EMI Rehearsal</div>
+  <nav class="category-tabs" role="tablist" aria-label="Situation categories">
+    <button class="cat-tab" role="tab" data-cat="all" aria-selected="true">All</button>
+    <button class="cat-tab" role="tab" data-cat="C1">C1</button>
+    <button class="cat-tab" role="tab" data-cat="C2">C2</button>
+    <button class="cat-tab" role="tab" data-cat="C3">C3</button>
+    <button class="cat-tab" role="tab" data-cat="C4">C4</button>
+    <button class="cat-tab" role="tab" data-cat="SEQ">Seq</button>
+  </nav>
+  <div class="header-controls">
+    <div class="streak-badge" id="streak-badge" title="Current streak">
+      <span id="streak-icon">&#x26A1;</span>
+      <span id="streak-count">0</span>
+    </div>
+    <button class="icon-btn" id="theme-toggle" title="Toggle theme" aria-label="Toggle dark/light theme">&#9788;</button>
+  </div>
+</header>
+
+<main id="main-content">
+  <div class="loading-msg" id="loading-msg">Loading situations&hellip;</div>
+  <div class="error-msg hidden" id="error-msg"></div>
+
+  <div class="hidden" id="quiz-container">
+    <div class="landscape-left">
+      <p class="prompt-text" id="prompt-text"></p>
+      <div class="diagram-area" id="diagram-area">
+        <svg id="diagram-svg" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+    </div>
+
+    <div class="landscape-right">
+      <div class="step-indicator" id="step-indicator">
+        <div class="step-dot" data-step="1" id="dot-1">1</div>
+        <div class="step-dot" data-step="2" id="dot-2">2</div>
+        <div class="step-dot" data-step="3" id="dot-3">3</div>
+      </div>
+
+      <p class="step-question" id="step-question" aria-live="polite"></p>
+
+      <div class="direction-buttons hidden" id="direction-buttons">
+        <button class="dir-btn" data-dir="UP">&#x2191; UP</button>
+        <button class="dir-btn" data-dir="LEFT">&#x2190; LEFT</button>
+        <button class="dir-btn" data-dir="INTO">&#x2297; INTO</button>
+        <button class="dir-btn" data-dir="OUT">&#x2299; OUT</button>
+        <button class="dir-btn" data-dir="RIGHT">&#x2192; RIGHT</button>
+        <button class="dir-btn" data-dir="DOWN">&#x2193; DOWN</button>
+      </div>
+
+      <div class="binary-buttons hidden" id="binary-buttons"></div>
+
+      <button class="next-btn hidden" id="next-btn">Next &#x2192;</button>
+
+      <div class="summary-row hidden" id="summary-row">
+        <span class="summary-mark" id="mark-1"></span>
+        <span class="summary-mark" id="mark-2"></span>
+        <span class="summary-mark" id="mark-3"></span>
+      </div>
+
+      <div class="progress-panel" id="progress-panel"></div>
+    </div>
+  </div>
+</main>
+
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+'use strict';
+
+(function() {
+
+// ── Embedded Situation Data ────────────────────────────────
+const SITUATIONS_DATA = [{"id":"C1-Z-pZ-G","category":"C1","category_label":"Area change, constant field","coil_axis":"z","render_view":"face-on","setup":{"field_direction":"OUT","field_symbol":"·","change":"area growing"},"step1_B":"OUT","step1_B_symbol":"·","step2_dPhi":"OUT","step2_dPhi_symbol":"·","step3_induced_B":"INTO","step3_induced_B_symbol":"×","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CW"},"prompt_text":"Z-coil in a uniform field OUT of the page. The coil is stretched so its area grows."},{"id":"C1-Z-pZ-S","category":"C1","category_label":"Area change, constant field","coil_axis":"z","render_view":"face-on","setup":{"field_direction":"OUT","field_symbol":"·","change":"area shrinking"},"step1_B":"OUT","step1_B_symbol":"·","step2_dPhi":"INTO","step2_dPhi_symbol":"×","step3_induced_B":"OUT","step3_induced_B_symbol":"·","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CCW"},"prompt_text":"Z-coil in a uniform field OUT of the page. The coil contracts so its area shrinks."},{"id":"C1-Z-nZ-G","category":"C1","category_label":"Area change, constant field","coil_axis":"z","render_view":"face-on","setup":{"field_direction":"INTO","field_symbol":"×","change":"area growing"},"step1_B":"INTO","step1_B_symbol":"×","step2_dPhi":"INTO","step2_dPhi_symbol":"×","step3_induced_B":"OUT","step3_induced_B_symbol":"·","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CCW"},"prompt_text":"Z-coil in a uniform field INTO the page. The coil is stretched so its area grows."},{"id":"C1-Z-nZ-S","category":"C1","category_label":"Area change, constant field","coil_axis":"z","render_view":"face-on","setup":{"field_direction":"INTO","field_symbol":"×","change":"area shrinking"},"step1_B":"INTO","step1_B_symbol":"×","step2_dPhi":"OUT","step2_dPhi_symbol":"·","step3_induced_B":"INTO","step3_induced_B_symbol":"×","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CW"},"prompt_text":"Z-coil in a uniform field INTO the page. The coil contracts so its area shrinks."},{"id":"C1-Y-pY-G","category":"C1","category_label":"Area change, constant field","coil_axis":"y","render_view":"iso-horizontal","setup":{"field_direction":"UP","change":"area growing"},"step1_B":"UP","step2_dPhi":"UP","step3_induced_B":"DOWN","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CW"},"prompt_text":"Y-coil in a uniform field pointing UP. The coil is stretched so its area grows."},{"id":"C1-Y-pY-S","category":"C1","category_label":"Area change, constant field","coil_axis":"y","render_view":"iso-horizontal","setup":{"field_direction":"UP","change":"area shrinking"},"step1_B":"UP","step2_dPhi":"DOWN","step3_induced_B":"UP","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CCW"},"prompt_text":"Y-coil in a uniform field pointing UP. The coil contracts so its area shrinks."},{"id":"C1-Y-nY-G","category":"C1","category_label":"Area change, constant field","coil_axis":"y","render_view":"iso-horizontal","setup":{"field_direction":"DOWN","change":"area growing"},"step1_B":"DOWN","step2_dPhi":"DOWN","step3_induced_B":"UP","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CCW"},"prompt_text":"Y-coil in a uniform field pointing DOWN. The coil is stretched so its area grows."},{"id":"C1-Y-nY-S","category":"C1","category_label":"Area change, constant field","coil_axis":"y","render_view":"iso-horizontal","setup":{"field_direction":"DOWN","change":"area shrinking"},"step1_B":"DOWN","step2_dPhi":"UP","step3_induced_B":"DOWN","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CW"},"prompt_text":"Y-coil in a uniform field pointing DOWN. The coil contracts so its area shrinks."},{"id":"C1-X-pX-G","category":"C1","category_label":"Area change, constant field","coil_axis":"x","render_view":"iso-vertical","setup":{"field_direction":"RIGHT","change":"area growing"},"step1_B":"RIGHT","step2_dPhi":"RIGHT","step3_induced_B":"LEFT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CW"},"prompt_text":"X-coil in a uniform field pointing RIGHT. The coil is stretched so its area grows."},{"id":"C1-X-pX-S","category":"C1","category_label":"Area change, constant field","coil_axis":"x","render_view":"iso-vertical","setup":{"field_direction":"RIGHT","change":"area shrinking"},"step1_B":"RIGHT","step2_dPhi":"LEFT","step3_induced_B":"RIGHT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CCW"},"prompt_text":"X-coil in a uniform field pointing RIGHT. The coil contracts so its area shrinks."},{"id":"C1-X-nX-G","category":"C1","category_label":"Area change, constant field","coil_axis":"x","render_view":"iso-vertical","setup":{"field_direction":"LEFT","change":"area growing"},"step1_B":"LEFT","step2_dPhi":"LEFT","step3_induced_B":"RIGHT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CCW"},"prompt_text":"X-coil in a uniform field pointing LEFT. The coil is stretched so its area grows."},{"id":"C1-X-nX-S","category":"C1","category_label":"Area change, constant field","coil_axis":"x","render_view":"iso-vertical","setup":{"field_direction":"LEFT","change":"area shrinking"},"step1_B":"LEFT","step2_dPhi":"RIGHT","step3_induced_B":"LEFT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CW"},"prompt_text":"X-coil in a uniform field pointing LEFT. The coil contracts so its area shrinks."},{"id":"C2-Z-pZ-G","category":"C2","category_label":"Field strength change, fixed area","coil_axis":"z","render_view":"face-on","setup":{"field_direction":"OUT","field_symbol":"·","change":"|B| growing"},"step1_B":"OUT","step1_B_symbol":"·","step2_dPhi":"OUT","step2_dPhi_symbol":"·","step3_induced_B":"INTO","step3_induced_B_symbol":"×","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CW"},"prompt_text":"Z-coil. An adjacent electromagnet drives a field OUT of the page, ramping up from zero."},{"id":"C2-Z-pZ-S","category":"C2","category_label":"Field strength change, fixed area","coil_axis":"z","render_view":"face-on","setup":{"field_direction":"OUT","field_symbol":"·","change":"|B| shrinking"},"step1_B":"OUT","step1_B_symbol":"·","step2_dPhi":"INTO","step2_dPhi_symbol":"×","step3_induced_B":"OUT","step3_induced_B_symbol":"·","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CCW"},"prompt_text":"Z-coil. An adjacent electromagnet's field OUT of the page is ramping down toward zero."},{"id":"C2-Z-nZ-G","category":"C2","category_label":"Field strength change, fixed area","coil_axis":"z","render_view":"face-on","setup":{"field_direction":"INTO","field_symbol":"×","change":"|B| growing"},"step1_B":"INTO","step1_B_symbol":"×","step2_dPhi":"INTO","step2_dPhi_symbol":"×","step3_induced_B":"OUT","step3_induced_B_symbol":"·","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CCW"},"prompt_text":"Z-coil. An adjacent electromagnet drives a field INTO the page, ramping up from zero."},{"id":"C2-Z-nZ-S","category":"C2","category_label":"Field strength change, fixed area","coil_axis":"z","render_view":"face-on","setup":{"field_direction":"INTO","field_symbol":"×","change":"|B| shrinking"},"step1_B":"INTO","step1_B_symbol":"×","step2_dPhi":"OUT","step2_dPhi_symbol":"·","step3_induced_B":"INTO","step3_induced_B_symbol":"×","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CW"},"prompt_text":"Z-coil. An adjacent electromagnet's field INTO the page is ramping down toward zero."},{"id":"C2-Y-pY-G","category":"C2","category_label":"Field strength change, fixed area","coil_axis":"y","render_view":"iso-horizontal","setup":{"field_direction":"UP","change":"|B| growing"},"step1_B":"UP","step2_dPhi":"UP","step3_induced_B":"DOWN","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CW"},"prompt_text":"Y-coil. The field pointing UP through the coil is ramping up from zero."},{"id":"C2-Y-pY-S","category":"C2","category_label":"Field strength change, fixed area","coil_axis":"y","render_view":"iso-horizontal","setup":{"field_direction":"UP","change":"|B| shrinking"},"step1_B":"UP","step2_dPhi":"DOWN","step3_induced_B":"UP","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CCW"},"prompt_text":"Y-coil. The field pointing UP through the coil is ramping down toward zero."},{"id":"C2-Y-nY-G","category":"C2","category_label":"Field strength change, fixed area","coil_axis":"y","render_view":"iso-horizontal","setup":{"field_direction":"DOWN","change":"|B| growing"},"step1_B":"DOWN","step2_dPhi":"DOWN","step3_induced_B":"UP","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CCW"},"prompt_text":"Y-coil. The field pointing DOWN through the coil is ramping up from zero."},{"id":"C2-Y-nY-S","category":"C2","category_label":"Field strength change, fixed area","coil_axis":"y","render_view":"iso-horizontal","setup":{"field_direction":"DOWN","change":"|B| shrinking"},"step1_B":"DOWN","step2_dPhi":"UP","step3_induced_B":"DOWN","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CW"},"prompt_text":"Y-coil. The field pointing DOWN through the coil is ramping down toward zero."},{"id":"C2-X-pX-G","category":"C2","category_label":"Field strength change, fixed area","coil_axis":"x","render_view":"iso-vertical","setup":{"field_direction":"RIGHT","change":"|B| growing"},"step1_B":"RIGHT","step2_dPhi":"RIGHT","step3_induced_B":"LEFT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CW"},"prompt_text":"X-coil. The field pointing RIGHT through the coil is ramping up from zero."},{"id":"C2-X-pX-S","category":"C2","category_label":"Field strength change, fixed area","coil_axis":"x","render_view":"iso-vertical","setup":{"field_direction":"RIGHT","change":"|B| shrinking"},"step1_B":"RIGHT","step2_dPhi":"LEFT","step3_induced_B":"RIGHT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CCW"},"prompt_text":"X-coil. The field pointing RIGHT through the coil is ramping down toward zero."},{"id":"C2-X-nX-G","category":"C2","category_label":"Field strength change, fixed area","coil_axis":"x","render_view":"iso-vertical","setup":{"field_direction":"LEFT","change":"|B| growing"},"step1_B":"LEFT","step2_dPhi":"LEFT","step3_induced_B":"RIGHT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CCW"},"prompt_text":"X-coil. The field pointing LEFT through the coil is ramping up from zero."},{"id":"C2-X-nX-S","category":"C2","category_label":"Field strength change, fixed area","coil_axis":"x","render_view":"iso-vertical","setup":{"field_direction":"LEFT","change":"|B| shrinking"},"step1_B":"LEFT","step2_dPhi":"RIGHT","step3_induced_B":"LEFT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CW"},"prompt_text":"X-coil. The field pointing LEFT through the coil is ramping down toward zero."},{"id":"C3-Z-pZ-N-APP","category":"C3","category_label":"Magnet translating","coil_axis":"z","render_view":"face-on","setup":{"magnet_side":"+z (front of page)","pole_facing_coil":"N","motion":"approach"},"step1_B":"INTO","step1_B_symbol":"×","step2_dPhi":"INTO","step2_dPhi_symbol":"×","step3_induced_B":"OUT","step3_induced_B_symbol":"·","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CCW"},"prompt_text":"Z-coil. Bar magnet in front of the page, N pole pointing toward the coil, moving INTO the page."},{"id":"C3-Z-pZ-N-REC","category":"C3","category_label":"Magnet translating","coil_axis":"z","render_view":"face-on","setup":{"magnet_side":"+z","pole_facing_coil":"N","motion":"recede"},"step1_B":"INTO","step1_B_symbol":"×","step2_dPhi":"OUT","step2_dPhi_symbol":"·","step3_induced_B":"INTO","step3_induced_B_symbol":"×","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CW"},"prompt_text":"Z-coil. Bar magnet in front of the page, N pole pointing toward the coil, moving OUT of the page (receding)."},{"id":"C3-Z-pZ-S-APP","category":"C3","category_label":"Magnet translating","coil_axis":"z","render_view":"face-on","setup":{"magnet_side":"+z","pole_facing_coil":"S","motion":"approach"},"step1_B":"OUT","step1_B_symbol":"·","step2_dPhi":"OUT","step2_dPhi_symbol":"·","step3_induced_B":"INTO","step3_induced_B_symbol":"×","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CW"},"prompt_text":"Z-coil. Bar magnet in front of the page, S pole pointing toward the coil, moving INTO the page."},{"id":"C3-Z-pZ-S-REC","category":"C3","category_label":"Magnet translating","coil_axis":"z","render_view":"face-on","setup":{"magnet_side":"+z","pole_facing_coil":"S","motion":"recede"},"step1_B":"OUT","step1_B_symbol":"·","step2_dPhi":"INTO","step2_dPhi_symbol":"×","step3_induced_B":"OUT","step3_induced_B_symbol":"·","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CCW"},"prompt_text":"Z-coil. Bar magnet in front of the page, S pole pointing toward the coil, moving OUT of the page (receding)."},{"id":"C3-Z-nZ-N-APP","category":"C3","category_label":"Magnet translating","coil_axis":"z","render_view":"face-on","setup":{"magnet_side":"-z (back of page)","pole_facing_coil":"N","motion":"approach"},"step1_B":"OUT","step1_B_symbol":"·","step2_dPhi":"OUT","step2_dPhi_symbol":"·","step3_induced_B":"INTO","step3_induced_B_symbol":"×","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CW"},"prompt_text":"Z-coil. Bar magnet behind the page, N pole pointing toward the coil, moving OUT of the page toward the coil."},{"id":"C3-Z-nZ-N-REC","category":"C3","category_label":"Magnet translating","coil_axis":"z","render_view":"face-on","setup":{"magnet_side":"-z","pole_facing_coil":"N","motion":"recede"},"step1_B":"OUT","step1_B_symbol":"·","step2_dPhi":"INTO","step2_dPhi_symbol":"×","step3_induced_B":"OUT","step3_induced_B_symbol":"·","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CCW"},"prompt_text":"Z-coil. Bar magnet behind the page, N pole pointing toward the coil, moving away INTO the page."},{"id":"C3-Z-nZ-S-APP","category":"C3","category_label":"Magnet translating","coil_axis":"z","render_view":"face-on","setup":{"magnet_side":"-z","pole_facing_coil":"S","motion":"approach"},"step1_B":"INTO","step1_B_symbol":"×","step2_dPhi":"INTO","step2_dPhi_symbol":"×","step3_induced_B":"OUT","step3_induced_B_symbol":"·","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CCW"},"prompt_text":"Z-coil. Bar magnet behind the page, S pole pointing toward the coil, moving OUT of the page toward the coil."},{"id":"C3-Z-nZ-S-REC","category":"C3","category_label":"Magnet translating","coil_axis":"z","render_view":"face-on","setup":{"magnet_side":"-z","pole_facing_coil":"S","motion":"recede"},"step1_B":"INTO","step1_B_symbol":"×","step2_dPhi":"OUT","step2_dPhi_symbol":"·","step3_induced_B":"INTO","step3_induced_B_symbol":"×","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CW"},"prompt_text":"Z-coil. Bar magnet behind the page, S pole pointing toward the coil, moving away INTO the page."},{"id":"C3-Y-pY-N-APP","category":"C3","category_label":"Magnet translating","coil_axis":"y","render_view":"iso-horizontal","setup":{"magnet_side":"+y (above)","pole_facing_coil":"N","motion":"approach"},"step1_B":"DOWN","step2_dPhi":"DOWN","step3_induced_B":"UP","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CCW"},"prompt_text":"Y-coil. Bar magnet above the coil, N pole pointing down toward the coil, falling toward it."},{"id":"C3-Y-pY-N-REC","category":"C3","category_label":"Magnet translating","coil_axis":"y","render_view":"iso-horizontal","setup":{"magnet_side":"+y","pole_facing_coil":"N","motion":"recede"},"step1_B":"DOWN","step2_dPhi":"UP","step3_induced_B":"DOWN","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CW"},"prompt_text":"Y-coil. Bar magnet above the coil, N pole pointing down, rising away from it."},{"id":"C3-Y-pY-S-APP","category":"C3","category_label":"Magnet translating","coil_axis":"y","render_view":"iso-horizontal","setup":{"magnet_side":"+y","pole_facing_coil":"S","motion":"approach"},"step1_B":"UP","step2_dPhi":"UP","step3_induced_B":"DOWN","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CW"},"prompt_text":"Y-coil. Bar magnet above the coil, S pole pointing down toward the coil, falling toward it."},{"id":"C3-Y-pY-S-REC","category":"C3","category_label":"Magnet translating","coil_axis":"y","render_view":"iso-horizontal","setup":{"magnet_side":"+y","pole_facing_coil":"S","motion":"recede"},"step1_B":"UP","step2_dPhi":"DOWN","step3_induced_B":"UP","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CCW"},"prompt_text":"Y-coil. Bar magnet above the coil, S pole pointing down, rising away from it."},{"id":"C3-Y-nY-N-APP","category":"C3","category_label":"Magnet translating","coil_axis":"y","render_view":"iso-horizontal","setup":{"magnet_side":"-y (below)","pole_facing_coil":"N","motion":"approach"},"step1_B":"UP","step2_dPhi":"UP","step3_induced_B":"DOWN","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CW"},"prompt_text":"Y-coil. Bar magnet below the coil, N pole pointing up toward the coil, rising toward it."},{"id":"C3-Y-nY-N-REC","category":"C3","category_label":"Magnet translating","coil_axis":"y","render_view":"iso-horizontal","setup":{"magnet_side":"-y","pole_facing_coil":"N","motion":"recede"},"step1_B":"UP","step2_dPhi":"DOWN","step3_induced_B":"UP","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CCW"},"prompt_text":"Y-coil. Bar magnet below the coil, N pole pointing up, falling away from it."},{"id":"C3-Y-nY-S-APP","category":"C3","category_label":"Magnet translating","coil_axis":"y","render_view":"iso-horizontal","setup":{"magnet_side":"-y","pole_facing_coil":"S","motion":"approach"},"step1_B":"DOWN","step2_dPhi":"DOWN","step3_induced_B":"UP","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CCW"},"prompt_text":"Y-coil. Bar magnet below the coil, S pole pointing up toward the coil, rising toward it."},{"id":"C3-Y-nY-S-REC","category":"C3","category_label":"Magnet translating","coil_axis":"y","render_view":"iso-horizontal","setup":{"magnet_side":"-y","pole_facing_coil":"S","motion":"recede"},"step1_B":"DOWN","step2_dPhi":"UP","step3_induced_B":"DOWN","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CW"},"prompt_text":"Y-coil. Bar magnet below the coil, S pole pointing up, falling away from it."},{"id":"C3-X-pX-N-APP","category":"C3","category_label":"Magnet translating","coil_axis":"x","render_view":"iso-vertical","setup":{"magnet_side":"+x (right)","pole_facing_coil":"N","motion":"approach"},"step1_B":"LEFT","step2_dPhi":"LEFT","step3_induced_B":"RIGHT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CCW"},"prompt_text":"X-coil. Bar magnet to the right of the coil, N pole pointing left toward the coil, moving left toward it."},{"id":"C3-X-pX-N-REC","category":"C3","category_label":"Magnet translating","coil_axis":"x","render_view":"iso-vertical","setup":{"magnet_side":"+x","pole_facing_coil":"N","motion":"recede"},"step1_B":"LEFT","step2_dPhi":"RIGHT","step3_induced_B":"LEFT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CW"},"prompt_text":"X-coil. Bar magnet to the right of the coil, N pole pointing left, moving right away from it."},{"id":"C3-X-pX-S-APP","category":"C3","category_label":"Magnet translating","coil_axis":"x","render_view":"iso-vertical","setup":{"magnet_side":"+x","pole_facing_coil":"S","motion":"approach"},"step1_B":"RIGHT","step2_dPhi":"RIGHT","step3_induced_B":"LEFT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CW"},"prompt_text":"X-coil. Bar magnet to the right of the coil, S pole pointing left toward the coil, moving left toward it."},{"id":"C3-X-pX-S-REC","category":"C3","category_label":"Magnet translating","coil_axis":"x","render_view":"iso-vertical","setup":{"magnet_side":"+x","pole_facing_coil":"S","motion":"recede"},"step1_B":"RIGHT","step2_dPhi":"LEFT","step3_induced_B":"RIGHT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CCW"},"prompt_text":"X-coil. Bar magnet to the right of the coil, S pole pointing left, moving right away from it."},{"id":"C3-X-nX-N-APP","category":"C3","category_label":"Magnet translating","coil_axis":"x","render_view":"iso-vertical","setup":{"magnet_side":"-x (left)","pole_facing_coil":"N","motion":"approach"},"step1_B":"RIGHT","step2_dPhi":"RIGHT","step3_induced_B":"LEFT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CW"},"prompt_text":"X-coil. Bar magnet to the left of the coil, N pole pointing right toward the coil, moving right toward it."},{"id":"C3-X-nX-N-REC","category":"C3","category_label":"Magnet translating","coil_axis":"x","render_view":"iso-vertical","setup":{"magnet_side":"-x","pole_facing_coil":"N","motion":"recede"},"step1_B":"RIGHT","step2_dPhi":"LEFT","step3_induced_B":"RIGHT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CCW"},"prompt_text":"X-coil. Bar magnet to the left of the coil, N pole pointing right, moving left away from it."},{"id":"C3-X-nX-S-APP","category":"C3","category_label":"Magnet translating","coil_axis":"x","render_view":"iso-vertical","setup":{"magnet_side":"-x","pole_facing_coil":"S","motion":"approach"},"step1_B":"LEFT","step2_dPhi":"LEFT","step3_induced_B":"RIGHT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CCW"},"prompt_text":"X-coil. Bar magnet to the left of the coil, S pole pointing right toward the coil, moving right toward it."},{"id":"C3-X-nX-S-REC","category":"C3","category_label":"Magnet translating","coil_axis":"x","render_view":"iso-vertical","setup":{"magnet_side":"-x","pole_facing_coil":"S","motion":"recede"},"step1_B":"LEFT","step2_dPhi":"RIGHT","step3_induced_B":"LEFT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CW"},"prompt_text":"X-coil. Bar magnet to the left of the coil, S pole pointing right, moving left away from it."},{"id":"C4-pX-A","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"RIGHT","start_n":"+x (parallel)","end_n":"any of +y, -y, +z, -z (perpendicular)","perpendicular_axes":["+y","-y","+z","-z"],"flux_trend":"+max → 0"},"step1_B":"RIGHT","step2_dPhi":"LEFT","step3_induced_B":"RIGHT","step3_current":{"as_viewed_from_axis":"-x","rotation_sense":"CW","note":"Induced moment points RIGHT (along +B), maintaining the falling flux."},"prompt_text":"Coil normal starts pointing RIGHT (parallel to B which points RIGHT). The coil rotates 90° so the normal becomes perpendicular to B."},{"id":"C4-pX-B","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"RIGHT","start_n":"perpendicular","end_n":"+x (parallel)","perpendicular_axes":["+y","-y","+z","-z"],"flux_trend":"0 → +max"},"step1_B":"RIGHT","step2_dPhi":"RIGHT","step3_induced_B":"LEFT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CW","note":"Induced moment points LEFT (against +B), opposing the rising flux."},"prompt_text":"Coil normal starts perpendicular to B (B points RIGHT). The coil rotates 90° so the normal aligns with B (RIGHT)."},{"id":"C4-pX-C","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"RIGHT","start_n":"-x (antiparallel)","end_n":"perpendicular","perpendicular_axes":["+y","-y","+z","-z"],"flux_trend":"-max → 0"},"step1_B":"RIGHT","step2_dPhi":"RIGHT","step3_induced_B":"LEFT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CW","note":"Induced moment points LEFT, maintaining the negative flux as it rises toward zero."},"prompt_text":"Coil normal starts pointing LEFT (antiparallel to B which points RIGHT). The coil rotates 90° so the normal becomes perpendicular to B."},{"id":"C4-pX-D","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"RIGHT","start_n":"perpendicular","end_n":"-x (antiparallel)","perpendicular_axes":["+y","-y","+z","-z"],"flux_trend":"0 → -max"},"step1_B":"RIGHT","step2_dPhi":"LEFT","step3_induced_B":"RIGHT","step3_current":{"as_viewed_from_axis":"-x","rotation_sense":"CW","note":"Induced moment points RIGHT, opposing the growing negative flux."},"prompt_text":"Coil normal starts perpendicular to B (B points RIGHT). The coil rotates 90° so the normal aligns antiparallel to B (LEFT)."},{"id":"C4-nX-A","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"LEFT","start_n":"-x (parallel)","end_n":"perpendicular","perpendicular_axes":["+y","-y","+z","-z"],"flux_trend":"+max → 0"},"step1_B":"LEFT","step2_dPhi":"RIGHT","step3_induced_B":"LEFT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CW"},"prompt_text":"Coil normal starts pointing LEFT (parallel to B which points LEFT). The coil rotates 90° so the normal becomes perpendicular to B."},{"id":"C4-nX-B","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"LEFT","start_n":"perpendicular","end_n":"-x (parallel)","perpendicular_axes":["+y","-y","+z","-z"],"flux_trend":"0 → +max"},"step1_B":"LEFT","step2_dPhi":"LEFT","step3_induced_B":"RIGHT","step3_current":{"as_viewed_from_axis":"-x","rotation_sense":"CW"},"prompt_text":"Coil normal starts perpendicular to B (B points LEFT). The coil rotates 90° so the normal aligns with B (LEFT)."},{"id":"C4-nX-C","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"LEFT","start_n":"+x (antiparallel)","end_n":"perpendicular","perpendicular_axes":["+y","-y","+z","-z"],"flux_trend":"-max → 0"},"step1_B":"LEFT","step2_dPhi":"LEFT","step3_induced_B":"RIGHT","step3_current":{"as_viewed_from_axis":"-x","rotation_sense":"CW"},"prompt_text":"Coil normal starts pointing RIGHT (antiparallel to B which points LEFT). The coil rotates 90° so the normal becomes perpendicular to B."},{"id":"C4-nX-D","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"LEFT","start_n":"perpendicular","end_n":"+x (antiparallel)","perpendicular_axes":["+y","-y","+z","-z"],"flux_trend":"0 → -max"},"step1_B":"LEFT","step2_dPhi":"RIGHT","step3_induced_B":"LEFT","step3_current":{"as_viewed_from_axis":"+x","rotation_sense":"CW"},"prompt_text":"Coil normal starts perpendicular to B (B points LEFT). The coil rotates 90° so the normal aligns antiparallel to B (RIGHT)."},{"id":"C4-pY-A","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"UP","start_n":"+y (parallel)","end_n":"perpendicular","perpendicular_axes":["+x","-x","+z","-z"],"flux_trend":"+max → 0"},"step1_B":"UP","step2_dPhi":"DOWN","step3_induced_B":"UP","step3_current":{"as_viewed_from_axis":"-y","rotation_sense":"CW"},"prompt_text":"Coil normal starts pointing UP (parallel to B which points UP). The coil rotates 90° so the normal becomes perpendicular to B."},{"id":"C4-pY-B","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"UP","start_n":"perpendicular","end_n":"+y (parallel)","perpendicular_axes":["+x","-x","+z","-z"],"flux_trend":"0 → +max"},"step1_B":"UP","step2_dPhi":"UP","step3_induced_B":"DOWN","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CW"},"prompt_text":"Coil normal starts perpendicular to B (B points UP). The coil rotates 90° so the normal aligns with B (UP)."},{"id":"C4-pY-C","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"UP","start_n":"-y (antiparallel)","end_n":"perpendicular","perpendicular_axes":["+x","-x","+z","-z"],"flux_trend":"-max → 0"},"step1_B":"UP","step2_dPhi":"UP","step3_induced_B":"DOWN","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CW"},"prompt_text":"Coil normal starts pointing DOWN (antiparallel to B which points UP). The coil rotates 90° so the normal becomes perpendicular to B."},{"id":"C4-pY-D","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"UP","start_n":"perpendicular","end_n":"-y (antiparallel)","perpendicular_axes":["+x","-x","+z","-z"],"flux_trend":"0 → -max"},"step1_B":"UP","step2_dPhi":"DOWN","step3_induced_B":"UP","step3_current":{"as_viewed_from_axis":"-y","rotation_sense":"CW"},"prompt_text":"Coil normal starts perpendicular to B (B points UP). The coil rotates 90° so the normal aligns antiparallel to B (DOWN)."},{"id":"C4-nY-A","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"DOWN","start_n":"-y (parallel)","end_n":"perpendicular","perpendicular_axes":["+x","-x","+z","-z"],"flux_trend":"+max → 0"},"step1_B":"DOWN","step2_dPhi":"UP","step3_induced_B":"DOWN","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CW"},"prompt_text":"Coil normal starts pointing DOWN (parallel to B which points DOWN). The coil rotates 90° so the normal becomes perpendicular to B."},{"id":"C4-nY-B","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"DOWN","start_n":"perpendicular","end_n":"-y (parallel)","perpendicular_axes":["+x","-x","+z","-z"],"flux_trend":"0 → +max"},"step1_B":"DOWN","step2_dPhi":"DOWN","step3_induced_B":"UP","step3_current":{"as_viewed_from_axis":"-y","rotation_sense":"CW"},"prompt_text":"Coil normal starts perpendicular to B (B points DOWN). The coil rotates 90° so the normal aligns with B (DOWN)."},{"id":"C4-nY-C","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"DOWN","start_n":"+y (antiparallel)","end_n":"perpendicular","perpendicular_axes":["+x","-x","+z","-z"],"flux_trend":"-max → 0"},"step1_B":"DOWN","step2_dPhi":"DOWN","step3_induced_B":"UP","step3_current":{"as_viewed_from_axis":"-y","rotation_sense":"CW"},"prompt_text":"Coil normal starts pointing UP (antiparallel to B which points DOWN). The coil rotates 90° so the normal becomes perpendicular to B."},{"id":"C4-nY-D","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"DOWN","start_n":"perpendicular","end_n":"+y (antiparallel)","perpendicular_axes":["+x","-x","+z","-z"],"flux_trend":"0 → -max"},"step1_B":"DOWN","step2_dPhi":"UP","step3_induced_B":"DOWN","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CW"},"prompt_text":"Coil normal starts perpendicular to B (B points DOWN). The coil rotates 90° so the normal aligns antiparallel to B (UP)."},{"id":"C4-pZ-A","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"OUT","start_n":"+z (parallel)","end_n":"perpendicular","perpendicular_axes":["+x","-x","+y","-y"],"flux_trend":"+max → 0"},"step1_B":"OUT","step1_B_symbol":"·","step2_dPhi":"INTO","step2_dPhi_symbol":"×","step3_induced_B":"OUT","step3_induced_B_symbol":"·","step3_current":{"as_viewed_from_axis":"-z","rotation_sense":"CW"},"prompt_text":"Coil normal starts pointing OUT of the page (parallel to B which points OUT). The coil rotates 90° so the normal becomes perpendicular to B."},{"id":"C4-pZ-B","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"OUT","start_n":"perpendicular","end_n":"+z (parallel)","perpendicular_axes":["+x","-x","+y","-y"],"flux_trend":"0 → +max"},"step1_B":"OUT","step1_B_symbol":"·","step2_dPhi":"OUT","step2_dPhi_symbol":"·","step3_induced_B":"INTO","step3_induced_B_symbol":"×","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CW"},"prompt_text":"Coil normal starts perpendicular to B (B points OUT). The coil rotates 90° so the normal aligns with B (OUT)."},{"id":"C4-pZ-C","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"OUT","start_n":"-z (antiparallel)","end_n":"perpendicular","perpendicular_axes":["+x","-x","+y","-y"],"flux_trend":"-max → 0"},"step1_B":"OUT","step1_B_symbol":"·","step2_dPhi":"OUT","step2_dPhi_symbol":"·","step3_induced_B":"INTO","step3_induced_B_symbol":"×","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CW"},"prompt_text":"Coil normal starts pointing INTO the page (antiparallel to B which points OUT). The coil rotates 90° so the normal becomes perpendicular to B."},{"id":"C4-pZ-D","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"OUT","start_n":"perpendicular","end_n":"-z (antiparallel)","perpendicular_axes":["+x","-x","+y","-y"],"flux_trend":"0 → -max"},"step1_B":"OUT","step1_B_symbol":"·","step2_dPhi":"INTO","step2_dPhi_symbol":"×","step3_induced_B":"OUT","step3_induced_B_symbol":"·","step3_current":{"as_viewed_from_axis":"-z","rotation_sense":"CW"},"prompt_text":"Coil normal starts perpendicular to B (B points OUT). The coil rotates 90° so the normal aligns antiparallel to B (INTO)."},{"id":"C4-nZ-A","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"INTO","start_n":"-z (parallel)","end_n":"perpendicular","perpendicular_axes":["+x","-x","+y","-y"],"flux_trend":"+max → 0"},"step1_B":"INTO","step1_B_symbol":"×","step2_dPhi":"OUT","step2_dPhi_symbol":"·","step3_induced_B":"INTO","step3_induced_B_symbol":"×","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CW"},"prompt_text":"Coil normal starts pointing INTO the page (parallel to B which points INTO). The coil rotates 90° so the normal becomes perpendicular to B."},{"id":"C4-nZ-B","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"INTO","start_n":"perpendicular","end_n":"-z (parallel)","perpendicular_axes":["+x","-x","+y","-y"],"flux_trend":"0 → +max"},"step1_B":"INTO","step1_B_symbol":"×","step2_dPhi":"INTO","step2_dPhi_symbol":"×","step3_induced_B":"OUT","step3_induced_B_symbol":"·","step3_current":{"as_viewed_from_axis":"-z","rotation_sense":"CW"},"prompt_text":"Coil normal starts perpendicular to B (B points INTO). The coil rotates 90° so the normal aligns with B (INTO)."},{"id":"C4-nZ-C","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"INTO","start_n":"+z (antiparallel)","end_n":"perpendicular","perpendicular_axes":["+x","-x","+y","-y"],"flux_trend":"-max → 0"},"step1_B":"INTO","step1_B_symbol":"×","step2_dPhi":"INTO","step2_dPhi_symbol":"×","step3_induced_B":"OUT","step3_induced_B_symbol":"·","step3_current":{"as_viewed_from_axis":"-z","rotation_sense":"CW"},"prompt_text":"Coil normal starts pointing OUT of the page (antiparallel to B which points INTO). The coil rotates 90° so the normal becomes perpendicular to B."},{"id":"C4-nZ-D","category":"C4","category_label":"Quarter-turn rotation","coil_axis":"variable","render_view":"iso-rotating","setup":{"B_direction":"INTO","start_n":"perpendicular","end_n":"+z (antiparallel)","perpendicular_axes":["+x","-x","+y","-y"],"flux_trend":"0 → -max"},"step1_B":"INTO","step1_B_symbol":"×","step2_dPhi":"OUT","step2_dPhi_symbol":"·","step3_induced_B":"INTO","step3_induced_B_symbol":"×","step3_current":{"as_viewed_from_axis":"+z","rotation_sense":"CW"},"prompt_text":"Coil normal starts perpendicular to B (B points INTO). The coil rotates 90° so the normal aligns antiparallel to B (OUT)."}];
+
+const SEQUENCES_DATA = [{"id":"SEQ-FALL-Y-N","category":"SEQUENCE","label":"Bar magnet falling through a horizontal coil, N pole leading","coil_axis":"y","render_view":"iso-horizontal","magnet_orientation":"N pole at bottom (leading), S pole at top","motion":"vertical fall along -y through centre of coil","phases":[{"phase_id":"P1","label":"approaching: magnet above coil, falling toward it","magnet_position":"+y, above coil","step1_B":"DOWN","step2_dPhi":"DOWN","step3_induced_B":"UP","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CCW","right_edge_iso":"×","left_edge_iso":"·"},"mechanical_reading":"Top face of coil acts as a north pole, repelling the falling N pole."},{"phase_id":"P2","label":"peak: magnet's centre at the coil plane","magnet_position":"y = 0, magnet centred at coil","step1_B":"DOWN, at peak magnitude","step2_dPhi":"zero","step3_induced_B":"none","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"none","right_edge_iso":"(fade)","left_edge_iso":"(fade)"},"mechanical_reading":"Induced current is zero. Flux is at its turning point. Motion continues but induction does not."},{"phase_id":"P3","label":"receding: magnet below coil, falling away","magnet_position":"-y, below coil","step1_B":"DOWN","step2_dPhi":"UP","step3_induced_B":"DOWN","step3_current":{"as_viewed_from_axis":"+y","rotation_sense":"CW","right_edge_iso":"·","left_edge_iso":"×"},"mechanical_reading":"Top face of coil acts as a south pole, attracting the receding magnet."}],"teaching_point":"B at the coil points DOWN throughout the entire fall. The current reverses because ΔΦ reverses at the peak of Φ, not because B reverses.","graph_overlay":"Plot Φ(t) (single hump) and I(t) (its derivative, with sign flipped). I crosses zero exactly where Φ peaks."}];
+
+// ── Utilities ──────────────────────────────────────────────
+
+const $ = (sel, ctx) => (ctx || document).querySelector(sel);
+const $$ = (sel, ctx) => [...(ctx || document).querySelectorAll(sel)];
+
+const OPPOSITE = {
+  UP: 'DOWN', DOWN: 'UP',
+  LEFT: 'RIGHT', RIGHT: 'LEFT',
+  INTO: 'OUT', OUT: 'INTO'
+};
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function showToast(msg, type = 'info', duration = 3000) {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  $('#toast-container').appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, duration);
+}
+
+// ── Data Loader ────────────────────────────────────────────
+
+const DataLoader = {
+  situations: [],
+  sequences: [],
+
+  load() {
+    this.situations = SITUATIONS_DATA;
+    this.sequences = SEQUENCES_DATA;
+    this.validate();
+    return { situations: this.situations, sequences: this.sequences };
+  },
+
+  validate() {
+    let errors = 0;
+    for (const s of this.situations) {
+      if (s.step3_induced_B !== OPPOSITE[s.step2_dPhi]) {
+        console.error(`Validation fail: ${s.id} step3_induced_B=${s.step3_induced_B} should be ${OPPOSITE[s.step2_dPhi]}`);
+        errors++;
+      }
+      if (s.category === 'C4') {
+        const axes = s.setup?.perpendicular_axes;
+        if (!axes || axes.length !== 4) {
+          console.error(`Validation fail: ${s.id} should have 4 perpendicular_axes`);
+          errors++;
+        }
+      }
+    }
+    if (errors) showToast(`${errors} validation error(s) — see console`, 'error', 5000);
+    else console.log(`All ${this.situations.length} situations validated OK`);
+  }
+};
+
+// ── Progress ───────────────────────────────────────────────
+
+const Progress = {
+  data: null,
+  KEY: 'emi-rehearsal-progress',
+
+  load() {
+    try {
+      const raw = localStorage.getItem(this.KEY);
+      if (raw) {
+        this.data = JSON.parse(raw);
+        if (this.data.version !== 1) this.data = null;
+      }
+    } catch(e) { /* ignore */ }
+    if (!this.data) {
+      this.data = { version: 1, progress: {}, streak: 0, preferences: { theme: 'auto' } };
+    }
+    return this.data;
+  },
+
+  save() {
+    try { localStorage.setItem(this.KEY, JSON.stringify(this.data)); }
+    catch(e) { /* ignore quota errors */ }
+  },
+
+  record(id, allCorrect) {
+    const p = this.data.progress[id] || { attempts: 0, correct_all_three: 0, last_seen: null };
+    p.attempts++;
+    if (allCorrect) {
+      p.correct_all_three++;
+      this.data.streak++;
+    } else {
+      this.data.streak = 0;
+    }
+    p.last_seen = new Date().toISOString();
+    this.data.progress[id] = p;
+    this.save();
+  },
+
+  getStats(category, situations) {
+    const catSits = category === 'all'
+      ? situations
+      : situations.filter(s => s.category === category);
+    const total = catSits.length;
+    const done = catSits.filter(s => {
+      const p = this.data.progress[s.id];
+      return p && p.correct_all_three > 0;
+    }).length;
+    return { total, done };
+  },
+
+  reset() {
+    this.data = { version: 1, progress: {}, streak: 0, preferences: this.data.preferences };
+    this.save();
+  }
+};
+
+// ── SVG Renderer ───────────────────────────────────────────
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const CX = 150, CY = 150;
+
+function svgEl(tag, attrs = {}, parent) {
+  const el = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  if (parent) parent.appendChild(el);
+  return el;
+}
+
+function clearSvg() {
+  const svg = $('#diagram-svg');
+  svg.innerHTML = '';
+  return svg;
+}
+
+function drawArrow(svg, x1, y1, x2, y2, color, opts = {}) {
+  const { strokeWidth = 2.5, dashed = false, label = '', labelOffset = 0 } = opts;
+  const g = svgEl('g', {}, svg);
+  const dash = dashed ? '6 4' : 'none';
+  svgEl('line', { x1, y1, x2, y2, stroke: color, 'stroke-width': strokeWidth, 'stroke-dasharray': dash }, g);
+
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const hl = 10;
+  const p1x = x2 - hl * Math.cos(angle - 0.4);
+  const p1y = y2 - hl * Math.sin(angle - 0.4);
+  const p2x = x2 - hl * Math.cos(angle + 0.4);
+  const p2y = y2 - hl * Math.sin(angle + 0.4);
+  svgEl('polygon', {
+    points: `${x2},${y2} ${p1x},${p1y} ${p2x},${p2y}`,
+    fill: color
+  }, g);
+
+  if (label) {
+    const mx = (x1 + x2) / 2 + labelOffset;
+    const my = (y1 + y2) / 2 - 8;
+    svgEl('text', {
+      x: mx, y: my, fill: color,
+      'font-size': '13', 'font-weight': '700', 'text-anchor': 'middle', 'font-family': 'system-ui, sans-serif'
+    }, g).textContent = label;
+  }
+  return g;
+}
+
+function drawDotSymbol(svg, x, y, color, size = 5) {
+  svgEl('circle', { cx: x, cy: y, r: size, fill: color }, svg);
+}
+
+function drawCrossSymbol(svg, x, y, color, size = 7) {
+  const g = svgEl('g', {}, svg);
+  svgEl('line', { x1: x - size, y1: y - size, x2: x + size, y2: y + size, stroke: color, 'stroke-width': 2.5 }, g);
+  svgEl('line', { x1: x + size, y1: y - size, x2: x - size, y2: y + size, stroke: color, 'stroke-width': 2.5 }, g);
+}
+
+function drawZSymbol(svg, x, y, direction, color, size) {
+  if (direction === 'OUT' || direction === '+z') drawDotSymbol(svg, x, y, color, size);
+  else if (direction === 'INTO' || direction === '-z') drawCrossSymbol(svg, x, y, color, size);
+}
+
+function directionToVector(dir) {
+  switch(dir) {
+    case 'UP':    return { dx: 0, dy: -1 };
+    case 'DOWN':  return { dx: 0, dy: 1 };
+    case 'LEFT':  return { dx: -1, dy: 0 };
+    case 'RIGHT': return { dx: 1, dy: 0 };
+    default: return { dx: 0, dy: 0 };
+  }
+}
+
+function drawDirectionIndicator(svg, dir, color, opts = {}) {
+  const { cx: ox = CX, cy: oy = CY, len = 40, label = '', labelOffset = 12 } = opts;
+  if (dir === 'INTO' || dir === 'OUT') {
+    drawZSymbol(svg, ox, oy, dir, color, 8);
+    if (label) {
+      svgEl('text', {
+        x: ox, y: oy - 16, fill: color,
+        'font-size': '13', 'font-weight': '700', 'text-anchor': 'middle', 'font-family': 'system-ui, sans-serif'
+      }, svg).textContent = label;
+    }
+  } else {
+    const v = directionToVector(dir);
+    drawArrow(svg, ox - v.dx * len * 0.4, oy - v.dy * len * 0.4,
+              ox + v.dx * len * 0.6, oy + v.dy * len * 0.6, color, { label, labelOffset });
+  }
+}
+
+function getEdgeSymbols(situation) {
+  const iB = situation.step3_induced_B;
+  const axis = situation.coil_axis;
+  if (axis === 'y') {
+    return {
+      right: iB === 'UP' ? 'INTO' : 'OUT',
+      left: iB === 'UP' ? 'OUT' : 'INTO',
+    };
+  } else if (axis === 'x') {
+    return {
+      top: iB === 'RIGHT' ? 'OUT' : 'INTO',
+      bottom: iB === 'RIGHT' ? 'INTO' : 'OUT',
+    };
+  }
+  return null;
+}
+
+// Draw current arrows around a face-on circle
+function drawCurrentArrowsFaceOn(svg, rotation, radius) {
+  const cw = rotation === 'CW';
+  const positions = [
+    { angle: -Math.PI / 2, tangent: cw ? 1 : -1 },
+    { angle: 0, tangent: cw ? 1 : -1 },
+    { angle: Math.PI / 2, tangent: cw ? 1 : -1 },
+    { angle: Math.PI, tangent: cw ? 1 : -1 },
+  ];
+  const color = 'var(--current-color)';
+  const arrowLen = 24;
+
+  for (const pos of positions) {
+    const px = CX + radius * Math.cos(pos.angle);
+    const py = CY + radius * Math.sin(pos.angle);
+    const tx = -Math.sin(pos.angle) * pos.tangent;
+    const ty = Math.cos(pos.angle) * pos.tangent;
+    drawArrow(svg,
+      px - tx * arrowLen * 0.5, py - ty * arrowLen * 0.5,
+      px + tx * arrowLen * 0.5, py + ty * arrowLen * 0.5,
+      color, { strokeWidth: 2.5 });
+  }
+}
+
+// ── Face-on renderer (z-coil) ──
+
+function renderFaceOn(svg, situation, revealStep) {
+  const R = 85;
+
+  // Field background symbols
+  const fieldDir = situation.setup?.field_direction || situation.step1_B;
+  const isInto = fieldDir === 'INTO';
+  const isOut = fieldDir === 'OUT';
+  if (isInto || isOut) {
+    const spacing = 35;
+    for (let gx = -2; gx <= 2; gx++) {
+      for (let gy = -2; gy <= 2; gy++) {
+        const sx = CX + gx * spacing;
+        const sy = CY + gy * spacing;
+        const dist = Math.sqrt((sx - CX) ** 2 + (sy - CY) ** 2);
+        if (dist < R - 10) {
+          if (isOut) drawDotSymbol(svg, sx, sy, 'var(--field-color-light)', 3);
+          else drawCrossSymbol(svg, sx, sy, 'var(--field-color-light)', 4);
+        }
+      }
+    }
+  }
+
+  // Coil circle
+  svgEl('circle', {
+    cx: CX, cy: CY, r: R,
+    stroke: 'var(--coil-stroke)', 'stroke-width': 3, fill: 'none'
+  }, svg);
+
+  // Magnet for C3
+  if (situation.category === 'C3') {
+    drawMagnetFaceOn(svg, situation);
+  }
+
+  // Area change indicator for C1
+  if (situation.category === 'C1') {
+    const growing = situation.setup.change === 'area growing';
+    drawAreaChangeIndicator(svg, R, growing);
+  }
+
+  // Electromagnet indicator for C2
+  if (situation.category === 'C2') {
+    drawFieldChangeIndicator(svg, situation);
+  }
+
+  // Step overlays
+  if (revealStep >= 1) {
+    drawDirectionIndicator(svg, situation.step1_B, 'var(--field-color)', { label: 'B', labelOffset: 14 });
+  }
+  if (revealStep >= 2) {
+    const offset = situation.step2_dPhi === situation.step1_B ? 20 : -20;
+    drawDirectionIndicator(svg, situation.step2_dPhi, 'var(--dphi-color)', {
+      cx: CX + (situation.step2_dPhi === 'INTO' || situation.step2_dPhi === 'OUT' ? 25 : 0),
+      cy: CY + (situation.step2_dPhi === 'INTO' || situation.step2_dPhi === 'OUT' ? 25 : 0),
+      label: 'ΔΦ', labelOffset: 14
+    });
+  }
+  if (revealStep >= 3) {
+    drawCurrentArrowsFaceOn(svg, situation.step3_current.rotation_sense, R);
+  }
+}
+
+function drawAreaChangeIndicator(svg, R, growing) {
+  const g = svgEl('g', { opacity: '0.4' }, svg);
+  const delta = growing ? 12 : -12;
+  svgEl('circle', {
+    cx: CX, cy: CY, r: R + delta,
+    stroke: 'var(--coil-stroke)', 'stroke-width': 1.5,
+    fill: 'none', 'stroke-dasharray': '4 3'
+  }, g);
+  const arrowDirs = growing
+    ? [[CX + R + 2, CY, CX + R + delta + 4, CY], [CX - R - 2, CY, CX - R - delta - 4, CY],
+       [CX, CY - R - 2, CX, CY - R - delta - 4], [CX, CY + R + 2, CX, CY + R + delta + 4]]
+    : [[CX + R - 2, CY, CX + R + delta - 4, CY], [CX - R + 2, CY, CX - R - delta + 4, CY],
+       [CX, CY - R + 2, CX, CY - R - delta + 4], [CX, CY + R - 2, CX, CY + R + delta - 4]];
+  for (const [x1, y1, x2, y2] of arrowDirs) {
+    drawArrow(svg, x1, y1, x2, y2, 'var(--fg-muted)', { strokeWidth: 1.5 });
+  }
+}
+
+function drawFieldChangeIndicator(svg, situation) {
+  const growing = situation.setup.change === '|B| growing';
+  const label = growing ? 'B ↑' : 'B ↓';
+  svgEl('text', {
+    x: CX, y: 28, fill: 'var(--field-color)',
+    'font-size': '14', 'font-weight': '700', 'text-anchor': 'middle', 'font-family': 'system-ui, sans-serif'
+  }, svg).textContent = label;
+}
+
+function drawMagnetFaceOn(svg, situation) {
+  const side = situation.setup.magnet_side;
+  const pole = situation.setup.pole_facing_coil;
+  const motion = situation.setup.motion;
+  const isFront = side.startsWith('+z');
+
+  const mx = CX, my = isFront ? 34 : 266;
+  const g = svgEl('g', {}, svg);
+
+  // Magnet along z-axis: show as a short isometric bar tilted slightly
+  // so both poles are visible with proper depth.
+  // For front (+z): viewer sees far-from-coil pole; coil-facing pole recedes toward coil.
+  // For back (-z): viewer sees coil-facing pole; far pole recedes away from coil.
+  const viewerPole = isFront ? (pole === 'N' ? 'S' : 'N') : pole;
+  const hiddenPole = viewerPole === 'N' ? 'S' : 'N';
+
+  // Far pole always recedes downward in the isometric view (into the page).
+  const depthDir = 1;
+  const d = 10;
+  const tiltX = 4;
+
+  // Far pole (smaller, offset, drawn first = behind)
+  const fy = my + depthDir * d;
+  svgEl('rect', {
+    x: mx - 13 + tiltX, y: fy - 8, width: 26, height: 16, rx: 2,
+    stroke: 'var(--fg)', 'stroke-width': 1, fill: 'var(--bg-card)', opacity: 0.5
+  }, g);
+  svgEl('rect', {
+    x: mx - 13 + tiltX, y: fy - 8, width: 26, height: 16, rx: 2,
+    fill: hiddenPole === 'N' ? 'var(--magnet-n)' : 'var(--magnet-s)', opacity: 0.15
+  }, g);
+  svgEl('text', {
+    x: mx + tiltX, y: fy + 4, fill: 'var(--fg)', 'font-size': '9', 'font-weight': '700',
+    'text-anchor': 'middle', 'font-family': 'system-ui, sans-serif', opacity: 0.45
+  }, g).textContent = hiddenPole;
+
+  // Connecting edges
+  svgEl('line', { x1: mx - 13 + tiltX, y1: fy - 8, x2: mx - 16, y2: my - 10,
+    stroke: 'var(--fg)', 'stroke-width': 1, opacity: 0.25 }, g);
+  svgEl('line', { x1: mx + 13 + tiltX, y1: fy - 8, x2: mx + 16, y2: my - 10,
+    stroke: 'var(--fg)', 'stroke-width': 1, opacity: 0.25 }, g);
+  svgEl('line', { x1: mx - 13 + tiltX, y1: fy + 8, x2: mx - 16, y2: my + 10,
+    stroke: 'var(--fg)', 'stroke-width': 1, opacity: 0.25 }, g);
+  svgEl('line', { x1: mx + 13 + tiltX, y1: fy + 8, x2: mx + 16, y2: my + 10,
+    stroke: 'var(--fg)', 'stroke-width': 1, opacity: 0.25 }, g);
+
+  // Near pole (larger, drawn on top)
+  svgEl('rect', {
+    x: mx - 16, y: my - 10, width: 32, height: 20, rx: 3,
+    stroke: 'var(--fg)', 'stroke-width': 1.5, fill: 'var(--bg-card)'
+  }, g);
+  svgEl('rect', {
+    x: mx - 16, y: my - 10, width: 32, height: 20, rx: 3,
+    fill: viewerPole === 'N' ? 'var(--magnet-n)' : 'var(--magnet-s)', opacity: 0.3
+  }, g);
+  svgEl('text', {
+    x: mx, y: my + 5, fill: 'var(--fg)', 'font-size': '13', 'font-weight': '700',
+    'text-anchor': 'middle', 'font-family': 'system-ui, sans-serif'
+  }, g).textContent = viewerPole;
+
+  // Motion arrow with italic v label
+  const approaching = motion === 'approach';
+  const towardCoil = isFront ? 1 : -1;
+  const arrowDir = approaching ? towardCoil : -towardCoil;
+  const ay1 = my + (isFront ? 22 : -22);
+  const ay2 = ay1 + arrowDir * 20;
+  drawArrow(svg, mx + 28, ay1, mx + 28, ay2, 'var(--fg-muted)', { strokeWidth: 1.5 });
+  svgEl('text', {
+    x: mx + 38, y: (ay1 + ay2) / 2 + 4, fill: 'var(--fg-muted)', 'font-size': '13',
+    'font-style': 'italic', 'font-family': 'Georgia, "Times New Roman", serif'
+  }, svg).textContent = 'v';
+}
+
+// ── Iso-horizontal renderer (y-coil) ──
+
+const ELLIPSE_RX = 90, ELLIPSE_RY = 32;
+
+function renderIsoHorizontal(svg, situation, revealStep) {
+  const rx = ELLIPSE_RX, ry = ELLIPSE_RY;
+
+  // Field arrows
+  const fieldDir = situation.setup?.field_direction || situation.step1_B;
+  drawFieldArrowsVertical(svg, fieldDir);
+
+  // Magnet for C3
+  if (situation.category === 'C3') {
+    drawMagnetIsoH(svg, situation);
+  }
+
+  if (situation.category === 'C1') {
+    const growing = situation.setup.change === 'area growing';
+    drawAreaChangeIsoH(svg, growing);
+  }
+
+  if (situation.category === 'C2') {
+    drawFieldChangeIndicator(svg, situation);
+  }
+
+  // Back arc (dashed)
+  svgEl('path', {
+    d: `M ${CX - rx},${CY} A ${rx},${ry} 0 0,1 ${CX + rx},${CY}`,
+    stroke: 'var(--coil-stroke)', 'stroke-width': 1.5, fill: 'none', 'stroke-dasharray': '4 3'
+  }, svg);
+
+  // Front arc (solid)
+  svgEl('path', {
+    d: `M ${CX + rx},${CY} A ${rx},${ry} 0 0,1 ${CX - rx},${CY}`,
+    stroke: 'var(--coil-stroke)', 'stroke-width': 3, fill: 'none'
+  }, svg);
+
+  // Step overlays
+  if (revealStep >= 1) {
+    drawDirectionIndicator(svg, situation.step1_B, 'var(--field-color)', { label: 'B' });
+  }
+  if (revealStep >= 2) {
+    const dx = situation.step1_B === situation.step2_dPhi ? 20 : -20;
+    drawDirectionIndicator(svg, situation.step2_dPhi, 'var(--dphi-color)', {
+      cx: CX + dx, label: 'ΔΦ'
+    });
+  }
+  if (revealStep >= 3) {
+    const edges = getEdgeSymbols(situation);
+    const color = 'var(--current-color)';
+    // Right edge (+x)
+    drawZSymbol(svg, CX + rx + 14, CY, edges.right, color, 6);
+    // Left edge (-x)
+    drawZSymbol(svg, CX - rx - 14, CY, edges.left, color, 6);
+    // Curved arrow on front arc
+    drawCurvedArrowIsoH(svg, situation.step3_current.rotation_sense, rx, ry);
+  }
+}
+
+function drawFieldArrowsVertical(svg, dir) {
+  const v = directionToVector(dir);
+  const color = 'var(--field-color-light)';
+  const positions = [
+    [CX - 50, CY], [CX, CY - 60], [CX + 50, CY], [CX, CY + 60]
+  ];
+  for (const [x, y] of positions) {
+    drawArrow(svg, x - v.dx * 18, y - v.dy * 18, x + v.dx * 18, y + v.dy * 18, color, { strokeWidth: 1.5 });
+  }
+}
+
+function drawCurvedArrowIsoH(svg, rotation, rx, ry) {
+  const cw = rotation !== 'CW';
+  const color = 'var(--current-color)';
+  // Draw a small curved arrow on the front arc
+  const startAngle = cw ? Math.PI * 0.65 : Math.PI * 0.35;
+  const endAngle = cw ? Math.PI * 0.35 : Math.PI * 0.65;
+  const sx = CX + rx * Math.cos(startAngle);
+  const sy = CY + ry * Math.sin(startAngle);
+  const ex = CX + rx * Math.cos(endAngle);
+  const ey = CY + ry * Math.sin(endAngle);
+  svgEl('path', {
+    d: `M ${sx},${sy} A ${rx},${ry} 0 0,${cw ? 0 : 1} ${ex},${ey}`,
+    stroke: color, 'stroke-width': 2.5, fill: 'none',
+    'marker-end': ''
+  }, svg);
+  // Arrowhead
+  const ang = Math.atan2(ey - sy, ex - sx);
+  const adj = cw ? 0.6 : -0.6;
+  const p1x = ex - 8 * Math.cos(ang - adj);
+  const p1y = ey - 8 * Math.sin(ang - adj);
+  const p2x = ex - 8 * Math.cos(ang + adj);
+  const p2y = ey - 8 * Math.sin(ang + adj);
+  svgEl('polygon', { points: `${ex},${ey} ${p1x},${p1y} ${p2x},${p2y}`, fill: color }, svg);
+}
+
+function drawMagnetIsoH(svg, situation) {
+  const side = situation.setup.magnet_side;
+  const pole = situation.setup.pole_facing_coil;
+  const motion = situation.setup.motion;
+  const isAbove = side.startsWith('+y');
+
+  const mx = CX, my = isAbove ? 40 : 260;
+  const g = svgEl('g', {}, svg);
+
+  const h = 40, w = 24;
+  svgEl('rect', {
+    x: mx - w / 2, y: my - h / 2, width: w, height: h, rx: 3,
+    stroke: 'var(--fg)', 'stroke-width': 1.5, fill: 'var(--bg-card)'
+  }, g);
+
+  const closerPole = pole;
+  const farPole = pole === 'N' ? 'S' : 'N';
+  const topHalf = isAbove ? farPole : closerPole;
+  const botHalf = isAbove ? closerPole : farPole;
+
+  svgEl('rect', {
+    x: mx - w / 2, y: my - h / 2, width: w, height: h / 2,
+    fill: topHalf === 'N' ? 'var(--magnet-n)' : 'var(--magnet-s)', opacity: 0.3
+  }, g);
+  svgEl('rect', {
+    x: mx - w / 2, y: my, width: w, height: h / 2,
+    fill: botHalf === 'N' ? 'var(--magnet-n)' : 'var(--magnet-s)', opacity: 0.3
+  }, g);
+
+  svgEl('text', {
+    x: mx, y: my - 5, fill: 'var(--fg)', 'font-size': '12', 'font-weight': '700',
+    'text-anchor': 'middle', 'font-family': 'system-ui, sans-serif'
+  }, g).textContent = topHalf;
+  svgEl('text', {
+    x: mx, y: my + 14, fill: 'var(--fg)', 'font-size': '12', 'font-weight': '700',
+    'text-anchor': 'middle', 'font-family': 'system-ui, sans-serif'
+  }, g).textContent = botHalf;
+
+  const approaching = motion === 'approach';
+  const towardCoil = isAbove ? 1 : -1;
+  const dir = approaching ? towardCoil : -towardCoil;
+  const ay1 = my, ay2 = my + dir * 22;
+  drawArrow(svg, mx + 22, ay1, mx + 22, ay2, 'var(--fg-muted)', { strokeWidth: 1.5 });
+  svgEl('text', {
+    x: mx + 32, y: (ay1 + ay2) / 2 + 4, fill: 'var(--fg-muted)', 'font-size': '13',
+    'font-style': 'italic', 'font-family': 'Georgia, "Times New Roman", serif'
+  }, svg).textContent = 'v';
+}
+
+function drawAreaChangeIsoH(svg, growing) {
+  const rx = ELLIPSE_RX, ry = ELLIPSE_RY;
+  const delta = growing ? 10 : -10;
+  svgEl('ellipse', {
+    cx: CX, cy: CY, rx: rx + delta, ry: ry + delta * 0.35,
+    stroke: 'var(--coil-stroke)', 'stroke-width': 1, fill: 'none',
+    'stroke-dasharray': '4 3', opacity: 0.4
+  }, svg);
+}
+
+// ── Iso-vertical renderer (x-coil) ──
+
+function renderIsoVertical(svg, situation, revealStep) {
+  const rx = 32, ry = 90;
+
+  // Field arrows
+  const fieldDir = situation.setup?.field_direction || situation.step1_B;
+  drawFieldArrowsHorizontal(svg, fieldDir);
+
+  if (situation.category === 'C3') {
+    drawMagnetIsoV(svg, situation);
+  }
+
+  if (situation.category === 'C1') {
+    const growing = situation.setup.change === 'area growing';
+    const delta = growing ? 10 : -10;
+    svgEl('ellipse', {
+      cx: CX, cy: CY, rx: rx + delta * 0.35, ry: ry + delta,
+      stroke: 'var(--coil-stroke)', 'stroke-width': 1, fill: 'none',
+      'stroke-dasharray': '4 3', opacity: 0.4
+    }, svg);
+  }
+
+  if (situation.category === 'C2') {
+    drawFieldChangeIndicator(svg, situation);
+  }
+
+  // Back arc (dashed) — left half
+  svgEl('path', {
+    d: `M ${CX},${CY - ry} A ${rx},${ry} 0 0,0 ${CX},${CY + ry}`,
+    stroke: 'var(--coil-stroke)', 'stroke-width': 1.5, fill: 'none', 'stroke-dasharray': '4 3'
+  }, svg);
+
+  // Front arc (solid) — right half
+  svgEl('path', {
+    d: `M ${CX},${CY + ry} A ${rx},${ry} 0 0,0 ${CX},${CY - ry}`,
+    stroke: 'var(--coil-stroke)', 'stroke-width': 3, fill: 'none'
+  }, svg);
+
+  // Step overlays
+  if (revealStep >= 1) {
+    drawDirectionIndicator(svg, situation.step1_B, 'var(--field-color)', { label: 'B' });
+  }
+  if (revealStep >= 2) {
+    const dy = situation.step1_B === situation.step2_dPhi ? 20 : -20;
+    drawDirectionIndicator(svg, situation.step2_dPhi, 'var(--dphi-color)', {
+      cy: CY + dy, label: 'ΔΦ'
+    });
+  }
+  if (revealStep >= 3) {
+    const edges = getEdgeSymbols(situation);
+    const color = 'var(--current-color)';
+    drawZSymbol(svg, CX, CY - ry - 14, edges.top, color, 6);
+    drawZSymbol(svg, CX, CY + ry + 14, edges.bottom, color, 6);
+    drawCurvedArrowIsoV(svg, situation.step3_current.rotation_sense, rx, ry);
+  }
+}
+
+function drawFieldArrowsHorizontal(svg, dir) {
+  const v = directionToVector(dir);
+  const color = 'var(--field-color-light)';
+  const positions = [
+    [CX, CY - 50], [CX - 60, CY], [CX, CY + 50], [CX + 60, CY]
+  ];
+  for (const [x, y] of positions) {
+    drawArrow(svg, x - v.dx * 18, y - v.dy * 18, x + v.dx * 18, y + v.dy * 18, color, { strokeWidth: 1.5 });
+  }
+}
+
+function drawCurvedArrowIsoV(svg, rotation, rx, ry) {
+  const cw = rotation !== 'CW';
+  const color = 'var(--current-color)';
+  const startAngle = cw ? -Math.PI * 0.15 : Math.PI * 0.15;
+  const endAngle = cw ? Math.PI * 0.15 : -Math.PI * 0.15;
+  const sx = CX + rx * Math.cos(startAngle);
+  const sy = CY + ry * Math.sin(startAngle);
+  const ex = CX + rx * Math.cos(endAngle);
+  const ey = CY + ry * Math.sin(endAngle);
+  svgEl('path', {
+    d: `M ${sx},${sy} A ${rx},${ry} 0 0,${cw ? 1 : 0} ${ex},${ey}`,
+    stroke: color, 'stroke-width': 2.5, fill: 'none'
+  }, svg);
+  const ang = Math.atan2(ey - sy, ex - sx);
+  const adj = cw ? -0.6 : 0.6;
+  const p1x = ex - 8 * Math.cos(ang - adj);
+  const p1y = ey - 8 * Math.sin(ang - adj);
+  const p2x = ex - 8 * Math.cos(ang + adj);
+  const p2y = ey - 8 * Math.sin(ang + adj);
+  svgEl('polygon', { points: `${ex},${ey} ${p1x},${p1y} ${p2x},${p2y}`, fill: color }, svg);
+}
+
+function drawMagnetIsoV(svg, situation) {
+  const side = situation.setup.magnet_side;
+  const pole = situation.setup.pole_facing_coil;
+  const motion = situation.setup.motion;
+  const isRight = side.startsWith('+x');
+
+  const mx = isRight ? 260 : 40;
+  const my = CY;
+  const g = svgEl('g', {}, svg);
+
+  const w = 40, h = 24;
+  svgEl('rect', {
+    x: mx - w / 2, y: my - h / 2, width: w, height: h, rx: 3,
+    stroke: 'var(--fg)', 'stroke-width': 1.5, fill: 'var(--bg-card)'
+  }, g);
+
+  const closerPole = pole;
+  const farPole = pole === 'N' ? 'S' : 'N';
+  const leftHalf = isRight ? closerPole : farPole;
+  const rightHalf = isRight ? farPole : closerPole;
+
+  svgEl('rect', {
+    x: mx - w / 2, y: my - h / 2, width: w / 2, height: h,
+    fill: leftHalf === 'N' ? 'var(--magnet-n)' : 'var(--magnet-s)', opacity: 0.3
+  }, g);
+  svgEl('rect', {
+    x: mx, y: my - h / 2, width: w / 2, height: h,
+    fill: rightHalf === 'N' ? 'var(--magnet-n)' : 'var(--magnet-s)', opacity: 0.3
+  }, g);
+
+  svgEl('text', {
+    x: mx - 10, y: my + 5, fill: 'var(--fg)', 'font-size': '12', 'font-weight': '700',
+    'text-anchor': 'middle', 'font-family': 'system-ui, sans-serif'
+  }, g).textContent = leftHalf;
+  svgEl('text', {
+    x: mx + 10, y: my + 5, fill: 'var(--fg)', 'font-size': '12', 'font-weight': '700',
+    'text-anchor': 'middle', 'font-family': 'system-ui, sans-serif'
+  }, g).textContent = rightHalf;
+
+  const approaching = motion === 'approach';
+  const towardCoil = isRight ? -1 : 1;
+  const dir = approaching ? towardCoil : -towardCoil;
+  const ax1 = mx, ax2 = mx + dir * 22;
+  drawArrow(svg, ax1, my - 18, ax2, my - 18, 'var(--fg-muted)', { strokeWidth: 1.5 });
+  svgEl('text', {
+    x: (ax1 + ax2) / 2, y: my - 24, fill: 'var(--fg-muted)', 'font-size': '13',
+    'text-anchor': 'middle', 'font-style': 'italic', 'font-family': 'Georgia, "Times New Roman", serif'
+  }, svg).textContent = 'v';
+}
+
+// ── Iso-rotating renderer (C4) ──
+
+function renderIsoRotating(svg, situation, revealStep) {
+  const B = situation.step1_B;
+  const bVec = directionToVector(B);
+  const isZaxis = B === 'INTO' || B === 'OUT';
+
+  // Fixed field arrows
+  if (isZaxis) {
+    const sym = B === 'OUT' ? 'OUT' : 'INTO';
+    const positions = [[80, 80], [220, 80], [80, 220], [220, 220], [150, 150]];
+    for (const [x, y] of positions) {
+      drawZSymbol(svg, x, y, sym, 'var(--field-color-light)', 4);
+    }
+  } else {
+    const positions = [[CX, 60], [CX, 240], [60, CY], [240, CY]];
+    for (const [x, y] of positions) {
+      drawArrow(svg, x - bVec.dx * 20, y - bVec.dy * 20,
+                x + bVec.dx * 20, y + bVec.dy * 20,
+                'var(--field-color-light)', { strokeWidth: 1.5 });
+    }
+  }
+
+  // Draw coil in final orientation as a simple ellipse
+  // For simplicity, show the coil in the "end" state
+  const startN = situation.setup.start_n;
+  const endN = situation.setup.end_n;
+
+  // Determine the coil appearance
+  let label1 = '', label2 = '';
+  if (endN.includes('perpendicular')) {
+    // End state: coil perpendicular to B
+    label1 = 'start: n̂ ' + startN.split(' ')[0];
+    label2 = 'end: n̂ ⊥ B';
+    drawCoilPerpendicular(svg, B);
+  } else {
+    // End state: coil parallel or antiparallel to B
+    label1 = 'start: n̂ ⊥ B';
+    label2 = 'end: n̂ ' + endN.split(' ')[0];
+    drawCoilAligned(svg, endN, B);
+  }
+
+  // Labels
+  svgEl('text', {
+    x: CX, y: 22, fill: 'var(--fg-muted)', 'font-size': '11',
+    'text-anchor': 'middle', 'font-family': 'system-ui, sans-serif'
+  }, svg).textContent = label1;
+  svgEl('text', {
+    x: CX, y: 288, fill: 'var(--fg-muted)', 'font-size': '11',
+    'text-anchor': 'middle', 'font-family': 'system-ui, sans-serif'
+  }, svg).textContent = label2;
+
+  // Rotation arrow
+  svgEl('text', {
+    x: CX, y: 40, fill: 'var(--fg-muted)', 'font-size': '18',
+    'text-anchor': 'middle'
+  }, svg).textContent = '↻';
+
+  // Step overlays
+  if (revealStep >= 1) {
+    drawDirectionIndicator(svg, situation.step1_B, 'var(--field-color)', {
+      cx: isZaxis ? CX : CX, cy: 70, label: 'B'
+    });
+  }
+  if (revealStep >= 2) {
+    drawDirectionIndicator(svg, situation.step2_dPhi, 'var(--dphi-color)', {
+      cx: isZaxis ? CX + 30 : CX + 30, cy: 70, label: 'ΔΦ'
+    });
+  }
+  if (revealStep >= 3) {
+    drawDirectionIndicator(svg, situation.step3_induced_B, 'var(--induced-b-color)', {
+      cx: CX, cy: CY + 60, label: 'I-B'
+    });
+  }
+}
+
+function drawCoilPerpendicular(svg, B) {
+  const isZaxis = B === 'INTO' || B === 'OUT';
+  if (isZaxis) {
+    drawThinEllipse(svg, CX, CY, 70, 14, 'horizontal');
+  } else if (B === 'UP' || B === 'DOWN') {
+    drawThinEllipse(svg, CX, CY, 70, 14, 'horizontal');
+  } else {
+    drawThinEllipse(svg, CX, CY, 14, 70, 'vertical');
+  }
+}
+
+function drawThinEllipse(svg, cx, cy, rx, ry, orient) {
+  if (orient === 'horizontal') {
+    // Back arc (top half — thin dashed)
+    svgEl('path', {
+      d: `M ${cx - rx},${cy} A ${rx},${ry} 0 0,1 ${cx + rx},${cy}`,
+      stroke: 'var(--coil-stroke)', 'stroke-width': 1.5, fill: 'none', 'stroke-dasharray': '4 3'
+    }, svg);
+    // Front arc (bottom half — thick solid)
+    svgEl('path', {
+      d: `M ${cx + rx},${cy} A ${rx},${ry} 0 0,1 ${cx - rx},${cy}`,
+      stroke: 'var(--coil-stroke)', 'stroke-width': 3, fill: 'none'
+    }, svg);
+  } else {
+    // Back arc (left half — thin dashed)
+    svgEl('path', {
+      d: `M ${cx},${cy - ry} A ${rx},${ry} 0 0,0 ${cx},${cy + ry}`,
+      stroke: 'var(--coil-stroke)', 'stroke-width': 1.5, fill: 'none', 'stroke-dasharray': '4 3'
+    }, svg);
+    // Front arc (right half — thick solid)
+    svgEl('path', {
+      d: `M ${cx},${cy + ry} A ${rx},${ry} 0 0,0 ${cx},${cy - ry}`,
+      stroke: 'var(--coil-stroke)', 'stroke-width': 3, fill: 'none'
+    }, svg);
+  }
+}
+
+function drawCoilAligned(svg, endN, B) {
+  // Coil aligned with B — seen face-on or as full circle/ellipse
+  const isZaxis = B === 'INTO' || B === 'OUT';
+  if (isZaxis) {
+    svgEl('circle', {
+      cx: CX, cy: CY, r: 70,
+      stroke: 'var(--coil-stroke)', 'stroke-width': 3, fill: 'none'
+    }, svg);
+  } else if (B === 'UP' || B === 'DOWN') {
+    // y-aligned coil in xz plane, show as horizontal ellipse
+    svgEl('path', {
+      d: `M ${CX - 70},${CY} A 70,25 0 0,1 ${CX + 70},${CY}`,
+      stroke: 'var(--coil-stroke)', 'stroke-width': 1.5, fill: 'none', 'stroke-dasharray': '4 3'
+    }, svg);
+    svgEl('path', {
+      d: `M ${CX + 70},${CY} A 70,25 0 0,1 ${CX - 70},${CY}`,
+      stroke: 'var(--coil-stroke)', 'stroke-width': 3, fill: 'none'
+    }, svg);
+  } else {
+    // x-aligned coil in yz plane, show as vertical ellipse
+    svgEl('path', {
+      d: `M ${CX},${CY - 70} A 25,70 0 0,0 ${CX},${CY + 70}`,
+      stroke: 'var(--coil-stroke)', 'stroke-width': 1.5, fill: 'none', 'stroke-dasharray': '4 3'
+    }, svg);
+    svgEl('path', {
+      d: `M ${CX},${CY + 70} A 25,70 0 0,0 ${CX},${CY - 70}`,
+      stroke: 'var(--coil-stroke)', 'stroke-width': 3, fill: 'none'
+    }, svg);
+  }
+}
+
+// ── Master render function ──
+
+function renderSituation(situation, revealStep) {
+  const svg = clearSvg();
+  const view = situation.render_view;
+  if (view === 'face-on') renderFaceOn(svg, situation, revealStep);
+  else if (view === 'iso-horizontal') renderIsoHorizontal(svg, situation, revealStep);
+  else if (view === 'iso-vertical') renderIsoVertical(svg, situation, revealStep);
+  else if (view === 'iso-rotating') renderIsoRotating(svg, situation, revealStep);
+}
+
+// ── Quiz Engine ────────────────────────────────────────────
+
+const Quiz = {
+  situations: [],
+  sequences: [],
+  queue: [],
+  queueIdx: 0,
+  currentSituation: null,
+  currentStep: 0,      // 0=setup, 1-3=asking, 4=summary
+  stepResults: [null, null, null],
+  activeCategory: 'all',
+  revealStep: 0,
+
+  init(situations, sequences) {
+    this.situations = situations;
+    this.sequences = sequences;
+    this.setupEventListeners();
+    this.selectCategory('all');
+  },
+
+  setupEventListeners() {
+    // Category tabs
+    for (const tab of $$('.cat-tab')) {
+      tab.addEventListener('click', () => {
+        const cat = tab.dataset.cat;
+        if (cat === 'SEQ') {
+          this.startSequence();
+        } else {
+          this.selectCategory(cat);
+        }
+      });
+    }
+
+    // Direction buttons
+    for (const btn of $$('.dir-btn')) {
+      btn.addEventListener('click', () => {
+        if (btn.disabled) return;
+        this.handleAnswer(btn.dataset.dir);
+      });
+    }
+
+    // Next button
+    $('#next-btn').addEventListener('click', () => this.advance());
+
+    // Theme toggle
+    $('#theme-toggle').addEventListener('click', () => {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      Progress.data.preferences.theme = next;
+      Progress.save();
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        if (!$('#next-btn').classList.contains('hidden')) {
+          e.preventDefault();
+          this.advance();
+        }
+      }
+      const keyMap = {
+        'ArrowUp': 'UP', 'ArrowDown': 'DOWN',
+        'ArrowLeft': 'LEFT', 'ArrowRight': 'RIGHT',
+        'i': 'INTO', 'I': 'INTO', 'o': 'OUT', 'O': 'OUT'
+      };
+      if (keyMap[e.key] && !$('#direction-buttons').classList.contains('hidden')) {
+        e.preventDefault();
+        this.handleAnswer(keyMap[e.key]);
+      }
+    });
+  },
+
+  selectCategory(cat) {
+    this.activeCategory = cat;
+
+    for (const tab of $$('.cat-tab')) {
+      tab.setAttribute('aria-selected', tab.dataset.cat === cat ? 'true' : 'false');
+    }
+
+    const pool = cat === 'all'
+      ? this.situations
+      : this.situations.filter(s => s.category === cat);
+
+    this.queue = shuffle(pool);
+    this.queueIdx = 0;
+    this.loadNext();
+  },
+
+  startSequence() {
+    for (const tab of $$('.cat-tab')) {
+      tab.setAttribute('aria-selected', tab.dataset.cat === 'SEQ' ? 'true' : 'false');
+    }
+
+    if (this.sequences.length === 0) {
+      showToast('No sequences available', 'error');
+      return;
+    }
+
+    // For now, treat sequence phases as individual quiz steps
+    const seq = this.sequences[0];
+    const phases = seq.phases.filter(p => p.step2_dPhi !== 'zero');
+    const fakeSituations = phases.map((phase, i) => ({
+      id: `${seq.id}-P${phase.phase_id}`,
+      category: 'SEQUENCE',
+      coil_axis: seq.coil_axis,
+      render_view: seq.render_view,
+      setup: { field_direction: phase.step1_B },
+      step1_B: phase.step1_B,
+      step2_dPhi: phase.step2_dPhi,
+      step3_induced_B: phase.step3_induced_B,
+      step3_current: phase.step3_current,
+      prompt_text: `${seq.label} — Phase: ${phase.label}`
+    }));
+
+    this.queue = fakeSituations;
+    this.queueIdx = 0;
+    this.loadNext();
+  },
+
+  loadNext() {
+    if (this.queueIdx >= this.queue.length) {
+      if (this.activeCategory === 'all' || this.queue[0]?.category === 'SEQUENCE') {
+        this.selectCategory(this.activeCategory);
+        return;
+      }
+      this.queue = shuffle(this.queue);
+      this.queueIdx = 0;
+    }
+
+    this.currentSituation = this.queue[this.queueIdx];
+    this.queueIdx++;
+    this.stepResults = [null, null, null];
+    this.currentStep = 1;
+    this.revealStep = 0;
+
+    $('#loading-msg').classList.add('hidden');
+    $('#quiz-container').classList.remove('hidden');
+    $('#prompt-text').textContent = this.currentSituation.prompt_text;
+
+    this.resetStepDots();
+    this.showStep(1);
+    this.updateProgress();
+  },
+
+  showStep(step) {
+    this.currentStep = step;
+    const s = this.currentSituation;
+
+    renderSituation(s, this.revealStep);
+
+    // Update step dots
+    $(`#dot-${step}`).classList.add('active');
+
+    // Hide all answer UI
+    $('#direction-buttons').classList.add('hidden');
+    $('#binary-buttons').classList.add('hidden');
+    $('#next-btn').classList.add('hidden');
+    $('#summary-row').classList.add('hidden');
+
+    // Enable direction buttons
+    for (const btn of $$('.dir-btn')) {
+      btn.disabled = false;
+      btn.classList.remove('correct-answer', 'wrong-answer');
+    }
+
+    if (step === 1) {
+      $('#step-question').textContent = 'Step 1: What is the direction of B through the coil?';
+      $('#direction-buttons').classList.remove('hidden');
+    } else if (step === 2) {
+      $('#step-question').textContent = 'Step 2: What is the direction of ΔΦ?';
+      $('#direction-buttons').classList.remove('hidden');
+    } else if (step === 3) {
+      this.showStep3UI();
+    }
+  },
+
+  showStep3UI() {
+    const s = this.currentSituation;
+    const view = s.render_view;
+
+    if (view === 'face-on') {
+      $('#step-question').textContent = 'Step 3: What is the direction of the induced current (as drawn)?';
+      this.showBinaryButtons(['CW', 'CCW'], ['Clockwise', 'Counter-clockwise']);
+    } else if (view === 'iso-horizontal') {
+      $('#step-question').textContent = 'Step 3: At the RIGHT edge of the ellipse, is the current coming OUT (·) or going IN (×)?';
+      this.showBinaryButtons(['OUT', 'INTO'], ['· Out of page', '× Into page']);
+    } else if (view === 'iso-vertical') {
+      $('#step-question').textContent = 'Step 3: At the TOP edge of the ellipse, is the current coming OUT (·) or going IN (×)?';
+      this.showBinaryButtons(['OUT', 'INTO'], ['· Out of page', '× Into page']);
+    } else if (view === 'iso-rotating') {
+      $('#step-question').textContent = 'Step 3: What direction is the B field produced by the induced current?';
+      $('#direction-buttons').classList.remove('hidden');
+    }
+  },
+
+  showBinaryButtons(values, labels) {
+    const container = $('#binary-buttons');
+    container.innerHTML = '';
+    container.classList.remove('hidden');
+
+    for (let i = 0; i < values.length; i++) {
+      const btn = document.createElement('button');
+      btn.className = 'binary-btn';
+      btn.dataset.value = values[i];
+      btn.innerHTML = `<span>${labels[i]}</span>`;
+      btn.addEventListener('click', () => this.handleStep3Answer(values[i]));
+      container.appendChild(btn);
+    }
+  },
+
+  handleAnswer(answer) {
+    if (this.currentStep < 1 || this.currentStep > 2) return;
+
+    const s = this.currentSituation;
+    const correct = this.currentStep === 1 ? s.step1_B : s.step2_dPhi;
+    const isCorrect = answer === correct;
+
+    this.stepResults[this.currentStep - 1] = isCorrect;
+    this.revealStep = this.currentStep;
+
+    // Update buttons
+    for (const btn of $$('.dir-btn')) {
+      btn.disabled = true;
+      if (btn.dataset.dir === correct) btn.classList.add('correct-answer');
+      if (btn.dataset.dir === answer && !isCorrect) btn.classList.add('wrong-answer');
+    }
+
+    // Update step dot
+    const dot = $(`#dot-${this.currentStep}`);
+    dot.classList.remove('active');
+    dot.classList.add(isCorrect ? 'correct' : 'wrong');
+    dot.textContent = isCorrect ? '✓' : '✗';
+
+    // Re-render with overlay
+    renderSituation(s, this.revealStep);
+
+    // Show next
+    $('#next-btn').classList.remove('hidden');
+    $('#next-btn').focus();
+  },
+
+  handleStep3Answer(answer) {
+    const s = this.currentSituation;
+    const view = s.render_view;
+    let correct;
+
+    if (view === 'face-on') {
+      correct = s.step3_current.rotation_sense;
+    } else if (view === 'iso-horizontal') {
+      const edges = getEdgeSymbols(s);
+      correct = edges.right;
+    } else if (view === 'iso-vertical') {
+      const edges = getEdgeSymbols(s);
+      correct = edges.top;
+    } else if (view === 'iso-rotating') {
+      correct = s.step3_induced_B;
+    }
+
+    const isCorrect = answer === correct;
+    this.stepResults[2] = isCorrect;
+    this.revealStep = 3;
+
+    // Update binary buttons
+    for (const btn of $$('.binary-btn', $('#binary-buttons'))) {
+      btn.disabled = true;
+      if (btn.dataset.value === correct) btn.classList.add('correct-answer');
+      if (btn.dataset.value === answer && !isCorrect) btn.classList.add('wrong-answer');
+    }
+
+    // Update direction buttons for iso-rotating
+    if (view === 'iso-rotating') {
+      for (const btn of $$('.dir-btn')) {
+        btn.disabled = true;
+        if (btn.dataset.dir === correct) btn.classList.add('correct-answer');
+        if (btn.dataset.dir === answer && !isCorrect) btn.classList.add('wrong-answer');
+      }
+    }
+
+    const dot = $('#dot-3');
+    dot.classList.remove('active');
+    dot.classList.add(isCorrect ? 'correct' : 'wrong');
+    dot.textContent = isCorrect ? '✓' : '✗';
+
+    renderSituation(s, this.revealStep);
+
+    this.currentStep = 4;
+    this.showSummary();
+  },
+
+  advance() {
+    $('#next-btn').classList.add('hidden');
+
+    if (this.currentStep < 3) {
+      this.showStep(this.currentStep + 1);
+    } else if (this.currentStep === 4) {
+      this.loadNext();
+    }
+  },
+
+  showSummary() {
+    const allCorrect = this.stepResults.every(r => r === true);
+    Progress.record(this.currentSituation.id, allCorrect);
+    this.updateStreak();
+
+    $('#direction-buttons').classList.add('hidden');
+    $('#binary-buttons').classList.add('hidden');
+    $('#step-question').textContent = allCorrect ? 'All correct!' : 'Review the steps above.';
+    $('#summary-row').classList.remove('hidden');
+
+    for (let i = 0; i < 3; i++) {
+      const mark = $(`#mark-${i + 1}`);
+      mark.textContent = this.stepResults[i] ? '✅' : '❌';
+    }
+
+    $('#next-btn').classList.remove('hidden');
+    $('#next-btn').textContent = 'Next →';
+    $('#next-btn').focus();
+
+    this.updateProgress();
+  },
+
+  resetStepDots() {
+    for (let i = 1; i <= 3; i++) {
+      const dot = $(`#dot-${i}`);
+      dot.className = 'step-dot';
+      dot.textContent = i;
+    }
+  },
+
+  updateStreak() {
+    $('#streak-count').textContent = Progress.data.streak;
+  },
+
+  updateProgress() {
+    const panel = $('#progress-panel');
+    panel.innerHTML = '';
+
+    const cats = ['C1', 'C2', 'C3', 'C4'];
+    for (const cat of cats) {
+      const stats = Progress.getStats(cat, this.situations);
+      const pct = stats.total ? Math.round(stats.done / stats.total * 100) : 0;
+
+      const row = document.createElement('div');
+      row.className = 'progress-row';
+      row.innerHTML = `
+        <span class="progress-label">${cat}</span>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
+        <span class="progress-count">${stats.done}/${stats.total}</span>
+      `;
+      panel.appendChild(row);
+    }
+  }
+};
+
+// ── Initialise ─────────────────────────────────────────────
+
+function init() {
+  Progress.load();
+
+  const savedTheme = Progress.data.preferences?.theme;
+  if (savedTheme && savedTheme !== 'auto') {
+    document.documentElement.setAttribute('data-theme', savedTheme);
+  }
+
+  try {
+    const { situations, sequences } = DataLoader.load();
+    if (situations.length === 0) {
+      throw new Error('No situations loaded.');
+    }
+    Quiz.init(situations, sequences);
+    $('#streak-count').textContent = Progress.data.streak;
+  } catch (err) {
+    $('#loading-msg').classList.add('hidden');
+    $('#error-msg').classList.remove('hidden');
+    $('#error-msg').textContent = `Error: ${err.message}`;
+    console.error(err);
+  }
+}
+
+init();
+
+// QA hooks
+window.__EMI_QA = {
+  getSituations: () => DataLoader.situations,
+  getSequences: () => DataLoader.sequences,
+  validate: () => DataLoader.validate(),
+  getProgress: () => Progress.data,
+  resetProgress: () => { Progress.reset(); location.reload(); }
+};
+
+})();
+</script>
+</body>
+</html>
