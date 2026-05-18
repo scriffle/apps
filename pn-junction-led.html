@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PN Junction & LED Simulator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #0a0a1a;
+            color: #eee;
+            overflow: hidden;
+        }
+
+        #canvas {
+            display: block;
+            background: #0a0a1a;
+            touch-action: none;
+        }
+
+        .controls {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background: rgba(16, 16, 36, 0.96);
+            padding: 18px;
+            border-radius: 10px;
+            border: 2px solid #3a3a5a;
+            max-width: 310px;
+            cursor: move;
+            user-select: none;
+            z-index: 10;
+        }
+
+        .controls.collapsed .control-content { display: none; }
+
+        .controls-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            cursor: pointer;
+        }
+
+        .controls.collapsed .controls-header { margin-bottom: 0; }
+
+        .collapse-btn {
+            background: #3a3a5a;
+            border: none;
+            color: #66d9ff;
+            width: 28px;
+            height: 28px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.3s;
+        }
+
+        .collapse-btn:hover { background: #4a4a6a; }
+
+        h2 { color: #66d9ff; font-size: 1.2em; }
+
+        .control-group { margin-bottom: 16px; }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            color: #aaa;
+            font-size: 0.9em;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: #2a2a4a;
+            outline: none;
+            -webkit-appearance: none;
+            touch-action: manipulation;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #66d9ff;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #66d9ff;
+            cursor: pointer;
+            border: none;
+        }
+
+        .value-display {
+            color: #66d9ff;
+            font-weight: bold;
+            font-size: 1em;
+            margin-top: 4px;
+        }
+
+        .info {
+            background: rgba(102, 217, 255, 0.08);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 0.82em;
+            line-height: 1.5;
+            border-left: 3px solid #66d9ff;
+            margin-top: 12px;
+        }
+
+        .legend {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            background: rgba(16, 16, 36, 0.94);
+            padding: 14px;
+            border-radius: 10px;
+            border: 2px solid #3a3a5a;
+            z-index: 10;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 6px 0;
+            font-size: 0.85em;
+        }
+
+        .legend-color {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+
+        .status-bar {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(16, 16, 36, 0.96);
+            padding: 14px 18px;
+            border-radius: 10px;
+            border: 2px solid #3a3a5a;
+            font-size: 0.9em;
+            z-index: 10;
+            min-width: 180px;
+        }
+
+        .status-bar .status-label {
+            color: #888;
+            font-size: 0.8em;
+            margin-bottom: 2px;
+        }
+
+        .status-bar .status-value {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 8px;
+        }
+
+        .forward { color: #4dff88; }
+        .reverse { color: #ff6464; }
+        .zero { color: #888; }
+
+        #modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #modal-overlay.open { display: flex; }
+
+        .modal-box {
+            background: #0d0d20;
+            border: 2px solid #4a4a6a;
+            border-radius: 14px;
+            padding: 0;
+            position: relative;
+            overflow: hidden;
+            width: fit-content;
+            max-width: 95vw;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 18px;
+            background: rgba(30, 30, 60, 0.9);
+            border-bottom: 1px solid #3a3a5a;
+        }
+
+        .modal-header h3 {
+            color: #66d9ff;
+            font-size: 1.1em;
+        }
+
+        .modal-close {
+            background: #3a3a5a;
+            border: none;
+            color: #aaa;
+            width: 30px;
+            height: 30px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .modal-close:hover { background: #5a5a7a; color: #fff; }
+
+        #modal-canvas {
+            display: block;
+        }
+
+        .modal-caption {
+            padding: 10px 18px;
+            font-size: 0.82em;
+            color: #999;
+            background: rgba(20, 20, 40, 0.9);
+            border-top: 1px solid #2a2a4a;
+            line-height: 1.5;
+        }
+
+        /* First-run welcome overlay */
+        #welcome-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(5, 5, 15, 0.92);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 1;
+            transition: opacity 0.4s ease;
+        }
+        #welcome-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .welcome-box {
+            background: linear-gradient(135deg, #141428 0%, #1a1a35 100%);
+            border: 2px solid #3a3a6a;
+            border-radius: 16px;
+            max-width: 560px;
+            width: 90vw;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 32px 28px 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 40px rgba(77, 120, 200, 0.08);
+        }
+        .welcome-box h1 {
+            font-size: 1.5em;
+            margin: 0 0 6px;
+            color: #dde;
+        }
+        .welcome-box .subtitle {
+            font-size: 0.85em;
+            color: #7a8aaa;
+            margin-bottom: 20px;
+        }
+        .welcome-box h2 {
+            font-size: 1.05em;
+            color: #aab;
+            margin: 18px 0 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid rgba(100, 100, 150, 0.2);
+        }
+        .welcome-box p, .welcome-box li {
+            font-size: 0.88em;
+            color: #99a;
+            line-height: 1.6;
+        }
+        .welcome-box ul {
+            padding-left: 20px;
+            margin: 6px 0;
+        }
+        .welcome-box li {
+            margin-bottom: 4px;
+        }
+        .welcome-box .key {
+            display: inline-block;
+            background: #2a2a4a;
+            border: 1px solid #4a4a6a;
+            border-radius: 4px;
+            padding: 1px 7px;
+            font-size: 0.85em;
+            color: #bbc;
+            font-family: monospace;
+        }
+        .welcome-box .disclaimer {
+            margin-top: 20px;
+            padding: 12px 14px;
+            background: rgba(200, 170, 80, 0.08);
+            border: 1px solid rgba(200, 170, 80, 0.2);
+            border-radius: 8px;
+            font-size: 0.8em;
+            color: #a99870;
+            line-height: 1.5;
+        }
+        .welcome-btn {
+            display: block;
+            width: 100%;
+            margin-top: 22px;
+            padding: 14px;
+            background: linear-gradient(135deg, #3a5a8a, #4a6aaa);
+            border: none;
+            border-radius: 10px;
+            color: #eef;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .welcome-btn:hover {
+            background: linear-gradient(135deg, #4a6aaa, #5a7abb);
+        }
+        .welcome-btn:active {
+            transform: scale(0.98);
+        }
+    </style>
+</head>
+<body>
+    <div id="welcome-overlay">
+        <div class="welcome-box">
+            <h1>PN Junction &amp; LED Simulator</h1>
+            <p class="subtitle">An interactive visualisation of how semiconductor diodes and LEDs work</p>
+
+            <h2>What you're looking at</h2>
+            <p>This simulation shows electrons flowing through a copper wire into a thin PN semiconductor junction. The two halves of the junction are doped with different elements:</p>
+            <ul>
+                <li><strong>N-type (left)</strong> &mdash; Silicon doped with Phosphorus (5 valence electrons). The extra electron is free to conduct.</li>
+                <li><strong>P-type (right)</strong> &mdash; Silicon doped with Boron (3 valence electrons). The missing electron creates a &ldquo;hole&rdquo; in the valence shell.</li>
+            </ul>
+
+            <h2>How to use</h2>
+            <ul>
+                <li><strong>Voltage slider</strong> &mdash; drag to apply forward (+V) or reverse (&minus;V) bias</li>
+                <li><strong>Forward bias:</strong> electrons flow through the junction, fill holes, and emit light (LED)</li>
+                <li><strong>Reverse bias:</strong> the junction blocks electron flow completely</li>
+                <li><strong>Click on the N or P region</strong> to open a zoomed modal showing valence shell wave functions and electron capture</li>
+            </ul>
+
+            <h2>What to look for</h2>
+            <ul>
+                <li>Phosphorus atoms (<span class="key">P</span>) have 5 wave lobes; Boron atoms (<span class="key">B</span>) have 3</li>
+                <li>Silicon atoms in the P-type region show a suppressed lobe &mdash; the hole</li>
+                <li>When an electron fills a hole, the atom glows yellow (photon emission)</li>
+                <li>Electrons repel each other and bounce off lattice atoms as they flow</li>
+            </ul>
+
+            <div class="disclaimer">
+                This simulation is for <strong>pedagogical purposes only</strong>. It uses simplified models to illustrate the core concepts of PN junctions, doping, and LED light emission. Real semiconductor physics involves quantum mechanics, band theory, and effects not captured here. Particle counts, speeds, and proportions are not to scale.
+            </div>
+
+            <button class="welcome-btn" id="welcome-dismiss">Got it &mdash; start exploring</button>
+        </div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="controls" id="controls">
+        <div class="controls-header" id="controlsHeader">
+            <h2>PN Junction / LED</h2>
+            <button class="collapse-btn" id="collapseBtn">&minus;</button>
+        </div>
+        <div class="control-content">
+            <div class="control-group">
+                <label for="voltage">Applied Voltage (Bias)</label>
+                <input type="range" id="voltage" min="-3" max="3" value="0" step="0.1">
+                <div class="value-display" id="voltageDisplay">0.0 V &mdash; No Bias</div>
+            </div>
+            <div class="info">
+                <strong>How it works:</strong><br>
+                &bull; Copper wire carries electrons to a thin PN junction<br>
+                &bull; Forward bias (+V): electrons cross junction, fill holes &rarr; emit light<br>
+                &bull; Reverse bias (&minus;V): junction blocks electron flow completely<br>
+                &bull; Conventional current flows opposite to electron flow
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar" id="statusBar">
+        <div class="status-label">Bias State</div>
+        <div class="status-value zero" id="biasState">No Bias</div>
+        <div class="status-label">Current Flow</div>
+        <div class="status-value" id="currentFlow" style="color:#888">None</div>
+        <div class="status-label">LED</div>
+        <div class="status-value" id="ledState" style="color:#888">Off</div>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-color" style="background: #4dabf7;"></div>
+            <span>Free electron (e&minus;)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #cc8844;"></div>
+            <span>Copper lattice atom (Cu&plus;)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #556;"></div>
+            <span>Silicon atom (Si)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #3a4a55; border: 1.5px solid #5a8a7a;"></div>
+            <span>Phosphorus dopant (P) — N-type</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #554a3a; border: 1.5px solid #8a7a5a;"></div>
+            <span>Boron dopant (B) — P-type</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: transparent; border: 2px dashed #999;"></div>
+            <span>Empty valence spot (hole)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ffee44;"></div>
+            <span>Photon (light emission)</span>
+        </div>
+    </div>
+
+    <div id="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 id="modal-title">Valence Shell View</h3>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <canvas id="modal-canvas" width="600" height="450"></canvas>
+            <div class="modal-caption" id="modal-caption"></div>
+        </div>
+    </div>
+
+    <script>
+    'use strict';
+    (function() {
+        // First-run welcome screen
+        const welcomeOverlay = document.getElementById('welcome-overlay');
+        const welcomeDismiss = document.getElementById('welcome-dismiss');
+        const WELCOME_KEY = 'pn-junction-led-welcomed';
+
+        if (localStorage.getItem(WELCOME_KEY)) {
+            welcomeOverlay.classList.add('hidden');
+            setTimeout(() => welcomeOverlay.style.display = 'none', 50);
+        }
+
+        welcomeDismiss.addEventListener('click', () => {
+            welcomeOverlay.classList.add('hidden');
+            setTimeout(() => welcomeOverlay.style.display = 'none', 400);
+            localStorage.setItem(WELCOME_KEY, '1');
+        });
+
+        document.addEventListener('keydown', e => {
+            if ((e.key === 'Enter' || e.key === 'Escape') && !welcomeOverlay.classList.contains('hidden')) {
+                welcomeDismiss.click();
+            }
+        });
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        const voltageSlider = document.getElementById('voltage');
+        const voltageDisplay = document.getElementById('voltageDisplay');
+        const biasStateEl = document.getElementById('biasState');
+        const currentFlowEl = document.getElementById('currentFlow');
+        const ledStateEl = document.getElementById('ledState');
+
+        let W, H;
+
+        // Layout: the junction is a narrow band in the center
+        // N_COLS and P_COLS control how many atom columns for each semiconductor side
+        const JUNCTION_COLS = 3;
+        const ATOM_SPACING = 48;
+        const ATOM_RADIUS = 9;
+        const SHELL_RADIUS = 17;
+        const PARTICLE_RADIUS = 5;
+        const DAMPING = 0.92;
+        const MAX_SPEED = 3.0;
+        const MARGIN = 150;
+
+        // Regions (recalculated on resize)
+        let nStart, nEnd, pStart, pEnd, junctionX;
+        let simW, simH;
+
+        const copperAtoms = [];
+        const nAtoms = [];
+        const pAtoms = [];
+        const electrons = [];
+
+        function resize() {
+            W = canvas.width = window.innerWidth;
+            H = canvas.height = window.innerHeight;
+            simW = W + MARGIN * 2;
+            simH = H + MARGIN * 2;
+
+            // Junction centered in sim space
+            junctionX = simW / 2;
+            nStart = junctionX - JUNCTION_COLS * ATOM_SPACING;
+            nEnd = junctionX;
+            pStart = junctionX;
+            pEnd = junctionX + JUNCTION_COLS * ATOM_SPACING;
+
+            buildLattice();
+            spawnElectrons();
+        }
+
+        function buildLattice() {
+            copperAtoms.length = 0;
+            nAtoms.length = 0;
+            pAtoms.length = 0;
+
+            const rows = Math.ceil(simH / ATOM_SPACING) + 1;
+
+            for (let r = 0; r < rows; r++) {
+                const y = r * ATOM_SPACING + ATOM_SPACING * 0.5;
+
+                // Left copper region
+                for (let x = ATOM_SPACING * 0.5; x < nStart; x += ATOM_SPACING) {
+                    copperAtoms.push({ x, y, baseX: x, baseY: y, vx: 0, vy: 0 });
+                }
+
+                // N-type semiconductor (doped with phosphorus)
+                for (let c = 0; c < JUNCTION_COLS; c++) {
+                    const x = nStart + c * ATOM_SPACING + ATOM_SPACING * 0.5;
+                    const isDopant = (c + r) % 3 === 1;
+                    nAtoms.push({ x, y, baseX: x, baseY: y, vx: 0, vy: 0, isDopant });
+                }
+
+                // P-type semiconductor (doped with boron)
+                for (let c = 0; c < JUNCTION_COLS; c++) {
+                    const x = pStart + c * ATOM_SPACING + ATOM_SPACING * 0.5;
+                    const isDopant = (c + r) % 3 === 1;
+                    pAtoms.push({
+                        x, y, baseX: x, baseY: y, vx: 0, vy: 0,
+                        holeFilled: false,
+                        fillTimer: 0,
+                        glowTimer: 0,
+                        isDopant
+                    });
+                }
+
+                // Right copper region
+                for (let x = pEnd + ATOM_SPACING * 0.5; x < simW; x += ATOM_SPACING) {
+                    copperAtoms.push({ x, y, baseX: x, baseY: y, vx: 0, vy: 0 });
+                }
+            }
+        }
+
+        function spawnElectrons() {
+            electrons.length = 0;
+
+            const numElectrons = Math.floor((simW * simH) / 4000);
+
+            for (let i = 0; i < numElectrons; i++) {
+                electrons.push({
+                    x: Math.random() * simW,
+                    y: Math.random() * simH,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2
+                });
+            }
+        }
+
+        resize();
+        window.addEventListener('resize', resize);
+
+        // Panel drag
+        const controlsPanel = document.getElementById('controls');
+        const collapseBtn = document.getElementById('collapseBtn');
+        let isDraggingPanel = false, panelOX = 0, panelOY = 0;
+
+        document.getElementById('controlsHeader').addEventListener('mousedown', e => {
+            if (e.target === collapseBtn) return;
+            isDraggingPanel = true;
+            const r = controlsPanel.getBoundingClientRect();
+            panelOX = e.clientX - r.left;
+            panelOY = e.clientY - r.top;
+        });
+        document.addEventListener('mousemove', e => {
+            if (isDraggingPanel) {
+                controlsPanel.style.left = (e.clientX - panelOX) + 'px';
+                controlsPanel.style.top = (e.clientY - panelOY) + 'px';
+            }
+        });
+        document.addEventListener('mouseup', () => { isDraggingPanel = false; });
+
+        collapseBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            controlsPanel.classList.toggle('collapsed');
+            collapseBtn.textContent = controlsPanel.classList.contains('collapsed') ? '+' : '−';
+        });
+
+        voltageSlider.addEventListener('input', updateUI);
+
+        function updateUI() {
+            const v = parseFloat(voltageSlider.value);
+            let label, cls;
+            if (v > 0.05) { label = 'Forward Bias'; cls = 'forward'; }
+            else if (v < -0.05) { label = 'Reverse Bias'; cls = 'reverse'; }
+            else { label = 'No Bias'; cls = 'zero'; }
+            voltageDisplay.textContent = v.toFixed(1) + ' V — ' + label;
+            biasStateEl.textContent = label;
+            biasStateEl.className = 'status-value ' + cls;
+
+            if (v > 0.6) {
+                currentFlowEl.textContent = 'Flowing';
+                currentFlowEl.style.color = '#4dff88';
+                ledStateEl.textContent = 'Emitting';
+                ledStateEl.style.color = '#ffee44';
+            } else if (v > 0.05) {
+                currentFlowEl.textContent = 'Minimal';
+                currentFlowEl.style.color = '#88aa66';
+                ledStateEl.textContent = 'Off';
+                ledStateEl.style.color = '#888';
+            } else {
+                currentFlowEl.textContent = 'None';
+                currentFlowEl.style.color = '#888';
+                ledStateEl.textContent = 'Off';
+                ledStateEl.style.color = '#888';
+            }
+        }
+        updateUI();
+
+        // Physics
+        function jiggleAtom(a, thermal) {
+            a.vx += (Math.random() - 0.5) * thermal;
+            a.vy += (Math.random() - 0.5) * thermal;
+            a.vx += (a.baseX - a.x) * 0.2;
+            a.vy += (a.baseY - a.y) * 0.2;
+            a.vx *= 0.82;
+            a.vy *= 0.82;
+            a.x += a.vx;
+            a.y += a.vy;
+        }
+
+        function updateAtoms() {
+            const thermal = 0.45;
+
+            copperAtoms.forEach(a => jiggleAtom(a, thermal));
+            nAtoms.forEach(a => jiggleAtom(a, thermal));
+            pAtoms.forEach(a => {
+                jiggleAtom(a, thermal);
+                if (a.holeFilled && a.fillTimer > 0) {
+                    a.fillTimer--;
+                    if (a.fillTimer <= 0) a.holeFilled = false;
+                }
+                if (a.glowTimer > 0) a.glowTimer--;
+            });
+        }
+
+        function updateElectrons() {
+            const v = parseFloat(voltageSlider.value);
+            const thermalSpeed = 0.7;
+            const fieldStrength = v * 0.08;
+
+            for (let i = 0; i < electrons.length; i++) {
+                const e = electrons[i];
+
+                // Thermal random motion — always present
+                e.vx += (Math.random() - 0.5) * thermalSpeed;
+                e.vy += (Math.random() - 0.5) * thermalSpeed;
+
+                // Electric field drift (forward = push right, reverse = push left)
+                e.vx += fieldStrength;
+
+                // --- JUNCTION BARRIER ---
+                const canCross = v > 0.6;
+
+                if (!canCross) {
+                    // Hard barrier at the junction line
+                    const margin = 8;
+                    if (e.x < junctionX && e.x + e.vx >= junctionX - margin) {
+                        e.vx = -Math.abs(e.vx) * 0.5;
+                        e.x = junctionX - margin - 1;
+                    }
+                    if (e.x > junctionX && e.x + e.vx <= junctionX + margin) {
+                        e.vx = Math.abs(e.vx) * 0.5;
+                        e.x = junctionX + margin + 1;
+                    }
+
+                    // Repulsion near junction
+                    const distToJunction = Math.abs(e.x - junctionX);
+                    if (distToJunction < 40) {
+                        const pushStrength = (1 - distToJunction / 40) * 0.8;
+                        if (e.x < junctionX) {
+                            e.vx -= pushStrength;
+                        } else {
+                            e.vx += pushStrength;
+                        }
+                    }
+                }
+
+                // Electron falls into a hole: brief pause, emit light, continue through
+                if (canCross && e.x > pStart && e.x < pEnd) {
+                    for (let j = 0; j < pAtoms.length; j++) {
+                        const a = pAtoms[j];
+                        if (a.holeFilled) continue;
+                        const dx = e.x - a.x, dy = e.y - a.y;
+                        if (dx * dx + dy * dy < 250) {
+                            a.holeFilled = true;
+                            a.fillTimer = 50 + Math.floor(Math.random() * 30);
+
+                            a.glowTimer = 30;
+
+                            // Electron briefly slows, then the field pushes it onward
+                            e.vx *= 0.15;
+                            e.vy *= 0.15;
+                            break;
+                        }
+                    }
+                }
+
+                // Repulsion from lattice atoms (copper, N-type, P-type)
+                const allAtoms = copperAtoms;
+                for (let j = 0; j < allAtoms.length; j++) {
+                    const a = allAtoms[j];
+                    const dx = e.x - a.x, dy = e.y - a.y;
+                    const d2 = dx * dx + dy * dy;
+                    if (d2 < 500 && d2 > 1) {
+                        const d = Math.sqrt(d2);
+                        const f = 80 / (d2 + 20);
+                        e.vx += (dx / d) * f;
+                        e.vy += (dy / d) * f;
+                    }
+                }
+                for (let j = 0; j < nAtoms.length; j++) {
+                    const a = nAtoms[j];
+                    const dx = e.x - a.x, dy = e.y - a.y;
+                    const d2 = dx * dx + dy * dy;
+                    if (d2 < 500 && d2 > 1) {
+                        const d = Math.sqrt(d2);
+                        const f = 80 / (d2 + 20);
+                        e.vx += (dx / d) * f;
+                        e.vy += (dy / d) * f;
+                    }
+                }
+                for (let j = 0; j < pAtoms.length; j++) {
+                    const a = pAtoms[j];
+                    const dx = e.x - a.x, dy = e.y - a.y;
+                    const d2 = dx * dx + dy * dy;
+                    if (d2 < 500 && d2 > 1) {
+                        const d = Math.sqrt(d2);
+                        const f = 80 / (d2 + 20);
+                        e.vx += (dx / d) * f;
+                        e.vy += (dy / d) * f;
+                    }
+                }
+
+                // Strong electron-electron repulsion to keep them spaced out
+                for (let j = i + 1; j < electrons.length; j++) {
+                    const o = electrons[j];
+                    const dx = e.x - o.x, dy = e.y - o.y;
+                    const d2 = dx * dx + dy * dy;
+                    if (d2 < 10000 && d2 > 1) {
+                        const d = Math.sqrt(d2);
+                        const f = 5000 / (d2 + 100);
+                        e.vx += (dx / d) * f;
+                        e.vy += (dy / d) * f;
+                        o.vx -= (dx / d) * f;
+                        o.vy -= (dy / d) * f;
+                    }
+                }
+
+                e.vx *= DAMPING;
+                e.vy *= DAMPING;
+                const spd = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
+                if (spd > MAX_SPEED) {
+                    e.vx = (e.vx / spd) * MAX_SPEED;
+                    e.vy = (e.vy / spd) * MAX_SPEED;
+                }
+
+                e.x += e.vx;
+                e.y += e.vy;
+
+                // Wrap vertically
+                if (e.y < 0) e.y = simH;
+                if (e.y > simH) e.y = 0;
+
+                // Wrap horizontally (circuit loop)
+                if (e.x > simW + 5) { e.x = 2; e.y = Math.random() * simH; }
+                if (e.x < -5) { e.x = simW - 2; e.y = Math.random() * simH; }
+            }
+        }
+
+
+        // Drawing
+        function draw() {
+            ctx.fillStyle = '#0a0a1a';
+            ctx.fillRect(0, 0, W, H);
+
+            const v = parseFloat(voltageSlider.value);
+
+            // Offset so sim space is centered and overflows edges
+            ctx.save();
+            ctx.translate(-MARGIN, -MARGIN);
+
+            // Copper region background tint
+            ctx.fillStyle = 'rgba(160, 100, 40, 0.06)';
+            ctx.fillRect(0, 0, nStart, simH);
+            ctx.fillRect(pEnd, 0, simW - pEnd, simH);
+
+            // N-type region
+            ctx.fillStyle = 'rgba(60, 80, 130, 0.12)';
+            ctx.fillRect(nStart, 0, nEnd - nStart, simH);
+
+            // P-type region
+            ctx.fillStyle = 'rgba(130, 80, 60, 0.12)';
+            ctx.fillRect(pStart, 0, pEnd - pStart, simH);
+
+            // Junction line
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(junctionX, 0);
+            ctx.lineTo(junctionX, simH);
+            ctx.stroke();
+
+            // Region boundary lines
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([6, 6]);
+            [nStart, pEnd].forEach(x => {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, simH);
+                ctx.stroke();
+            });
+            ctx.setLineDash([]);
+
+            // Draw copper atoms
+            copperAtoms.forEach(a => {
+                ctx.beginPath();
+                ctx.arc(a.x, a.y, ATOM_RADIUS, 0, Math.PI * 2);
+                ctx.fillStyle = '#8a5c2a';
+                ctx.fill();
+                ctx.strokeStyle = '#bb7733';
+                ctx.lineWidth = 1.2;
+                ctx.stroke();
+            });
+
+            // N-type semiconductor atoms
+            nAtoms.forEach(a => {
+                ctx.beginPath();
+                ctx.arc(a.x, a.y, ATOM_RADIUS, 0, Math.PI * 2);
+                ctx.fillStyle = a.isDopant ? '#3a4a55' : '#445';
+                ctx.fill();
+                ctx.strokeStyle = a.isDopant ? '#5a8a7a' : '#667';
+                ctx.lineWidth = 1.2;
+                ctx.stroke();
+
+                // Dopant label
+                if (a.isDopant) {
+                    ctx.fillStyle = 'rgba(130, 200, 170, 0.7)';
+                    ctx.font = 'bold 7px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('P', a.x, a.y);
+                }
+
+                // Full valence shell
+                ctx.beginPath();
+                ctx.arc(a.x, a.y, SHELL_RADIUS, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(150, 180, 220, 0.35)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // Bound electron on shell
+                ctx.beginPath();
+                ctx.arc(a.x + SHELL_RADIUS, a.y, 2.5, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(77, 171, 247, 0.5)';
+                ctx.fill();
+            });
+
+            // P-type semiconductor atoms
+            pAtoms.forEach(a => {
+                ctx.beginPath();
+                ctx.arc(a.x, a.y, ATOM_RADIUS, 0, Math.PI * 2);
+                ctx.fillStyle = a.isDopant ? '#554a3a' : '#445';
+                ctx.fill();
+                ctx.strokeStyle = a.isDopant ? '#8a7a5a' : '#667';
+                ctx.lineWidth = 1.2;
+                ctx.stroke();
+
+                // Dopant label
+                if (a.isDopant) {
+                    ctx.fillStyle = 'rgba(200, 180, 130, 0.7)';
+                    ctx.font = 'bold 7px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('B', a.x, a.y);
+                }
+
+                ctx.beginPath();
+                ctx.arc(a.x, a.y, SHELL_RADIUS, 0, Math.PI * 2);
+                if (a.holeFilled) {
+                    ctx.strokeStyle = 'rgba(150, 180, 220, 0.5)';
+                    ctx.setLineDash([]);
+                } else {
+                    ctx.strokeStyle = 'rgba(180, 160, 140, 0.4)';
+                    ctx.setLineDash([4, 4]);
+                }
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                if (a.holeFilled) {
+                    ctx.beginPath();
+                    ctx.arc(a.x - SHELL_RADIUS, a.y, 3, 0, Math.PI * 2);
+                    ctx.fillStyle = '#4dabf7';
+                    ctx.fill();
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(a.x - SHELL_RADIUS, a.y, 3.5, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(200, 180, 150, 0.6)';
+                    ctx.lineWidth = 1.2;
+                    ctx.stroke();
+                }
+            });
+
+            // Free electrons
+            ctx.fillStyle = '#4dabf7';
+            electrons.forEach(e => {
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, PARTICLE_RADIUS, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.fillStyle = '#0a0a1a';
+            ctx.font = 'bold 9px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            electrons.forEach(e => {
+                ctx.fillText('−', e.x, e.y);
+            });
+
+            // Glow on P-type atoms when a hole has just been filled
+            pAtoms.forEach(a => {
+                if (a.glowTimer > 0) {
+                    const intensity = a.glowTimer / 30;
+                    ctx.fillStyle = `rgba(255, 238, 68, ${intensity * 0.4})`;
+                    ctx.beginPath();
+                    ctx.arc(a.x, a.y, SHELL_RADIUS + 10, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+
+            ctx.restore();
+
+            // Region labels and annotations in screen space
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = 'rgba(200, 150, 80, 0.5)';
+            ctx.fillText('Copper wire', (nStart - MARGIN) / 2, 8);
+            ctx.fillText('Copper wire', (pEnd - MARGIN) + (W - (pEnd - MARGIN)) / 2, 8);
+            ctx.fillStyle = 'rgba(120, 150, 220, 0.6)';
+            ctx.fillText('N-type', (nStart + nEnd) / 2 - MARGIN, 8);
+            ctx.fillStyle = 'rgba(220, 150, 120, 0.6)';
+            ctx.fillText('P-type', (pStart + pEnd) / 2 - MARGIN, 8);
+
+            drawAnnotations(v);
+        }
+
+        function drawAnnotations(v) {
+            if (Math.abs(v) < 0.05) return;
+
+            ctx.font = '13px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+
+            const y = H - 26;
+
+            if (v > 0.6) {
+                ctx.fillStyle = 'rgba(77, 171, 247, 0.7)';
+                ctx.fillText('e⁻ flow: N → P  (left to right through junction)', W / 2, y);
+                ctx.fillStyle = 'rgba(100, 220, 150, 0.6)';
+                ctx.fillText('Conventional current (I): opposite to electron flow', W / 2, y + 16);
+            } else if (v > 0.05) {
+                ctx.fillStyle = 'rgba(200, 200, 100, 0.6)';
+                ctx.fillText('Below threshold — not enough voltage to overcome junction barrier', W / 2, y);
+            } else {
+                ctx.fillStyle = 'rgba(255, 100, 100, 0.6)';
+                ctx.fillText('Reverse bias — junction blocks all electron flow', W / 2, y);
+            }
+
+            // Voltage polarity markers
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = 'rgba(200, 200, 200, 0.5)';
+            if (v > 0) {
+                ctx.fillText('+', 24, H / 2);
+                ctx.fillText('−', W - 24, H / 2);
+            } else {
+                ctx.fillText('−', 24, H / 2);
+                ctx.fillText('+', W - 24, H / 2);
+            }
+        }
+
+        function animate() {
+            updateAtoms();
+            updateElectrons();
+            draw();
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+
+        // ===== MODAL ZOOMED VIEW =====
+        const modalOverlay = document.getElementById('modal-overlay');
+        const modalCanvas = document.getElementById('modal-canvas');
+        const modalCtx = modalCanvas.getContext('2d');
+        const modalTitle = document.getElementById('modal-title');
+        const modalCaption = document.getElementById('modal-caption');
+        const modalClose = document.getElementById('modal-close');
+        let modalOpen = false;
+        let modalType = 'P';
+        let modalAnimId = null;
+
+        // Modal atom/electron state
+        const MR = 40;          // atom radius in modal
+        const MSR = 65;         // shell radius
+        const MW = 600, MH = 450;
+        const mAtoms = [];
+        const mElectrons = [];
+        const mGlows = [];
+
+        function openModal(type) {
+            modalType = type;
+            modalOpen = true;
+            modalOverlay.classList.add('open');
+
+            if (type === 'P') {
+                modalTitle.textContent = 'P-type: Boron-doped Si — holes from 3-valence dopant';
+                modalCaption.textContent =
+                    'Boron (B) has only 3 valence electrons vs silicon\'s 4. When B substitutes into the Si lattice, ' +
+                    'it leaves an empty valence spot (hole) on neighbouring Si atoms. Electrons drift in from the N-side, ' +
+                    'fall into holes, emit photons (yellow glow), then the E-field lifts them back out.';
+            } else {
+                modalTitle.textContent = 'N-type: Phosphorus-doped Si — extra electron from 5-valence dopant';
+                modalCaption.textContent =
+                    'Phosphorus (P) has 5 valence electrons vs silicon\'s 4. Four bond with the lattice; the 5th is loosely ' +
+                    'bound and free to move as a conduction electron. The Si valence shells remain full.';
+            }
+
+            initModalScene();
+            if (!modalAnimId) modalAnimId = requestAnimationFrame(animateModal);
+        }
+
+        function closeModal() {
+            modalOpen = false;
+            modalOverlay.classList.remove('open');
+            if (modalAnimId) {
+                cancelAnimationFrame(modalAnimId);
+                modalAnimId = null;
+            }
+        }
+
+        modalClose.addEventListener('click', closeModal);
+        modalOverlay.addEventListener('click', e => {
+            if (e.target === modalOverlay) closeModal();
+        });
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && modalOpen) closeModal();
+        });
+
+        // Click on canvas to detect N/P region
+        canvas.addEventListener('click', e => {
+            if (modalOpen) return;
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left + MARGIN;
+            if (clickX >= nStart && clickX < nEnd) {
+                openModal('N');
+            } else if (clickX >= pStart && clickX < pEnd) {
+                openModal('P');
+            }
+        });
+
+        function initModalScene() {
+            mAtoms.length = 0;
+            mElectrons.length = 0;
+            mGlows.length = 0;
+
+            // 3x3 grid of atoms
+            const cols = 3, rows = 3;
+            const spacingX = MW / (cols + 1);
+            const spacingY = MH / (rows + 1);
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const isDopant = (r === 1 && c === 1);
+                    mAtoms.push({
+                        x: spacingX * (c + 1),
+                        y: spacingY * (r + 1),
+                        holeFilled: modalType === 'N',
+                        capturedElectron: null,
+                        captureTimer: 0,
+                        glowIntensity: 0,
+                        releaseDelay: 0,
+                        isDopant
+                    });
+                }
+            }
+
+            // Spawn free electrons
+            const numE = modalType === 'P' ? 6 : 10;
+            for (let i = 0; i < numE; i++) {
+                mElectrons.push({
+                    x: Math.random() * MW,
+                    y: Math.random() * MH,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2,
+                    captured: false,
+                    orbitAngle: Math.random() * Math.PI * 2,
+                    orbitTarget: null
+                });
+            }
+        }
+
+        function animateModal() {
+            if (!modalOpen) { modalAnimId = null; return; }
+            updateModalScene();
+            drawModalScene();
+            modalAnimId = requestAnimationFrame(animateModal);
+        }
+
+        function updateModalScene() {
+            const v = parseFloat(voltageSlider.value);
+            const fieldPush = v * 0.03;
+
+            // Update atoms
+            mAtoms.forEach(a => {
+                if (a.glowIntensity > 0) a.glowIntensity -= 0.015;
+
+                if (a.capturedElectron && a.captureTimer > 0) {
+                    a.captureTimer--;
+                    if (a.captureTimer <= 0) {
+                        // E-field lifts electron back out
+                        const el = a.capturedElectron;
+                        el.captured = false;
+                        el.orbitTarget = null;
+                        el.vx = 1.5 + Math.random();
+                        el.vy = (Math.random() - 0.5) * 2;
+                        a.capturedElectron = null;
+                        a.holeFilled = false;
+                    }
+                }
+            });
+
+            // Update electrons
+            mElectrons.forEach(el => {
+                if (el.captured) {
+                    // Orbit the atom it's captured in
+                    if (el.orbitTarget) {
+                        el.orbitAngle += 0.06;
+                        el.x = el.orbitTarget.x + Math.cos(el.orbitAngle) * MSR;
+                        el.y = el.orbitTarget.y + Math.sin(el.orbitAngle) * MSR;
+                    }
+                    return;
+                }
+
+                // Thermal jitter
+                el.vx += (Math.random() - 0.5) * 0.5;
+                el.vy += (Math.random() - 0.5) * 0.5;
+
+                // E-field drift
+                el.vx += fieldPush;
+
+                // Repel electrons to stay outside valence shells
+                mAtoms.forEach(a => {
+                    const dx = el.x - a.x, dy = el.y - a.y;
+                    const d = Math.sqrt(dx * dx + dy * dy);
+                    if (d < MSR + 12 && d > 1) {
+                        const f = 6 / (d + 1);
+                        el.vx += (dx / d) * f;
+                        el.vy += (dy / d) * f;
+                    }
+                });
+
+                // P-type: check if electron falls into a hole
+                if (modalType === 'P') {
+                    mAtoms.forEach(a => {
+                        if (a.isDopant || a.holeFilled || a.capturedElectron) return;
+                        const dx = el.x - a.x, dy = el.y - a.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        // Electron near the shell radius gets captured
+                        if (dist < MSR + 8 && dist > MSR - 20) {
+                            if (Math.random() < 0.02) {
+                                el.captured = true;
+                                el.orbitTarget = a;
+                                el.orbitAngle = Math.atan2(dy, dx);
+                                a.holeFilled = true;
+                                a.capturedElectron = el;
+                                a.glowIntensity = 1.0;
+                                // Random duration before E-field lifts it out
+                                a.captureTimer = 60 + Math.floor(Math.random() * 120);
+                            }
+                        }
+                    });
+                }
+
+                // Electron-electron repulsion
+                mElectrons.forEach(other => {
+                    if (other === el || other.captured) return;
+                    const dx = el.x - other.x, dy = el.y - other.y;
+                    const d2 = dx * dx + dy * dy;
+                    if (d2 < 3000 && d2 > 1) {
+                        const d = Math.sqrt(d2);
+                        const f = 40 / (d2 + 20);
+                        el.vx += (dx / d) * f;
+                        el.vy += (dy / d) * f;
+                    }
+                });
+
+                el.vx *= 0.93;
+                el.vy *= 0.93;
+                const spd = Math.sqrt(el.vx * el.vx + el.vy * el.vy);
+                if (spd > 2.5) { el.vx = (el.vx / spd) * 2.5; el.vy = (el.vy / spd) * 2.5; }
+
+                el.x += el.vx;
+                el.y += el.vy;
+
+                // Wrap
+                if (el.x > MW + 10) { el.x = -5; el.y = Math.random() * MH; }
+                if (el.x < -10) { el.x = MW + 5; el.y = Math.random() * MH; }
+                if (el.y > MH + 10) el.y = -5;
+                if (el.y < -10) el.y = MH + 5;
+            });
+        }
+
+        function drawModalScene() {
+            modalCtx.fillStyle = '#0a0a1a';
+            modalCtx.fillRect(0, 0, MW, MH);
+
+            // Draw atoms
+            mAtoms.forEach(a => {
+                // Photon glow
+                if (a.glowIntensity > 0) {
+                    modalCtx.fillStyle = `rgba(255, 238, 68, ${a.glowIntensity * 0.35})`;
+                    modalCtx.beginPath();
+                    modalCtx.arc(a.x, a.y, MSR + 20, 0, Math.PI * 2);
+                    modalCtx.fill();
+                }
+
+                // Atom core
+                modalCtx.beginPath();
+                modalCtx.arc(a.x, a.y, MR, 0, Math.PI * 2);
+                if (a.isDopant) {
+                    modalCtx.fillStyle = modalType === 'N' ? '#3a4a55' : '#554a3a';
+                } else {
+                    modalCtx.fillStyle = '#445';
+                }
+                modalCtx.fill();
+                modalCtx.strokeStyle = a.isDopant
+                    ? (modalType === 'N' ? '#5a8a7a' : '#8a7a5a')
+                    : '#667';
+                modalCtx.lineWidth = 2;
+                modalCtx.stroke();
+
+                // Nucleus label
+                modalCtx.fillStyle = a.isDopant
+                    ? (modalType === 'N' ? 'rgba(130, 200, 170, 0.9)' : 'rgba(200, 180, 130, 0.9)')
+                    : '#889';
+                modalCtx.font = a.isDopant ? 'bold 14px Arial' : '12px Arial';
+                modalCtx.textAlign = 'center';
+                modalCtx.textBaseline = 'middle';
+                modalCtx.fillText(a.isDopant ? (modalType === 'N' ? 'P' : 'B') : 'Si', a.x, a.y);
+
+                // Dopant sublabel
+                if (a.isDopant) {
+                    modalCtx.fillStyle = 'rgba(150, 150, 170, 0.5)';
+                    modalCtx.font = '9px Arial';
+                    modalCtx.fillText(modalType === 'N' ? '(5 valence)' : '(3 valence)', a.x, a.y + MR + 12);
+                }
+
+                // Valence shell wave peaks depend on atom type:
+                // Si = 4, Phosphorus dopant = 5, Boron dopant = 3
+                const WAVE_AMP = 10;
+                const PEAKS = a.isDopant ? (modalType === 'N' ? 5 : 3) : 4;
+                const steps = 120;
+                const holeIndex = 2;
+                const t = Date.now() * 0.003;
+                const standingPhase = Math.cos(t);
+
+                // Faint base orbit circle (the nodal ring)
+                modalCtx.beginPath();
+                modalCtx.arc(a.x, a.y, MSR, 0, Math.PI * 2);
+                modalCtx.strokeStyle = 'rgba(100, 100, 140, 0.12)';
+                modalCtx.lineWidth = 1;
+                modalCtx.stroke();
+
+                // Standing wave: amplitude oscillates, nodes stay fixed
+                // For 3-of-4 (hole): one lobe suppressed
+                modalCtx.beginPath();
+                for (let s = 0; s <= steps; s++) {
+                    const theta = (s / steps) * Math.PI * 2;
+
+                    // Which lobe are we in?
+                    const lobePhase = ((theta / (Math.PI * 2)) * PEAKS) % PEAKS;
+                    const lobeIdx = Math.floor(lobePhase);
+
+                    let amp = WAVE_AMP;
+                    if (modalType === 'P' && !a.isDopant && !a.holeFilled && lobeIdx === holeIndex) {
+                        amp = 0.5;
+                    }
+
+                    // Standing wave: sin(n*theta) * cos(omega*t)
+                    const wave = Math.sin(theta * PEAKS) * standingPhase * amp;
+                    const r = MSR + wave;
+                    const px = a.x + Math.cos(theta) * r;
+                    const py = a.y + Math.sin(theta) * r;
+                    if (s === 0) modalCtx.moveTo(px, py); else modalCtx.lineTo(px, py);
+                }
+                modalCtx.closePath();
+
+                if (a.isDopant) {
+                    modalCtx.strokeStyle = modalType === 'N'
+                        ? 'rgba(100, 200, 160, 0.7)'
+                        : 'rgba(200, 180, 120, 0.7)';
+                } else if (modalType === 'N' || a.holeFilled) {
+                    modalCtx.strokeStyle = 'rgba(77, 171, 247, 0.7)';
+                } else {
+                    modalCtx.strokeStyle = 'rgba(180, 160, 120, 0.5)';
+                }
+                modalCtx.lineWidth = 2;
+                modalCtx.stroke();
+
+                // Fill the wave lobes with translucent colour to show probability density
+                for (let lobe = 0; lobe < PEAKS; lobe++) {
+                    const isHole = modalType === 'P' && !a.isDopant && !a.holeFilled && lobe === holeIndex;
+                    if (isHole) continue;
+
+                    const lobeStart = (lobe / PEAKS) * Math.PI * 2;
+                    const lobeEnd = ((lobe + 1) / PEAKS) * Math.PI * 2;
+
+                    modalCtx.beginPath();
+                    // Outer edge (wave)
+                    for (let s = 0; s <= 30; s++) {
+                        const theta = lobeStart + (s / 30) * (lobeEnd - lobeStart);
+                        const wave = Math.sin(theta * PEAKS) * standingPhase * WAVE_AMP;
+                        const r = MSR + wave;
+                        const px = a.x + Math.cos(theta) * r;
+                        const py = a.y + Math.sin(theta) * r;
+                        if (s === 0) modalCtx.moveTo(px, py); else modalCtx.lineTo(px, py);
+                    }
+                    // Inner edge (base circle) back
+                    for (let s = 30; s >= 0; s--) {
+                        const theta = lobeStart + (s / 30) * (lobeEnd - lobeStart);
+                        const px = a.x + Math.cos(theta) * MSR;
+                        const py = a.y + Math.sin(theta) * MSR;
+                        modalCtx.lineTo(px, py);
+                    }
+                    modalCtx.closePath();
+
+                    if (a.isDopant) {
+                        modalCtx.fillStyle = modalType === 'N'
+                            ? 'rgba(100, 200, 160, 0.12)'
+                            : 'rgba(200, 180, 120, 0.12)';
+                    } else if (modalType === 'N' || a.holeFilled) {
+                        modalCtx.fillStyle = 'rgba(77, 171, 247, 0.12)';
+                    } else {
+                        modalCtx.fillStyle = 'rgba(150, 170, 200, 0.08)';
+                    }
+                    modalCtx.fill();
+                }
+
+                // Label the hole gap
+                if (modalType === 'P' && !a.isDopant && !a.holeFilled) {
+                    const holeAngle = ((holeIndex + 0.5) / PEAKS) * Math.PI * 2;
+                    const lx = a.x + Math.cos(holeAngle) * (MSR + 18);
+                    const ly = a.y + Math.sin(holeAngle) * (MSR + 18);
+                    modalCtx.fillStyle = 'rgba(200, 180, 140, 0.6)';
+                    modalCtx.font = '10px Arial';
+                    modalCtx.textAlign = 'center';
+                    modalCtx.textBaseline = 'middle';
+                    modalCtx.fillText('hole', lx, ly);
+                }
+            });
+
+            // Draw free electrons (only those not captured)
+            mElectrons.forEach(el => {
+                if (el.captured) return;
+
+                modalCtx.fillStyle = '#4dabf7';
+                modalCtx.beginPath();
+                modalCtx.arc(el.x, el.y, 6, 0, Math.PI * 2);
+                modalCtx.fill();
+
+                modalCtx.fillStyle = '#0a0a1a';
+                modalCtx.font = 'bold 10px Arial';
+                modalCtx.textAlign = 'center';
+                modalCtx.textBaseline = 'middle';
+                modalCtx.fillText('−', el.x, el.y);
+            });
+
+            // E-field arrows
+            const v = parseFloat(voltageSlider.value);
+            if (Math.abs(v) > 0.05) {
+                modalCtx.strokeStyle = 'rgba(100, 200, 255, 0.2)';
+                modalCtx.lineWidth = 1.5;
+                modalCtx.setLineDash([5, 5]);
+                for (let y = 30; y < MH; y += 60) {
+                    modalCtx.beginPath();
+                    modalCtx.moveTo(10, y);
+                    modalCtx.lineTo(MW - 10, y);
+                    modalCtx.stroke();
+                    // Arrow
+                    const dir = v > 0 ? 1 : -1;
+                    const ax = v > 0 ? MW - 18 : 18;
+                    modalCtx.beginPath();
+                    modalCtx.moveTo(ax, y - 4);
+                    modalCtx.lineTo(ax + dir * 8, y);
+                    modalCtx.lineTo(ax, y + 4);
+                    modalCtx.stroke();
+                }
+                modalCtx.setLineDash([]);
+
+                modalCtx.fillStyle = 'rgba(100, 200, 255, 0.4)';
+                modalCtx.font = '11px Arial';
+                modalCtx.textAlign = 'center';
+                modalCtx.fillText('E-field', MW / 2, 16);
+            }
+        }
+
+    })();
+    </script>
+</body>
+</html>
