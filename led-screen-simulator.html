@@ -1,0 +1,1667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LED Screen Simulator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #0a0a1a;
+            color: #eee;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #canvas {
+            display: block;
+            background: #0a0a1a;
+            touch-action: none;
+        }
+
+        .controls {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background: rgba(16, 16, 36, 0.96);
+            padding: 18px;
+            border-radius: 10px;
+            border: 2px solid #3a3a5a;
+            max-width: 310px;
+            cursor: move;
+            z-index: 10;
+        }
+
+        .controls.collapsed .control-content { display: none; }
+
+        .controls-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            cursor: pointer;
+        }
+
+        .controls.collapsed .controls-header { margin-bottom: 0; }
+
+        .collapse-btn {
+            background: #3a3a5a;
+            border: none;
+            color: #66d9ff;
+            width: 28px;
+            height: 28px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.3s;
+        }
+
+        .collapse-btn:hover { background: #4a4a6a; }
+
+        h2 { color: #66d9ff; font-size: 1.1em; }
+
+        .channel-group {
+            margin-bottom: 14px;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .channel-group.red { background: rgba(255, 60, 60, 0.06); border-color: rgba(255, 60, 60, 0.15); }
+        .channel-group.green { background: rgba(60, 255, 60, 0.06); border-color: rgba(60, 255, 60, 0.15); }
+        .channel-group.blue { background: rgba(60, 100, 255, 0.06); border-color: rgba(60, 100, 255, 0.15); }
+
+        .channel-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            font-size: 0.88em;
+            font-weight: bold;
+        }
+
+        .channel-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .channel-group.red .channel-dot { background: #ff4444; }
+        .channel-group.green .channel-dot { background: #44ff44; }
+        .channel-group.blue .channel-dot { background: #4466ff; }
+
+        .channel-group.red .channel-label { color: #ff8888; }
+        .channel-group.green .channel-label { color: #88ff88; }
+        .channel-group.blue .channel-label { color: #8888ff; }
+
+        label {
+            display: block;
+            margin-bottom: 4px;
+            color: #888;
+            font-size: 0.82em;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: #2a2a4a;
+            outline: none;
+            -webkit-appearance: none;
+            touch-action: manipulation;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
+        .channel-group.red input::-webkit-slider-thumb { background: #ff4444; }
+        .channel-group.green input::-webkit-slider-thumb { background: #44ff44; }
+        .channel-group.blue input::-webkit-slider-thumb { background: #4466ff; }
+        .channel-group.red input::-moz-range-thumb { background: #ff4444; }
+        .channel-group.green input::-moz-range-thumb { background: #44ff44; }
+        .channel-group.blue input::-moz-range-thumb { background: #4466ff; }
+
+        .value-display {
+            font-weight: bold;
+            font-size: 0.88em;
+            margin-top: 3px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .swatch-area {
+            margin-top: 14px;
+            padding: 12px;
+            background: rgba(255,255,255,0.04);
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .swatch-label {
+            font-size: 0.78em;
+            color: #888;
+            margin-bottom: 6px;
+        }
+
+        .swatch-rect {
+            width: 100%;
+            height: 48px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.15);
+            margin-bottom: 6px;
+        }
+
+        .swatch-hex {
+            font-family: monospace;
+            font-size: 0.92em;
+            color: #aaa;
+        }
+
+        .swatch-rgb {
+            font-family: monospace;
+            font-size: 0.78em;
+            color: #777;
+            margin-top: 2px;
+        }
+
+        .nav-bar {
+            position: absolute;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(16, 16, 36, 0.96);
+            padding: 8px 12px;
+            border-radius: 12px;
+            border: 2px solid #3a3a5a;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            z-index: 10;
+        }
+
+        .nav-btn {
+            background: #2a2a4a;
+            border: 1px solid #3a3a5a;
+            color: #999;
+            padding: 8px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.82em;
+            font-weight: bold;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .nav-btn:hover { background: #3a3a5a; color: #ccc; }
+
+        .nav-btn.active {
+            background: rgba(102, 217, 255, 0.15);
+            border-color: #66d9ff;
+            color: #66d9ff;
+        }
+
+        .nav-arrow {
+            color: #555;
+            font-size: 0.8em;
+            flex-shrink: 0;
+        }
+
+        .legend {
+            position: absolute;
+            bottom: 70px;
+            left: 16px;
+            background: rgba(16, 16, 36, 0.94);
+            padding: 12px;
+            border-radius: 10px;
+            border: 2px solid #3a3a5a;
+            z-index: 10;
+            font-size: 0.82em;
+            max-width: 240px;
+        }
+
+        .legend-title {
+            color: #66d9ff;
+            font-weight: bold;
+            margin-bottom: 6px;
+            font-size: 0.9em;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 4px 0;
+        }
+
+        .legend-color {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+
+        #welcome-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(5, 5, 15, 0.92);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 1;
+            transition: opacity 0.4s ease;
+        }
+
+        #welcome-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .welcome-box {
+            background: linear-gradient(135deg, #141428 0%, #1a1a35 100%);
+            border: 2px solid #3a3a6a;
+            border-radius: 16px;
+            max-width: 600px;
+            width: 90vw;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 32px 28px 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+        }
+
+        .welcome-box h1 {
+            font-size: 1.5em;
+            margin: 0 0 6px;
+            color: #dde;
+        }
+
+        .welcome-box .subtitle {
+            font-size: 0.85em;
+            color: #7a8aaa;
+            margin-bottom: 20px;
+        }
+
+        .welcome-box h2 {
+            font-size: 1em;
+            color: #aab;
+            margin: 16px 0 6px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid rgba(100, 100, 150, 0.2);
+        }
+
+        .welcome-box p, .welcome-box li {
+            font-size: 0.85em;
+            color: #99a;
+            line-height: 1.6;
+        }
+
+        .welcome-box ul { padding-left: 20px; margin: 6px 0; }
+        .welcome-box li { margin-bottom: 3px; }
+
+        .welcome-box .key {
+            display: inline-block;
+            background: #2a2a4a;
+            border: 1px solid #4a4a6a;
+            border-radius: 4px;
+            padding: 1px 6px;
+            font-size: 0.85em;
+            color: #bbc;
+            font-family: monospace;
+        }
+
+        .welcome-box .disclaimer {
+            margin-top: 18px;
+            padding: 10px 12px;
+            background: rgba(200, 170, 80, 0.08);
+            border: 1px solid rgba(200, 170, 80, 0.2);
+            border-radius: 8px;
+            font-size: 0.78em;
+            color: #a99870;
+            line-height: 1.5;
+        }
+
+        .welcome-btn {
+            display: block;
+            width: 100%;
+            margin-top: 20px;
+            padding: 14px;
+            background: linear-gradient(135deg, #3a5a8a, #4a6aaa);
+            border: none;
+            border-radius: 10px;
+            color: #eef;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .welcome-btn:hover { background: linear-gradient(135deg, #4a6aaa, #5a7abb); }
+
+        .zoom-icons { display: flex; gap: 8px; justify-content: center; margin: 10px 0; }
+
+        .zoom-icon {
+            width: 60px;
+            height: 60px;
+            background: #1a1a30;
+            border: 1px solid #3a3a5a;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6em;
+            color: #889;
+        }
+
+        .zoom-icon .icon-emoji { font-size: 1.8em; margin-bottom: 2px; }
+
+        @media (prefers-reduced-motion: reduce) {
+            * { transition: none !important; animation: none !important; }
+        }
+
+        @media (max-width: 600px) {
+            .controls { max-width: 260px; padding: 12px; }
+            .nav-btn { padding: 6px 10px; font-size: 0.75em; }
+            .legend { bottom: 60px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="welcome-overlay">
+        <div class="welcome-box">
+            <h1>LED Screen Simulator</h1>
+            <p class="subtitle">From quantum physics to the screen in your pocket</p>
+
+            <p>Every image on every screen is built from tiny red, green, and blue lights at different intensities. This simulator lets you explore that idea across four zoom levels:</p>
+
+            <div class="zoom-icons">
+                <div class="zoom-icon"><span class="icon-emoji">&#9889;</span>Physics</div>
+                <div class="zoom-icon"><span class="icon-emoji">&#9679;</span>Pixel</div>
+                <div class="zoom-icon"><span class="icon-emoji">&#9638;</span>Array</div>
+                <div class="zoom-icon"><span class="icon-emoji">&#128241;</span>Phone</div>
+            </div>
+
+            <h2>Zoom levels</h2>
+            <ul>
+                <li><strong>Physics</strong> &mdash; Three PN junction LEDs with electron flow simulations. Each drives one colour channel (R/G/B).</li>
+                <li><strong>Pixel</strong> &mdash; A single tri-colour pixel with three subpixel emitters mixing into one colour.</li>
+                <li><strong>Array</strong> &mdash; A grid of pixels forming a visible image, with individual subpixels discernible.</li>
+                <li><strong>Phone</strong> &mdash; A phone screen showing the full image. Use the magnifying glass to zoom into the pixel array.</li>
+            </ul>
+
+            <h2>Controls</h2>
+            <ul>
+                <li>Three voltage sliders control the <strong>Red</strong>, <strong>Green</strong>, and <strong>Blue</strong> LED brightness (0&ndash;255)</li>
+                <li>Use the bottom navigation bar or keys <span class="key">1</span>&ndash;<span class="key">4</span> to switch zoom levels</li>
+                <li><span class="key">&larr;</span> <span class="key">&rarr;</span> arrow keys step between views</li>
+            </ul>
+
+            <div class="disclaimer">
+                This simulation is for <strong>pedagogical purposes only</strong>. It uses simplified models to illustrate how LED screens produce colour from subpixel light emission. Particle counts, speeds, and proportions are not to scale. Real displays use more complex driver circuits and millions of pixels.
+            </div>
+
+            <button class="welcome-btn" id="welcome-dismiss">Start exploring</button>
+        </div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="controls" id="controls">
+        <div class="controls-header" id="controlsHeader">
+            <h2>RGB LED Driver</h2>
+            <button class="collapse-btn" id="collapseBtn">&minus;</button>
+        </div>
+        <div class="control-content">
+            <div class="channel-group red">
+                <div class="channel-label"><div class="channel-dot"></div>Red (620 nm) — AlGaAs</div>
+                <input type="range" id="voltage-red" min="0" max="3" value="0" step="0.05">
+                <div class="value-display">
+                    <span id="vdisp-red" style="color:#ff8888">0.00 V</span>
+                    <span id="bdisp-red" style="color:#ff8888">0</span>
+                </div>
+            </div>
+            <div class="channel-group green">
+                <div class="channel-label"><div class="channel-dot"></div>Green (530 nm) — InGaN</div>
+                <input type="range" id="voltage-green" min="0" max="3" value="0" step="0.05">
+                <div class="value-display">
+                    <span id="vdisp-green" style="color:#88ff88">0.00 V</span>
+                    <span id="bdisp-green" style="color:#88ff88">0</span>
+                </div>
+            </div>
+            <div class="channel-group blue">
+                <div class="channel-label"><div class="channel-dot"></div>Blue (470 nm) — InGaN</div>
+                <input type="range" id="voltage-blue" min="0" max="3" value="0" step="0.05">
+                <div class="value-display">
+                    <span id="vdisp-blue" style="color:#8888ff">0.00 V</span>
+                    <span id="bdisp-blue" style="color:#8888ff">0</span>
+                </div>
+            </div>
+            <div class="swatch-area">
+                <div class="swatch-label">Composite Pixel Colour</div>
+                <div class="swatch-rect" id="swatchRect"></div>
+                <div class="swatch-hex" id="swatchHex">#000000</div>
+                <div class="swatch-rgb" id="swatchRgb">rgb(0, 0, 0)</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="legend" id="legend"></div>
+
+    <nav class="nav-bar" id="navBar" aria-label="Zoom level navigation">
+        <button class="nav-btn active" data-view="physics">1: Physics</button>
+        <span class="nav-arrow">&rarr;</span>
+        <button class="nav-btn" data-view="pixel">2: Pixel</button>
+        <span class="nav-arrow">&rarr;</span>
+        <button class="nav-btn" data-view="array">3: Array</button>
+        <span class="nav-arrow">&rarr;</span>
+        <button class="nav-btn" data-view="phone">4: Phone</button>
+    </nav>
+
+    <script>
+    'use strict';
+    (function() {
+
+    // ──────────────────────────────────────────
+    //  Welcome overlay
+    // ──────────────────────────────────────────
+    const welcomeOverlay = document.getElementById('welcome-overlay');
+    const WELCOME_KEY = 'led-screen-sim-welcomed';
+    if (localStorage.getItem(WELCOME_KEY)) {
+        welcomeOverlay.classList.add('hidden');
+        setTimeout(() => welcomeOverlay.style.display = 'none', 50);
+    }
+    document.getElementById('welcome-dismiss').addEventListener('click', () => {
+        welcomeOverlay.classList.add('hidden');
+        setTimeout(() => welcomeOverlay.style.display = 'none', 400);
+        localStorage.setItem(WELCOME_KEY, '1');
+    });
+    document.addEventListener('keydown', e => {
+        if ((e.key === 'Enter' || e.key === 'Escape') && !welcomeOverlay.classList.contains('hidden')) {
+            document.getElementById('welcome-dismiss').click();
+        }
+    });
+
+    // ──────────────────────────────────────────
+    //  Canvas & globals
+    // ──────────────────────────────────────────
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let W, H;
+
+    function resizeCanvas() {
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', () => {
+        resizeCanvas();
+        buildAllChannels();
+        needsRedraw = true;
+    });
+
+    // ──────────────────────────────────────────
+    //  State
+    // ──────────────────────────────────────────
+    const VIEWS = ['physics', 'pixel', 'array', 'phone'];
+    let currentView = 'physics';
+    let needsRedraw = true;
+    let physicsRunning = true;
+
+    const channels = [
+        { id: 'red',   voltage: 0, brightness: 0, glowColor: [255, 60, 60],   labelColor: '#ff8888', label: 'RED (620 nm)',   baseColor: [255, 0, 0],
+          material: 'AlGaAs', nDopant: 'Si', pDopant: 'Zn', nDopantFull: 'Silicon', pDopantFull: 'Zinc',
+          nColor: '#4a5548', nStroke: '#6a8a68', pColor: '#554a42', pStroke: '#8a7a62' },
+        { id: 'green', voltage: 0, brightness: 0, glowColor: [60, 255, 60],   labelColor: '#88ff88', label: 'GREEN (530 nm)', baseColor: [0, 255, 0],
+          material: 'InGaN',  nDopant: 'Si', pDopant: 'Mg', nDopantFull: 'Silicon', pDopantFull: 'Magnesium',
+          nColor: '#3a4a55', nStroke: '#5a8a7a', pColor: '#4a4a3a', pStroke: '#7a8a5a' },
+        { id: 'blue',  voltage: 0, brightness: 0, glowColor: [60, 100, 255],  labelColor: '#8888ff', label: 'BLUE (470 nm)',  baseColor: [0, 0, 255],
+          material: 'InGaN',  nDopant: 'Si', pDopant: 'Mg', nDopantFull: 'Silicon', pDopantFull: 'Magnesium',
+          nColor: '#3a4055', nStroke: '#5a6a9a', pColor: '#443a55', pStroke: '#6a5a8a' },
+    ];
+
+    const magnifier = { active: false, x: 0, y: 0, radius: 130 };
+
+    function voltageToBrightness(v) {
+        if (v <= 0.6) return 0;
+        return Math.round(255 * Math.sqrt((v - 0.6) / 2.4));
+    }
+
+    function compositeColor() {
+        return `rgb(${channels[0].brightness}, ${channels[1].brightness}, ${channels[2].brightness})`;
+    }
+
+    function compositeHex() {
+        const r = channels[0].brightness, g = channels[1].brightness, b = channels[2].brightness;
+        return '#' + [r, g, b].map(c => c.toString(16).padStart(2, '0')).join('');
+    }
+
+    // ──────────────────────────────────────────
+    //  UI elements
+    // ──────────────────────────────────────────
+    const sliders = channels.map(ch => document.getElementById('voltage-' + ch.id));
+    const vDisps = channels.map(ch => document.getElementById('vdisp-' + ch.id));
+    const bDisps = channels.map(ch => document.getElementById('bdisp-' + ch.id));
+    const swatchRect = document.getElementById('swatchRect');
+    const swatchHex = document.getElementById('swatchHex');
+    const swatchRgb = document.getElementById('swatchRgb');
+    const legendEl = document.getElementById('legend');
+
+    function brightnessToVoltage(b) {
+        if (b <= 0) return 0;
+        return Math.min(3, 0.6 + (b / 255) * (b / 255) * 2.4);
+    }
+
+    function setChannelsFromPixel(r, g, b) {
+        const vr = brightnessToVoltage(r);
+        const vg = brightnessToVoltage(g);
+        const vb = brightnessToVoltage(b);
+        sliders[0].value = vr.toFixed(2);
+        sliders[1].value = vg.toFixed(2);
+        sliders[2].value = vb.toFixed(2);
+        updateUI();
+    }
+
+    function updateUI() {
+        channels.forEach((ch, i) => {
+            ch.voltage = parseFloat(sliders[i].value);
+            ch.brightness = voltageToBrightness(ch.voltage);
+            vDisps[i].textContent = ch.voltage.toFixed(2) + ' V';
+            bDisps[i].textContent = ch.brightness + ' / 255';
+        });
+        swatchRect.style.background = compositeColor();
+        swatchHex.textContent = compositeHex();
+        swatchRgb.textContent = `rgb(${channels[0].brightness}, ${channels[1].brightness}, ${channels[2].brightness})`;
+        needsRedraw = true;
+    }
+
+    sliders.forEach(s => s.addEventListener('input', updateUI));
+    updateUI();
+
+    // Panel drag
+    const controlsPanel = document.getElementById('controls');
+    const collapseBtn = document.getElementById('collapseBtn');
+    let isDragging = false, dragOX = 0, dragOY = 0;
+
+    document.getElementById('controlsHeader').addEventListener('mousedown', e => {
+        if (e.target === collapseBtn) return;
+        isDragging = true;
+        const r = controlsPanel.getBoundingClientRect();
+        dragOX = e.clientX - r.left;
+        dragOY = e.clientY - r.top;
+    });
+    document.addEventListener('mousemove', e => {
+        if (isDragging) {
+            controlsPanel.style.left = (e.clientX - dragOX) + 'px';
+            controlsPanel.style.top = (e.clientY - dragOY) + 'px';
+        }
+    });
+    document.addEventListener('mouseup', () => isDragging = false);
+
+    collapseBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        controlsPanel.classList.toggle('collapsed');
+        collapseBtn.textContent = controlsPanel.classList.contains('collapsed') ? '+' : '−';
+    });
+
+    // ──────────────────────────────────────────
+    //  Navigation
+    // ──────────────────────────────────────────
+    const navBtns = document.querySelectorAll('.nav-btn');
+
+    function switchView(view) {
+        if (view === currentView) return;
+        currentView = view;
+        physicsRunning = (view === 'physics');
+        navBtns.forEach(b => b.classList.toggle('active', b.dataset.view === view));
+        updateLegend();
+        needsRedraw = true;
+        if (physicsRunning) buildAllChannels();
+    }
+
+    navBtns.forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
+
+    document.addEventListener('keydown', e => {
+        if (welcomeOverlay && !welcomeOverlay.classList.contains('hidden')) return;
+        const idx = VIEWS.indexOf(currentView);
+        if (e.key >= '1' && e.key <= '4') {
+            switchView(VIEWS[parseInt(e.key) - 1]);
+        } else if (e.key === 'ArrowRight' && idx < 3) {
+            switchView(VIEWS[idx + 1]);
+        } else if (e.key === 'ArrowLeft' && idx > 0) {
+            switchView(VIEWS[idx - 1]);
+        }
+    });
+
+    // ──────────────────────────────────────────
+    //  Legend
+    // ──────────────────────────────────────────
+    function updateLegend() {
+        let html = '';
+        if (currentView === 'physics') {
+            html = `<div class="legend-title">Physics View</div>
+                <div class="legend-item"><div class="legend-color" style="background:#4dabf7"></div>Free electron (e⁻)</div>
+                <div class="legend-item"><div class="legend-color" style="background:#cc8844"></div>Copper lead</div>
+                <div class="legend-item"><div class="legend-color" style="background:#445"></div>Lattice atom</div>
+                <div class="legend-item" style="color:#ff8888;font-size:0.85em">Red: AlGaAs — Si (N) / Zn (P)</div>
+                <div class="legend-item" style="color:#88ff88;font-size:0.85em">Green: InGaN — Si (N) / Mg (P)</div>
+                <div class="legend-item" style="color:#8888ff;font-size:0.85em">Blue: InGaN — Si (N) / Mg (P)</div>
+                <div class="legend-item"><div class="legend-color" style="background:transparent;border:2px dashed #999"></div>Hole (empty valence spot)</div>
+                <div class="legend-item"><div class="legend-color" style="background:#ff4444"></div>Photon emission</div>`;
+        } else if (currentView === 'pixel') {
+            html = `<div class="legend-title">Pixel View</div>
+                <div class="legend-item"><div class="legend-color" style="background:#ff4444"></div>Red subpixel</div>
+                <div class="legend-item"><div class="legend-color" style="background:#44ff44"></div>Green subpixel</div>
+                <div class="legend-item"><div class="legend-color" style="background:#4466ff"></div>Blue subpixel</div>
+                <div class="legend-item" style="color:#888;font-size:0.9em">Brightness: 0–255 per channel</div>`;
+        } else if (currentView === 'array') {
+            html = `<div class="legend-title">Array View</div>
+                <div class="legend-item" style="color:#999;font-size:0.9em">Each pixel = 3 subpixels (R G B)</div>
+                <div class="legend-item" style="color:#999;font-size:0.9em">Click a pixel to drive Physics view</div>
+                <div class="legend-item" style="color:#999;font-size:0.9em">with that pixel's colour</div>`;
+        } else {
+            html = `<div class="legend-title">Phone View</div>
+                <div class="legend-item" style="color:#999;font-size:0.9em">Move cursor over screen to magnify</div>
+                <div class="legend-item" style="color:#999;font-size:0.9em">Magnifier shows subpixel structure</div>`;
+        }
+        legendEl.innerHTML = html;
+    }
+    updateLegend();
+
+    // ──────────────────────────────────────────
+    //  Embedded stock image (pronking lamb)
+    // ──────────────────────────────────────────
+    const IMG_W = 32, IMG_H = 24;
+    const imagePixels = new Uint8Array(IMG_W * IMG_H * 3);
+
+    const LAMB_IMG_B64 = 'data:image/png;base64,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';
+
+    function loadStockImage() {
+        const img = new Image();
+        img.onload = function() {
+            const tmpC = document.createElement('canvas');
+            tmpC.width = IMG_W; tmpC.height = IMG_H;
+            const tmpCtx = tmpC.getContext('2d');
+            tmpCtx.drawImage(img, 0, 0, IMG_W, IMG_H);
+            const data = tmpCtx.getImageData(0, 0, IMG_W, IMG_H).data;
+            for (let i = 0; i < IMG_W * IMG_H; i++) {
+                imagePixels[i * 3] = data[i * 4];
+                imagePixels[i * 3 + 1] = data[i * 4 + 1];
+                imagePixels[i * 3 + 2] = data[i * 4 + 2];
+            }
+            needsRedraw = true;
+        };
+        img.src = LAMB_IMG_B64;
+    }
+    loadStockImage();
+
+    const LAMB_HIRES_B64 = 'data:image/jpeg;base64,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';
+    const phoneImg = new Image();
+    const PHONE_W = 240, PHONE_H = 171;
+    const phonePixels = new Uint8Array(PHONE_W * PHONE_H * 3);
+    phoneImg.onload = function() {
+        const tmpC = document.createElement('canvas');
+        tmpC.width = PHONE_W; tmpC.height = PHONE_H;
+        const tmpCtx = tmpC.getContext('2d');
+        tmpCtx.drawImage(phoneImg, 0, 0, PHONE_W, PHONE_H);
+        const data = tmpCtx.getImageData(0, 0, PHONE_W, PHONE_H).data;
+        for (let i = 0; i < PHONE_W * PHONE_H; i++) {
+            phonePixels[i * 3] = data[i * 4];
+            phonePixels[i * 3 + 1] = data[i * 4 + 1];
+            phonePixels[i * 3 + 2] = data[i * 4 + 2];
+        }
+        needsRedraw = true;
+    };
+    phoneImg.src = LAMB_HIRES_B64;
+
+    // ──────────────────────────────────────────
+    //  Physics simulation (per-channel)
+    // ──────────────────────────────────────────
+    const ATOM_SPACING = 44;
+    const ATOM_RADIUS = 8;
+    const SHELL_RADIUS = 15;
+    const PARTICLE_RADIUS = 4;
+    const DAMPING = 0.92;
+    const MAX_SPEED = 3.0;
+    const JUNCTION_COLS = 3;
+
+    const channelSims = [null, null, null];
+
+    const SIM_MARGIN_Y = 80;
+
+    function createChannelSim(bandY, bandH, channelIdx) {
+        const simH = bandH + SIM_MARGIN_Y * 2;
+        const sim = {
+            bandY: bandY,
+            bandH: bandH,
+            simH: simH,
+            copperAtoms: [],
+            nAtoms: [],
+            pAtoms: [],
+            electrons: [],
+            junctionX: 0,
+            nStart: 0, nEnd: 0, pStart: 0, pEnd: 0,
+            simW: 0,
+        };
+
+        sim.simW = W + 100;
+        sim.junctionX = sim.simW / 2;
+        sim.nStart = sim.junctionX - JUNCTION_COLS * ATOM_SPACING;
+        sim.nEnd = sim.junctionX;
+        sim.pStart = sim.junctionX;
+        sim.pEnd = sim.junctionX + JUNCTION_COLS * ATOM_SPACING;
+
+        const rows = Math.ceil(simH / ATOM_SPACING) + 1;
+        for (let r = 0; r < rows; r++) {
+            const y = r * ATOM_SPACING + ATOM_SPACING * 0.5;
+            for (let x = ATOM_SPACING * 0.5; x < sim.nStart; x += ATOM_SPACING) {
+                sim.copperAtoms.push({ x, y, baseX: x, baseY: y, vx: 0, vy: 0 });
+            }
+            for (let c = 0; c < JUNCTION_COLS; c++) {
+                const x = sim.nStart + c * ATOM_SPACING + ATOM_SPACING * 0.5;
+                sim.nAtoms.push({ x, y, baseX: x, baseY: y, vx: 0, vy: 0, isDopant: (c + r) % 3 === 1 });
+            }
+            for (let c = 0; c < JUNCTION_COLS; c++) {
+                const x = sim.pStart + c * ATOM_SPACING + ATOM_SPACING * 0.5;
+                sim.pAtoms.push({
+                    x, y, baseX: x, baseY: y, vx: 0, vy: 0,
+                    isDopant: (c + r) % 3 === 1,
+                    holeFilled: false, fillTimer: 0, glowTimer: 0
+                });
+            }
+            for (let x = sim.pEnd + ATOM_SPACING * 0.5; x < sim.simW; x += ATOM_SPACING) {
+                sim.copperAtoms.push({ x, y, baseX: x, baseY: y, vx: 0, vy: 0 });
+            }
+        }
+
+        const maxElectrons = 120;
+        const numE = Math.min(maxElectrons, Math.floor((sim.simW * simH) / 3000));
+        for (let i = 0; i < numE; i++) {
+            sim.electrons.push({
+                x: Math.random() * sim.simW,
+                y: Math.random() * simH,
+                vx: (Math.random() - 0.5) * 2,
+                vy: (Math.random() - 0.5) * 2
+            });
+        }
+
+        return sim;
+    }
+
+    function buildAllChannels() {
+        if (currentView !== 'physics') return;
+        const bandH = Math.floor(H / 3);
+        for (let i = 0; i < 3; i++) {
+            channelSims[i] = createChannelSim(i * bandH, bandH, i);
+        }
+    }
+    buildAllChannels();
+
+    function jiggleAtom(a) {
+        a.vx += (Math.random() - 0.5) * 0.45;
+        a.vy += (Math.random() - 0.5) * 0.45;
+        a.vx += (a.baseX - a.x) * 0.2;
+        a.vy += (a.baseY - a.y) * 0.2;
+        a.vx *= 0.82;
+        a.vy *= 0.82;
+        a.x += a.vx;
+        a.y += a.vy;
+    }
+
+    function updateChannelPhysics(sim, voltage) {
+        sim.copperAtoms.forEach(jiggleAtom);
+        sim.nAtoms.forEach(jiggleAtom);
+        sim.pAtoms.forEach(a => {
+            jiggleAtom(a);
+            if (a.holeFilled && a.fillTimer > 0) {
+                a.fillTimer--;
+                if (a.fillTimer <= 0) a.holeFilled = false;
+            }
+            if (a.glowTimer > 0) a.glowTimer--;
+        });
+
+        const fieldStrength = voltage * 0.08;
+        const canCross = voltage > 0.6;
+        const jx = sim.junctionX;
+        const simH = sim.simH;
+
+        for (let i = 0; i < sim.electrons.length; i++) {
+            const e = sim.electrons[i];
+            e.vx += (Math.random() - 0.5) * 0.7;
+            e.vy += (Math.random() - 0.5) * 0.7;
+            e.vx += fieldStrength;
+
+            if (!canCross) {
+                const margin = 8;
+                if (e.x < jx && e.x + e.vx >= jx - margin) {
+                    e.vx = -Math.abs(e.vx) * 0.5;
+                    e.x = jx - margin - 1;
+                }
+                if (e.x > jx && e.x + e.vx <= jx + margin) {
+                    e.vx = Math.abs(e.vx) * 0.5;
+                    e.x = jx + margin + 1;
+                }
+                const distJ = Math.abs(e.x - jx);
+                if (distJ < 40) {
+                    const push = (1 - distJ / 40) * 0.8;
+                    e.vx += e.x < jx ? -push : push;
+                }
+            }
+
+            if (canCross && e.x > sim.pStart && e.x < sim.pEnd) {
+                for (let j = 0; j < sim.pAtoms.length; j++) {
+                    const a = sim.pAtoms[j];
+                    if (a.holeFilled) continue;
+                    const dx = e.x - a.x, dy = e.y - a.y;
+                    if (dx * dx + dy * dy < 250) {
+                        a.holeFilled = true;
+                        a.fillTimer = 50 + Math.floor(Math.random() * 30);
+                        a.glowTimer = 30;
+                        e.vx *= 0.15;
+                        e.vy *= 0.15;
+                        break;
+                    }
+                }
+            }
+
+            const atomSets = [sim.copperAtoms, sim.nAtoms, sim.pAtoms];
+            for (let s = 0; s < 3; s++) {
+                const atoms = atomSets[s];
+                for (let j = 0; j < atoms.length; j++) {
+                    const a = atoms[j];
+                    const dx = e.x - a.x, dy = e.y - a.y;
+                    const d2 = dx * dx + dy * dy;
+                    if (d2 < 500 && d2 > 1) {
+                        const d = Math.sqrt(d2);
+                        const f = 80 / (d2 + 20);
+                        e.vx += (dx / d) * f;
+                        e.vy += (dy / d) * f;
+                    }
+                }
+            }
+
+            for (let j = i + 1; j < sim.electrons.length; j++) {
+                const o = sim.electrons[j];
+                const dx = e.x - o.x, dy = e.y - o.y;
+                const d2 = dx * dx + dy * dy;
+                if (d2 < 8000 && d2 > 1) {
+                    const d = Math.sqrt(d2);
+                    const f = 4000 / (d2 + 100);
+                    e.vx += (dx / d) * f;
+                    e.vy += (dy / d) * f;
+                    o.vx -= (dx / d) * f;
+                    o.vy -= (dy / d) * f;
+                }
+            }
+
+            e.vx *= DAMPING;
+            e.vy *= DAMPING;
+            const spd = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
+            if (spd > MAX_SPEED) { e.vx = (e.vx / spd) * MAX_SPEED; e.vy = (e.vy / spd) * MAX_SPEED; }
+
+            e.x += e.vx;
+            e.y += e.vy;
+            if (e.y < 0) e.y = simH;
+            if (e.y > simH) e.y = 0;
+            if (e.x > sim.simW + 5) { e.x = 2; e.y = Math.random() * simH; }
+            if (e.x < -5) { e.x = sim.simW - 2; e.y = Math.random() * simH; }
+        }
+    }
+
+    // ──────────────────────────────────────────
+    //  Physics View drawing
+    // ──────────────────────────────────────────
+    function drawPhysicsView() {
+        const bandH = Math.floor(H / 3);
+        const offset = 50;
+
+        for (let ci = 0; ci < 3; ci++) {
+            const sim = channelSims[ci];
+            if (!sim) continue;
+            const ch = channels[ci];
+            const topY = ci * bandH;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(0, topY, W, bandH);
+            ctx.clip();
+            ctx.translate(-offset, topY - SIM_MARGIN_Y);
+
+            // Region backgrounds — opacity scales with brightness
+            const simH = sim.simH;
+            const bright = ch.brightness / 255;
+            ctx.fillStyle = `rgba(${ch.glowColor[0]}, ${ch.glowColor[1]}, ${ch.glowColor[2]}, ${0.02 + bright * 0.12})`;
+            ctx.fillRect(0, 0, sim.simW, simH);
+
+            ctx.fillStyle = `rgba(${ch.glowColor[0]}, ${ch.glowColor[1]}, ${ch.glowColor[2]}, ${0.03 + bright * 0.20})`;
+            ctx.fillRect(sim.nStart, 0, sim.nEnd - sim.nStart, simH);
+
+            ctx.fillStyle = `rgba(${ch.glowColor[0]}, ${ch.glowColor[1]}, ${ch.glowColor[2]}, ${0.04 + bright * 0.28})`;
+            ctx.fillRect(sim.pStart, 0, sim.pEnd - sim.pStart, simH);
+
+            // Junction line
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(sim.junctionX, 0);
+            ctx.lineTo(sim.junctionX, simH);
+            ctx.stroke();
+
+            // Copper atoms
+            sim.copperAtoms.forEach(a => {
+                ctx.beginPath();
+                ctx.arc(a.x, a.y, ATOM_RADIUS, 0, Math.PI * 2);
+                ctx.fillStyle = '#8a5c2a';
+                ctx.fill();
+                ctx.strokeStyle = '#bb7733';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            });
+
+            // N-type atoms
+            sim.nAtoms.forEach(a => {
+                ctx.beginPath();
+                ctx.arc(a.x, a.y, ATOM_RADIUS, 0, Math.PI * 2);
+                ctx.fillStyle = a.isDopant ? ch.nColor : '#445';
+                ctx.fill();
+                ctx.strokeStyle = a.isDopant ? ch.nStroke : '#667';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                if (a.isDopant) {
+                    ctx.fillStyle = ch.nStroke;
+                    ctx.font = 'bold 6px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(ch.nDopant, a.x, a.y);
+                }
+                ctx.beginPath();
+                ctx.arc(a.x, a.y, SHELL_RADIUS, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(150, 180, 220, 0.3)';
+                ctx.lineWidth = 0.8;
+                ctx.stroke();
+            });
+
+            // P-type atoms
+            sim.pAtoms.forEach(a => {
+                ctx.beginPath();
+                ctx.arc(a.x, a.y, ATOM_RADIUS, 0, Math.PI * 2);
+                ctx.fillStyle = a.isDopant ? ch.pColor : '#445';
+                ctx.fill();
+                ctx.strokeStyle = a.isDopant ? ch.pStroke : '#667';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                if (a.isDopant) {
+                    ctx.fillStyle = ch.pStroke;
+                    ctx.font = 'bold 6px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(ch.pDopant, a.x, a.y);
+                }
+                ctx.beginPath();
+                ctx.arc(a.x, a.y, SHELL_RADIUS, 0, Math.PI * 2);
+                if (a.holeFilled) {
+                    ctx.strokeStyle = 'rgba(150, 180, 220, 0.4)';
+                    ctx.setLineDash([]);
+                } else {
+                    ctx.strokeStyle = 'rgba(180, 160, 140, 0.35)';
+                    ctx.setLineDash([3, 3]);
+                }
+                ctx.lineWidth = 0.8;
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Photon glow
+                if (a.glowTimer > 0) {
+                    const intensity = a.glowTimer / 30;
+                    ctx.fillStyle = `rgba(${ch.glowColor[0]}, ${ch.glowColor[1]}, ${ch.glowColor[2]}, ${intensity * 0.5})`;
+                    ctx.beginPath();
+                    ctx.arc(a.x, a.y, SHELL_RADIUS + 10, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+
+            // Electrons
+            ctx.fillStyle = '#4dabf7';
+            sim.electrons.forEach(e => {
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, PARTICLE_RADIUS, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.fillStyle = '#0a0a1a';
+            ctx.font = 'bold 8px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            sim.electrons.forEach(e => {
+                ctx.fillText('−', e.x, e.y);
+            });
+
+            ctx.restore();
+
+            // Band label with material
+            ctx.fillStyle = ch.labelColor;
+            ctx.font = 'bold 13px Arial';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText(ch.label + '  ' + ch.material, 8, topY + 8);
+
+            // N/P labels with dopant names
+            ctx.font = '10px Arial';
+            ctx.textAlign = 'center';
+            const nCenterX = (sim.nStart + sim.nEnd) / 2 - offset;
+            const pCenterX = (sim.pStart + sim.pEnd) / 2 - offset;
+            ctx.fillStyle = 'rgba(120, 150, 220, 0.5)';
+            ctx.fillText('N (' + ch.nDopant + ')', nCenterX, topY + bandH - 16);
+            ctx.fillStyle = 'rgba(220, 150, 120, 0.5)';
+            ctx.fillText('P (' + ch.pDopant + ')', pCenterX, topY + bandH - 16);
+
+            // Divider line
+            if (ci < 2) {
+                ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(0, topY + bandH);
+                ctx.lineTo(W, topY + bandH);
+                ctx.stroke();
+            }
+        }
+    }
+
+    // ──────────────────────────────────────────
+    //  Pixel View drawing
+    // ──────────────────────────────────────────
+    function drawPixelView() {
+        const cx = W / 2, cy = H / 2;
+        const pixW = Math.min(300, W * 0.5);
+        const pixH = pixW * 1.4;
+        const subW = pixW / 3.6;
+        const subH = pixH * 0.8;
+        const gap = (pixW - subW * 3) / 4;
+        const startX = cx - pixW / 2;
+        const startY = cy - pixH / 2;
+
+        // Pixel housing
+        ctx.fillStyle = '#1a1a2a';
+        ctx.strokeStyle = '#4a4a6a';
+        ctx.lineWidth = 3;
+        roundRect(ctx, startX - 20, startY - 20, pixW + 40, pixH + 40, 16);
+        ctx.fill();
+        ctx.stroke();
+
+        // Dark substrate
+        ctx.fillStyle = '#0d0d15';
+        roundRect(ctx, startX - 6, startY - 6, pixW + 12, pixH + 12, 8);
+        ctx.fill();
+
+        // Subpixels
+        const subpixels = [
+            { color: channels[0].baseColor, brightness: channels[0].brightness, voltage: channels[0].voltage, label: 'R' },
+            { color: channels[1].baseColor, brightness: channels[1].brightness, voltage: channels[1].voltage, label: 'G' },
+            { color: channels[2].baseColor, brightness: channels[2].brightness, voltage: channels[2].voltage, label: 'B' },
+        ];
+
+        const t = Date.now() * 0.003;
+
+        subpixels.forEach((sp, i) => {
+            const sx = startX + gap * (i + 1) + subW * i;
+            const sy = startY + (pixH - subH) / 2;
+            const bright = sp.brightness / 255;
+
+            // Subpixel rect
+            ctx.fillStyle = `rgba(${sp.color[0]}, ${sp.color[1]}, ${sp.color[2]}, ${bright * 0.9 + 0.1})`;
+            roundRect(ctx, sx, sy, subW, subH, 4);
+            ctx.fill();
+
+            if (bright > 0) {
+                // Glow
+                const pulse = 1 + Math.sin(t + i * 2) * 0.06;
+                const glowR = Math.max(subW, subH) * 0.7 * pulse;
+                const grad = ctx.createRadialGradient(sx + subW / 2, sy + subH / 2, 0, sx + subW / 2, sy + subH / 2, glowR);
+                grad.addColorStop(0, `rgba(${sp.color[0]}, ${sp.color[1]}, ${sp.color[2]}, ${bright * 0.4})`);
+                grad.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(sx + subW / 2 - glowR, sy + subH / 2 - glowR, glowR * 2, glowR * 2);
+            }
+
+            // Label
+            ctx.fillStyle = `rgba(${sp.color[0]}, ${sp.color[1]}, ${sp.color[2]}, 0.7)`;
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillText(sp.label, sx + subW / 2, sy + subH + 10);
+
+            // Voltage and brightness values
+            ctx.fillStyle = '#888';
+            ctx.font = '11px Arial';
+            ctx.fillText(sp.voltage.toFixed(2) + ' V', sx + subW / 2, sy + subH + 28);
+            ctx.fillText(sp.brightness + ' / 255', sx + subW / 2, sy + subH + 42);
+
+            // Wire bond line (decorative)
+            ctx.strokeStyle = 'rgba(200,200,200,0.15)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(sx + subW / 2, sy);
+            ctx.lineTo(sx + subW / 2, sy - 25);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(sx + subW / 2, sy - 27, 2, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(200,200,200,0.3)';
+            ctx.fill();
+        });
+
+        // Composite glow (additive) above the pixel
+        const saved = ctx.globalCompositeOperation;
+        ctx.globalCompositeOperation = 'lighter';
+        const glowCx = cx, glowCy = startY - 80;
+        const glowSize = 60;
+        subpixels.forEach(sp => {
+            if (sp.brightness === 0) return;
+            const bright = sp.brightness / 255;
+            const grad = ctx.createRadialGradient(glowCx, glowCy, 0, glowCx, glowCy, glowSize);
+            grad.addColorStop(0, `rgba(${sp.color[0]}, ${sp.color[1]}, ${sp.color[2]}, ${bright * 0.6})`);
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(glowCx - glowSize, glowCy - glowSize, glowSize * 2, glowSize * 2);
+        });
+        ctx.globalCompositeOperation = saved;
+
+        // Composite label
+        ctx.fillStyle = '#888';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Mixed light output', glowCx, glowCy - glowSize - 8);
+
+        // Composite swatch
+        const swatchSize = 40;
+        ctx.fillStyle = compositeColor();
+        roundRect(ctx, glowCx - swatchSize / 2, glowCy + glowSize + 5, swatchSize, swatchSize, 6);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 1;
+        roundRect(ctx, glowCx - swatchSize / 2, glowCy + glowSize + 5, swatchSize, swatchSize, 6);
+        ctx.stroke();
+        ctx.fillStyle = '#999';
+        ctx.font = '10px monospace';
+        ctx.fillText(compositeHex(), glowCx, glowCy + glowSize + swatchSize + 20);
+
+        // Title
+        ctx.fillStyle = '#66d9ff';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Single Tri-Colour Pixel', cx, 30);
+        ctx.fillStyle = '#777';
+        ctx.font = '12px Arial';
+        ctx.fillText('Three LED subpixels combine to produce one colour', cx, 50);
+    }
+
+    // ──────────────────────────────────────────
+    //  Array View drawing
+    // ──────────────────────────────────────────
+    let highlightedPixel = null;
+
+    function drawArrayView() {
+        const titleSpace = 55;
+        const bottomSpace = 100;
+        const availH = H - titleSpace - bottomSpace;
+        const availW = W - 40;
+
+        const baseSubW = 4, baseSubH = 14, baseSubGap = 1, basePxGap = 2;
+        const basePxW = baseSubW * 3 + baseSubGap * 4;
+        const basePxH = baseSubH + baseSubGap * 2;
+        const baseGridW = IMG_W * (basePxW + basePxGap);
+        const baseGridH = IMG_H * (basePxH + basePxGap);
+
+        const scale = Math.min(1, availW / baseGridW, availH / baseGridH);
+        const subpxW = Math.max(2, Math.floor(baseSubW * scale));
+        const subpxH = Math.max(6, Math.floor(baseSubH * scale));
+        const subGap = Math.max(1, Math.round(baseSubGap * scale));
+        const pxGap = Math.max(1, Math.round(basePxGap * scale));
+        const pxW = subpxW * 3 + subGap * 4;
+        const pxH = subpxH + subGap * 2;
+
+        const gridW = IMG_W * (pxW + pxGap);
+        const gridH = IMG_H * (pxH + pxGap);
+        const ox = Math.floor((W - gridW) / 2);
+        const oy = titleSpace + Math.floor((availH - gridH) / 2);
+
+        // Title
+        ctx.fillStyle = '#66d9ff';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Pixel Array', W / 2, 22);
+        ctx.fillStyle = '#777';
+        ctx.font = '11px Arial';
+        ctx.fillText('Each pixel has 3 subpixels (R G B). Click a pixel to drive the Physics view with its colour.', W / 2, 42);
+
+        for (let py = 0; py < IMG_H; py++) {
+            for (let px = 0; px < IMG_W; px++) {
+                const i = (py * IMG_W + px) * 3;
+                const r = imagePixels[i];
+                const g = imagePixels[i + 1];
+                const b = imagePixels[i + 2];
+
+                const x0 = ox + px * (pxW + pxGap);
+                const y0 = oy + py * (pxH + pxGap);
+
+                // Pixel background
+                ctx.fillStyle = '#111';
+                ctx.fillRect(x0, y0, pxW, pxH);
+
+                // R subpixel
+                ctx.fillStyle = `rgb(${r}, 0, 0)`;
+                ctx.fillRect(x0 + subGap, y0 + subGap, subpxW, subpxH);
+                // G subpixel
+                ctx.fillStyle = `rgb(0, ${g}, 0)`;
+                ctx.fillRect(x0 + subGap * 2 + subpxW, y0 + subGap, subpxW, subpxH);
+                // B subpixel
+                ctx.fillStyle = `rgb(0, 0, ${b})`;
+                ctx.fillRect(x0 + subGap * 3 + subpxW * 2, y0 + subGap, subpxW, subpxH);
+
+                if (highlightedPixel && highlightedPixel.px === px && highlightedPixel.py === py) {
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(x0 - 1, y0 - 1, pxW + 2, pxH + 2);
+                }
+            }
+        }
+
+        // Tooltip for highlighted pixel
+        if (highlightedPixel) {
+            const hp = highlightedPixel;
+            const i = (hp.py * IMG_W + hp.px) * 3;
+            const r = imagePixels[i];
+            const g = imagePixels[i + 1];
+            const b = imagePixels[i + 2];
+            const tipX = ox + hp.px * (pxW + pxGap) + pxW + 8;
+            const tipY = oy + hp.py * (pxH + pxGap);
+
+            const vr = brightnessToVoltage(r), vg = brightnessToVoltage(g), vb = brightnessToVoltage(b);
+
+            ctx.fillStyle = 'rgba(16,16,36,0.95)';
+            roundRect(ctx, tipX, tipY, 160, 58, 6);
+            ctx.fill();
+            ctx.strokeStyle = '#4a4a6a';
+            ctx.lineWidth = 1;
+            roundRect(ctx, tipX, tipY, 160, 58, 6);
+            ctx.stroke();
+
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = '#ff8888'; ctx.fillText(`R: ${r}/255  ${vr.toFixed(2)} V`, tipX + 8, tipY + 8);
+            ctx.fillStyle = '#88ff88'; ctx.fillText(`G: ${g}/255  ${vg.toFixed(2)} V`, tipX + 8, tipY + 22);
+            ctx.fillStyle = '#8888ff'; ctx.fillText(`B: ${b}/255  ${vb.toFixed(2)} V`, tipX + 8, tipY + 36);
+
+            // Composite swatch
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            ctx.fillRect(tipX + 130, tipY + 8, 22, 42);
+            ctx.strokeStyle = '#555';
+            ctx.strokeRect(tipX + 130, tipY + 8, 22, 42);
+        }
+
+        // Store layout for click detection
+        drawArrayView._layout = { ox, oy, pxW, pxH, pxGap };
+    }
+
+    // Live hover updates for array view
+    canvas.addEventListener('mousemove', e => {
+        if (currentView !== 'array') return;
+        const layout = drawArrayView._layout;
+        if (!layout) return;
+        const mx = e.clientX, my = e.clientY;
+        const px = Math.floor((mx - layout.ox) / (layout.pxW + layout.pxGap));
+        const py = Math.floor((my - layout.oy) / (layout.pxH + layout.pxGap));
+        if (px >= 0 && px < IMG_W && py >= 0 && py < IMG_H) {
+            highlightedPixel = { px, py };
+            const i = (py * IMG_W + px) * 3;
+            setChannelsFromPixel(imagePixels[i], imagePixels[i + 1], imagePixels[i + 2]);
+        } else {
+            highlightedPixel = null;
+        }
+        needsRedraw = true;
+    });
+
+    canvas.addEventListener('click', e => {
+        if (currentView === 'array') {
+            // Click still works for array (same as hover but keeps selection)
+            return;
+        } else if (currentView === 'phone') {
+            const layout = drawPhoneView._layout;
+            if (!layout) return;
+            const mx = e.clientX, my = e.clientY;
+            const relX = mx - layout.imgX;
+            const relY = my - layout.imgY;
+            const ipx = Math.floor(relX / layout.imgRenderW * PHONE_W);
+            const ipy = Math.floor(relY / layout.imgRenderH * PHONE_H);
+            if (ipx >= 0 && ipx < PHONE_W && ipy >= 0 && ipy < PHONE_H) {
+                const i = (ipy * PHONE_W + ipx) * 3;
+                setChannelsFromPixel(phonePixels[i], phonePixels[i + 1], phonePixels[i + 2]);
+            }
+        }
+    });
+
+    // ──────────────────────────────────────────
+    //  Phone View drawing
+    // ──────────────────────────────────────────
+    function drawPhoneView() {
+        const phoneW = Math.min(280, W * 0.35);
+        const phoneH = phoneW * 2;
+        const px = Math.floor(W / 2 - phoneW / 2);
+        const py = Math.floor(H / 2 - phoneH / 2);
+        const bezel = 12;
+        const cornerR = 30;
+        const screenX = px + bezel;
+        const screenY = py + bezel + 20;
+        const screenW = phoneW - bezel * 2;
+        const screenH = phoneH - bezel * 2 - 30;
+
+        // Phone body
+        ctx.fillStyle = '#222';
+        roundRect(ctx, px, py, phoneW, phoneH, cornerR);
+        ctx.fill();
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 2;
+        roundRect(ctx, px, py, phoneW, phoneH, cornerR);
+        ctx.stroke();
+
+        // Notch
+        ctx.fillStyle = '#222';
+        roundRect(ctx, px + phoneW / 2 - 30, py, 60, 18, 8);
+        ctx.fill();
+
+        // Camera dot
+        ctx.beginPath();
+        ctx.arc(px + phoneW / 2, py + 10, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#1a1a30';
+        ctx.fill();
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Screen background
+        ctx.fillStyle = '#0a0a1a';
+        roundRect(ctx, screenX, screenY, screenW, screenH, 4);
+        ctx.fill();
+
+        // Render high-res image to phone screen, keep pxSize for magnifier mapping
+        const pxSize = Math.min(screenW / IMG_W, screenH / IMG_H);
+        const hiresAspect = phoneImg.naturalWidth / (phoneImg.naturalHeight || 1);
+        const hiresH = Math.min(screenH, screenW / hiresAspect);
+        const hiresW = hiresH * hiresAspect;
+        const imgRenderW = Math.floor(hiresW);
+        const imgRenderH = Math.floor(hiresH);
+        const imgX = screenX + Math.floor((screenW - imgRenderW) / 2);
+        const imgY = screenY + Math.floor((screenH - imgRenderH) / 2);
+
+        if (phoneImg.complete && phoneImg.naturalWidth > 0) {
+            ctx.drawImage(phoneImg, imgX, imgY, imgRenderW, imgRenderH);
+        }
+
+        // Title
+        ctx.fillStyle = '#66d9ff';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Phone Screen', W / 2, Math.max(20, py - 30));
+        ctx.fillStyle = '#777';
+        ctx.font = '11px Arial';
+        ctx.fillText('Move cursor over the screen to see subpixels through the magnifier', W / 2, Math.max(36, py - 14));
+
+        // Store layout for magnifier
+        drawPhoneView._layout = { imgX, imgY, imgRenderW, imgRenderH, pxSize, screenX, screenY, screenW, screenH };
+
+        // Magnifier
+        if (magnifier.active) {
+            drawMagnifier();
+        }
+    }
+
+    function drawMagnifier() {
+        const layout = drawPhoneView._layout;
+        if (!layout) return;
+        const mx = magnifier.x, my = magnifier.y;
+        const r = magnifier.radius;
+
+        // What pixel is the cursor over? Map render coords to hi-res pixel grid
+        const relX = mx - layout.imgX;
+        const relY = my - layout.imgY;
+        const imgPx = Math.floor(relX / layout.imgRenderW * PHONE_W);
+        const imgPy = Math.floor(relY / layout.imgRenderH * PHONE_H);
+
+        if (imgPx < 0 || imgPx >= PHONE_W || imgPy < 0 || imgPy >= PHONE_H) return;
+
+        // Magnifier circle
+        const magX = mx, magY = my - r - 20;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(magX, magY, r, 0, Math.PI * 2);
+        ctx.clip();
+
+        // Dark background
+        ctx.fillStyle = '#0a0a1a';
+        ctx.fillRect(magX - r, magY - r, r * 2, r * 2);
+
+        // Draw subpixels in magnifier using hi-res pixel data
+        const subpxW = 3;
+        const subpxH = 10;
+        const subGap = 1;
+        const mpxW = subpxW * 3 + subGap * 4;
+        const mpxH = subpxH + subGap * 2;
+        const mpxGap = 1;
+
+        const viewRadius = 7;
+        const gridStartX = magX - viewRadius * (mpxW + mpxGap);
+        const gridStartY = magY - viewRadius * (mpxH + mpxGap);
+
+        for (let dy = -viewRadius; dy <= viewRadius; dy++) {
+            for (let dx = -viewRadius; dx <= viewRadius; dx++) {
+                const ipx = imgPx + dx;
+                const ipy = imgPy + dy;
+                if (ipx < 0 || ipx >= PHONE_W || ipy < 0 || ipy >= PHONE_H) continue;
+
+                const idx = (ipy * PHONE_W + ipx) * 3;
+                const rv = phonePixels[idx];
+                const gv = phonePixels[idx + 1];
+                const bv = phonePixels[idx + 2];
+
+                const x0 = gridStartX + (dx + viewRadius) * (mpxW + mpxGap);
+                const y0 = gridStartY + (dy + viewRadius) * (mpxH + mpxGap);
+
+                ctx.fillStyle = '#111';
+                ctx.fillRect(x0, y0, mpxW, mpxH);
+                ctx.fillStyle = `rgb(${rv}, 0, 0)`;
+                ctx.fillRect(x0 + subGap, y0 + subGap, subpxW, subpxH);
+                ctx.fillStyle = `rgb(0, ${gv}, 0)`;
+                ctx.fillRect(x0 + subGap * 2 + subpxW, y0 + subGap, subpxW, subpxH);
+                ctx.fillStyle = `rgb(0, 0, ${bv})`;
+                ctx.fillRect(x0 + subGap * 3 + subpxW * 2, y0 + subGap, subpxW, subpxH);
+
+                // Highlight center pixel
+                if (dx === 0 && dy === 0) {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeRect(x0 - 1, y0 - 1, mpxW + 2, mpxH + 2);
+                }
+            }
+        }
+
+        ctx.restore();
+
+        // Lens border
+        ctx.beginPath();
+        ctx.arc(magX, magY, r, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 6;
+        ctx.stroke();
+
+        // Handle line
+        ctx.strokeStyle = 'rgba(200,200,200,0.4)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(magX + r * 0.7, magY + r * 0.7);
+        ctx.lineTo(magX + r * 1.1, magY + r * 1.1);
+        ctx.stroke();
+    }
+
+    canvas.addEventListener('mousemove', e => {
+        if (currentView !== 'phone') { magnifier.active = false; return; }
+        const layout = drawPhoneView._layout;
+        if (!layout) return;
+        const mx = e.clientX, my = e.clientY;
+        if (mx >= layout.screenX && mx <= layout.screenX + layout.screenW &&
+            my >= layout.screenY && my <= layout.screenY + layout.screenH) {
+            magnifier.active = true;
+            magnifier.x = mx;
+            magnifier.y = my;
+            // Live update sliders from hovered pixel
+            const relX = mx - layout.imgX;
+            const relY = my - layout.imgY;
+            const ipx = Math.floor(relX / layout.imgRenderW * PHONE_W);
+            const ipy = Math.floor(relY / layout.imgRenderH * PHONE_H);
+            if (ipx >= 0 && ipx < PHONE_W && ipy >= 0 && ipy < PHONE_H) {
+                const i = (ipy * PHONE_W + ipx) * 3;
+                setChannelsFromPixel(phonePixels[i], phonePixels[i + 1], phonePixels[i + 2]);
+            }
+            needsRedraw = true;
+        } else {
+            if (magnifier.active) { magnifier.active = false; needsRedraw = true; }
+        }
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+        if (magnifier.active) { magnifier.active = false; needsRedraw = true; }
+    });
+
+    // Touch support for magnifier
+    canvas.addEventListener('touchmove', e => {
+        if (currentView !== 'phone') return;
+        e.preventDefault();
+        const t = e.touches[0];
+        const layout = drawPhoneView._layout;
+        if (!layout) return;
+        if (t.clientX >= layout.screenX && t.clientX <= layout.screenX + layout.screenW &&
+            t.clientY >= layout.screenY && t.clientY <= layout.screenY + layout.screenH) {
+            magnifier.active = true;
+            magnifier.x = t.clientX;
+            magnifier.y = t.clientY;
+            needsRedraw = true;
+        }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', () => {
+        if (magnifier.active) { magnifier.active = false; needsRedraw = true; }
+    });
+
+    // ──────────────────────────────────────────
+    //  Utility: rounded rectangle
+    // ──────────────────────────────────────────
+    function roundRect(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+    }
+
+    // ──────────────────────────────────────────
+    //  Main animation loop
+    // ──────────────────────────────────────────
+    function animate() {
+        if (physicsRunning) {
+            for (let i = 0; i < 3; i++) {
+                if (channelSims[i]) {
+                    updateChannelPhysics(channelSims[i], channels[i].voltage);
+                }
+            }
+        }
+
+        if (physicsRunning || needsRedraw) {
+            ctx.fillStyle = '#0a0a1a';
+            ctx.fillRect(0, 0, W, H);
+
+            switch (currentView) {
+                case 'physics': drawPhysicsView(); break;
+                case 'pixel': drawPixelView(); break;
+                case 'array': drawArrayView(); break;
+                case 'phone': drawPhoneView(); break;
+            }
+
+            needsRedraw = false;
+        }
+
+        requestAnimationFrame(animate);
+    }
+
+    animate();
+
+    // ──────────────────────────────────────────
+    //  localStorage persistence
+    // ──────────────────────────────────────────
+    const SAVE_KEY = 'led-screen-sim-state';
+
+    function saveState() {
+        const data = {
+            view: currentView,
+            voltages: channels.map(c => c.voltage),
+        };
+        try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) {}
+    }
+
+    function loadState() {
+        try {
+            const raw = localStorage.getItem(SAVE_KEY);
+            if (!raw) return;
+            const data = JSON.parse(raw);
+            if (data.voltages) {
+                data.voltages.forEach((v, i) => {
+                    if (sliders[i]) { sliders[i].value = v; }
+                });
+            }
+            if (data.view && VIEWS.includes(data.view)) {
+                switchView(data.view);
+            }
+            updateUI();
+        } catch (e) {}
+    }
+
+    loadState();
+
+    let saveTimer = null;
+    function debouncedSave() {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(saveState, 500);
+    }
+    sliders.forEach(s => s.addEventListener('input', debouncedSave));
+    window.addEventListener('beforeunload', saveState);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) saveState(); });
+
+    })();
+    </script>
+</body>
+</html>
