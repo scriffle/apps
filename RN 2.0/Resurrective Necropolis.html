@@ -1443,6 +1443,16 @@ const VoiceEngine = {
         if (!this.ready) return;
         this.synth.cancel();
 
+        // Safari/Edge bug: after cancel(), the engine needs a brief pause
+        // before it will accept a new utterance. Without this, utterances
+        // are silently dropped. We debounce with a short delay.
+        if (this._speakTimer) clearTimeout(this._speakTimer);
+        this._speakTimer = setTimeout(() => this._doSpeak(nameData), 60);
+    },
+
+    _doSpeak(nameData) {
+        if (!this.ready) return;
+
         const voice = this.selectVoice(nameData);
         if (!voice) return;
 
@@ -1467,13 +1477,16 @@ const VoiceEngine = {
             }
         }
 
-        // Tier 1: Always set utterance.lang to the name's language
+        // Tier 1: Set utterance.lang — but ONLY when the voice matches the language.
+        // Safari/Edge silently drop utterances when lang doesn't match the voice.
+        // For non-native voices, use the voice's own lang to avoid silent failures.
         const preferredLangs = this.getPreferredLangs(nameData.familyKey, nameData.subBranch);
         const nameLang = preferredLangs[0] || 'en-US';
+        const effectiveLang = voiceIsNative ? nameLang : voice.lang;
 
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.voice = voice;
-        utterance.lang = nameLang; // Tier 1: explicit lang hint
+        utterance.lang = effectiveLang;
         utterance.rate = voiceIsNative ? 0.85 :
             (this.PRONUNCIATION_RULES[nameData.familyKey]?.rate || 0.8);
         utterance.pitch = 1.0;
@@ -1488,7 +1501,7 @@ const VoiceEngine = {
             statusEl.textContent = '';
             this._safariWatchdog = null;
             // Safari sometimes fires 'interrupted' errors on rapid cancel — ignore
-            if (e.error === 'interrupted') return;
+            if (e.error === 'interrupted' || e.error === 'canceled') return;
             console.warn('Speech error:', e.error, 'for', text);
         };
 
@@ -1502,7 +1515,14 @@ const VoiceEngine = {
             }
         }, 8000);
 
-        this.synth.speak(utterance);
+        // Final safety: ensure synth isn't in a stale speaking state
+        // (Safari can report speaking=true even after cancel)
+        if (this.synth.speaking) {
+            this.synth.cancel();
+            setTimeout(() => this.synth.speak(utterance), 30);
+        } else {
+            this.synth.speak(utterance);
+        }
     },
 
     // Settings persistence
@@ -1852,9 +1872,9 @@ const UI = {
             this.el.nativeScript.classList.remove('fade-out');
             this.el.nativeScript.classList.add('fade-in');
 
-            // Auto-speak
+            // Auto-speak — speak() handles its own cancel→delay internally
             if (this.autoSpeak && VoiceEngine.ready) {
-                setTimeout(() => VoiceEngine.speak(nameData), 150);
+                VoiceEngine.speak(nameData);
             }
         }, 300);
 
