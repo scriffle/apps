@@ -1124,6 +1124,33 @@ const MALE_VOICE_NAMES = new Set([
     'keita','injoong','niwat','hamed','prabhat','mark','david'
 ]);
 
+// ── TTS Debug Trail ──
+// Captures every event in the speak pipeline for diagnosis.
+// Access via: TTS_TRAIL (array) or copy(TTS_TRAIL) in console.
+// Each entry: { t: ms_since_start, event, ...details }
+const TTS_TRAIL = [];
+const TTS_TRAIL_START = performance.now();
+function ttsLog(event, details = {}) {
+    const entry = {
+        t: Math.round(performance.now() - TTS_TRAIL_START),
+        event,
+        ...details
+    };
+    TTS_TRAIL.push(entry);
+    // Keep last 200 entries
+    if (TTS_TRAIL.length > 200) TTS_TRAIL.shift();
+    // Also log to console with prefix for easy filtering
+    console.log(`[TTS ${entry.t}ms] ${event}`, details);
+}
+// Helper to dump trail as formatted text
+function ttsDump() {
+    return TTS_TRAIL.map(e => {
+        const { t, event, ...rest } = e;
+        const details = Object.keys(rest).length ? ' ' + JSON.stringify(rest) : '';
+        return `${String(t).padStart(7)}ms  ${event}${details}`;
+    }).join('\n');
+}
+
 const VoiceEngine = {
     synth: window.speechSynthesis,
     voices: [],
@@ -1440,13 +1467,25 @@ const VoiceEngine = {
     // e.g. ["Kazuhiro","和宏","harmonious_vast","japanese","kah-zoo-hee-roh"]
 
     speak(nameData) {
-        if (!this.ready) return;
+        if (!this.ready) {
+            ttsLog('speak:skip', { reason: 'not ready' });
+            return;
+        }
+
+        ttsLog('speak:cancel', {
+            name: nameData.romanized,
+            wasSpeaking: this.synth.speaking,
+            wasPending: this.synth.pending
+        });
         this.synth.cancel();
 
         // Safari/Edge bug: after cancel(), the engine needs a brief pause
         // before it will accept a new utterance. Without this, utterances
         // are silently dropped. We debounce with a short delay.
-        if (this._speakTimer) clearTimeout(this._speakTimer);
+        if (this._speakTimer) {
+            ttsLog('speak:debounce', { reason: 'timer cleared, replaced' });
+            clearTimeout(this._speakTimer);
+        }
         this._speakTimer = setTimeout(() => this._doSpeak(nameData), 60);
     },
 
@@ -1454,26 +1493,34 @@ const VoiceEngine = {
         if (!this.ready) return;
 
         const voice = this.selectVoice(nameData);
-        if (!voice) return;
+        if (!voice) {
+            ttsLog('doSpeak:noVoice', { name: nameData.romanized, family: nameData.familyKey });
+            return;
+        }
 
         const voiceIsNative = this._voiceMatchesLang(voice, nameData.familyKey, nameData.subBranch);
 
         // Decide what text to feed the speech engine
         let text = nameData.romanized;
+        let textSource = 'romanized';
 
         // Priority 1: If voice natively speaks the language AND we have native script, use it
         if (voiceIsNative && nameData.nativeScript && nameData.nativeScript !== 'null') {
             text = nameData.nativeScript;
+            textSource = 'nativeScript';
         }
         // Priority 2: If we have a phonetic hint (Tier 2), use it for non-native voices
         else if (!voiceIsNative && nameData.phoneticHint) {
             text = nameData.phoneticHint;
+            textSource = 'phoneticHint';
         }
         // Priority 3: Apply family pronunciation rules (Tier 3) for non-native voices
         else if (!voiceIsNative) {
             const rules = this.PRONUNCIATION_RULES[nameData.familyKey];
             if (rules && rules.transform) {
+                const original = text;
                 text = rules.transform(nameData.romanized, nameData.subBranch);
+                textSource = (text !== original) ? 'transform' : 'romanized(no-change)';
             }
         }
 
@@ -1484,6 +1531,20 @@ const VoiceEngine = {
         const nameLang = preferredLangs[0] || 'en-US';
         const effectiveLang = voiceIsNative ? nameLang : voice.lang;
 
+        ttsLog('doSpeak:setup', {
+            name: nameData.romanized,
+            text,
+            textSource,
+            voice: voice.name,
+            voiceLang: voice.lang,
+            nameLang,
+            effectiveLang,
+            voiceIsNative,
+            family: nameData.familyKey,
+            subBranch: nameData.subBranch,
+            synthState: { speaking: this.synth.speaking, pending: this.synth.pending, paused: this.synth.paused }
+        });
+
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.voice = voice;
         utterance.lang = effectiveLang;
@@ -1492,12 +1553,20 @@ const VoiceEngine = {
         utterance.pitch = 1.0;
         utterance.volume = 1.0;
 
+        const speakId = TTS_TRAIL.length; // track this utterance
         const statusEl = document.getElementById('voiceStatus');
+
         utterance.onstart = () => {
+            ttsLog('utterance:start', { id: speakId, name: nameData.romanized, text });
             statusEl.textContent = `Speaking: ${voice.name} (${voice.lang})`;
         };
-        utterance.onend = () => { statusEl.textContent = ''; this._safariWatchdog = null; };
+        utterance.onend = () => {
+            ttsLog('utterance:end', { id: speakId, name: nameData.romanized });
+            statusEl.textContent = '';
+            this._safariWatchdog = null;
+        };
         utterance.onerror = (e) => {
+            ttsLog('utterance:error', { id: speakId, name: nameData.romanized, error: e.error, text });
             statusEl.textContent = '';
             this._safariWatchdog = null;
             // Safari sometimes fires 'interrupted' errors on rapid cancel — ignore
@@ -1510,6 +1579,7 @@ const VoiceEngine = {
         if (this._safariWatchdog) clearTimeout(this._safariWatchdog);
         this._safariWatchdog = setTimeout(() => {
             if (this.synth.speaking) {
+                ttsLog('watchdog:fired', { name: nameData.romanized });
                 this.synth.cancel();
                 statusEl.textContent = '';
             }
@@ -1518,9 +1588,14 @@ const VoiceEngine = {
         // Final safety: ensure synth isn't in a stale speaking state
         // (Safari can report speaking=true even after cancel)
         if (this.synth.speaking) {
+            ttsLog('doSpeak:stale', { reason: 'synth still speaking after cancel, re-cancelling' });
             this.synth.cancel();
-            setTimeout(() => this.synth.speak(utterance), 30);
+            setTimeout(() => {
+                ttsLog('doSpeak:retrySpeak', { name: nameData.romanized });
+                this.synth.speak(utterance);
+            }, 30);
         } else {
+            ttsLog('doSpeak:speak', { name: nameData.romanized });
             this.synth.speak(utterance);
         }
     },
