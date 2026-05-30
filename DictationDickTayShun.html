@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Diction Dictation</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #1a1a2e;
+  --bg-card: #16213e;
+  --bg-input: #0f3460;
+  --text: #e8e8e8;
+  --text-dim: #8892a4;
+  --accent: #e94560;
+  --accent-glow: rgba(233, 69, 96, 0.3);
+  --success: #4ecca3;
+  --success-glow: rgba(78, 204, 163, 0.15);
+  --warn: #f0a500;
+  --radius: 12px;
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 24px; --space-6: 32px; --space-7: 48px; --space-8: 64px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f5f5f7;
+    --bg-card: #ffffff;
+    --bg-input: #e8edf2;
+    --text: #1a1a2e;
+    --text-dim: #6b7280;
+    --accent: #d63851;
+    --accent-glow: rgba(214, 56, 81, 0.15);
+    --bg-input: #eef1f6;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+html { height: 100%; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: env(safe-area-inset-top) var(--space-4) env(safe-area-inset-bottom);
+  line-height: 1.5;
+}
+
+a:focus-visible, button:focus-visible, input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* --- HEADER --- */
+header {
+  text-align: center;
+  padding: var(--space-6) 0 var(--space-4);
+  max-width: 600px;
+  width: 100%;
+}
+header h1 {
+  font-size: clamp(1.8rem, 5vw, 2.8rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, var(--accent), #ff8a65);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+header p {
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  margin-top: var(--space-2);
+}
+
+/* --- GAME AREA --- */
+#game {
+  max-width: 640px;
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* --- SCORE BAR --- */
+.score-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  padding: 0 var(--space-2);
+}
+.score-bar .stat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.score-bar .num {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- CARD --- */
+.card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: var(--space-6);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+  position: relative;
+}
+
+.mangled-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  margin-bottom: var(--space-3);
+}
+
+.mangled-text {
+  font-family: var(--mono);
+  font-size: clamp(1.1rem, 3.5vw, 1.5rem);
+  line-height: 1.6;
+  color: var(--accent);
+  font-weight: 600;
+  word-break: break-word;
+}
+
+/* --- CONTROLS --- */
+.controls {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+button {
+  font-family: var(--font);
+  font-size: 0.9rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  padding: var(--space-3) var(--space-5);
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s, background 0.15s;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+button:active { transform: scale(0.97); }
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-speak {
+  background: var(--accent);
+  color: white;
+  box-shadow: 0 2px 12px var(--accent-glow);
+  flex: 1;
+  justify-content: center;
+}
+.btn-speak:hover:not(:disabled) {
+  box-shadow: 0 4px 20px var(--accent-glow);
+}
+
+.btn-secondary {
+  background: var(--bg-input);
+  color: var(--text);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--bg-card);
+}
+
+.btn-skip {
+  background: transparent;
+  color: var(--text-dim);
+  padding: var(--space-3) var(--space-4);
+}
+.btn-skip:hover { color: var(--text); }
+
+/* --- INPUT AREA --- */
+.input-area {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.input-area label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+.input-area textarea {
+  font-family: var(--font);
+  font-size: 1rem;
+  background: var(--bg-input);
+  color: var(--text);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: var(--space-4);
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 0.15s;
+  line-height: 1.5;
+}
+.input-area textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.input-area textarea::placeholder { color: var(--text-dim); opacity: 0.6; }
+
+.submit-row {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+
+/* --- RESULT --- */
+.result {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: var(--space-5);
+  animation: slideUp 0.3s ease-out;
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.result-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.result-header .icon {
+  font-size: 1.5rem;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.result-header .icon.perfect { background: var(--success-glow); }
+.result-header .icon.partial { background: rgba(240, 165, 0, 0.15); }
+.result-header .icon.miss { background: rgba(233, 69, 96, 0.15); }
+.result-header .label { font-weight: 700; font-size: 1.1rem; }
+.result-header .score-detail { color: var(--text-dim); font-size: 0.85rem; }
+
+.comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+@media (max-width: 500px) {
+  .comparison { grid-template-columns: 1fr; }
+}
+.comparison .col-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  margin-bottom: var(--space-2);
+}
+.comparison .col-text {
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+.comparison .col-text .word-correct { color: var(--success); }
+.comparison .col-text .word-wrong { color: var(--accent); text-decoration: underline; text-decoration-style: wavy; }
+.comparison .col-text .word-missing { color: var(--text-dim); opacity: 0.5; }
+
+.next-row {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-5);
+}
+.btn-next {
+  background: var(--accent);
+  color: white;
+  padding: var(--space-3) var(--space-7);
+  font-size: 1rem;
+  box-shadow: 0 2px 12px var(--accent-glow);
+}
+
+/* --- STATES --- */
+.hidden { display: none !important; }
+
+.speaking .btn-speak {
+  animation: pulse 1s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 2px 12px var(--accent-glow); }
+  50% { box-shadow: 0 4px 28px var(--accent-glow); }
+}
+
+/* --- DIFFICULTY SELECTOR --- */
+.difficulty {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+}
+.difficulty button {
+  font-size: 0.8rem;
+  padding: var(--space-2) var(--space-4);
+  border-radius: 20px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  min-height: 36px;
+}
+.difficulty button.active {
+  background: var(--accent);
+  color: white;
+}
+
+/* --- INTRO SCREEN --- */
+#intro {
+  max-width: 500px;
+  width: 100%;
+  text-align: center;
+  padding: var(--space-7) var(--space-4);
+}
+#intro h2 {
+  font-size: 1.4rem;
+  margin-bottom: var(--space-4);
+}
+#intro p {
+  color: var(--text-dim);
+  margin-bottom: var(--space-5);
+  line-height: 1.7;
+}
+#intro .example {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: var(--space-5);
+  margin-bottom: var(--space-6);
+  text-align: left;
+}
+#intro .example .mono {
+  font-family: var(--mono);
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 1.05rem;
+  margin-bottom: var(--space-3);
+}
+#intro .example .reveal {
+  color: var(--success);
+  font-size: 0.95rem;
+}
+#intro .example .arrow {
+  color: var(--text-dim);
+  margin: var(--space-3) 0;
+  font-size: 0.85rem;
+}
+
+.btn-start {
+  background: var(--accent);
+  color: white;
+  font-size: 1.1rem;
+  padding: var(--space-4) var(--space-7);
+  box-shadow: 0 4px 20px var(--accent-glow);
+}
+
+/* --- TOAST --- */
+.toast {
+  position: fixed;
+  bottom: var(--space-6);
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: var(--bg-card);
+  color: var(--text);
+  padding: var(--space-3) var(--space-5);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  opacity: 0;
+  transition: transform 0.3s ease-out, opacity 0.3s;
+  z-index: 100;
+  pointer-events: none;
+}
+.toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+/* --- FOOTER --- */
+footer {
+  padding: var(--space-6) 0 var(--space-4);
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.75rem;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Diction Dictation</h1>
+  <p>Read the mangled text. Listen to what it really says. Type the original.</p>
+</header>
+
+<!-- INTRO SCREEN -->
+<div id="intro">
+  <h2>How it works</h2>
+  <div class="example">
+    <div class="mono">Aisle bi ewe a hole knew won hear.</div>
+    <div class="arrow">sounds like...</div>
+    <div class="reveal">I'll buy you a whole new one here.</div>
+  </div>
+  <p>
+    Every word has been swapped for a homophone — a word that sounds the same but
+    is spelled differently. Read the mangled sentence, hit <strong>Speak</strong> to hear
+    what it really says, then type the original sentence.
+  </p>
+  <div class="difficulty" style="margin-bottom: var(--space-6);">
+    <button data-diff="easy" class="active" aria-pressed="true">Easy</button>
+    <button data-diff="medium" aria-pressed="false">Medium</button>
+    <button data-diff="hard" aria-pressed="false">Hard</button>
+  </div>
+  <button class="btn-start" id="startBtn" aria-label="Start game">Let's go</button>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="game" class="hidden">
+  <div class="score-bar">
+    <div class="stat"><span>Round</span> <span class="num" id="roundNum">1</span><span>/ <span id="totalRounds">10</span></span></div>
+    <div class="stat"><span>Score</span> <span class="num" id="scoreNum">0</span></div>
+    <div class="stat"><span>Streak</span> <span class="num" id="streakNum">0</span></div>
+  </div>
+
+  <div class="card" id="questionCard">
+    <div class="mangled-label">Decode this</div>
+    <div class="mangled-text" id="mangledText" aria-live="polite"></div>
+  </div>
+
+  <div class="controls" id="speakControls">
+    <button class="btn-speak" id="speakBtn" aria-label="Hear the sentence spoken aloud">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+      Speak
+    </button>
+    <button class="btn-secondary" id="speakSlowBtn" aria-label="Hear the sentence spoken slowly">
+      Slow
+    </button>
+  </div>
+
+  <div class="input-area" id="inputArea">
+    <label for="answerInput">What did it really say?</label>
+    <textarea id="answerInput" placeholder="Type the original sentence..." rows="2" autocomplete="off" spellcheck="false"></textarea>
+    <div class="submit-row">
+      <button class="btn-skip" id="skipBtn">Skip</button>
+      <button class="btn-speak" id="submitBtn" style="flex:none;">Check</button>
+    </div>
+  </div>
+
+  <div id="resultArea" class="hidden"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<footer>
+  Diction Dictation — 58 sentences, 150 homophone groups
+</footer>
+
+<script>
+'use strict';
+
+const SENTENCES = [
+  {id:1,plain:"I'll buy you a whole new one here",mangled:"Aisle bi ewe a hole knew won hear"},
+  {id:2,plain:"I know you're not the right one",mangled:"Eye no your knot the write won"},
+  {id:3,plain:"Do you need to find where they're allowed?",mangled:"Dew ewe knead too fined wear there aloud?"},
+  {id:4,plain:"Would he be here by night?",mangled:"Wood he bee hear bye knight?"},
+  {id:5,plain:"It's no way I'll sell it",mangled:"Its know weigh aisle cell it"},
+  {id:6,plain:"I see the bare fir trees in the morning mist",mangled:"Eye sea the bear fur trees in the mourning missed"},
+  {id:7,plain:"Whether the rain falls here, the deer flee at night",mangled:"Weather the reign falls hear, the dear flea at knight"},
+  {id:8,plain:"The flower beds need dew; we'd trim them by morning",mangled:"The flour beds knead do; weed trim them bye mourning"},
+  {id:9,plain:"The blue sea rose at the peak, and the tide held the whole shore",mangled:"The blew see rows at the peek, and the tied held the hole shore"},
+  {id:10,plain:"Our lone doe pawed its way through at dawn; she sighed",mangled:"Hour loan dough pored it's weigh threw at dawn; she side"},
+  {id:11,plain:"I'll meet you for steak and some pie",mangled:"Aisle meat ewe four stake and sum pi"},
+  {id:12,plain:"We bred a great flower; the berry and carrot were chilly",mangled:"We bread a grate flour; the bury and carat were chili"},
+  {id:13,plain:"Choose the raw meat; it's the base of the coarse sauce",mangled:"Chews the roar meet; its the bass of the course source"},
+  {id:14,plain:"The heir was sent to hire a knight in time for the peace talks",mangled:"The air was cent too higher a night in thyme four the piece talks"},
+  {id:15,plain:"He would write by the throne; I sent him a piece of ore for his feat",mangled:"He wood right buy the thrown; eye cent hymn a peace of oar four his feet"},
+  {id:16,plain:"The hoarse guest has grown weak; he'll need patience",mangled:"The horse guessed has groan week; heel knead patients"},
+  {id:17,plain:"I guessed the sore foot would not heal; he's been here for hours",mangled:"Eye guest the soar foot wood knot heel; he's bean hear four ours"},
+  {id:18,plain:"We caught sight of the sale and choose to browse for a pair of jeans",mangled:"We court cite of the sail and chews too brows four a pear of genes"},
+  {id:19,plain:"They sell pears by the pane near the stairs; none were on the board",mangled:"They cell pairs bye the pain near the stares; nun were on the bored"},
+  {id:20,plain:"We leased the right role at the site for real profit",mangled:"We least the rite roll at the sight four reel prophet"},
+  {id:21,plain:"No maid would mind the mail; none of them knew the maze",mangled:"Know made wood mined the male; nun of them new the maize"},
+  {id:22,plain:"The maid led him through the hall where the cymbal hung in your honour",mangled:"The made lead hymn threw the hall wear the symbol hung in yore honour"},
+  {id:23,plain:"In the past, the poor patients paced by the pane; they pause to peek at a pie",mangled:"In the passed, the pour patience paste bye the pain; they paws too peak at a pi"},
+  {id:24,plain:"The prophet prayed in the plain rain, wrapping raw red presents near the pole",mangled:"The profit preyed in the plane reign, rapping roar read presence near the poll"},
+  {id:25,plain:"The rays of the sun rose through the bold throne",mangled:"The raise of the sun rows threw the bowled thrown"},
+  {id:26,plain:"It's not his role to lead the stationery order overseas",mangled:"Its knot his roll too led the stationary order oversees"},
+  {id:27,plain:"The board seems idle; I would write the whole serial by Sunday",mangled:"The bored seams idle; eye wood right the hole cereal buy sundae"},
+  {id:28,plain:"We rode to the seas and saw the source of the real scene",mangled:"We rowed too the sees and soar the sauce of the reel seen"},
+  {id:29,plain:"We rode to the isle where the sail caught the sore air",mangled:"We rowed too the aisle wear the sale court the soar heir"},
+  {id:30,plain:"On Sunday she sighed at the size of the sweet room",mangled:"On sundae she side at the sighs of the suite room"},
+  {id:31,plain:"Some steak sat on the stair; the steel sword and the stationery were sort of nice",mangled:"Sum stake sat on the stare; the steal soared and the stationary were sought of nice"},
+  {id:32,plain:"They threw the weight into the tents and tied it to the tee",mangled:"They through the wait into the tense and tide it too the tea"},
+  {id:33,plain:"She waive the fee, then wade through the waste to tow the cord ashore",mangled:"She wave the fee, then weighed threw the waist too toe the chord ashore"},
+  {id:34,plain:"He wore his old coat where nobody could find him",mangled:"He war his old coat wear nobody could fined hymn"},
+  {id:35,plain:"The war raged on for one whole week",mangled:"The wore raged on four won hole weak"},
+  {id:36,plain:"We'll find a way through this; we've sown much",mangled:"Wheel fined a weigh threw this; weave sewn much"},
+  {id:37,plain:"Your witch would whine about the ale",mangled:"You're which wood wine about the ail"},
+  {id:38,plain:"Whose wood burns in the night? I'd be allowed to know",mangled:"Who's would burns in the knight? I'd bee aloud too no"},
+  {id:39,plain:"The banned group struck a chord at the site",mangled:"The band group struck a cord at the cite"},
+  {id:40,plain:"He discussed the chute with such fury",mangled:"He disgust the shoot with such fury"},
+  {id:41,plain:"The colonel found it a great feat; the coarse cord held the fowl",mangled:"The kernel found it a grate feet; the course chord held the foul"},
+  {id:42,plain:"The flea flew past the fowl; the ewe fled to the fir",mangled:"The flee flu passed the foul; the you fled too the fur"},
+  {id:43,plain:"The bare deer pawed at the prey; I saw it by our road",mangled:"The bear dear pored at the pray; eye soar it buy hour rode"},
+  {id:44,plain:"She oversees the sea trade from her office",mangled:"She overseas the see trade from her office"},
+  {id:45,plain:"The sail brought ore for the steel; it's a great source of profit",mangled:"The sale brought oar four the steal; its a grate sauce of prophet"},
+  {id:46,plain:"He sighed at the pain; his grown presence seemed higher than his role",mangled:"He side at the pane; his groan presents seamed hire than his roll"},
+  {id:47,plain:"The moan echoed aloud; the hour passed and he missed the scent of the morning",mangled:"The mown echoed allowed; the our past and he mist the cent of the mourning"},
+  {id:48,plain:"I read the bold sign — no higher fare, they'd allowed eight in",mangled:"Eye red the bowled sign — know hire fair, they'd aloud ate in"},
+  {id:49,plain:"I heard him browse the aisle; the seam in his worn jeans had given way",mangled:"Eye herd hymn brows the isle; the seem in his warn genes had given weigh"},
+  {id:50,plain:"He paced the road in the chilly rain; his presence here would seize their attention",mangled:"He paste the rode in the chili reign; his presents hear wood sees there attention"},
+  {id:51,plain:"The cereal had a plain, coarse base; not much flavour",mangled:"The serial had a plane, course bass; knot much flavour"},
+  {id:52,plain:"The lone mown field stretched to the floor of the valley",mangled:"The loan moan field stretched too the flaw of the valley"},
+  {id:53,plain:"She would sew the hem tight; it held through the night",mangled:"She wood sow the hem tight; it held threw the knight"},
+  {id:54,plain:"The flu blew through town last week",mangled:"The flew blue threw town last weak"},
+  {id:55,plain:"Don't brake hard; you'll build up a bruise on your arm",mangled:"Don't break hard; you'll billed up a brews on you're arm"},
+  {id:56,plain:"His patience can lapse; wave them through, the pause has been too long",mangled:"His patients can laps; waive them threw, the paws has bean two long"},
+  {id:57,plain:"Wade to the stair and sort it by the morning",mangled:"Weighed too the stare and sought it bye the mourning"},
+  {id:58,plain:"Wrap the gift and paste it to the board; he'd build a shelf for tea",mangled:"Rap the gift and paced it too the bored; he'd billed a shelf four tee"}
+];
+
+const DIFFICULTY = {
+  easy:   { rounds: 10, maxWords: 8,  speakLimit: 5, label: 'Easy' },
+  medium: { rounds: 10, maxWords: 14, speakLimit: 3, label: 'Medium' },
+  hard:   { rounds: 10, maxWords: 99, speakLimit: 1, label: 'Hard' }
+};
+
+let state = {
+  difficulty: 'easy',
+  round: 0,
+  score: 0,
+  streak: 0,
+  bestStreak: 0,
+  speaksUsed: 0,
+  roundSentences: [],
+  current: null,
+  phase: 'intro' // intro | question | result
+};
+
+// --- DOM ---
+const $ = (sel) => document.querySelector(sel);
+const introEl = $('#intro');
+const gameEl = $('#game');
+const mangledText = $('#mangledText');
+const speakBtn = $('#speakBtn');
+const speakSlowBtn = $('#speakSlowBtn');
+const answerInput = $('#answerInput');
+const submitBtn = $('#submitBtn');
+const skipBtn = $('#skipBtn');
+const resultArea = $('#resultArea');
+const inputArea = $('#inputArea');
+const speakControls = $('#speakControls');
+const roundNum = $('#roundNum');
+const totalRounds = $('#totalRounds');
+const scoreNum = $('#scoreNum');
+const streakNum = $('#streakNum');
+const toastEl = $('#toast');
+const startBtn = $('#startBtn');
+
+// --- DIFFICULTY SELECTOR ---
+document.querySelectorAll('.difficulty button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.difficulty button').forEach(b => {
+      b.classList.remove('active');
+      b.setAttribute('aria-pressed', 'false');
+    });
+    btn.classList.add('active');
+    btn.setAttribute('aria-pressed', 'true');
+    state.difficulty = btn.dataset.diff;
+  });
+});
+
+// --- START ---
+startBtn.addEventListener('click', startGame);
+
+function startGame() {
+  const diff = DIFFICULTY[state.difficulty];
+  const pool = SENTENCES.filter(s => {
+    const wordCount = s.plain.replace(/[^a-zA-Z' ]/g, '').split(/\s+/).length;
+    return wordCount <= diff.maxWords;
+  });
+
+  // Shuffle and pick rounds
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  state.roundSentences = shuffled.slice(0, diff.rounds);
+  state.round = 0;
+  state.score = 0;
+  state.streak = 0;
+  state.bestStreak = 0;
+
+  introEl.classList.add('hidden');
+  gameEl.classList.remove('hidden');
+  totalRounds.textContent = state.roundSentences.length;
+  updateScoreBar();
+  nextRound();
+}
+
+function nextRound() {
+  if (state.round >= state.roundSentences.length) {
+    showFinalScore();
+    return;
+  }
+
+  state.current = state.roundSentences[state.round];
+  state.speaksUsed = 0;
+  state.phase = 'question';
+
+  roundNum.textContent = state.round + 1;
+  mangledText.textContent = state.current.mangled;
+  answerInput.value = '';
+
+  resultArea.classList.add('hidden');
+  resultArea.innerHTML = '';
+  inputArea.classList.remove('hidden');
+  speakControls.classList.remove('hidden');
+
+  updateSpeakButtons();
+  answerInput.focus();
+}
+
+// --- SPEECH ---
+function speak(text, slow) {
+  if (!('speechSynthesis' in window)) {
+    showToast('Speech not supported in this browser');
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate = slow ? 0.6 : 0.9;
+  utter.pitch = 1;
+  utter.lang = 'en-US';
+
+  const voices = window.speechSynthesis.getVoices();
+  const preferred = voices.find(v => v.lang.startsWith('en') && v.name.includes('Samantha'))
+    || voices.find(v => v.lang.startsWith('en-US'))
+    || voices.find(v => v.lang.startsWith('en'));
+  if (preferred) utter.voice = preferred;
+
+  speakBtn.closest('.controls')?.classList.add('speaking');
+  utter.onend = () => speakBtn.closest('.controls')?.classList.remove('speaking');
+  utter.onerror = () => speakBtn.closest('.controls')?.classList.remove('speaking');
+
+  window.speechSynthesis.speak(utter);
+
+  state.speaksUsed++;
+  updateSpeakButtons();
+}
+
+function updateSpeakButtons() {
+  const diff = DIFFICULTY[state.difficulty];
+  const left = diff.speakLimit - state.speaksUsed;
+  speakBtn.disabled = left <= 0;
+  speakSlowBtn.disabled = left <= 0;
+
+  if (left <= 0) {
+    speakBtn.textContent = 'No listens left';
+  } else {
+    speakBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg> Speak (${left})`;
+  }
+}
+
+speakBtn.addEventListener('click', () => speak(state.current.plain, false));
+speakSlowBtn.addEventListener('click', () => speak(state.current.plain, true));
+
+// --- SUBMIT ---
+submitBtn.addEventListener('click', checkAnswer);
+skipBtn.addEventListener('click', () => {
+  state.streak = 0;
+  showResult(0, []);
+});
+
+answerInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    checkAnswer();
+  }
+});
+
+function normalize(text) {
+  return text.toLowerCase()
+    .replace(/['']/g, "'")
+    .replace(/[^a-z' ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function checkAnswer() {
+  const userRaw = answerInput.value.trim();
+  if (!userRaw) {
+    showToast('Type your answer first');
+    answerInput.focus();
+    return;
+  }
+
+  const target = normalize(state.current.plain).split(' ');
+  const answer = normalize(userRaw).split(' ');
+
+  let correct = 0;
+  const wordResults = [];
+
+  const maxLen = Math.max(target.length, answer.length);
+  for (let i = 0; i < maxLen; i++) {
+    const t = target[i] || '';
+    const a = answer[i] || '';
+    if (t === a) {
+      correct++;
+      wordResults.push({ target: t, answer: a, status: 'correct' });
+    } else if (a === '') {
+      wordResults.push({ target: t, answer: '', status: 'missing' });
+    } else {
+      wordResults.push({ target: t, answer: a, status: 'wrong' });
+    }
+  }
+
+  const pct = target.length > 0 ? correct / target.length : 0;
+  const roundScore = Math.round(pct * 100);
+
+  if (pct >= 0.9) {
+    state.streak++;
+  } else {
+    state.streak = 0;
+  }
+  if (state.streak > state.bestStreak) state.bestStreak = state.streak;
+
+  state.score += roundScore;
+  showResult(roundScore, wordResults);
+}
+
+function showResult(roundScore, wordResults) {
+  state.phase = 'result';
+  inputArea.classList.add('hidden');
+  speakControls.classList.add('hidden');
+  resultArea.classList.remove('hidden');
+
+  const isPerfect = roundScore === 100;
+  const isSkip = wordResults.length === 0;
+  const isGood = roundScore >= 80;
+
+  let iconClass, iconChar, label;
+  if (isSkip) {
+    iconClass = 'miss'; iconChar = '—'; label = 'Skipped';
+  } else if (isPerfect) {
+    iconClass = 'perfect'; iconChar = '✓'; label = 'Perfect!';
+  } else if (isGood) {
+    iconClass = 'partial'; iconChar = '≈'; label = 'Close!';
+  } else {
+    iconClass = 'miss'; iconChar = '✗'; label = 'Not quite';
+  }
+
+  let yourWordsHtml = '';
+  let correctWordsHtml = '';
+
+  if (wordResults.length > 0) {
+    yourWordsHtml = wordResults.map(w => {
+      if (w.status === 'correct') return `<span class="word-correct">${esc(w.answer)}</span>`;
+      if (w.status === 'missing') return `<span class="word-missing">___</span>`;
+      return `<span class="word-wrong">${esc(w.answer)}</span>`;
+    }).join(' ');
+
+    correctWordsHtml = wordResults.map(w => {
+      if (w.status === 'correct') return `<span class="word-correct">${esc(w.target)}</span>`;
+      return `<span class="word-wrong">${esc(w.target)}</span>`;
+    }).join(' ');
+  }
+
+  resultArea.innerHTML = `
+    <div class="result">
+      <div class="result-header">
+        <div class="icon ${iconClass}">${iconChar}</div>
+        <div>
+          <div class="label">${label}</div>
+          ${!isSkip ? `<div class="score-detail">${roundScore}% — ${wordResults.filter(w=>w.status==='correct').length}/${wordResults.filter(w=>w.target).length} words</div>` : ''}
+        </div>
+      </div>
+      ${wordResults.length > 0 ? `
+      <div class="comparison">
+        <div>
+          <div class="col-label">You typed</div>
+          <div class="col-text">${yourWordsHtml}</div>
+        </div>
+        <div>
+          <div class="col-label">Original</div>
+          <div class="col-text">${correctWordsHtml}</div>
+        </div>
+      </div>
+      ` : `
+      <div style="margin-top:var(--space-4);color:var(--text-dim);">
+        <div class="col-label">The answer was</div>
+        <div style="margin-top:var(--space-2);font-size:1rem;">${esc(state.current.plain)}</div>
+      </div>
+      `}
+      <div style="margin-top:var(--space-4);padding-top:var(--space-4);border-top:1px solid var(--bg-input);">
+        <div class="col-label" style="margin-bottom:var(--space-2);">Listen</div>
+        <div class="controls">
+          <button class="btn-secondary" onclick="speak('${esc(state.current.plain).replace(/'/g,"\\'")}', false)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            Hear it
+          </button>
+        </div>
+      </div>
+      <div class="next-row">
+        <button class="btn-next" id="nextBtn">${state.round + 1 >= state.roundSentences.length ? 'See results' : 'Next'}</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('nextBtn').addEventListener('click', () => {
+    state.round++;
+    updateScoreBar();
+    nextRound();
+  });
+
+  updateScoreBar();
+}
+
+function showFinalScore() {
+  const maxScore = state.roundSentences.length * 100;
+  const pct = Math.round((state.score / maxScore) * 100);
+
+  gameEl.innerHTML = `
+    <div class="card" style="text-align:center;padding:var(--space-7) var(--space-6);">
+      <h2 style="font-size:2rem;margin-bottom:var(--space-4);">${pct >= 90 ? 'Incredible!' : pct >= 70 ? 'Well done!' : pct >= 40 ? 'Nice try!' : 'Keep practising!'}</h2>
+      <div style="font-size:3rem;font-weight:800;color:var(--accent);margin-bottom:var(--space-2);">${state.score}</div>
+      <div style="color:var(--text-dim);margin-bottom:var(--space-6);">out of ${maxScore} (${pct}%)</div>
+      <div style="display:flex;justify-content:center;gap:var(--space-7);margin-bottom:var(--space-7);">
+        <div>
+          <div style="font-size:1.5rem;font-weight:700;">${state.bestStreak}</div>
+          <div style="color:var(--text-dim);font-size:0.8rem;">Best streak</div>
+        </div>
+        <div>
+          <div style="font-size:1.5rem;font-weight:700;">${state.roundSentences.length}</div>
+          <div style="color:var(--text-dim);font-size:0.8rem;">Rounds</div>
+        </div>
+        <div>
+          <div style="font-size:1.5rem;font-weight:700;">${DIFFICULTY[state.difficulty].label}</div>
+          <div style="color:var(--text-dim);font-size:0.8rem;">Difficulty</div>
+        </div>
+      </div>
+      <button class="btn-start" id="playAgainBtn">Play again</button>
+    </div>
+  `;
+
+  document.getElementById('playAgainBtn').addEventListener('click', () => {
+    gameEl.innerHTML = `
+      <div class="score-bar">
+        <div class="stat"><span>Round</span> <span class="num" id="roundNum">1</span><span>/ <span id="totalRounds">10</span></span></div>
+        <div class="stat"><span>Score</span> <span class="num" id="scoreNum">0</span></div>
+        <div class="stat"><span>Streak</span> <span class="num" id="streakNum">0</span></div>
+      </div>
+      <div class="card" id="questionCard">
+        <div class="mangled-label">Decode this</div>
+        <div class="mangled-text" id="mangledText" aria-live="polite"></div>
+      </div>
+      <div class="controls" id="speakControls">
+        <button class="btn-speak" id="speakBtn" aria-label="Hear the sentence spoken aloud">Speak</button>
+        <button class="btn-secondary" id="speakSlowBtn" aria-label="Hear slowly">Slow</button>
+      </div>
+      <div class="input-area" id="inputArea">
+        <label for="answerInput">What did it really say?</label>
+        <textarea id="answerInput" placeholder="Type the original sentence..." rows="2" autocomplete="off" spellcheck="false"></textarea>
+        <div class="submit-row">
+          <button class="btn-skip" id="skipBtn">Skip</button>
+          <button class="btn-speak" id="submitBtn" style="flex:none;">Check</button>
+        </div>
+      </div>
+      <div id="resultArea" class="hidden"></div>
+    `;
+    rebindGameUI();
+    introEl.classList.remove('hidden');
+    gameEl.classList.add('hidden');
+  });
+}
+
+function rebindGameUI() {
+  const newSpeakBtn = $('#speakBtn');
+  const newSlowBtn = $('#speakSlowBtn');
+  const newSubmitBtn = $('#submitBtn');
+  const newSkipBtn = $('#skipBtn');
+  const newAnswerInput = $('#answerInput');
+
+  if (newSpeakBtn) newSpeakBtn.addEventListener('click', () => speak(state.current?.plain, false));
+  if (newSlowBtn) newSlowBtn.addEventListener('click', () => speak(state.current?.plain, true));
+  if (newSubmitBtn) newSubmitBtn.addEventListener('click', checkAnswer);
+  if (newSkipBtn) newSkipBtn.addEventListener('click', () => { state.streak = 0; showResult(0, []); });
+  if (newAnswerInput) newAnswerInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); checkAnswer(); }
+  });
+}
+
+function updateScoreBar() {
+  const rn = $('#roundNum');
+  const sn = $('#scoreNum');
+  const sk = $('#streakNum');
+  if (rn) rn.textContent = state.round + 1;
+  if (sn) sn.textContent = state.score;
+  if (sk) sk.textContent = state.streak;
+}
+
+function esc(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  setTimeout(() => toastEl.classList.remove('show'), 2500);
+}
+
+// Preload voices
+if ('speechSynthesis' in window) {
+  speechSynthesis.getVoices();
+  speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+}
+</script>
+</body>
+</html>
