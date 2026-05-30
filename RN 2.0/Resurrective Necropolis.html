@@ -1457,7 +1457,11 @@ const VoiceEngine = {
         const vLang = voice.lang.toLowerCase();
         for (const pl of preferredLangs) {
             const plLower = pl.toLowerCase();
-            if (vLang === plLower || vLang.startsWith(plLower.split('-')[0])) return true;
+            // Skip English fallbacks — they're for scoring, not native matching
+            // (unless the family's PRIMARY lang is English, e.g. Na-Dene, Pama-Nyungan)
+            const plBase = plLower.split('-')[0];
+            if (plBase === 'en' && preferredLangs[0] && !preferredLangs[0].toLowerCase().startsWith('en')) continue;
+            if (vLang === plLower || vLang.startsWith(plBase)) return true;
         }
         return false;
     },
@@ -1470,6 +1474,12 @@ const VoiceEngine = {
         if (!this.ready) {
             ttsLog('speak:skip', { reason: 'not ready' });
             return;
+        }
+
+        // Kill any pending watchdog BEFORE cancel() triggers onerror
+        if (this._safariWatchdog) {
+            clearTimeout(this._safariWatchdog);
+            this._safariWatchdog = null;
         }
 
         ttsLog('speak:cancel', {
@@ -1563,12 +1573,12 @@ const VoiceEngine = {
         utterance.onend = () => {
             ttsLog('utterance:end', { id: speakId, name: nameData.romanized });
             statusEl.textContent = '';
-            this._safariWatchdog = null;
+            // Clear watchdog on natural completion
+            if (this._safariWatchdog) { clearTimeout(this._safariWatchdog); this._safariWatchdog = null; }
         };
         utterance.onerror = (e) => {
             ttsLog('utterance:error', { id: speakId, name: nameData.romanized, error: e.error, text });
             statusEl.textContent = '';
-            this._safariWatchdog = null;
             // Safari sometimes fires 'interrupted' errors on rapid cancel — ignore
             if (e.error === 'interrupted' || e.error === 'canceled') return;
             console.warn('Speech error:', e.error, 'for', text);
