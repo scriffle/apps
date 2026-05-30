@@ -1515,8 +1515,19 @@ const VoiceEngine = {
         let textSource = 'romanized';
 
         // Priority 1: If voice natively speaks the language AND we have native script, use it
+        // But ensure we include the FULL name — native script may only cover the given name
         if (voiceIsNative && nameData.nativeScript && nameData.nativeScript !== 'null') {
             text = nameData.nativeScript;
+            // Native script often only has the given name. If there's a surname or patronymic
+            // that isn't already in the native script, append romanized forms so TTS speaks
+            // the full name. E.g. "రమ్య" + "Kamath" → "రమ్య Kamath"
+            // Skip this for family_first (CJK/Korean) — their native scripts are already complete
+            if (nameData.nameOrder !== 'family_first') {
+                const extras = [];
+                if (nameData.patronymic && !text.includes(nameData.patronymic)) extras.push(nameData.patronymic);
+                if (nameData.familySurname && !text.includes(nameData.familySurname)) extras.push(nameData.familySurname);
+                if (extras.length) text = text + ' ' + extras.join(' ');
+            }
             textSource = 'nativeScript';
         }
         // Priority 2: If we have a phonetic hint (Tier 2), use it for non-native voices
