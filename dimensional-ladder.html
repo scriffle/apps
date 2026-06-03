@@ -1,0 +1,2072 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0f1729" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f6fb" media="(prefers-color-scheme: light)">
+<meta name="description" content="Dimensional Ladder — an interactive Flatland-inspired toy: manipulate an object in one dimension and watch a lower-dimensional being perceive only a slice or shadow. Climb from 2D↔1D up to 4D↔5D.">
+<meta property="og:title" content="Dimensional Ladder">
+<meta property="og:description" content="Climb from 1D to 5D and see how each world perceives the dimension above it as a slice or a shadow.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234f7cff'/%3E%3Ccircle cx='16' cy='13' r='7' fill='none' stroke='white' stroke-width='2'/%3E%3Cline x1='4' y1='22' x2='28' y2='22' stroke='white' stroke-width='2'/%3E%3Cline x1='11' y1='22' x2='21' y2='22' stroke='%23ffd166' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22Dimensional%20Ladder%22%2C%22short_name%22%3A%22Ladder%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230f1729%22%2C%22theme_color%22%3A%22%230f1729%22%2C%22icons%22%3A%5B%5D%7D">
+<title>Dimensional Ladder — 2D ↔ 1D</title>
+<style>
+/* ============================================================
+   S0 · RESET & TOKENS
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  touch-action: manipulation;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+:root {
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px;
+  --radius: 12px; --radius-sm: 8px;
+  --font-sm: clamp(12px, 1.4vw, 13px);
+  --font-md: clamp(13px, 1.6vw, 15px);
+  --font-lg: clamp(18px, 2.6vw, 22px);
+  --ease: cubic-bezier(.4, 0, .2, 1);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --t-fast: .15s; --t-med: .25s;
+}
+
+/* ============================================================
+   S1 · THEME (light / dark via system + [data-theme] override)
+   ============================================================ */
+:root, [data-theme="light"] {
+  --bg: #f4f6fb; --bg-2: #ffffff; --panel: #ffffff; --panel-2: #eef1f8;
+  --fg: #1b2233; --fg-dim: #5a6478; --line: #d7ddea; --line-strong:#c0c8da;
+  --accent: #2f6bff; --accent-fg: #ffffff;
+  --grid: #e3e8f2; --axis: #b7c0d4; --canvas-bg: #fbfcff;
+  --shape-fill: rgba(47,107,255,.14); --shape-stroke: #2f6bff;
+  --slice: #ff5d73; --shadow-col: #16a36b; --cursor: #f59f0a;
+  --warn:#c2410c; --good:#16a36b;
+  --shadow-cast: 0 6px 24px rgba(20,30,60,.12);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1729; --bg-2: #131d33; --panel: #16213a; --panel-2: #1d2b49;
+    --fg: #e8edf8; --fg-dim: #9aa6c0; --line: #28344f; --line-strong:#33415f;
+    --accent: #5c8bff; --accent-fg: #0b1222;
+    --grid: #1b273f; --axis: #3a4868; --canvas-bg: #0c1426;
+    --shape-fill: rgba(92,139,255,.18); --shape-stroke: #7aa0ff;
+    --slice: #ff7184; --shadow-col: #34d39a; --cursor: #ffba49;
+    --warn:#fb923c; --good:#34d39a;
+    --shadow-cast: 0 8px 30px rgba(0,0,0,.45);
+  }
+}
+[data-theme="dark"] {
+  --bg: #0f1729; --bg-2: #131d33; --panel: #16213a; --panel-2: #1d2b49;
+  --fg: #e8edf8; --fg-dim: #9aa6c0; --line: #28344f; --line-strong:#33415f;
+  --accent: #5c8bff; --accent-fg: #0b1222;
+  --grid: #1b273f; --axis: #3a4868; --canvas-bg: #0c1426;
+  --shape-fill: rgba(92,139,255,.18); --shape-stroke: #7aa0ff;
+  --slice: #ff7184; --shadow-col: #34d39a; --cursor: #ffba49;
+  --warn:#fb923c; --good:#34d39a;
+  --shadow-cast: 0 8px 30px rgba(0,0,0,.45);
+}
+[data-theme="light"] { color-scheme: light; }
+[data-theme="dark"]  { color-scheme: dark; }
+@media (prefers-contrast: more) {
+  :root { --line:#000; --fg-dim:#333; }
+}
+
+/* ============================================================
+   S2 · LAYOUT (dual-pane responsive grid)
+   ============================================================ */
+.app {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) min(360px, 40vw);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "header header" "stage controls" "footer footer";
+  height: 100dvh;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+}
+header.bar { grid-area: header; }
+.stage { grid-area: stage; display: grid; grid-template-rows: minmax(0, 1.5fr) minmax(0, 1fr); gap: var(--space-3); min-height: 0; }
+aside.controls { grid-area: controls; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
+footer.statusbar { grid-area: footer; }
+
+.pane {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: flex; flex-direction: column;
+  min-height: 0; overflow: hidden;
+  box-shadow: var(--shadow-cast);
+  contain: layout paint;
+}
+.pane-head { display: flex; align-items: baseline; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.pane-head h2 { margin: 0; font-size: var(--font-md); font-weight: 650; letter-spacing: .01em; }
+.pane-head .cap { font-size: var(--font-sm); color: var(--fg-dim); }
+.canvas-wrap { position: relative; flex: 1; min-height: 0; }
+canvas { display: block; width: 100%; height: 100%; background: var(--canvas-bg); touch-action: none; cursor: grab; }
+canvas:active { cursor: grabbing; }
+canvas:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+
+@media (max-width: 900px) {
+  body { overflow: auto; }
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-areas: "header" "stage" "controls" "footer";
+    grid-template-rows: auto minmax(60vh, 1fr) auto auto;
+    height: auto; min-height: 100dvh;
+  }
+  aside.controls { overflow: visible; }
+}
+@media (max-width: 560px) {
+  .stage { grid-template-rows: minmax(280px, 1fr) minmax(150px, .55fr); }
+}
+
+/* ============================================================
+   S3 · COMPONENTS (bar, buttons, controls, toasts, drawer)
+   ============================================================ */
+header.bar { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: var(--space-2); font-weight: 750; font-size: var(--font-lg); }
+.brand .logo { width: 28px; height: 28px; }
+.rung-tabs { display: flex; gap: var(--space-1); background: var(--panel-2); padding: 3px; border-radius: 999px; border: 1px solid var(--line); }
+.rung-tabs button { border: 0; background: transparent; color: var(--fg-dim); font: inherit; font-size: var(--font-sm); padding: 6px 12px; border-radius: 999px; cursor: pointer; min-height: 36px; }
+.rung-tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-fg); font-weight: 650; }
+.rung-tabs button:disabled { opacity: .45; cursor: not-allowed; }
+.spacer { flex: 1; }
+
+.iconbtn, .btn {
+  font: inherit; cursor: pointer; border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong); background: var(--panel); color: var(--fg);
+  min-height: 40px; min-width: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 0 12px; transition: background var(--t-fast), border-color var(--t-fast), transform var(--t-fast);
+}
+.iconbtn { padding: 0; }
+.btn svg, .iconbtn svg { width: 18px; height: 18px; }
+.btn:hover, .iconbtn:hover { border-color: var(--accent); }
+.btn:active, .iconbtn:active { transform: translateY(1px); }
+.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 650; }
+.btn:disabled, .iconbtn:disabled { opacity: .4; cursor: not-allowed; }
+:where(button, a, input, select, [tabindex]):focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.group { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-3); margin-bottom: var(--space-3); }
+.group > h3 { margin: 0 0 var(--space-2); font-size: var(--font-sm); text-transform: uppercase; letter-spacing: .08em; color: var(--fg-dim); display:flex; align-items:center; gap:6px;}
+.field { margin: var(--space-3) 0 0; }
+.field:first-of-type { margin-top: var(--space-2); }
+.field label { display: flex; justify-content: space-between; align-items: baseline; font-size: var(--font-sm); margin-bottom: 5px; gap: 8px;}
+.field label .val { color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+input[type="range"] { width: 100%; accent-color: var(--accent); height: 28px; }
+select { width: 100%; font: inherit; font-size: var(--font-md); padding: 9px 10px; border-radius: var(--radius-sm); border: 1px solid var(--line-strong); background: var(--panel-2); color: var(--fg); min-height: 42px; }
+
+.seg { display: flex; gap: 4px; background: var(--panel-2); padding: 4px; border-radius: var(--radius-sm); border: 1px solid var(--line); flex-wrap: wrap; }
+.seg button { flex: 1 1 auto; border: 0; background: transparent; color: var(--fg-dim); font: inherit; font-size: var(--font-sm); padding: 8px 6px; border-radius: 6px; cursor: pointer; min-height: 38px; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); font-weight: 650; }
+.row { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.row > * { flex: 1; }
+
+/* Compact control panel — fits a standard laptop without scrolling.
+   Slider rows put the label beside the slider; selects stay stacked. */
+aside.controls .group { padding: 7px 11px; margin-bottom: 5px; }
+aside.controls .group > h3 { margin: 0 0 4px; font-size: 10.5px; }
+aside.controls .field { margin-top: 6px; }
+aside.controls .field:first-of-type { margin-top: 4px; }
+aside.controls .field > label { margin-bottom: 2px; }
+aside.controls .field:has(input[type="range"]) { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+aside.controls .field:has(input[type="range"]) > label { flex: 0 0 45%; min-width: 0; margin: 0; overflow: hidden; white-space: nowrap; font-size: 11px; }
+aside.controls input[type="range"] { height: 20px; }
+aside.controls .field:has(input[type="range"]) input[type="range"] { flex: 1 1 auto; min-width: 0; }
+aside.controls input[type="range"]:disabled { opacity: .4; cursor: not-allowed; }
+aside.controls select { min-height: 32px; padding: 5px 9px; }
+aside.controls .seg button { min-height: 28px; }
+aside.controls .btn { min-height: 30px; }
+aside.controls .cap { font-size: 10.5px !important; line-height: 1.3 !important; margin: 4px 0 0 !important; }
+
+footer.statusbar {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3); font-size: var(--font-sm); color: var(--fg-dim);
+  display: flex; align-items: center; gap: var(--space-3); min-height: 44px;
+}
+footer.statusbar .legend { display:inline-flex; align-items:center; gap:6px; }
+footer.statusbar .sw { width: 12px; height: 12px; border-radius: 3px; display:inline-block;}
+footer.statusbar .v { font-variant-numeric: tabular-nums; }
+footer.statusbar #version { margin-left: auto; opacity:.7; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.skip { position: absolute; left: -999px; top: 8px; z-index: 50; background: var(--accent); color: var(--accent-fg); padding: 10px 14px; border-radius: 8px; }
+.skip:focus { left: 8px; }
+
+/* Toasts */
+#toast-host { position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; flex-direction: column-reverse; gap: 8px; z-index: 60; width: min(420px, 92vw); }
+.toast { background: var(--panel); border: 1px solid var(--line-strong); border-left: 4px solid var(--accent); border-radius: var(--radius-sm); padding: 10px 14px; box-shadow: var(--shadow-cast); font-size: var(--font-sm); display: flex; gap: 10px; align-items: center; animation: toastIn var(--t-med) var(--spring); }
+.toast button { margin-left: auto; }
+
+/* Drawer (help / settings / onboarding) */
+.scrim { position: fixed; inset: 0; background: rgba(8,12,24,.5); opacity: 0; pointer-events: none; transition: opacity var(--t-med); z-index: 70; }
+.scrim.open { opacity: 1; pointer-events: auto; }
+.drawer { position: fixed; top: 0; right: 0; height: 100dvh; width: min(440px, 94vw); background: var(--bg-2); border-left: 1px solid var(--line); box-shadow: var(--shadow-cast); transform: translateX(100%); transition: transform var(--t-med) var(--ease); z-index: 71; display: flex; flex-direction: column; }
+.drawer.open { transform: none; }
+.drawer header { display: flex; align-items: center; padding: var(--space-4); border-bottom: 1px solid var(--line); }
+.drawer header h2 { margin: 0; font-size: var(--font-lg); flex: 1; }
+.drawer .body { padding: var(--space-4); overflow: auto; line-height: 1.55; }
+.drawer .body h3 { font-size: var(--font-md); margin: var(--space-4) 0 var(--space-2); }
+.drawer .body p, .drawer .body li { font-size: var(--font-md); color: var(--fg); }
+.drawer kbd { font: inherit; font-size: .85em; background: var(--panel-2); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; }
+.drawer dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; align-items: baseline; }
+.drawer dt { white-space: nowrap; }
+
+/* First-run dialog (centered) */
+.dialog { position: fixed; inset: 0; display: grid; place-items: center; z-index: 72; padding: 16px; opacity: 0; pointer-events: none; transition: opacity var(--t-med);}
+.dialog.open { opacity: 1; pointer-events: auto; }
+.dialog .card { background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); max-width: 520px; width: 100%; padding: var(--space-5); box-shadow: var(--shadow-cast); transform: scale(.96); transition: transform var(--t-med) var(--spring);}
+.dialog.open .card { transform: none; }
+.dialog h2 { margin: 0 0 var(--space-2); font-size: var(--font-lg); }
+.dialog p { line-height: 1.55; color: var(--fg); }
+.dialog .actions { display: flex; gap: var(--space-2); justify-content: flex-end; margin-top: var(--space-4); }
+
+@keyframes toastIn { from { opacity: 0; transform: translateY(8px); } }
+
+/* ============================================================
+   S5 · MOTION / CONTRAST / PRINT
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+@media print {
+  header.bar .rung-tabs, aside.controls, footer.statusbar #version, .iconbtn { display: none !important; }
+  .app { height: auto; display: block; }
+  .pane { break-inside: avoid; box-shadow: none; }
+  body { overflow: visible; background: #fff; color: #000; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#stage">Skip to the simulator</a>
+
+<div class="app">
+  <!-- ============== HEADER ============== -->
+  <header class="bar">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><circle cx="16" cy="13" r="7" fill="none" stroke="#fff" stroke-width="2"/><line x1="4" y1="22" x2="28" y2="22" stroke="#fff" stroke-width="2"/><line x1="11" y1="22" x2="21" y2="22" stroke="#ffd166" stroke-width="4" stroke-linecap="round"/></svg>
+      <span>Dimensional Ladder</span>
+    </div>
+    <nav class="rung-tabs" aria-label="Dimension rung">
+      <button id="tab-2to1" aria-selected="true">2D ↔ 1D</button>
+      <button id="tab-2to3" aria-selected="false">2D ↔ 3D</button>
+      <button id="tab-3to4" aria-selected="false">3D ↔ 4D</button>
+      <button id="tab-4to5" aria-selected="false">4D ↔ 5D</button>
+    </nav>
+    <span class="spacer"></span>
+    <button class="iconbtn" id="btn-undo" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg></button>
+    <button class="iconbtn" id="btn-redo" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h1"/></svg></button>
+    <button class="iconbtn" id="btn-share" title="Copy share link" aria-label="Copy share link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg></button>
+    <button class="iconbtn" id="btn-theme" title="Toggle theme" aria-label="Toggle colour theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg></button>
+    <button class="iconbtn" id="btn-help" title="Help & about (?)" aria-label="Help and about"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4"/><line x1="12" y1="17" x2="12" y2="17"/></svg></button>
+  </header>
+
+  <!-- ============== STAGE (dual pane) ============== -->
+  <div class="stage" id="stage">
+    <section class="pane" aria-labelledby="upper-h">
+      <div class="pane-head">
+        <h2 id="upper-h">Flatland · 2D</h2>
+        <span class="cap" id="upper-cap">Drag the shape and the line. The grey line is the 1D being's whole universe.</span>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="canvas2d" role="application" tabindex="0"
+          aria-label="Two-dimensional space. Drag the shape to move it, its handles to rotate or resize, and the line to move or rotate the 1D world. Arrow keys move the shape."></canvas>
+      </div>
+    </section>
+
+    <section class="pane" aria-labelledby="lower-h">
+      <div class="pane-head">
+        <h2 id="lower-h">Lineland · 1D</h2>
+        <span class="cap" id="lower-cap">What a 1D being perceives — only length along its single axis.</span>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="canvas1d" role="application" tabindex="0"
+          aria-label="One-dimensional view. The lit bars are what the 1D being perceives. Drag the marker to move the being along its world."></canvas>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============== CONTROLS ============== -->
+  <aside class="controls" aria-label="Controls">
+    <div class="group">
+      <h3>Perception</h3>
+      <div class="seg" role="group" aria-label="Perception mode">
+        <button id="mode-slice" aria-pressed="true">✂️ Slice</button>
+        <button id="mode-shadow" aria-pressed="false">🔦 Shadow</button>
+      </div>
+      <p class="cap" id="mode-explain" style="margin:8px 0 0;font-size:var(--font-sm);color:var(--fg-dim);line-height:1.45;"></p>
+    </div>
+
+    <div id="controls-2to1">
+    <div class="group">
+      <h3>The 2D object</h3>
+      <div class="field">
+        <label for="shape">Shape</label>
+        <select id="shape">
+          <option value="circle">● Circle</option>
+          <option value="triangle">▲ Triangle</option>
+          <option value="square">■ Square</option>
+          <option value="star">★ Star (concave)</option>
+          <option value="blob">🫧 Blob (concave)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="size">Size <span class="val" id="size-val"></span></label>
+        <input type="range" id="size" min="0.6" max="5" step="0.05">
+      </div>
+      <div class="field">
+        <label for="rot">Rotation <span class="val" id="rot-val"></span></label>
+        <input type="range" id="rot" min="-180" max="180" step="1">
+      </div>
+    </div>
+
+    <div class="group">
+      <h3>The slice line (1D world)</h3>
+      <div class="field">
+        <label for="lang">Tilt <span class="val" id="lang-val"></span></label>
+        <input type="range" id="lang" min="-90" max="90" step="1">
+      </div>
+      <div class="field">
+        <label for="loff" id="loff-label">Slice position <span class="val" id="loff-val"></span></label>
+        <input type="range" id="loff" min="-6" max="6" step="0.02">
+      </div>
+    </div>
+    </div>
+
+    <div id="controls-2to3" hidden>
+    <div class="group">
+      <h3>The 3D object</h3>
+      <div class="field">
+        <label for="solid">Solid</label>
+        <select id="solid">
+          <option value="sphere">● Sphere</option>
+          <option value="cube">⬛ Cube</option>
+          <option value="tetra">▲ Tetrahedron</option>
+          <option value="octa">◆ Octahedron</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="size3">Size <span class="val" id="size3-val"></span></label>
+        <input type="range" id="size3" min="0.6" max="3.2" step="0.05">
+      </div>
+      <div class="field">
+        <label for="rotx">Tilt X <span class="val" id="rotx-val"></span></label>
+        <input type="range" id="rotx" min="-180" max="180" step="1">
+      </div>
+      <div class="field">
+        <label for="roty">Tilt Y <span class="val" id="roty-val"></span></label>
+        <input type="range" id="roty" min="-180" max="180" step="1">
+      </div>
+    </div>
+
+    <div class="group">
+      <h3>The slice plane (2D world)</h3>
+      <div class="field">
+        <label for="height" id="height-label">Slice height <span class="val" id="height-val"></span></label>
+        <input type="range" id="height" min="-3.2" max="3.2" step="0.02">
+      </div>
+      <div class="row" style="margin-top:10px;"><button class="btn" id="btn-view-reset">Reset view angle</button></div>
+    </div>
+    </div>
+
+    <div id="controls-3to4" hidden>
+    <div class="group">
+      <h3>The 4D object</h3>
+      <div class="field">
+        <label for="solid4">Object</label>
+        <select id="solid4">
+          <option value="tesseract">⬛ Tesseract (8-cell)</option>
+          <option value="glome">● Hypersphere</option>
+          <option value="cell16">◆ 16-cell</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="size4">Size <span class="val" id="size4-val"></span></label>
+        <input type="range" id="size4" min="0.6" max="2.4" step="0.05">
+      </div>
+      <div class="field">
+        <label for="rotxw">4D spin · XW <span class="val" id="rotxw-val"></span></label>
+        <input type="range" id="rotxw" min="-180" max="180" step="1">
+      </div>
+      <div class="field">
+        <label for="rotyw">4D spin · YW <span class="val" id="rotyw-val"></span></label>
+        <input type="range" id="rotyw" min="-180" max="180" step="1">
+      </div>
+    </div>
+
+    <div class="group">
+      <h3>The slice space (3D world)</h3>
+      <div class="field">
+        <label for="height4" id="height4-label">Slice depth (w) <span class="val" id="height4-val"></span></label>
+        <input type="range" id="height4" min="-2.4" max="2.4" step="0.02">
+      </div>
+      <div class="row" style="margin-top:10px;"><button class="btn" id="btn-view-reset4">Reset view angle</button></div>
+    </div>
+    </div>
+
+    <div id="controls-4to5" hidden>
+    <div class="group">
+      <h3>The 5D object</h3>
+      <div class="field">
+        <label for="solid5">Object</label>
+        <select id="solid5">
+          <option value="penteract">⬛ Penteract (5-cube)</option>
+          <option value="glome5">● Hypersphere (5-D)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="size5">Size <span class="val" id="size5-val"></span></label>
+        <input type="range" id="size5" min="0.6" max="1.9" step="0.05">
+      </div>
+      <div class="field">
+        <label for="rota">5D spin · X–W₁ <span class="val" id="rota-val"></span></label>
+        <input type="range" id="rota" min="-180" max="180" step="1">
+      </div>
+      <div class="field">
+        <label for="rotb">5D spin · Y–W₂ <span class="val" id="rotb-val"></span></label>
+        <input type="range" id="rotb" min="-180" max="180" step="1">
+      </div>
+      <div class="field">
+        <label for="rotc">5D spin · W₁–W₂ <span class="val" id="rotc-val"></span></label>
+        <input type="range" id="rotc" min="-180" max="180" step="1">
+      </div>
+    </div>
+
+    <div class="group">
+      <h3>The slice space (4D world)</h3>
+      <div class="field">
+        <label for="height5" id="height5-label">Slice depth (w₂) <span class="val" id="height5-val"></span></label>
+        <input type="range" id="height5" min="-1.9" max="1.9" step="0.02">
+      </div>
+      <div class="row" style="margin-top:10px;"><button class="btn" id="btn-view-reset5">Reset view angle</button></div>
+    </div>
+    </div>
+
+    <div class="group">
+      <h3>Hidden-dimension encoding</h3>
+      <div class="field">
+        <label for="enc">Show the lost axis as</label>
+        <select id="enc">
+          <option value="none">— none (plain) —</option>
+          <option value="hue">🌈 Colour / hue</option>
+          <option value="scrub">🎚️ Colour + scrubber</option>
+          <option value="bright">🔆 Brightness &amp; size</option>
+          <option value="time">⏱️ Time / pulse</option>
+        </select>
+      </div>
+      <p class="cap" id="enc-explain" style="margin:8px 0 0;font-size:var(--font-sm);color:var(--fg-dim);line-height:1.45;"></p>
+    </div>
+
+    <div class="group">
+      <h3>Auto-sweep</h3>
+      <div class="row">
+        <button class="btn primary" id="btn-play" aria-pressed="false" style="flex:2;"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span id="play-label">Play</span></button>
+        <button class="btn" id="btn-reset" title="Reset to defaults">Reset</button>
+      </div>
+      <div class="field">
+        <label for="speed">Speed <span class="val" id="speed-val"></span></label>
+        <input type="range" id="speed" min="0.2" max="3" step="0.1">
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============== STATUS BAR ============== -->
+  <footer class="statusbar">
+    <span class="legend"><span class="sw" id="sw-perc"></span><span id="status-main">—</span></span>
+    <span class="legend" id="depth-legend" hidden><span class="sw" id="sw-depth"></span><span id="depth-text"></span></span>
+    <span id="version">v1.3.0</span>
+  </footer>
+</div>
+
+<!-- ARIA live regions -->
+<div class="sr-only" id="live-polite" aria-live="polite" aria-atomic="true"></div>
+<div class="sr-only" id="live-assertive" aria-live="assertive" aria-atomic="true"></div>
+<p class="sr-only" id="canvas2d-help">Two-dimensional editing area. Use arrow keys to move the shape, square brackets to tilt the slice line, plus and minus to resize, M to switch slice or shadow, Space to play the sweep.</p>
+
+<!-- Toast host -->
+<div id="toast-host" aria-live="polite" aria-atomic="false"></div>
+
+<!-- Drawer (help / settings) -->
+<div class="scrim" id="scrim"></div>
+<div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" tabindex="-1">
+  <header>
+    <h2 id="drawer-title">Help</h2>
+    <button class="iconbtn" id="drawer-close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </header>
+  <div class="body" id="drawer-body"></div>
+</div>
+
+<!-- First-run dialog -->
+<div class="dialog" id="onboard" role="dialog" aria-modal="true" aria-labelledby="ob-title">
+  <div class="card">
+    <h2 id="ob-title">Welcome to the Dimensional Ladder 🪜</h2>
+    <p>Every rung pairs two worlds. You manipulate an object in the <strong>higher</strong> dimension (top panel); the <strong>bottom panel</strong> shows everything a being one dimension <em>down</em> can perceive — only a <strong>slice</strong> (cross-section) or a <strong>shadow</strong> of it.</p>
+    <p>Start in Flatland — <strong>2D ↔ 1D</strong> — then climb the tabs: <strong>2D↔3D</strong> (a sphere becomes a circle, a cube a hexagon), <strong>3D↔4D</strong> (a tesseract's cube-in-a-cube), and <strong>4D↔5D</strong>, where we run out of room to draw — so the extra axes become <strong>colour</strong> and <strong>brightness</strong>.</p>
+    <div class="actions">
+      <button class="btn" id="ob-tour">Show me ▶</button>
+      <button class="btn primary" id="ob-go">Start exploring</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ============================================================
+   J0 · CONFIG
+   ============================================================ */
+const APP_VERSION = '1.3.0';
+const EPS = 1e-9;
+const STORE_KEY = 'dimsim:2to1:v1';
+const ONBOARD_KEY = 'dimsim:onboarded:v2';
+const $ = (id) => document.getElementById(id);
+
+/* ============================================================
+   J1 · Vec — dimension-generic linear algebra (Float64Array)
+   Never references a concrete dimension; takes N as data.
+   ============================================================ */
+const Vec = (() => {
+  const sub = (a, b, out) => { out = out || new Float64Array(a.length); for (let i = 0; i < a.length; i++) out[i] = a[i] - b[i]; return out; };
+  const add = (a, b, out) => { out = out || new Float64Array(a.length); for (let i = 0; i < a.length; i++) out[i] = a[i] + b[i]; return out; };
+  const scale = (a, s, out) => { out = out || new Float64Array(a.length); for (let i = 0; i < a.length; i++) out[i] = a[i] * s; return out; };
+  const dot = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
+  const norm = (a) => Math.sqrt(dot(a, a));
+  const normalize = (a, out) => { const n = norm(a) || 1; return scale(a, 1 / n, out); };
+  const lerp = (a, b, t, out) => { out = out || new Float64Array(a.length); for (let i = 0; i < a.length; i++) out[i] = a[i] + (b[i] - a[i]) * t; return out; };
+  // N×N rotation matrix (row-major) for a rotation by theta in the (i,j) plane.
+  const rotationInPlane = (n, i, j, theta) => {
+    const m = identity(n), c = Math.cos(theta), s = Math.sin(theta);
+    m[i * n + i] = c; m[i * n + j] = -s; m[j * n + i] = s; m[j * n + j] = c;
+    return m;
+  };
+  const identity = (n) => { const m = new Float64Array(n * n); for (let i = 0; i < n; i++) m[i * n + i] = 1; return m; };
+  const matVec = (M, v, n, out) => { out = out || new Float64Array(n); for (let r = 0; r < n; r++) { let s = 0; for (let c = 0; c < n; c++) s += M[r * n + c] * v[c]; out[r] = s; } return out; };
+  // Orthonormal basis ((n-1)×n) of the hyperplane with unit normal nrm (Gram–Schmidt).
+  const orthonormalBasis = (nrm) => {
+    const n = nrm.length, rows = [];
+    // drop the standard axis most parallel to the normal for conditioning
+    let drop = 0, best = -1;
+    for (let i = 0; i < n; i++) { const a = Math.abs(nrm[i]); if (a > best) { best = a; drop = i; } }
+    for (let k = 0; k < n; k++) {
+      if (k === drop) continue;
+      const e = new Float64Array(n); e[k] = 1;
+      // subtract projection onto normal and onto previous rows
+      let v = sub(e, scale(nrm, dot(e, nrm)));
+      for (const r of rows) v = sub(v, scale(r, dot(v, r)));
+      const ln = norm(v); if (ln < 1e-7) continue;
+      rows.push(scale(v, 1 / ln));
+    }
+    return rows; // array of Float64Array(n), length n-1
+  };
+  return Object.freeze({ sub, add, scale, dot, norm, normalize, lerp, rotationInPlane, identity, matVec, orthonormalBasis });
+})();
+
+/* ============================================================
+   J2 · Geometry — object model + builders + transform
+   Unit shapes centred at origin; transform applies scale·rot + pos.
+   ============================================================ */
+const Geometry = (() => {
+  function polygon(verts2d, meta) {
+    const V = verts2d.length;
+    const verts = new Float64Array(V * 2);
+    for (let i = 0; i < V; i++) { verts[i * 2] = verts2d[i][0]; verts[i * 2 + 1] = verts2d[i][1]; }
+    const edges = new Uint32Array(V * 2);
+    for (let i = 0; i < V; i++) { edges[i * 2] = i; edges[i * 2 + 1] = (i + 1) % V; }
+    const idx = []; for (let i = 0; i < V; i++) idx.push(i);
+    return { kind: 'polytope', dim: 2, vcount: V, verts, edges, faces: [idx, edges], meta };
+  }
+  const regular = (n, phase) => { const a = []; for (let k = 0; k < n; k++) { const t = phase + 2 * Math.PI * k / n; a.push([Math.cos(t), Math.sin(t)]); } return a; };
+  function star(points, inner) {
+    const a = []; for (let k = 0; k < points * 2; k++) { const r = (k % 2 === 0) ? 1 : inner; const t = -Math.PI / 2 + Math.PI * k / points; a.push([r * Math.cos(t), r * Math.sin(t)]); } return a;
+  }
+  function blob(samples) {
+    const a = []; for (let k = 0; k < samples; k++) { const t = 2 * Math.PI * k / samples; const r = 1 + 0.32 * Math.sin(3 * t + 0.6) + 0.17 * Math.sin(5 * t - 0.3); a.push([r * Math.cos(t), r * Math.sin(t)]); } return a;
+  }
+  function make(type) {
+    switch (type) {
+      case 'circle':   return { kind: 'implicit', dim: 2, meta: { type } }; // unit hypersphere (radius 1)
+      case 'triangle': return polygon(regular(3, Math.PI / 2), { type });
+      case 'square':   return polygon(regular(4, Math.PI / 4), { type });
+      case 'star':     return polygon(star(5, 0.44), { type });
+      case 'blob':     return polygon(blob(80), { type });
+      default:         return { kind: 'implicit', dim: 2, meta: { type: 'circle' } };
+    }
+  }
+  // world-space vertices for a polytope given transform {pos:[x,y], angle, size}
+  function worldVerts(obj, xf) {
+    const c = Math.cos(xf.angle), s = Math.sin(xf.angle), R = xf.size, px = xf.pos[0], py = xf.pos[1];
+    const V = obj.vcount, out = new Float64Array(V * 2);
+    for (let i = 0; i < V; i++) {
+      const x = obj.verts[i * 2] * R, y = obj.verts[i * 2 + 1] * R;
+      out[i * 2] = px + (c * x - s * y);
+      out[i * 2 + 1] = py + (s * x + c * y);
+    }
+    return out;
+  }
+  // approximate centroid in world space (≈ pos for centred shapes)
+  const centroid = (obj, xf) => new Float64Array(xf.pos);
+  return Object.freeze({ make, worldVerts, centroid });
+})();
+
+/* ============================================================
+   J3 · Perception — slice() + shadow() (the engine's heart)
+   Speaks Hyperplane{normal, offset, dir}; rung/UI supplies it.
+   For 2D↔1D: dir = unit line direction (the 1-D basis).
+   1-D coordinate of a world point q is simply u = dir · q
+   (because dir ⟂ normal, the offset term drops out).
+   ============================================================ */
+const Perception = (() => {
+  // Build the slice hyperplane for a line of direction-angle `a` through `point`.
+  function lineToHyperplane(point, a, sweepOffset) {
+    const dir = new Float64Array([Math.cos(a), Math.sin(a)]);
+    const normal = new Float64Array([-Math.sin(a), Math.cos(a)]);
+    let offset = Vec.dot(normal, point);
+    if (sweepOffset) offset += sweepOffset;
+    return { dim: 2, normal, offset, dir, basis: [dir] };
+  }
+
+  function slice(obj, xf, plane) {
+    const { normal, offset, dir } = plane;
+    if (obj.kind === 'implicit') {
+      const c = new Float64Array(xf.pos), r = xf.size;            // radius = size (unit shape)
+      const d = Vec.dot(normal, c) - offset;                       // signed perpendicular distance
+      if (Math.abs(d) > r - EPS) {                                 // empty (or tangent point)
+        if (Math.abs(Math.abs(d) - r) < 1e-4) {
+          const foot = Vec.sub(c, Vec.scale(normal, d));
+          const u = Vec.dot(dir, foot);
+          return { segments: [{ u0: u, u1: u, p0: foot, p1: foot }], depth: d, r, tangent: true };
+        }
+        return { segments: [], depth: d, r };
+      }
+      const L = Math.sqrt(Math.max(0, r * r - d * d));
+      const foot = Vec.sub(c, Vec.scale(normal, d));
+      const uc = Vec.dot(dir, foot);
+      const p0 = Vec.add(foot, Vec.scale(dir, -L)), p1 = Vec.add(foot, Vec.scale(dir, L));
+      return { segments: [{ u0: uc - L, u1: uc + L, p0, p1 }], depth: d, r };
+    }
+    // polytope: edge-crossing + even-odd pairing (sgn: zero counts as +)
+    const wv = Geometry.worldVerts(obj, xf), V = obj.vcount;
+    const sgn = (x) => (x >= -EPS ? 1 : -1);
+    const cross = [], collinear = [];
+    for (let e = 0; e < V; e++) {
+      const i = obj.edges[e * 2], j = obj.edges[e * 2 + 1];
+      const A = wv.subarray(i * 2, i * 2 + 2), B = wv.subarray(j * 2, j * 2 + 2);
+      const sA = Vec.dot(normal, A) - offset, sB = Vec.dot(normal, B) - offset;
+      if (Math.abs(sA) < EPS && Math.abs(sB) < EPS) {              // edge lies in the line
+        collinear.push([Vec.dot(dir, A), Vec.dot(dir, B), A.slice(), B.slice()]); continue;
+      }
+      if (sgn(sA) !== sgn(sB)) {
+        const t = sA / (sA - sB);
+        const X = Vec.lerp(A, B, t);
+        cross.push({ u: Vec.dot(dir, X), X });
+      }
+    }
+    cross.sort((p, q) => p.u - q.u);
+    // de-duplicate crossings that coincide (line through a vertex) — keep even count
+    const uniq = [];
+    for (const cpt of cross) { if (uniq.length && Math.abs(uniq[uniq.length - 1].u - cpt.u) < 1e-6) continue; uniq.push(cpt); }
+    const segments = [];
+    for (let k = 0; k + 1 < uniq.length; k += 2) {
+      segments.push({ u0: uniq[k].u, u1: uniq[k + 1].u, p0: uniq[k].X, p1: uniq[k + 1].X });
+    }
+    for (const cl of collinear) { const lo = Math.min(cl[0], cl[1]), hi = Math.max(cl[0], cl[1]); segments.push({ u0: lo, u1: hi, p0: cl[2], p1: cl[3] }); }
+    const depth = Vec.dot(normal, Geometry.centroid(obj, xf)) - offset;
+    return { segments, depth };
+  }
+
+  // Orthographic shadow onto the line direction. Independent of offset.
+  function shadow(obj, xf, plane) {
+    const { dir } = plane;
+    if (obj.kind === 'implicit') {
+      const uc = Vec.dot(dir, xf.pos), r = xf.size;
+      return { segments: [{ u0: uc - r, u1: uc + r }], depth: 0, shadow: true };
+    }
+    const wv = Geometry.worldVerts(obj, xf), V = obj.vcount;
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < V; i++) { const u = Vec.dot(dir, wv.subarray(i * 2, i * 2 + 2)); if (u < lo) lo = u; if (u > hi) hi = u; }
+    return { segments: [{ u0: lo, u1: hi }], depth: 0, shadow: true };
+  }
+  return Object.freeze({ lineToHyperplane, slice, shadow });
+})();
+
+/* ============================================================
+   J4 · Encoding — map the lost (perpendicular) axis to a channel.
+   At this rung it previews; from 4D up it carries real coordinates.
+   The "scrubber" is just the slice offset → re-uses Perception.slice.
+   ============================================================ */
+const Encoding = (() => {
+  // depth d (perpendicular offset of the object) normalised to [-1,1] by radius span
+  function channel(mode, d, span, timePhase, colorblind) {
+    const t = Math.max(-1, Math.min(1, span ? d / span : 0));      // -1..1
+    const base = { color: getVar('--slice'), alpha: 1, width: 1, glow: 0 };
+    switch (mode) {
+      case 'hue': case 'scrub': {
+        const hue = colorblind ? (200 + t * 120) : (t < 0 ? 210 + (-t) * 70 : 40 - t * 40); // blue(far)→red(near)
+        return { color: `hsl(${hue} 85% ${colorblind ? 55 : 58}%)`, alpha: 1, width: 1, glow: 0.4 };
+      }
+      case 'bright': {
+        const a = 0.35 + 0.65 * (1 - Math.abs(t));                 // brightest near the line
+        return { color: getVar('--slice'), alpha: a, width: 0.6 + 1.4 * (1 - Math.abs(t)), glow: 0.5 * (1 - Math.abs(t)) };
+      }
+      case 'time': {
+        const pulse = 0.55 + 0.45 * Math.sin(timePhase * 4 + t * 3);
+        return { color: getVar('--slice'), alpha: 0.5 + 0.5 * pulse, width: 1, glow: pulse * 0.6 };
+      }
+      default: return base;
+    }
+  }
+  return Object.freeze({ channel });
+})();
+function getVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+/* ============================================================
+   J8 · STATE — single store, commit, undo/redo ring
+   ============================================================ */
+const DEFAULTS = () => ({
+  shape: 'circle', pos: [0, 0], angle: 0, size: 2.4,
+  line: { px: 0, py: 0, angle: 0 },        // angle = direction of the 1D world
+  mode: 'slice', enc: 'none', cursor1D: 0,
+  speed: 1, colorblind: false,
+});
+const DEFAULTS3 = () => ({ solid: 'sphere', size: 2.2, rotX: 0.62, rotY: -0.5, height: 0, yaw: -0.62, pitch: 0.46, cursor: [0, 0] });
+const DEFAULTS4 = () => ({ solid: 'tesseract', size: 1.7, rotXW: 0.5, rotYW: 0.3, height: 0, yaw: -0.6, pitch: 0.45 });
+const DEFAULTS5 = () => ({ solid: 'penteract', size: 1.5, rotA: 0.5, rotB: 0.35, rotC: 0, height: 0, yaw: -0.6, pitch: 0.45 });
+let state = DEFAULTS();
+let currentRung = '2to1';                   // '2to1' | '2to3' | '3to4' | '4to5'
+const s3 = DEFAULTS3();                      // rung-2 (2D↔3D) geometry + camera
+const s4 = DEFAULTS4();                      // rung-3 (3D↔4D) geometry + camera
+const s5 = DEFAULTS5();                      // rung-4 (4D↔5D) geometry + camera
+let obj = Geometry.make(state.shape);
+const history = []; let histIdx = -1;
+let suppressHistory = false;
+
+function rebuildObject() { obj = Geometry.make(state.shape); }
+// Full snapshot: shared UI + both rungs, so undo/redo and share links span rungs.
+function snapshot() {
+  return JSON.parse(JSON.stringify({
+    rung: currentRung, mode: state.mode, enc: state.enc, speed: state.speed,
+    r1: { shape: state.shape, pos: state.pos, angle: state.angle, size: state.size, line: state.line, cursor1D: state.cursor1D },
+    s3: { solid: s3.solid, size: s3.size, rotX: s3.rotX, rotY: s3.rotY, height: s3.height, yaw: s3.yaw, pitch: s3.pitch, cursor: s3.cursor },
+    s4: { solid: s4.solid, size: s4.size, rotXW: s4.rotXW, rotYW: s4.rotYW, height: s4.height, yaw: s4.yaw, pitch: s4.pitch },
+    s5: { solid: s5.solid, size: s5.size, rotA: s5.rotA, rotB: s5.rotB, rotC: s5.rotC, height: s5.height, yaw: s5.yaw, pitch: s5.pitch },
+  }));
+}
+function pushHistory() {
+  if (suppressHistory) return;
+  history.splice(histIdx + 1);
+  history.push(snapshot());
+  if (history.length > 100) history.shift();
+  histIdx = history.length - 1;
+  updateHistButtons();
+}
+// Restore a full snapshot into shared UI + both rungs, then refresh everything.
+function applyState(full) {
+  const f = sanitize(full);
+  currentRung = f.rung;
+  state.mode = f.mode; state.enc = f.enc; state.speed = f.speed;
+  state.shape = f.r1.shape; state.pos = f.r1.pos.slice(); state.angle = f.r1.angle;
+  state.size = f.r1.size; state.line = Object.assign({}, f.r1.line); state.cursor1D = f.r1.cursor1D;
+  Object.assign(s3, f.s3); s3.cursor = f.s3.cursor.slice();
+  Object.assign(s4, f.s4);
+  Object.assign(s5, f.s5);
+  rebuildObject(); Rung23.rebuild(); Rung34.rebuild(); Rung45.rebuild();
+  applyRungUI(); applyModeUI(); applyEncUI();
+  syncControls(); markDirty(); saveDebounced(); updateHash();
+}
+const applySnapshot = applyState;
+function undo() { if (histIdx > 0) { histIdx--; applySnapshot(history[histIdx]); updateHistButtons(); toast('Undo'); } }
+function redo() { if (histIdx < history.length - 1) { histIdx++; applySnapshot(history[histIdx]); updateHistButtons(); toast('Redo'); } }
+function updateHistButtons() { $('btn-undo').disabled = histIdx <= 0; $('btn-redo').disabled = histIdx >= history.length - 1; }
+
+/* ============================================================
+   J9 · PERSISTENCE — localStorage (debounced) + hash codec
+   ============================================================ */
+let saveTimer = 0;
+function saveNow() { try { localStorage.setItem(STORE_KEY, JSON.stringify(snapshot())); } catch (e) {} }
+function saveDebounced() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 500); }
+function loadStored() { try { const r = localStorage.getItem(STORE_KEY); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
+
+// Validate/clamp any parsed object into a complete, safe full-state. Never throws.
+function sanitize(o) {
+  const N = (v, def, lo, hi) => { v = parseFloat(v); if (!Number.isFinite(v)) return def; return (lo != null) ? Math.min(hi, Math.max(lo, v)) : v; };
+  const pick = (v, list, def) => list.includes(v) ? v : def;
+  o = (o && typeof o === 'object') ? o : {};
+  const r1 = o.r1 || {}, S3 = o.s3 || {}, S4 = o.s4 || {}, S5 = o.s5 || {}, ln = r1.line || {};
+  return {
+    rung: pick(o.rung, ['2to1', '2to3', '3to4', '4to5'], '2to1'),
+    mode: pick(o.mode, ['slice', 'shadow'], 'slice'),
+    enc: pick(o.enc, ['none', 'hue', 'scrub', 'bright', 'time'], 'none'),
+    speed: N(o.speed, 1, 0.2, 3),
+    r1: {
+      shape: pick(r1.shape, ['circle', 'triangle', 'square', 'star', 'blob'], 'circle'),
+      pos: [N(r1.pos && r1.pos[0], 0), N(r1.pos && r1.pos[1], 0)],
+      angle: N(r1.angle, 0), size: N(r1.size, 2.4, 0.6, 5),
+      line: { px: N(ln.px, 0), py: N(ln.py, 0), angle: N(ln.angle, 0) },
+      cursor1D: N(r1.cursor1D, 0),
+    },
+    s3: {
+      solid: pick(S3.solid, ['sphere', 'cube', 'tetra', 'octa'], 'sphere'),
+      size: N(S3.size, 2.2, 0.6, 3.2), rotX: N(S3.rotX, 0.62), rotY: N(S3.rotY, -0.5),
+      height: N(S3.height, 0, -3.2, 3.2), yaw: N(S3.yaw, -0.62), pitch: N(S3.pitch, 0.46, -1.45, 1.45),
+      cursor: [N(S3.cursor && S3.cursor[0], 0), N(S3.cursor && S3.cursor[1], 0)],
+    },
+    s4: {
+      solid: pick(S4.solid, ['tesseract', 'glome', 'cell16'], 'tesseract'),
+      size: N(S4.size, 1.7, 0.6, 2.4), rotXW: N(S4.rotXW, 0.5), rotYW: N(S4.rotYW, 0.3),
+      height: N(S4.height, 0, -2.4, 2.4), yaw: N(S4.yaw, -0.6), pitch: N(S4.pitch, 0.45, -1.45, 1.45),
+    },
+    s5: {
+      solid: pick(S5.solid, ['penteract', 'glome5'], 'penteract'),
+      size: N(S5.size, 1.5, 0.6, 1.9), rotA: N(S5.rotA, 0.5), rotB: N(S5.rotB, 0.35), rotC: N(S5.rotC, 0),
+      height: N(S5.height, 0, -1.9, 1.9), yaw: N(S5.yaw, -0.6), pitch: N(S5.pitch, 0.45, -1.45, 1.45),
+    },
+  };
+}
+function updateHash() { try { window.history.replaceState(null, '', '#d=' + encodeURIComponent(JSON.stringify(snapshot()))); } catch (e) {} }
+function decodeHash() {
+  try {
+    const m = location.hash.replace(/^#/, '').match(/(?:^|&)d=([^&]*)/);
+    return m ? JSON.parse(decodeURIComponent(m[1])) : null;
+  } catch (e) { return null; }
+}
+
+/* ============================================================
+   J6 · RENDERERS — Upper (2D) + Lower (1D), Canvas 2D
+   ============================================================ */
+const view = { ppu: 32 };                 // pixels per world unit (shared so lengths match)
+const C2 = $('canvas2d'), C1 = $('canvas1d');
+const X2 = C2.getContext('2d'), X1 = C1.getContext('2d');
+const size2 = { w: 0, h: 0 }, size1 = { w: 0, h: 0 };
+
+function fitCanvas(canvas, sz) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  const r = canvas.getBoundingClientRect();
+  sz.w = Math.max(1, r.width); sz.h = Math.max(1, r.height);
+  canvas.width = Math.round(sz.w * dpr); canvas.height = Math.round(sz.h * dpr);
+  const ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+function recomputePPU() { view.ppu = Math.max(14, Math.min(size2.w, size2.h) / 14); }
+
+// world <-> screen (upper)
+const w2sx = (x) => size2.w / 2 + x * view.ppu;
+const w2sy = (y) => size2.h / 2 - y * view.ppu;
+const s2wx = (sx) => (sx - size2.w / 2) / view.ppu;
+const s2wy = (sy) => (size2.h / 2 - sy) / view.ppu;
+// 1D u <-> screen x (lower)
+const u2sx = (u) => size1.w / 2 + u * view.ppu;
+const sx2u = (sx) => (sx - size1.w / 2) / view.ppu;
+const baseY1 = () => size1.h * 0.56;
+
+let lastResult = null, timePhase = 0;
+
+function currentPlane() {
+  const off = (sweep.active && state.mode === 'slice') ? sweep.offsetDelta : 0;
+  return Perception.lineToHyperplane(new Float64Array([state.line.px, state.line.py]), state.line.angle, off);
+}
+function currentXform() {
+  const ang = state.angle + ((sweep.active && state.mode === 'shadow') ? sweep.angleDelta : 0);
+  return { pos: new Float64Array(state.pos), angle: ang, size: state.size };
+}
+function recompute() {
+  const plane = currentPlane(), xf = currentXform();
+  lastResult = (state.mode === 'shadow') ? Perception.shadow(obj, xf, plane) : Perception.slice(obj, xf, plane);
+  lastResult.plane = plane; lastResult.xf = xf;
+}
+
+function drawUpper() {
+  const ctx = X2, W = size2.w, H = size2.h;
+  ctx.clearRect(0, 0, W, H);
+  // grid
+  ctx.lineWidth = 1; ctx.strokeStyle = getVar('--grid');
+  const step = view.ppu; ctx.beginPath();
+  for (let x = (W / 2) % step; x < W; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+  for (let y = (H / 2) % step; y < H; y += step) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
+  ctx.stroke();
+  // axes
+  ctx.strokeStyle = getVar('--axis'); ctx.lineWidth = 1.5; ctx.beginPath();
+  ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.stroke();
+
+  const plane = lastResult.plane, xf = lastResult.xf, dir = plane.dir, nrm = plane.normal;
+
+  // ---- the 1D world: the slice line, drawn as the "universe" of Lineland ----
+  const foot = Vec.scale(nrm, plane.offset);
+  const big = (W + H);
+  const a = Vec.add(foot, Vec.scale(dir, -big)), b = Vec.add(foot, Vec.scale(dir, big));
+  ctx.save();
+  ctx.setLineDash(state.mode === 'shadow' ? [7, 6] : []);
+  ctx.strokeStyle = getVar('--axis'); ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(w2sx(a[0]), w2sy(a[1])); ctx.lineTo(w2sx(b[0]), w2sy(b[1])); ctx.stroke();
+  ctx.restore();
+
+  // ---- the 2D object ----
+  ctx.lineWidth = 2.5; ctx.strokeStyle = getVar('--shape-stroke'); ctx.fillStyle = getVar('--shape-fill');
+  if (obj.kind === 'implicit') {
+    ctx.beginPath(); ctx.arc(w2sx(xf.pos[0]), w2sy(xf.pos[1]), xf.size * view.ppu, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+  } else {
+    const wv = Geometry.worldVerts(obj, xf);
+    ctx.beginPath();
+    for (let i = 0; i < obj.vcount; i++) { const sx = w2sx(wv[i * 2]), sy = w2sy(wv[i * 2 + 1]); i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy); }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  if (eggActive) drawFace(ctx, xf);
+
+  // ---- shadow projection rays ----
+  if (state.mode === 'shadow' && lastResult.segments.length) {
+    const seg = lastResult.segments[0];
+    ctx.save(); ctx.strokeStyle = getVar('--shadow-col'); ctx.setLineDash([3, 4]); ctx.lineWidth = 1.2; ctx.globalAlpha = .8;
+    [seg.u0, seg.u1].forEach((u) => {
+      const onLine = Vec.add(foot, Vec.scale(dir, u - Vec.dot(dir, foot)));
+      // perpendicular drop from an extreme point: approximate by projecting object centre extreme
+      const ext = Vec.add(onLine, Vec.scale(nrm, Vec.dot(nrm, xf.pos) - plane.offset));
+      ctx.beginPath(); ctx.moveTo(w2sx(ext[0]), w2sy(ext[1])); ctx.lineTo(w2sx(onLine[0]), w2sy(onLine[1])); ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  // ---- highlighted intersection (the chord(s)) on the line ----
+  const span = lastResult.r || 3;
+  lastResult.segments.forEach((seg) => {
+    let p0, p1;
+    if (seg.p0) { p0 = seg.p0; p1 = seg.p1; }
+    else { p0 = Vec.add(foot, Vec.scale(dir, seg.u0 - Vec.dot(dir, foot))); p1 = Vec.add(foot, Vec.scale(dir, seg.u1 - Vec.dot(dir, foot))); }
+    const st = styleFor(lastResult.depth, span);
+    ctx.save();
+    ctx.strokeStyle = st.color; ctx.globalAlpha = st.alpha; ctx.lineCap = 'round';
+    ctx.lineWidth = 5 * st.width; if (st.glow) { ctx.shadowColor = st.color; ctx.shadowBlur = 14 * st.glow; }
+    ctx.beginPath(); ctx.moveTo(w2sx(p0[0]), w2sy(p0[1])); ctx.lineTo(w2sx(p1[0]), w2sy(p1[1])); ctx.stroke();
+    ctx.restore();
+  });
+
+  // ---- handles ----
+  drawHandles(ctx, xf, plane, foot, dir);
+
+  // ---- 1D cursor mapped back into 2D ----
+  const cw = Vec.add(foot, Vec.scale(dir, state.cursor1D - Vec.dot(dir, foot)));
+  const inside = isInsideAnySegment(state.cursor1D);
+  ctx.fillStyle = inside ? getVar('--good') : getVar('--cursor');
+  ctx.strokeStyle = getVar('--canvas-bg'); ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(w2sx(cw[0]), w2sy(cw[1]), 7, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+}
+
+function drawHandles(ctx, xf, plane, foot, dir) {
+  const c = [w2sx(xf.pos[0]), w2sy(xf.pos[1])];
+  const ca = Math.cos(xf.angle), sa = Math.sin(xf.angle);
+  // rotate handle (object): up = angle+90
+  const rh = handleObjRotate(xf), reh = handleObjResize(xf);
+  // line rotate handle: along dir from foot
+  const lrh = handleLineRotate(plane, foot, dir);
+  const dot = (sx, sy, col) => { ctx.beginPath(); ctx.fillStyle = col; ctx.strokeStyle = getVar('--canvas-bg'); ctx.lineWidth = 2; ctx.arc(sx, sy, 6.5, 0, 2 * Math.PI); ctx.fill(); ctx.stroke(); };
+  // connector for object rotate handle
+  ctx.strokeStyle = getVar('--shape-stroke'); ctx.globalAlpha = .5; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(c[0], c[1]); ctx.lineTo(w2sx(rh[0]), w2sy(rh[1])); ctx.stroke(); ctx.globalAlpha = 1;
+  dot(w2sx(rh[0]), w2sy(rh[1]), getVar('--shape-stroke'));
+  dot(w2sx(reh[0]), w2sy(reh[1]), getVar('--accent'));
+  dot(w2sx(lrh[0]), w2sy(lrh[1]), getVar('--axis'));
+}
+const handleObjRotate = (xf) => Vec.add(xf.pos, new Float64Array([Math.cos(xf.angle + Math.PI / 2) * (xf.size + .8), Math.sin(xf.angle + Math.PI / 2) * (xf.size + .8)]));
+const handleObjResize = (xf) => Vec.add(xf.pos, new Float64Array([Math.cos(xf.angle) * xf.size, Math.sin(xf.angle) * xf.size]));
+const handleLineRotate = (plane, foot, dir) => Vec.add(foot, Vec.scale(dir, 3.2));
+
+function drawFace(ctx, xf) { // EASTER EGG: A. Square gets a face
+  const cx = w2sx(xf.pos[0]), cy = w2sy(xf.pos[1]), r = xf.size * view.ppu;
+  ctx.save(); ctx.fillStyle = getVar('--fg'); ctx.strokeStyle = getVar('--fg'); ctx.lineWidth = 2; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(cx - r * .28, cy - r * .15, Math.max(2, r * .08), 0, 7); ctx.arc(cx + r * .28, cy - r * .15, Math.max(2, r * .08), 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy + r * .12, r * .32, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  ctx.restore();
+}
+
+function drawLower() {
+  const ctx = X1, W = size1.w, H = size1.h, by = baseY1();
+  ctx.clearRect(0, 0, W, H);
+  // the 1D universe line
+  ctx.strokeStyle = getVar('--axis'); ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(0, by); ctx.lineTo(W, by); ctx.stroke();
+  // ticks
+  ctx.fillStyle = getVar('--fg-dim'); ctx.strokeStyle = getVar('--line-strong'); ctx.lineWidth = 1;
+  ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+  const uMax = Math.ceil(W / 2 / view.ppu);
+  for (let u = -uMax; u <= uMax; u++) {
+    const x = u2sx(u); ctx.beginPath(); ctx.moveTo(x, by - 5); ctx.lineTo(x, by + 5); ctx.stroke();
+    if (u !== 0) ctx.fillText(String(u), x, by + 18);
+  }
+  ctx.fillStyle = getVar('--fg-dim'); ctx.fillText('0', u2sx(0), by + 18);
+
+  // segments (what the 1D being perceives) — drawn as raised bars
+  const span = lastResult.r || 3;
+  const st = styleFor(lastResult.depth, span);
+  lastResult.segments.forEach((seg) => {
+    const x0 = u2sx(Math.min(seg.u0, seg.u1)), x1 = u2sx(Math.max(seg.u0, seg.u1));
+    const barTop = by - 16 * (st.width || 1) - 10;
+    ctx.save(); ctx.globalAlpha = st.alpha; ctx.fillStyle = st.color;
+    if (st.glow) { ctx.shadowColor = st.color; ctx.shadowBlur = 16 * st.glow; }
+    const h = 20 * (st.width || 1);
+    roundRect(ctx, x0, by - h / 2, Math.max(2, x1 - x0), h, Math.min(h / 2, 6)); ctx.fill();
+    ctx.restore();
+    // endpoint ticks
+    ctx.strokeStyle = st.color; ctx.lineWidth = 2; ctx.globalAlpha = 1;
+    [x0, x1].forEach((x) => { ctx.beginPath(); ctx.moveTo(x, by - 16); ctx.lineTo(x, by + 16); ctx.stroke(); });
+  });
+
+  // the 1D being (cursor)
+  const cx = u2sx(state.cursor1D);
+  const inside = isInsideAnySegment(state.cursor1D);
+  ctx.fillStyle = inside ? getVar('--good') : getVar('--cursor');
+  ctx.beginPath(); ctx.moveTo(cx, by + 22); ctx.lineTo(cx - 7, by + 36); ctx.lineTo(cx + 7, by + 36); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = getVar('--fg-dim'); ctx.textAlign = 'center'; ctx.font = '11px system-ui';
+  ctx.fillText(inside ? 'feels matter' : 'empty', cx, by + 49);
+}
+function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+
+function styleFor(depth, span) {
+  if (state.enc === 'none') return { color: state.mode === 'shadow' ? getVar('--shadow-col') : getVar('--slice'), alpha: 1, width: 1, glow: 0.25 };
+  return Encoding.channel(state.enc, depth, span, timePhase, state.colorblind);
+}
+function isInsideAnySegment(u) { return lastResult && lastResult.segments.some((s) => u >= Math.min(s.u0, s.u1) - 1e-9 && u <= Math.max(s.u0, s.u1) + 1e-9); }
+
+/* ============================================================
+   J10 · INTERACTION — pointer + keyboard + sweep + easter egg
+   ============================================================ */
+const sweep = { active: false, t: 0, offsetDelta: 0, angleDelta: 0, h3: 0, h4: 0, h5: 0 };
+let dirty = true; const markDirty = () => { dirty = true; };
+// the active rung's module (null = rung 1, which lives inline at top level)
+function activeModule() { return currentRung === '2to3' ? Rung23 : currentRung === '3to4' ? Rung34 : currentRung === '4to5' ? Rung45 : null; }
+
+// ---- pointer on the 2D canvas ----
+let drag = null;
+function pickHandle(wx, wy) {
+  const xf = currentXform(), plane = currentPlane();
+  const foot = Vec.scale(plane.normal, plane.offset), dir = plane.dir;
+  const near = (p, tol) => Math.hypot(wx - p[0], wy - p[1]) < tol;
+  const tol = 14 / view.ppu;
+  if (near(handleObjRotate(xf), tol)) return { type: 'obj-rotate' };
+  if (near(handleObjResize(xf), tol)) return { type: 'obj-resize' };
+  if (near(handleLineRotate(plane, foot, dir), tol)) return { type: 'line-rotate' };
+  // inside object?
+  if (pointInObject(wx, wy, xf)) return { type: 'obj-move', gx: wx - xf.pos[0], gy: wy - xf.pos[1] };
+  // near the line?
+  const perp = Math.abs(Vec.dot(plane.normal, new Float64Array([wx, wy])) - plane.offset);
+  if (perp < 12 / view.ppu) return { type: 'line-move' };
+  return null;
+}
+function pointInObject(wx, wy, xf) {
+  if (obj.kind === 'implicit') return Math.hypot(wx - xf.pos[0], wy - xf.pos[1]) <= xf.size;
+  const wv = Geometry.worldVerts(obj, xf); let inside = false;
+  for (let i = 0, j = obj.vcount - 1; i < obj.vcount; j = i++) {
+    const xi = wv[i * 2], yi = wv[i * 2 + 1], xj = wv[j * 2], yj = wv[j * 2 + 1];
+    if (((yi > wy) !== (yj > wy)) && (wx < (xj - xi) * (wy - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+C2.addEventListener('pointerdown', (e) => {
+  const R = activeModule(); if (R) return R.c2Down(e);
+  C2.setPointerCapture(e.pointerId); C2.focus();
+  const r = C2.getBoundingClientRect();
+  drag = pickHandle(s2wx(e.clientX - r.left), s2wy(e.clientY - r.top));
+  if (drag) e.preventDefault();
+});
+C2.addEventListener('pointermove', (e) => {
+  const R = activeModule(); if (R) return R.c2Move(e);
+  if (!drag) return;
+  const r = C2.getBoundingClientRect(); const wx = s2wx(e.clientX - r.left), wy = s2wy(e.clientY - r.top);
+  switch (drag.type) {
+    case 'obj-move': state.pos = [wx - drag.gx, wy - drag.gy]; break;
+    case 'obj-rotate': state.angle = Math.atan2(wy - state.pos[1], wx - state.pos[0]) - Math.PI / 2; break;
+    case 'obj-resize': state.size = Math.min(5, Math.max(0.6, Math.hypot(wx - state.pos[0], wy - state.pos[1]))); break;
+    case 'line-rotate': state.line.angle = Math.atan2(wy - state.line.py, wx - state.line.px); break;
+    case 'line-move': {
+      const nrm = new Float64Array([-Math.sin(state.line.angle), Math.cos(state.line.angle)]);
+      const cur = Vec.dot(nrm, new Float64Array([state.line.px, state.line.py]));
+      const want = Vec.dot(nrm, new Float64Array([wx, wy]));
+      state.line.px += (want - cur) * nrm[0]; state.line.py += (want - cur) * nrm[1]; break;
+    }
+  }
+  syncControls(); markDirty(); saveDebounced(); updateHash();
+});
+const endDrag = (e) => { const R = activeModule(); if (R) return R.c2Up(e); if (drag) { drag = null; pushHistory(); } };
+C2.addEventListener('pointerup', endDrag); C2.addEventListener('pointercancel', endDrag);
+
+// ---- pointer on the 1D canvas (drag the being) ----
+let dragCursor = false;
+function setCursorFromEvent(e) { const r = C1.getBoundingClientRect(); state.cursor1D = Math.round(sx2u(e.clientX - r.left) * 100) / 100; syncControls(); markDirty(); saveDebounced(); updateHash(); }
+C1.addEventListener('pointerdown', (e) => { const R = activeModule(); if (R) return R.c1Down(e); C1.setPointerCapture(e.pointerId); C1.focus(); dragCursor = true; setCursorFromEvent(e); e.preventDefault(); });
+C1.addEventListener('pointermove', (e) => { const R = activeModule(); if (R) return R.c1Move(e); if (dragCursor) setCursorFromEvent(e); });
+C1.addEventListener('pointerup', (e) => { const R = activeModule(); if (R) return R.c1Up(e); if (dragCursor) { dragCursor = false; pushHistory(); } });
+
+// ---- wheel zoom (upper) ----
+C2.addEventListener('wheel', (e) => { e.preventDefault(); const R = activeModule(); if (R) { R.wheel(e); return; } view.ppu = Math.max(14, Math.min(110, view.ppu * (e.deltaY < 0 ? 1.08 : 0.93))); markDirty(); }, { passive: false });
+
+// ---- keyboard ----
+let eggBuf = '', eggActive = false, eggTimer = 0;
+document.addEventListener('keydown', (e) => {
+  const tag = (document.activeElement && document.activeElement.tagName) || '';
+  const typing = tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA';
+  // easter egg buffer (works anywhere)
+  if (e.key.length === 1 && /[a-z]/i.test(e.key)) { eggBuf = (eggBuf + e.key.toLowerCase()).slice(-8); if (eggBuf === 'flatland') triggerEgg(); }
+  if (typing) return;
+  // shared shortcuts (both rungs)
+  if (e.key === ' ') { toggleSweep(); e.preventDefault(); return; }
+  if (e.key === 'm' || e.key === 'M') { setMode(state.mode === 'slice' ? 'shadow' : 'slice'); e.preventDefault(); return; }
+  if (e.key === '?') { openDrawer('help'); e.preventDefault(); return; }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { e.shiftKey ? redo() : undo(); e.preventDefault(); return; }
+  let handled = true;
+  if (currentRung === '2to3') {
+    switch (e.key) {
+      case 'ArrowLeft': s3.yaw -= 0.12; break;
+      case 'ArrowRight': s3.yaw += 0.12; break;
+      case 'ArrowUp': s3.pitch = Math.min(1.45, s3.pitch + 0.1); break;
+      case 'ArrowDown': s3.pitch = Math.max(-1.45, s3.pitch - 0.1); break;
+      case '[': s3.height = Math.max(-3.2, s3.height - 0.15); break;
+      case ']': s3.height = Math.min(3.2, s3.height + 0.15); break;
+      case '+': case '=': s3.size = Math.min(3.2, s3.size + 0.12); break;
+      case '-': case '_': s3.size = Math.max(0.6, s3.size - 0.12); break;
+      default: handled = false;
+    }
+    if (handled) { e.preventDefault(); syncControls(); markDirty(); saveDebounced(); updateHash(); if (!e.key.startsWith('Arrow')) pushHistory(); }
+    return;
+  }
+  if (currentRung === '3to4') {
+    switch (e.key) {
+      case 'ArrowLeft': s4.yaw -= 0.12; break;
+      case 'ArrowRight': s4.yaw += 0.12; break;
+      case 'ArrowUp': s4.pitch = Math.min(1.45, s4.pitch + 0.1); break;
+      case 'ArrowDown': s4.pitch = Math.max(-1.45, s4.pitch - 0.1); break;
+      case '[': s4.height = Math.max(-2.4, s4.height - 0.12); break;
+      case ']': s4.height = Math.min(2.4, s4.height + 0.12); break;
+      case '+': case '=': s4.size = Math.min(2.4, s4.size + 0.1); break;
+      case '-': case '_': s4.size = Math.max(0.6, s4.size - 0.1); break;
+      default: handled = false;
+    }
+    if (handled) { e.preventDefault(); syncControls(); markDirty(); saveDebounced(); updateHash(); if (!e.key.startsWith('Arrow')) pushHistory(); }
+    return;
+  }
+  if (currentRung === '4to5') {
+    switch (e.key) {
+      case 'ArrowLeft': s5.yaw -= 0.12; break;
+      case 'ArrowRight': s5.yaw += 0.12; break;
+      case 'ArrowUp': s5.pitch = Math.min(1.45, s5.pitch + 0.1); break;
+      case 'ArrowDown': s5.pitch = Math.max(-1.45, s5.pitch - 0.1); break;
+      case '[': s5.height = Math.max(-1.9, s5.height - 0.1); break;
+      case ']': s5.height = Math.min(1.9, s5.height + 0.1); break;
+      case '+': case '=': s5.size = Math.min(1.9, s5.size + 0.08); break;
+      case '-': case '_': s5.size = Math.max(0.6, s5.size - 0.08); break;
+      default: handled = false;
+    }
+    if (handled) { e.preventDefault(); syncControls(); markDirty(); saveDebounced(); updateHash(); if (!e.key.startsWith('Arrow')) pushHistory(); }
+    return;
+  }
+  const nudge = 0.2;
+  switch (e.key) {
+    case 'ArrowLeft': state.pos = [state.pos[0] - nudge, state.pos[1]]; break;
+    case 'ArrowRight': state.pos = [state.pos[0] + nudge, state.pos[1]]; break;
+    case 'ArrowUp': state.pos = [state.pos[0], state.pos[1] + nudge]; break;
+    case 'ArrowDown': state.pos = [state.pos[0], state.pos[1] - nudge]; break;
+    case '[': state.line.angle -= Math.PI / 36; break;
+    case ']': state.line.angle += Math.PI / 36; break;
+    case '+': case '=': state.size = Math.min(5, state.size + 0.15); break;
+    case '-': case '_': state.size = Math.max(0.6, state.size - 0.15); break;
+    default: handled = false;
+  }
+  if (handled) { e.preventDefault(); syncControls(); markDirty(); saveDebounced(); updateHash(); pushHistory(); }
+});
+
+function triggerEgg() {
+  eggActive = true; clearTimeout(eggTimer); eggTimer = setTimeout(() => { eggActive = false; markDirty(); }, 9000);
+  markDirty(); toast('“We are all of us in the gutter, but some of us look at higher dimensions.” — A. Square greets you 👋');
+  announce('Easter egg: A. Square appears.', true);
+}
+
+/* ============================================================
+   J11 · UI — controls wiring, toasts, drawer, status
+   ============================================================ */
+function applyModeUI() {
+  const m = state.mode, r = currentRung;
+  $('mode-slice').setAttribute('aria-pressed', String(m === 'slice'));
+  $('mode-shadow').setAttribute('aria-pressed', String(m === 'shadow'));
+  const txt = {
+    '2to1': { slice: 'The line cuts through the shape — a segment that grows, then shrinks.', shadow: 'The shape’s shadow on the line — depends only on orientation.' },
+    '2to3': { slice: 'The plane cuts the solid — a cross-section that morphs as it passes.', shadow: 'The solid’s shadow on the plane — orientation only, not height.' },
+    '3to4': { slice: 'Your 3-space cuts the 4D object — a solid cross-section that morphs.', shadow: 'The 4D object’s 3-D shadow (a tesseract → cube-in-a-cube).' },
+    '4to5': { slice: 'Your 4-space cuts the 5D object — a 4D cross-section (w₁ = colour).', shadow: 'The 5D object’s 4-D shadow (the w₂ axis is flattened away).' },
+  };
+  $('mode-explain').textContent = txt[r][m];
+  // the slice-position/height/depth slider does nothing in shadow mode — disable it rather than spend a long label on it
+  ['loff', 'height', 'height4', 'height5'].forEach(id => { const el = $(id); if (el) el.disabled = (m === 'shadow'); });
+  $('sw-perc').style.background = (m === 'shadow') ? getVar('--shadow-col') : getVar('--slice');
+}
+function setMode(m) { state.mode = m; applyModeUI(); markDirty(); saveDebounced(); updateHash(); pushHistory(); }
+function applyEncUI() {
+  const v = state.enc;
+  const txt = {
+    none: 'Plain — nothing extra encoded.',
+    hue: 'Hidden offset → colour (near warm, far cool).',
+    scrub: 'Hidden offset → colour; the slice slider scrubs that axis.',
+    bright: 'Hidden offset → brightness & thickness.',
+    time: 'Hidden offset → a pulsing animation.'
+  };
+  $('enc-explain').textContent = txt[v] || '';
+  $('depth-legend').hidden = (v === 'none');
+  $('enc').value = v;
+}
+function setEnc(v) { state.enc = v; applyEncUI(); markDirty(); saveDebounced(); updateHash(); pushHistory(); }
+function toggleSweep() {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!sweep.active) {
+    sweep.active = true; sweep.t = 0;
+    $('btn-play').setAttribute('aria-pressed', 'true'); $('play-label').textContent = 'Pause';
+    if (reduce) toast('Reduced-motion is on — sweeping in gentle steps.');
+  } else {
+    // bake transient into committed state, then stop
+    if (currentRung === '2to3') {
+      if (state.mode === 'slice') s3.height = Math.max(-3.2, Math.min(3.2, sweep.h3));
+    } else if (currentRung === '3to4') {
+      if (state.mode === 'slice') s4.height = Math.max(-2.4, Math.min(2.4, sweep.h4));
+    } else if (currentRung === '4to5') {
+      if (state.mode === 'slice') s5.height = Math.max(-1.9, Math.min(1.9, sweep.h5));
+    } else if (state.mode === 'slice') {
+      const nrm = new Float64Array([-Math.sin(state.line.angle), Math.cos(state.line.angle)]);
+      state.line.px += sweep.offsetDelta * nrm[0]; state.line.py += sweep.offsetDelta * nrm[1];
+    } else { state.angle += sweep.angleDelta; }
+    sweep.active = false; sweep.offsetDelta = 0; sweep.angleDelta = 0; sweep.h3 = 0; sweep.h4 = 0; sweep.h5 = 0;
+    $('btn-play').setAttribute('aria-pressed', 'false'); $('play-label').textContent = 'Play';
+    syncControls(); pushHistory();
+  }
+  markDirty();
+}
+
+// toasts (max 3)
+function toast(msg, action) {
+  const host = $('toast-host'); const el = document.createElement('div'); el.className = 'toast';
+  const span = document.createElement('span'); span.textContent = msg; el.appendChild(span);
+  const close = document.createElement('button'); close.className = 'iconbtn'; close.setAttribute('aria-label', 'Dismiss'); close.style.minWidth = '32px'; close.style.minHeight = '32px';
+  close.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+  close.onclick = () => el.remove(); el.appendChild(close);
+  host.appendChild(el); while (host.children.length > 3) host.firstChild.remove();
+  setTimeout(() => el.remove(), 4200);
+}
+let liveTimer = 0;
+function announce(msg, assertive) { clearTimeout(liveTimer); liveTimer = setTimeout(() => { $(assertive ? 'live-assertive' : 'live-polite').textContent = msg; }, 280); }
+
+// drawer
+function openDrawer(which) {
+  $('drawer-title').textContent = which === 'help' ? 'Help & about' : 'Settings';
+  $('drawer-body').innerHTML = which === 'help' ? HELP_HTML : '';
+  $('scrim').classList.add('open'); $('drawer').classList.add('open'); $('drawer').focus();
+}
+function closeDrawer() { $('scrim').classList.remove('open'); $('drawer').classList.remove('open'); }
+
+const HELP_HTML = `
+  <h3>The idea</h3>
+  <p>You live in <strong>2D</strong>. The grey line in the top panel is the <strong>entire 1D universe</strong> of a being who can only sense <em>length</em>. The bottom panel is everything that being perceives.</p>
+  <h3>Slice vs Shadow</h3>
+  <p><strong>Slice</strong> is a cross-section — drag the shape <em>through</em> the line and watch a segment appear, grow, peak, shrink and vanish (a circle gives exactly 2√(r²−d²)). <strong>Shadow</strong> is a projection — its length depends only on the shape's orientation, not how far above the line it sits.</p>
+  <h3>Concavity</h3>
+  <p>Try the ★ star or 🫧 blob: a single line can enter and leave several times, so the 1D being feels <em>several separate objects</em> with empty gaps between them.</p>
+  <h3>The hidden dimension</h3>
+  <p>The lower being can never sense the perpendicular direction. The encodings map that lost axis to <strong>colour</strong>, <strong>brightness/size</strong> or <strong>time</strong> — a preview of how the higher rungs (3D↔4D, 4D↔5D) will show dimensions we can't draw.</p>
+  <h3>Climbing a rung: 2D ↔ 3D</h3>
+  <p>Switch tabs to <strong>2D ↔ 3D</strong>. Now <em>you</em> are the 3D being and the glowing plane is a flat being's whole world. <strong>Drag the top panel to orbit.</strong> A <strong>sphere</strong> passing through gives a circle that grows then shrinks — exactly the Flatland visit. Tilt a <strong>cube</strong> and slide the height to find a triangle, square, or even a <strong>hexagon</strong> cross-section.</p>
+  <h3>Going to hyperspace: 3D ↔ 4D</h3>
+  <p>The <strong>3D ↔ 4D</strong> tab is the big one. We can't draw 4D, so the top panel shows a 4D object's <strong>4D→3D shadow</strong> (a <strong>tesseract</strong> looks like a cube-inside-a-cube) with the hidden 4th axis <strong>w drawn as colour</strong>. Use <strong>4D&nbsp;spin</strong> to rotate it through the 4th dimension — it appears to turn inside-out. Slide the <strong>slice depth</strong> to pass it through your 3-space: a <strong>hypersphere</strong> arrives as a sphere that grows then shrinks, and a tesseract's cross-section morphs between cubes and other polyhedra. The bottom panel is the solid you'd actually perceive.</p>
+  <h3>The top of the ladder: 4D ↔ 5D</h3>
+  <p>By <strong>4D ↔ 5D</strong> we've run out of spatial directions entirely, so two axes ride on appearance: the <strong>4th axis (w₁) is colour</strong> and the <strong>5th axis (w₂) is brightness</strong>. The top panel shows a <strong>penteract</strong> (5-cube) or 5-sphere with x,y,z drawn spatially; <strong>spin in 5D</strong> and watch the colours and brightness flow as the hidden axes rotate into view. Slide the <strong>w₂ depth</strong> to pass it through the 4D world below — where you see the 4-D cross-section (with w₁ still shown as colour). This is the idea that powers all the higher rungs: when you run out of room, encode dimensions as colour, brightness, size, or motion.</p>
+  <h3>Keyboard</h3>
+  <dl>
+    <dt><kbd>← ↑ → ↓</kbd></dt><dd>Move the shape (2D) · orbit the view (3D)</dd>
+    <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Tilt the line / move the slice plane</dd>
+    <dt><kbd>+</kbd> <kbd>−</kbd></dt><dd>Resize the object</dd>
+    <dt><kbd>M</kbd></dt><dd>Slice / Shadow</dd>
+    <dt><kbd>Space</kbd></dt><dd>Play / pause the sweep</dd>
+    <dt><kbd>Ctrl/⌘ Z</kbd></dt><dd>Undo · <kbd>⇧</kbd> to redo</dd>
+    <dt><kbd>?</kbd></dt><dd>This help</dd>
+  </dl>
+  <h3>About</h3>
+  <p>Inspired by Edwin Abbott's <em>Flatland</em> (1884). The full ladder — 2D↔1D, 2D↔3D, 3D↔4D, 4D↔5D — in a single self-contained file, no libraries. v${APP_VERSION}.</p>
+  <p style="opacity:.6">Tip: there's a hidden greeting somewhere…</p>`;
+
+// ---- sync the control widgets from state ----
+function syncControls() {
+  $('enc').value = state.enc;
+  $('speed').value = state.speed; $('speed-val').textContent = state.speed.toFixed(1) + '×';
+  if (currentRung === '2to3') { syncControls3(); return; }
+  if (currentRung === '3to4') { syncControls4(); return; }
+  if (currentRung === '4to5') { syncControls5(); return; }
+  $('shape').value = state.shape;
+  $('size').value = state.size; $('size-val').textContent = state.size.toFixed(2) + '×';
+  let deg = state.angle * 180 / Math.PI; deg = ((deg + 180) % 360 + 360) % 360 - 180;
+  $('rot').value = Math.round(deg); $('rot-val').textContent = Math.round(deg) + '°';
+  let ldeg = state.line.angle * 180 / Math.PI; ldeg = ((ldeg + 90) % 180 + 180) % 180 - 90;
+  $('lang').value = Math.round(ldeg); $('lang-val').textContent = Math.round(ldeg) + '°';
+  const nrm = new Float64Array([-Math.sin(state.line.angle), Math.cos(state.line.angle)]);
+  const off = Vec.dot(nrm, new Float64Array([state.line.px, state.line.py]));
+  $('loff').value = Math.max(-6, Math.min(6, off)); $('loff-val').textContent = off.toFixed(2);
+}
+function syncControls3() {
+  $('solid').value = s3.solid;
+  $('size3').value = s3.size; $('size3-val').textContent = s3.size.toFixed(2) + '×';
+  const dx = Math.round(s3.rotX * 180 / Math.PI), dxn = ((dx + 180) % 360 + 360) % 360 - 180;
+  $('rotx').value = dxn; $('rotx-val').textContent = dxn + '°';
+  const dy = Math.round(s3.rotY * 180 / Math.PI), dyn = ((dy + 180) % 360 + 360) % 360 - 180;
+  $('roty').value = dyn; $('roty-val').textContent = dyn + '°';
+  $('height').value = s3.height; $('height-val').textContent = s3.height.toFixed(2);
+}
+function syncControls4() {
+  $('solid4').value = s4.solid;
+  $('size4').value = s4.size; $('size4-val').textContent = s4.size.toFixed(2) + '×';
+  const dx = Math.round(s4.rotXW * 180 / Math.PI), dxn = ((dx + 180) % 360 + 360) % 360 - 180;
+  $('rotxw').value = dxn; $('rotxw-val').textContent = dxn + '°';
+  const dy = Math.round(s4.rotYW * 180 / Math.PI), dyn = ((dy + 180) % 360 + 360) % 360 - 180;
+  $('rotyw').value = dyn; $('rotyw-val').textContent = dyn + '°';
+  $('height4').value = s4.height; $('height4-val').textContent = s4.height.toFixed(2);
+}
+function syncControls5() {
+  const deg = (rad) => { const d = Math.round(rad * 180 / Math.PI); return ((d + 180) % 360 + 360) % 360 - 180; };
+  $('solid5').value = s5.solid;
+  $('size5').value = s5.size; $('size5-val').textContent = s5.size.toFixed(2) + '×';
+  $('rota').value = deg(s5.rotA); $('rota-val').textContent = deg(s5.rotA) + '°';
+  $('rotb').value = deg(s5.rotB); $('rotb-val').textContent = deg(s5.rotB) + '°';
+  $('rotc').value = deg(s5.rotC); $('rotc-val').textContent = deg(s5.rotC) + '°';
+  $('height5').value = s5.height; $('height5-val').textContent = s5.height.toFixed(2);
+}
+
+// ---- status / readout ----
+function updateStatus() {
+  const R = activeModule(); if (R) return R.updateStatus();
+  const segs = lastResult.segments, total = segs.reduce((a, s) => a + Math.abs(s.u1 - s.u0), 0);
+  let main;
+  if (state.mode === 'shadow') {
+    main = segs.length ? `Shadow — width ${total.toFixed(2)} units (orientation-only)` : 'Shadow — nothing';
+  } else if (!segs.length) {
+    main = 'Slice — no intersection (the being feels nothing)';
+  } else {
+    const d = Math.abs(lastResult.depth || 0);
+    const where = (lastResult.depth > 0.02) ? 'above' : (lastResult.depth < -0.02 ? 'below' : 'centred on');
+    main = `Slice — ${segs.length} segment${segs.length > 1 ? 's' : ''}, total length ${total.toFixed(2)}; centre ${d.toFixed(2)} ${where} the line`;
+  }
+  $('status-main').textContent = main;
+  if (state.enc !== 'none') {
+    $('sw-depth').style.background = styleFor(lastResult.depth, lastResult.r || 3).color;
+    $('depth-text').textContent = `hidden offset ≈ ${(lastResult.depth || 0).toFixed(2)}`;
+  }
+  announce(main);
+}
+
+/* ============================================================
+   J7 · RUNG 2↔3 — a 3-D solid sliced (or shadowed) onto a 2-D world.
+   Same idea as rung 1, one dimension up: the glowing plane is the
+   whole universe of a flat being; it perceives the cross-section.
+   ============================================================ */
+function makeSolid(type) {
+  const P = (verts, edges, faces) => {
+    const V = verts.length, fv = new Float64Array(V * 3);
+    for (let i = 0; i < V; i++) { fv[i*3]=verts[i][0]; fv[i*3+1]=verts[i][1]; fv[i*3+2]=verts[i][2]; }
+    return { kind: 'poly3', vcount: V, ecount: edges.length, verts: fv, edges: Uint32Array.from(edges.flat()), faces };
+  };
+  switch (type) {
+    case 'cube': return P(
+      [[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]],
+      [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]],
+      [[0,1,2,3],[4,5,6,7],[0,1,5,4],[2,3,7,6],[1,2,6,5],[0,3,7,4]]);
+    case 'tetra': return P(
+      [[1,1,1],[1,-1,-1],[-1,1,-1],[-1,-1,1]],
+      [[0,1],[0,2],[0,3],[1,2],[1,3],[2,3]],
+      [[0,1,2],[0,1,3],[0,2,3],[1,2,3]]);
+    case 'octa': return P(
+      [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]],
+      [[0,2],[0,3],[0,4],[0,5],[1,2],[1,3],[1,4],[1,5],[2,4],[2,5],[3,4],[3,5]],
+      [[0,2,4],[0,2,5],[0,3,4],[0,3,5],[1,2,4],[1,2,5],[1,3,4],[1,3,5]]);
+    default: return { kind: 'sphere3' };
+  }
+}
+function polyArea(poly) { let a = 0; for (let i = 0, n = poly.length; i < n; i++) { const j = (i+1)%n; a += poly[i][0]*poly[j][1] - poly[j][0]*poly[i][1]; } return Math.abs(a)/2; }
+function pointInPoly(px, py, poly) { let inside = false; for (let i = 0, j = poly.length-1; i < poly.length; j = i++) { const xi=poly[i][0],yi=poly[i][1],xj=poly[j][0],yj=poly[j][1]; if (((yi>py)!==(yj>py)) && (px < (xj-xi)*(py-yi)/(yj-yi)+xi)) inside=!inside; } return inside; }
+function convexHull(pts) {
+  if (pts.length < 3) return pts.slice();
+  const p = pts.slice().sort((a,b)=> a[0]-b[0] || a[1]-b[1]);
+  const cr = (o,a,b)=> (a[0]-o[0])*(b[1]-o[1]) - (a[1]-o[1])*(b[0]-o[0]);
+  const lo = []; for (const q of p) { while (lo.length>=2 && cr(lo[lo.length-2],lo[lo.length-1],q)<=0) lo.pop(); lo.push(q); }
+  const hi = []; for (let i=p.length-1;i>=0;i--){ const q=p[i]; while (hi.length>=2 && cr(hi[hi.length-2],hi[hi.length-1],q)<=0) hi.pop(); hi.push(q); }
+  lo.pop(); hi.pop(); return lo.concat(hi);
+}
+
+const Rung23 = (() => {
+  let obj3 = makeSolid(s3.solid);
+  let last3 = { kind: 'empty', area: 0, depth: 0, poly: [], poly3: [] };
+  const view3 = { zoom: 1 };
+  let orbit = null, drag1 = false;
+  const rotX = (th) => Vec.rotationInPlane(3, 1, 2, th);   // about world X
+  const rotY = (th) => Vec.rotationInPlane(3, 0, 2, th);   // about world Y
+  const effH = () => (sweep.active && state.mode === 'slice') ? sweep.h3 : s3.height;
+
+  function rebuild() { obj3 = makeSolid(s3.solid); }
+  function worldVerts() {
+    if (obj3.kind === 'sphere3') return null;
+    const Rx = rotX(s3.rotX), Ry = rotY(s3.rotY), V = obj3.vcount, out = new Float64Array(V * 3);
+    for (let i = 0; i < V; i++) {
+      const sc = Vec.scale(obj3.verts.subarray(i*3, i*3+3), s3.size);
+      const r = Vec.matVec(Ry, Vec.matVec(Rx, sc, 3), 3);
+      out[i*3]=r[0]; out[i*3+1]=r[1]; out[i*3+2]=r[2];
+    }
+    return out;
+  }
+  function recompute() {
+    const h = effH(), wv = worldVerts();
+    last3 = (state.mode === 'shadow') ? shadow(wv) : slice(wv, h);
+    last3.wv = wv; last3.h = h;
+  }
+  function slice(wv, h) {
+    if (obj3.kind === 'sphere3') {
+      const r = s3.size, d = Math.abs(h);
+      if (d >= r) return { kind: (r - d > -0.03) ? 'point' : 'empty', area: 0, depth: h, poly3: [] };
+      const rc = Math.sqrt(r*r - d*d);
+      return { kind: 'circle', rc, area: Math.PI*rc*rc, center: [0,0], depth: h, worldC: [0,0,h] };
+    }
+    const pts = [];
+    for (let e = 0; e < obj3.ecount; e++) {
+      const i = obj3.edges[e*2], j = obj3.edges[e*2+1];
+      const za = wv[i*3+2], zb = wv[j*3+2], sa = za - h, sb = zb - h;
+      if ((sa >= 0) !== (sb >= 0)) {
+        const t = sa / (sa - sb);
+        pts.push([wv[i*3] + t*(wv[j*3]-wv[i*3]), wv[i*3+1] + t*(wv[j*3+1]-wv[i*3+1])]);
+      }
+    }
+    if (pts.length < 3) return { kind: 'empty', area: 0, depth: h, poly: [], poly3: [] };
+    let cx = 0, cy = 0; pts.forEach(p => { cx += p[0]; cy += p[1]; }); cx /= pts.length; cy /= pts.length;
+    pts.sort((a,b) => Math.atan2(a[1]-cy, a[0]-cx) - Math.atan2(b[1]-cy, b[0]-cx));
+    return { kind: 'poly', poly: pts, poly3: pts.map(p => [p[0], p[1], h]), area: polyArea(pts), center: [cx, cy], depth: h };
+  }
+  function shadow(wv) {
+    if (obj3.kind === 'sphere3') { const r = s3.size; return { kind: 'circle', rc: r, area: Math.PI*r*r, center: [0,0], depth: 0, shadow: true, worldC: [0,0,0] }; }
+    const proj = []; for (let i = 0; i < obj3.vcount; i++) proj.push([wv[i*3], wv[i*3+1]]);
+    const hull = convexHull(proj);
+    return { kind: 'poly', poly: hull, poly3: hull.map(p => [p[0], p[1], 0]), area: polyArea(hull), center: [0,0], depth: 0, shadow: true };
+  }
+
+  function camProject(scale, cx, cy) {
+    const Rxc = rotX(s3.pitch), Ryc = rotY(s3.yaw);
+    return (p) => { const a = Vec.matVec(Ryc, Vec.matVec(Rxc, new Float64Array(p), 3), 3); return [cx + a[0]*scale, cy - a[1]*scale, a[2]]; };
+  }
+  function drawUpper() {
+    const ctx = X2, W = size2.w, H = size2.h; ctx.clearRect(0, 0, W, H);
+    const scale = Math.max(16, Math.min(W, H) / (2 * (s3.size + 1.7)) * view3.zoom), cx = W/2, cy = H/2;
+    const proj = camProject(scale, cx, cy), h = last3.h, S = Math.ceil(s3.size + 1.3);
+    // slice plane z = h (the flat being's whole universe)
+    const planeCol = state.mode === 'shadow' ? getVar('--shadow-col') : getVar('--accent');
+    const corners = [[-S,-S,h],[S,-S,h],[S,S,h],[-S,S,h]].map(proj);
+    const tracePoly = (pl) => { ctx.beginPath(); pl.forEach((p,i)=> i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.closePath(); };
+    ctx.save();
+    ctx.fillStyle = planeCol; ctx.globalAlpha = 0.10; tracePoly(corners); ctx.fill();
+    ctx.globalAlpha = 0.55; ctx.strokeStyle = planeCol; ctx.lineWidth = 1; ctx.setLineDash(state.mode==='shadow'?[6,5]:[]); tracePoly(corners); ctx.stroke();
+    ctx.globalAlpha = 0.22; ctx.setLineDash([]);
+    for (let g = -S; g <= S; g++) { const a = proj([g,-S,h]), b = proj([g,S,h]), c = proj([-S,g,h]), d = proj([S,g,h]); ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.moveTo(c[0],c[1]); ctx.lineTo(d[0],d[1]); ctx.stroke(); }
+    ctx.restore();
+    // the solid
+    if (obj3.kind === 'sphere3') {
+      const c = proj([0,0,0]), rpx = s3.size * scale;
+      const g = ctx.createRadialGradient(c[0]-rpx*0.35, c[1]-rpx*0.35, rpx*0.1, c[0], c[1], rpx);
+      g.addColorStop(0, getVar('--shape-stroke')); g.addColorStop(1, getVar('--canvas-bg'));
+      ctx.save(); ctx.globalAlpha = 0.5; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(c[0], c[1], rpx, 0, 7); ctx.fill();
+      ctx.globalAlpha = 1; ctx.strokeStyle = getVar('--shape-stroke'); ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
+    } else { drawSolidFaces(ctx, proj); }
+    // cross-section / shadow highlight
+    drawCross(ctx, proj);
+    // 2D probe mapped up onto the plane
+    const cur = proj([s3.cursor[0], s3.cursor[1], h]), inside = cursorInside();
+    ctx.fillStyle = inside ? getVar('--good') : getVar('--cursor'); ctx.strokeStyle = getVar('--canvas-bg'); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cur[0], cur[1], 6, 0, 7); ctx.fill(); ctx.stroke();
+  }
+  function drawSolidFaces(ctx, proj) {
+    const wv = last3.wv;
+    const Rxc = rotX(s3.pitch), Ryc = rotY(s3.yaw);
+    const camN = (n) => Vec.matVec(Ryc, Vec.matVec(Rxc, n, 3), 3);
+    const items = obj3.faces.map(f => {
+      const ps = f.map(idx => [wv[idx*3], wv[idx*3+1], wv[idx*3+2]]);
+      const sp = ps.map(proj), zc = sp.reduce((a,p)=>a+p[2],0)/sp.length;
+      const u = Vec.sub(new Float64Array(ps[1]), new Float64Array(ps[0]));
+      const v = Vec.sub(new Float64Array(ps[2]), new Float64Array(ps[0]));
+      let n = new Float64Array([u[1]*v[2]-u[2]*v[1], u[2]*v[0]-u[0]*v[2], u[0]*v[1]-u[1]*v[0]]);
+      const ctr = new Float64Array(3); ps.forEach(p=>{ctr[0]+=p[0];ctr[1]+=p[1];ctr[2]+=p[2];});
+      if (Vec.dot(n, ctr) < 0) n = Vec.scale(n, -1);
+      n = Vec.normalize(n);
+      return { sp, zc, shade: Math.max(0, camN(n)[2]) };
+    });
+    items.sort((a,b)=> a.zc - b.zc);   // far first (painter's algorithm)
+    for (const it of items) {
+      const L = Math.round(30 + 42 * it.shade);
+      ctx.beginPath(); it.sp.forEach((p,i)=> i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.closePath();
+      ctx.globalAlpha = 0.8; ctx.fillStyle = `hsl(216 68% ${L}%)`; ctx.fill();
+      ctx.globalAlpha = 1; ctx.strokeStyle = getVar('--shape-stroke'); ctx.lineWidth = 1.4; ctx.stroke();
+    }
+  }
+  function drawCross(ctx, proj) {
+    if (last3.kind !== 'circle' && !(last3.kind === 'poly' && last3.poly3.length)) return;
+    const st = styleFor(last3.depth || 0, s3.size);
+    const pl = (last3.kind === 'circle')
+      ? Array.from({length: 49}, (_, k) => { const a = 2*Math.PI*k/48; return proj([last3.rc*Math.cos(a), last3.rc*Math.sin(a), last3.worldC ? last3.worldC[2] : 0]); })
+      : last3.poly3.map(proj);
+    ctx.save(); ctx.strokeStyle = st.color; ctx.fillStyle = st.color; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+    if (st.glow) { ctx.shadowColor = st.color; ctx.shadowBlur = 12 * st.glow; }
+    ctx.globalAlpha = (st.alpha||1) * 0.25; ctx.beginPath(); pl.forEach((p,i)=> i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = (st.alpha||1); ctx.beginPath(); pl.forEach((p,i)=> i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.closePath(); ctx.stroke();
+    ctx.restore();
+  }
+  function lowScale() { return Math.max(14, Math.min(size1.w, size1.h) / (2 * (s3.size + 0.8))); }
+  function drawLower() {
+    const ctx = X1, W = size1.w, H = size1.h, cx = W/2, cy = H/2, sc = lowScale(); ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = getVar('--grid'); ctx.lineWidth = 1;
+    for (let x = cx % sc; x < W; x += sc) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+    for (let y = cy % sc; y < H; y += sc) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+    ctx.strokeStyle = getVar('--axis'); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(W,cy); ctx.moveTo(cx,0); ctx.lineTo(cx,H); ctx.stroke();
+    const map = (p) => [cx + p[0]*sc, cy - p[1]*sc];
+    const st = styleFor(last3.depth || 0, s3.size);
+    ctx.save(); ctx.strokeStyle = st.color; ctx.fillStyle = st.color; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
+    if (st.glow) { ctx.shadowColor = st.color; ctx.shadowBlur = 14 * st.glow; }
+    if (last3.kind === 'circle') {
+      const rr = last3.rc * sc;
+      ctx.globalAlpha = (st.alpha||1)*0.3; ctx.beginPath(); ctx.arc(cx, cy, rr, 0, 7); ctx.fill();
+      ctx.globalAlpha = (st.alpha||1); ctx.beginPath(); ctx.arc(cx, cy, rr, 0, 7); ctx.stroke();
+    } else if (last3.kind === 'poly' && last3.poly.length) {
+      const pl = last3.poly.map(map);
+      ctx.globalAlpha = (st.alpha||1)*0.3; ctx.beginPath(); pl.forEach((p,i)=> i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = (st.alpha||1); ctx.beginPath(); pl.forEach((p,i)=> i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.closePath(); ctx.stroke();
+    } else {
+      ctx.globalAlpha = 1; ctx.fillStyle = getVar('--fg-dim'); ctx.font = '13px system-ui'; ctx.textAlign = 'center'; ctx.fillText('— the plane misses the solid —', cx, cy);
+    }
+    ctx.restore();
+    const inside = cursorInside(), cp = map(s3.cursor);
+    ctx.fillStyle = inside ? getVar('--good') : getVar('--cursor'); ctx.strokeStyle = getVar('--canvas-bg'); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cp[0], cp[1], 6, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = getVar('--fg-dim'); ctx.font = '11px system-ui'; ctx.textAlign = 'center'; ctx.fillText(inside ? 'feels matter' : 'empty', cp[0], cp[1] + 20);
+  }
+  function cursorInside() {
+    const u = s3.cursor[0], v = s3.cursor[1];
+    if (last3.kind === 'circle') return Math.hypot(u, v) <= last3.rc;
+    if (last3.kind === 'poly' && last3.poly.length >= 3) return pointInPoly(u, v, last3.poly);
+    return false;
+  }
+  function updateStatus() {
+    const c = last3, names = { sphere:'sphere', cube:'cube', tetra:'tetrahedron', octa:'octahedron' };
+    const gon = { 3:'triangular', 4:'quadrilateral', 5:'pentagonal', 6:'hexagonal' };
+    let main;
+    if (state.mode === 'shadow') main = `Shadow — ${names[s3.solid]} silhouette, area ${(c.area||0).toFixed(2)}`;
+    else if (c.kind === 'empty') main = 'Slice — no intersection (the plane misses the solid)';
+    else if (c.kind === 'point') main = 'Slice — a single point (the plane just grazes it)';
+    else if (c.kind === 'circle') main = `Slice — circle, radius ${c.rc.toFixed(2)}, area ${c.area.toFixed(2)}; plane ${Math.abs(c.depth).toFixed(2)} from centre`;
+    else main = `Slice — ${gon[c.poly.length] || (c.poly.length + '-sided')} cross-section, area ${c.area.toFixed(2)}`;
+    $('status-main').textContent = main;
+    if (state.enc !== 'none') { $('sw-depth').style.background = styleFor(c.depth||0, s3.size).color; $('depth-text').textContent = `hidden height ≈ ${(c.depth||0).toFixed(2)}`; }
+    announce(main);
+  }
+  // interaction
+  function c2Down(e) { orbit = { x: e.clientX, y: e.clientY, yaw: s3.yaw, pitch: s3.pitch }; try { C2.setPointerCapture(e.pointerId); } catch (_) {} C2.focus(); if (e.preventDefault) e.preventDefault(); }
+  function c2Move(e) { if (!orbit) return; s3.yaw = orbit.yaw + (e.clientX - orbit.x) * 0.01; s3.pitch = Math.max(-1.45, Math.min(1.45, orbit.pitch + (e.clientY - orbit.y) * 0.01)); markDirty(); saveDebounced(); updateHash(); }
+  function c2Up() { orbit = null; }
+  function lowToWorld(e) { const r = C1.getBoundingClientRect(), sc = lowScale(); return [ (e.clientX - r.left - size1.w/2) / sc, -((e.clientY - r.top) - size1.h/2) / sc ]; }
+  function c1Down(e) { try { C1.setPointerCapture(e.pointerId); } catch (_) {} C1.focus(); drag1 = true; s3.cursor = lowToWorld(e); markDirty(); saveDebounced(); updateHash(); if (e.preventDefault) e.preventDefault(); }
+  function c1Move(e) { if (drag1) { s3.cursor = lowToWorld(e); markDirty(); saveDebounced(); updateHash(); } }
+  function c1Up() { if (drag1) { drag1 = false; pushHistory(); } }
+  function wheel(e) { view3.zoom = Math.max(0.4, Math.min(2.6, view3.zoom * (e.deltaY < 0 ? 1.08 : 0.93))); markDirty(); }
+  return { rebuild, recompute, drawUpper, drawLower, updateStatus, c2Down, c2Move, c2Up, c1Down, c1Move, c1Up, wheel };
+})();
+
+/* ============================================================
+   J7b · RUNG 3↔4 — a 4-D object sliced (or shadowed) into a 3-D world.
+   Top pane: the 4D object as a 4D→3D perspective wireframe (the
+   famous cube-in-a-cube) with the 4th axis w shown as COLOUR.
+   Bottom pane: the solid 3-D cross-section a 3D being perceives.
+   ============================================================ */
+function mkPoly4(verts, edges, cells) {
+  const V = verts.length, fv = new Float64Array(V * 4);
+  for (let i = 0; i < V; i++) for (let k = 0; k < 4; k++) fv[i*4+k] = verts[i][k];
+  const cellEdges = cells.map(vs => { const set = new Set(vs), list = []; edges.forEach((e, ei) => { if (set.has(e[0]) && set.has(e[1])) list.push(ei); }); return list; });
+  return { kind: 'poly4', vcount: V, verts: fv, edges, ecount: edges.length, cells, cellEdges };
+}
+function makeHypersolid(type) {
+  if (type === 'glome') return { kind: 'glome4' };
+  if (type === 'cell16') {
+    const verts = [[1,0,0,0],[-1,0,0,0],[0,1,0,0],[0,-1,0,0],[0,0,1,0],[0,0,-1,0],[0,0,0,1],[0,0,0,-1]];
+    const opp = { 0:1, 1:0, 2:3, 3:2, 4:5, 5:4, 6:7, 7:6 }, edges = [];
+    for (let i = 0; i < 8; i++) for (let j = i+1; j < 8; j++) if (opp[i] !== j) edges.push([i, j]);
+    const pairs = [[0,1],[2,3],[4,5],[6,7]], cells = [];
+    for (let m = 0; m < 16; m++) { const vs = []; for (let p = 0; p < 4; p++) vs.push(pairs[p][(m>>p)&1]); cells.push(vs); }
+    return mkPoly4(verts, edges, cells);
+  }
+  // tesseract (8-cell)
+  const verts = [];
+  for (let b = 0; b < 16; b++) verts.push([(b&1)?1:-1, (b&2)?1:-1, (b&4)?1:-1, (b&8)?1:-1]);
+  const edges = [];
+  for (let a = 0; a < 16; a++) for (let k = 0; k < 4; k++) { const b = a ^ (1<<k); if (b > a) edges.push([a, b]); }
+  const cells = [];
+  for (let ax = 0; ax < 4; ax++) for (const s of [1, -1]) { const vs = []; for (let v = 0; v < 16; v++) if (verts[v][ax] === s) vs.push(v); cells.push(vs); }
+  return mkPoly4(verts, edges, cells);
+}
+
+const Rung34 = (() => {
+  let obj4 = makeHypersolid(s4.solid);
+  let last4 = { kind: 'empty' };
+  const view4 = { zoom: 1 };
+  let orbit = null;
+  const cross3 = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+  const rotP = (i, j, th) => Vec.rotationInPlane(4, i, j, th);   // 4D rotation in plane (i,j)
+  const rot3X = (th) => Vec.rotationInPlane(3, 1, 2, th);
+  const rot3Y = (th) => Vec.rotationInPlane(3, 0, 2, th);
+  const effH = () => (sweep.active && state.mode === 'slice') ? sweep.h4 : s4.height;
+  const D4 = () => s4.size + 2.4;                                // 4D perspective distance (> max |w|)
+
+  function rebuild() { obj4 = makeHypersolid(s4.solid); }
+  function worldVerts() {
+    if (obj4.kind === 'glome4') return null;
+    const Rxw = rotP(0, 3, s4.rotXW), Ryw = rotP(1, 3, s4.rotYW), V = obj4.vcount, out = new Float64Array(V * 4);
+    for (let i = 0; i < V; i++) {
+      const r = Vec.matVec(Ryw, Vec.matVec(Rxw, Vec.scale(obj4.verts.subarray(i*4, i*4+4), s4.size), 4), 4);
+      out[i*4]=r[0]; out[i*4+1]=r[1]; out[i*4+2]=r[2]; out[i*4+3]=r[3];
+    }
+    return out;
+  }
+  function recompute() { const h = effH(), wv = worldVerts(); last4 = (state.mode === 'shadow') ? shadow(wv) : slice(wv, h); last4.wv = wv; last4.h = h; }
+  function slice(wv, h) {
+    if (obj4.kind === 'glome4') {
+      const r = s4.size, d = Math.abs(h);
+      if (d >= r) return { kind: (r - d > -0.03) ? 'point' : 'empty', depth: h };
+      return { kind: 'sphere', rc: Math.sqrt(r*r - d*d), depth: h };
+    }
+    const ptOf = {}, verts3 = [];
+    for (let ei = 0; ei < obj4.ecount; ei++) {
+      const e = obj4.edges[ei], i = e[0], j = e[1], sa = wv[i*4+3] - h, sb = wv[j*4+3] - h;
+      if ((sa >= 0) !== (sb >= 0)) {
+        const t = sa / (sa - sb);
+        ptOf[ei] = verts3.length;
+        verts3.push([wv[i*4]+t*(wv[j*4]-wv[i*4]), wv[i*4+1]+t*(wv[j*4+1]-wv[i*4+1]), wv[i*4+2]+t*(wv[j*4+2]-wv[i*4+2])]);
+      }
+    }
+    if (verts3.length < 3) return { kind: verts3.length ? 'point' : 'empty', depth: h };
+    const faces = [];
+    for (const cEdges of obj4.cellEdges) {
+      const idx = []; for (const ei of cEdges) if (ei in ptOf) idx.push(ptOf[ei]);
+      if (idx.length >= 3) { const ord = orderFace(idx.map(k => verts3[k]), idx); if (ord) faces.push(ord); }
+    }
+    return { kind: 'solid', verts3, faces, depth: h };
+  }
+  function orderFace(pts, idx) {
+    const n = pts.length, c = [0,0,0];
+    for (const p of pts) { c[0]+=p[0]; c[1]+=p[1]; c[2]+=p[2]; } c[0]/=n; c[1]/=n; c[2]/=n;
+    let nb = null;
+    for (let i = 1; i < n-1 && !nb; i++) { const cr = cross3(Vec.sub(pts[i], pts[0]), Vec.sub(pts[i+1], pts[0])); if (Math.hypot(cr[0],cr[1],cr[2]) > 1e-9) nb = cr; }
+    if (!nb) return null;
+    const u = Vec.normalize(Vec.sub(pts[0], c)), v = cross3(nb, u);
+    return idx.map((id, k) => { const d = Vec.sub(pts[k], c); return { id, ang: Math.atan2(d[0]*v[0]+d[1]*v[1]+d[2]*v[2], d[0]*u[0]+d[1]*u[1]+d[2]*u[2]) }; })
+      .sort((a, b) => a.ang - b.ang).map(o => o.id);
+  }
+  function shadow(wv) {
+    if (obj4.kind === 'glome4') return { kind: 'sphere', rc: s4.size, depth: 0, shadow: true };
+    const verts3 = []; for (let i = 0; i < obj4.vcount; i++) verts3.push([wv[i*4], wv[i*4+1], wv[i*4+2]]);
+    return { kind: 'wire', verts3, edges: obj4.edges, depth: 0, shadow: true };
+  }
+  function camProject(scale, cx, cy) {
+    const Rx = rot3X(s4.pitch), Ry = rot3Y(s4.yaw);
+    return (p) => { const a = Vec.matVec(Ry, Vec.matVec(Rx, new Float64Array(p), 3), 3); return [cx + a[0]*scale, cy - a[1]*scale, a[2]]; };
+  }
+  function encodeW(w) {
+    const t = Math.max(-1, Math.min(1, w / s4.size)), enc = (state.enc === 'none') ? 'hue' : state.enc;
+    if (enc === 'bright') return `hsl(214 70% ${Math.round(34 + 42 * (0.5 + 0.5 * t))}%)`;
+    if (enc === 'time') { const p = 0.5 + 0.5 * Math.sin(timePhase * 3 + t * 3.2); return `hsl(${Math.round(210 + 70*t)} 85% ${Math.round(45 + 22*p)}%)`; }
+    const hue = state.colorblind ? (210 + t * 110) : (t < 0 ? 210 + (-t) * 60 : 45 - t * 45);
+    return `hsl(${hue} 88% 58%)`;
+  }
+  function drawUpper() {
+    const ctx = X2, W = size2.w, H = size2.h; ctx.clearRect(0, 0, W, H);
+    const scale = Math.max(20, Math.min(W, H) / (2 * (s4.size + 1.6)) * view4.zoom), cx = W/2, cy = H/2, proj = camProject(scale, cx, cy);
+    if (obj4.kind === 'glome4') {
+      ctx.save(); ctx.lineWidth = 2; const c = proj([0,0,0]);
+      for (let k = -3; k <= 3; k++) { const w = k/3 * s4.size, rr = Math.sqrt(Math.max(0, s4.size*s4.size - w*w)), f = D4()/(D4()-w); ctx.globalAlpha = 0.55; ctx.strokeStyle = encodeW(w); ctx.beginPath(); ctx.arc(c[0], c[1], rr*f*scale, 0, 7); ctx.stroke(); }
+      ctx.restore(); return;
+    }
+    const wv = last4.wv, P = [];
+    for (let i = 0; i < obj4.vcount; i++) { const w = wv[i*4+3], f = D4()/(D4()-w); P.push(proj([wv[i*4]*f, wv[i*4+1]*f, wv[i*4+2]*f])); P[i].w = w; }
+    const es = obj4.edges.map((e) => ({ e, z: (P[e[0]][2] + P[e[1]][2]) / 2 })).sort((a, b) => a.z - b.z);
+    ctx.save(); ctx.lineCap = 'round';
+    for (const { e } of es) { const a = P[e[0]], b = P[e[1]], w = (a.w + b.w) / 2; ctx.strokeStyle = encodeW(w); ctx.globalAlpha = 0.92; ctx.lineWidth = 1.5 + 1.6 * (0.5 + 0.5 * w / s4.size); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+    for (let i = 0; i < P.length; i++) { ctx.fillStyle = encodeW(P[i].w); ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(P[i][0], P[i][1], 3, 0, 7); ctx.fill(); }
+    ctx.restore();
+    if (state.mode === 'slice' && last4.kind === 'solid') {
+      const st = styleFor(last4.depth || 0, s4.size), f = D4()/(D4()-last4.h);
+      ctx.save(); ctx.strokeStyle = st.color; ctx.globalAlpha = 0.95; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
+      for (const face of last4.faces) { ctx.beginPath(); face.forEach((id, k) => { const q = proj([last4.verts3[id][0]*f, last4.verts3[id][1]*f, last4.verts3[id][2]*f]); k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); }); ctx.closePath(); ctx.stroke(); }
+      ctx.restore();
+    }
+  }
+  function drawLower() {
+    const ctx = X1, W = size1.w, H = size1.h; ctx.clearRect(0, 0, W, H);
+    const scale = Math.max(16, Math.min(W, H) / (2 * (s4.size + 0.8)) * view4.zoom), cx = W/2, cy = H/2, proj = camProject(scale, cx, cy);
+    if (last4.kind === 'sphere') {
+      const c = proj([0,0,0]), rpx = last4.rc * scale, st = styleFor(last4.depth || 0, s4.size);
+      const g = ctx.createRadialGradient(c[0]-rpx*0.35, c[1]-rpx*0.35, rpx*0.1, c[0], c[1], rpx);
+      g.addColorStop(0, st.color); g.addColorStop(1, getVar('--canvas-bg'));
+      ctx.save(); ctx.globalAlpha = (st.alpha||1)*0.6; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(c[0], c[1], rpx, 0, 7); ctx.fill();
+      ctx.globalAlpha = (st.alpha||1); ctx.strokeStyle = st.color; ctx.lineWidth = 2.5; ctx.stroke(); ctx.restore();
+    } else if (last4.kind === 'solid') {
+      drawSolid(ctx, proj, last4.verts3, last4.faces, styleFor(last4.depth || 0, s4.size));
+    } else if (last4.kind === 'wire') {
+      ctx.save(); ctx.strokeStyle = getVar('--shadow-col'); ctx.lineWidth = 2; ctx.globalAlpha = 0.9; ctx.lineCap = 'round';
+      const P = last4.verts3.map(proj);
+      for (const e of last4.edges) { const a = P[e[0]], b = P[e[1]]; ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke(); }
+      ctx.restore();
+    } else {
+      ctx.fillStyle = getVar('--fg-dim'); ctx.font = '13px system-ui'; ctx.textAlign = 'center'; ctx.fillText('— the 3-space misses the object —', cx, cy);
+    }
+  }
+  function drawSolid(ctx, proj, verts3, faces, st) {
+    const Rx = rot3X(s4.pitch), Ry = rot3Y(s4.yaw), camN = (n) => Vec.matVec(Ry, Vec.matVec(Rx, n, 3), 3);
+    const items = faces.map(f => {
+      const ps = f.map(id => verts3[id]), sp = ps.map(proj), zc = sp.reduce((a,p)=>a+p[2],0)/sp.length;
+      let n = new Float64Array(cross3(Vec.sub(ps[1], ps[0]), Vec.sub(ps[2], ps[0])));
+      const ctr = [0,0,0]; ps.forEach(p=>{ctr[0]+=p[0];ctr[1]+=p[1];ctr[2]+=p[2];});
+      if (Vec.dot(n, ctr) < 0) n = Vec.scale(n, -1);
+      const ln = Math.hypot(n[0],n[1],n[2]) || 1; n = Vec.scale(n, 1/ln);
+      return { sp, zc, shade: Math.max(0, camN(n)[2]) };
+    });
+    items.sort((a, b) => a.zc - b.zc);
+    const useEnc = state.enc !== 'none';
+    for (const it of items) {
+      ctx.beginPath(); it.sp.forEach((p,i)=> i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.closePath();
+      ctx.fillStyle = useEnc ? st.color : `hsl(352 75% ${Math.round(40 + 34 * it.shade)}%)`;
+      ctx.globalAlpha = useEnc ? (0.4 + 0.4 * it.shade) : 0.72; ctx.fill();
+      ctx.globalAlpha = 1; ctx.strokeStyle = st.color; ctx.lineWidth = 1.6; ctx.stroke();
+    }
+  }
+  function updateStatus() {
+    const c = last4, names = { tesseract: 'tesseract', glome: 'hypersphere', cell16: '16-cell' };
+    let main;
+    if (state.mode === 'shadow') main = `Shadow — the ${names[s4.solid]}'s 3-D shadow (4D→3D projection)`;
+    else if (c.kind === 'empty') main = 'Slice — no intersection (the 3-space misses the object)';
+    else if (c.kind === 'point') main = 'Slice — a single point (just grazing)';
+    else if (c.kind === 'sphere') main = `Slice — a sphere, radius ${c.rc.toFixed(2)}; 3-space ${Math.abs(c.depth).toFixed(2)} from centre along w`;
+    else main = `Slice — a ${c.faces.length}-faced polyhedron; 3-space at w = ${(c.depth||0).toFixed(2)}`;
+    $('status-main').textContent = main;
+    if (state.enc !== 'none') { $('sw-depth').style.background = styleFor(c.depth||0, s4.size).color; $('depth-text').textContent = `w-depth ≈ ${(c.depth||0).toFixed(2)}`; }
+    announce(main);
+  }
+  function startOrbit(e, canvas) { orbit = { x: e.clientX, y: e.clientY, yaw: s4.yaw, pitch: s4.pitch }; try { canvas.setPointerCapture(e.pointerId); } catch (_) {} canvas.focus(); if (e.preventDefault) e.preventDefault(); }
+  function moveOrbit(e) { if (!orbit) return; s4.yaw = orbit.yaw + (e.clientX - orbit.x) * 0.01; s4.pitch = Math.max(-1.45, Math.min(1.45, orbit.pitch + (e.clientY - orbit.y) * 0.01)); markDirty(); saveDebounced(); updateHash(); }
+  function endOrbit() { orbit = null; }
+  function wheel(e) { view4.zoom = Math.max(0.4, Math.min(2.6, view4.zoom * (e.deltaY < 0 ? 1.08 : 0.93))); markDirty(); }
+  return { rebuild, recompute, drawUpper, drawLower, updateStatus,
+    c2Down: (e) => startOrbit(e, C2), c2Move: moveOrbit, c2Up: endOrbit,
+    c1Down: (e) => startOrbit(e, C1), c1Move: moveOrbit, c1Up: endOrbit, wheel };
+})();
+
+/* ============================================================
+   J7c · RUNG 4↔5 — a 5-D object perceived by a 4-D being.
+   We're out of spatial axes: x,y,z are drawn spatially (orbit),
+   the 4th axis w₁ is COLOUR and the 5th w₂ is BRIGHTNESS. Slicing
+   at w₂=h gives a 4-D cross-section (rendered like rung 3's 4D view,
+   w₁ as colour). This is the user's "extra dims as colour" idea.
+   ============================================================ */
+function makePenteract() {
+  const verts = [];
+  for (let b = 0; b < 32; b++) { const v = []; for (let k = 0; k < 5; k++) v.push((b>>k&1) ? 1 : -1); verts.push(v); }
+  const edges = [], emap = {}, ekey = (i, j) => (i < j ? i*32+j : j*32+i);
+  for (let a = 0; a < 32; a++) for (let k = 0; k < 5; k++) { const b = a ^ (1<<k); if (b > a) { emap[ekey(a,b)] = edges.length; edges.push([a, b]); } }
+  const faces = [];                                    // 2-faces, each as its 4 boundary edge indices
+  for (let i = 0; i < 5; i++) for (let j = i+1; j < 5; j++) {
+    const others = [0,1,2,3,4].filter(a => a !== i && a !== j);
+    for (let m = 0; m < 8; m++) {
+      let base = 0; others.forEach((ax, oi) => { if ((m>>oi)&1) base |= (1<<ax); });
+      const v00 = base, v10 = base|(1<<i), v11 = base|(1<<i)|(1<<j), v01 = base|(1<<j);
+      faces.push([emap[ekey(v00,v10)], emap[ekey(v10,v11)], emap[ekey(v11,v01)], emap[ekey(v01,v00)]]);
+    }
+  }
+  const fv = new Float64Array(32 * 5);
+  for (let i = 0; i < 32; i++) for (let k = 0; k < 5; k++) fv[i*5+k] = verts[i][k];
+  return { kind: 'penteract', vcount: 32, verts: fv, edges, ecount: edges.length, faces };
+}
+function sampleSphere(dim, n) {                        // n points on the unit (dim−1)-sphere
+  const pts = [];
+  for (let i = 0; i < n; i++) { const v = []; let s = 0; for (let k = 0; k < dim; k++) { let u = 0; for (let g = 0; g < 3; g++) u += Math.random() - 0.5; v.push(u); s += u*u; } s = Math.sqrt(s) || 1; for (let k = 0; k < dim; k++) v[k] /= s; pts.push(v); }
+  return pts;
+}
+function makeHyperglome5() { return { kind: 'glome5', cloud5: sampleSphere(5, 520), cloud4: sampleSphere(4, 360) }; }
+
+const Rung45 = (() => {
+  let obj5 = (s5.solid === 'glome5') ? makeHyperglome5() : makePenteract();
+  let last5 = { kind: 'empty' };
+  const view5 = { zoom: 1 };
+  let orbit = null;
+  const rotP = (i, j, th) => Vec.rotationInPlane(5, i, j, th);
+  const rot3X = (th) => Vec.rotationInPlane(3, 1, 2, th);
+  const rot3Y = (th) => Vec.rotationInPlane(3, 0, 2, th);
+  const effH = () => (sweep.active && state.mode === 'slice') ? sweep.h5 : s5.height;
+  function rebuild() { obj5 = (s5.solid === 'glome5') ? makeHyperglome5() : makePenteract(); }
+  function R5(v) { return Vec.matVec(rotP(3,4,s5.rotC), Vec.matVec(rotP(1,4,s5.rotB), Vec.matVec(rotP(0,3,s5.rotA), v, 5), 5), 5); }
+  function worldVerts() {
+    if (obj5.kind !== 'penteract') return null;
+    const out = new Float64Array(32 * 5);
+    for (let i = 0; i < 32; i++) { const r = R5(Vec.scale(obj5.verts.subarray(i*5, i*5+5), s5.size)); for (let k = 0; k < 5; k++) out[i*5+k] = r[k]; }
+    return out;
+  }
+  function recompute() { const h = effH(), wv = worldVerts(); last5 = (state.mode === 'shadow') ? shadow(wv) : slice(wv, h); last5.wv = wv; last5.h = h; }
+  function slice(wv, h) {
+    if (obj5.kind === 'glome5') { const r = s5.size, d = Math.abs(h); if (d >= r) return { kind: (r - d > -0.03) ? 'point' : 'empty', depth: h }; return { kind: 'ball4', rc: Math.sqrt(r*r - d*d), depth: h }; }
+    const ptOf = {}, v4 = [];
+    for (let ei = 0; ei < obj5.ecount; ei++) {
+      const e = obj5.edges[ei], i = e[0], j = e[1], sa = wv[i*5+4] - h, sb = wv[j*5+4] - h;
+      if ((sa >= 0) !== (sb >= 0)) { const t = sa / (sa - sb); ptOf[ei] = v4.length; v4.push([wv[i*5]+t*(wv[j*5]-wv[i*5]), wv[i*5+1]+t*(wv[j*5+1]-wv[i*5+1]), wv[i*5+2]+t*(wv[j*5+2]-wv[i*5+2]), wv[i*5+3]+t*(wv[j*5+3]-wv[i*5+3])]); }
+    }
+    if (v4.length < 2) return { kind: v4.length ? 'point' : 'empty', depth: h };
+    const edges4 = [];
+    for (const f of obj5.faces) { const hit = []; for (const ei of f) if (ei in ptOf) hit.push(ptOf[ei]); if (hit.length === 2) edges4.push(hit); }
+    return { kind: 'wire4', v4, edges4, depth: h };
+  }
+  function shadow(wv) {
+    if (obj5.kind === 'glome5') return { kind: 'ball4', rc: s5.size, depth: 0, shadow: true };
+    const v4 = []; for (let i = 0; i < 32; i++) v4.push([wv[i*5], wv[i*5+1], wv[i*5+2], wv[i*5+3]]);
+    return { kind: 'wire4', v4, edges4: obj5.edges, depth: 0, shadow: true };
+  }
+  function camProject(scale, cx, cy) {
+    const Rx = rot3X(s5.pitch), Ry = rot3Y(s5.yaw);
+    return (p) => { const a = Vec.matVec(Ry, Vec.matVec(Rx, new Float64Array([p[0], p[1], p[2]]), 3), 3); return [cx + a[0]*scale, cy - a[1]*scale, a[2]]; };
+  }
+  function hueOf(w1) { const t = Math.max(-1, Math.min(1, w1 / s5.size)); return state.colorblind ? (210 + t*110) : (t < 0 ? 210 + (-t)*60 : 45 - t*45); }
+  function enc5(w1, w2) {
+    const t2 = Math.max(-1, Math.min(1, w2 / s5.size));
+    let a = 0.3 + 0.65 * (0.5 + 0.5 * t2);
+    if (state.enc === 'time') a *= 0.55 + 0.45 * Math.sin(timePhase * 3 + t2 * 4);
+    return { color: `hsl(${hueOf(w1)} 88% 58%)`, alpha: Math.max(0.12, Math.min(1, a)), size: 1.5 + 3 * (0.5 + 0.5 * t2) };
+  }
+  function drawUpper() {
+    const ctx = X2, W = size2.w, H = size2.h; ctx.clearRect(0, 0, W, H);
+    const scale = Math.max(18, Math.min(W, H) / (2 * (s5.size + 1.5)) * view5.zoom), cx = W/2, cy = H/2, proj = camProject(scale, cx, cy);
+    if (obj5.kind === 'glome5') {
+      const pts = obj5.cloud5.map(u => { const w = R5(Vec.scale(new Float64Array(u), s5.size)); return { sp: proj(w), w1: w[3], w2: w[4] }; }).sort((a, b) => a.sp[2] - b.sp[2]);
+      ctx.save(); for (const p of pts) { const st = enc5(p.w1, p.w2); ctx.globalAlpha = st.alpha; ctx.fillStyle = st.color; ctx.beginPath(); ctx.arc(p.sp[0], p.sp[1], st.size, 0, 7); ctx.fill(); } ctx.restore(); return;
+    }
+    const wv = last5.wv, P = [];
+    for (let i = 0; i < 32; i++) { P.push(proj([wv[i*5], wv[i*5+1], wv[i*5+2]])); P[i].w1 = wv[i*5+3]; P[i].w2 = wv[i*5+4]; }
+    const es = obj5.edges.map((e) => ({ e, z: (P[e[0]][2] + P[e[1]][2]) / 2 })).sort((a, b) => a.z - b.z);
+    ctx.save(); ctx.lineCap = 'round';
+    for (const { e } of es) { const a = P[e[0]], b = P[e[1]], st = enc5((a.w1+b.w1)/2, (a.w2+b.w2)/2); ctx.strokeStyle = st.color; ctx.globalAlpha = st.alpha; ctx.lineWidth = 0.8 + st.size * 0.5; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+    ctx.restore();
+  }
+  function drawLower() {
+    const ctx = X1, W = size1.w, H = size1.h; ctx.clearRect(0, 0, W, H);
+    const scale = Math.max(16, Math.min(W, H) / (2 * (s5.size + 0.6)) * view5.zoom), cx = W/2, cy = H/2, proj = camProject(scale, cx, cy);
+    if (last5.kind === 'ball4') {
+      const pts = obj5.cloud4.map(u => { const p = [u[0]*last5.rc, u[1]*last5.rc, u[2]*last5.rc, u[3]*last5.rc]; return { sp: proj(p), w1: p[3] }; }).sort((a, b) => a.sp[2] - b.sp[2]);
+      ctx.save(); for (const p of pts) { ctx.globalAlpha = 0.85; ctx.fillStyle = `hsl(${hueOf(p.w1)} 88% 58%)`; ctx.beginPath(); ctx.arc(p.sp[0], p.sp[1], 2.6, 0, 7); ctx.fill(); } ctx.restore();
+    } else if (last5.kind === 'wire4') {
+      const P = last5.v4.map(p => { const sp = proj(p); sp.w1 = p[3]; return sp; });
+      const es = last5.edges4.map((e) => ({ e, z: (P[e[0]][2] + P[e[1]][2]) / 2 })).sort((a, b) => a.z - b.z);
+      ctx.save(); ctx.lineCap = 'round'; ctx.lineWidth = 2;
+      for (const { e } of es) { const a = P[e[0]], b = P[e[1]]; ctx.strokeStyle = last5.shadow ? getVar('--shadow-col') : `hsl(${hueOf((a.w1+b.w1)/2)} 88% 58%)`; ctx.globalAlpha = 0.9; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); } ctx.restore();
+    } else { ctx.fillStyle = getVar('--fg-dim'); ctx.font = '13px system-ui'; ctx.textAlign = 'center'; ctx.fillText('— the 4-space misses the object —', cx, cy); }
+  }
+  function updateStatus() {
+    const c = last5, names = { penteract: 'penteract', glome5: '5-sphere' };
+    let main;
+    if (state.mode === 'shadow') main = `Shadow — the ${names[s5.solid]}'s 4-D shadow (w₂ flattened away)`;
+    else if (c.kind === 'empty') main = 'Slice — no intersection (the 4-space misses the object)';
+    else if (c.kind === 'point') main = 'Slice — a single point (just grazing)';
+    else if (c.kind === 'ball4') main = `Slice — a sphere-in-4D (4-ball), radius ${c.rc.toFixed(2)}; 4-space ${Math.abs(c.depth).toFixed(2)} from centre along w₂`;
+    else main = `Slice — a 4-D polytope (${c.edges4.length} edges), w₁ shown as colour; 4-space at w₂ = ${(c.depth||0).toFixed(2)}`;
+    $('status-main').textContent = main;
+    if (state.enc !== 'none') { $('sw-depth').style.background = styleFor(c.depth||0, s5.size).color; $('depth-text').textContent = `w₂-depth ≈ ${(c.depth||0).toFixed(2)}`; }
+    announce(main);
+  }
+  function startOrbit(e, canvas) { orbit = { x: e.clientX, y: e.clientY, yaw: s5.yaw, pitch: s5.pitch }; try { canvas.setPointerCapture(e.pointerId); } catch (_) {} canvas.focus(); if (e.preventDefault) e.preventDefault(); }
+  function moveOrbit(e) { if (!orbit) return; s5.yaw = orbit.yaw + (e.clientX - orbit.x) * 0.01; s5.pitch = Math.max(-1.45, Math.min(1.45, orbit.pitch + (e.clientY - orbit.y) * 0.01)); markDirty(); saveDebounced(); updateHash(); }
+  function endOrbit() { orbit = null; }
+  function wheel(e) { view5.zoom = Math.max(0.4, Math.min(2.6, view5.zoom * (e.deltaY < 0 ? 1.08 : 0.93))); markDirty(); }
+  return { rebuild, recompute, drawUpper, drawLower, updateStatus,
+    c2Down: (e) => startOrbit(e, C2), c2Move: moveOrbit, c2Up: endOrbit,
+    c1Down: (e) => startOrbit(e, C1), c1Move: moveOrbit, c1Up: endOrbit, wheel };
+})();
+
+function applyRungUI() {
+  const r = currentRung;
+  $('tab-2to1').setAttribute('aria-selected', String(r === '2to1'));
+  $('tab-2to3').setAttribute('aria-selected', String(r === '2to3'));
+  $('tab-3to4').setAttribute('aria-selected', String(r === '3to4'));
+  $('tab-4to5').setAttribute('aria-selected', String(r === '4to5'));
+  $('controls-2to1').hidden = r !== '2to1';
+  $('controls-2to3').hidden = r !== '2to3';
+  $('controls-3to4').hidden = r !== '3to4';
+  $('controls-4to5').hidden = r !== '4to5';
+  const heads = {
+    '2to1': ['Flatland · 2D', 'Lineland · 1D', "Drag the shape and the line. The grey line is the 1D being's whole universe.", 'What a 1D being perceives — only length along its single axis.', 'Two-dimensional space. Drag the shape, its handles, or the line.', 'One-dimensional view. Drag the marker to move the being.'],
+    '2to3': ['Space · 3D', 'Flatland · 2D', 'Drag to orbit. The glowing plane is a flat being’s whole universe.', 'What a 2D being perceives — a flat cross-section (or shadow).', 'Three-dimensional space. Drag to orbit; tilt the solid and move the slice plane.', 'Two-dimensional cross-section. Drag to move the 2D probe point.'],
+    '3to4': ['Hyperspace · 4D', 'Space · 3D', 'The 4D object’s shadow, with the 4th axis (w) as colour. Drag to orbit; 4D-spin to tumble it.', 'What a 3D being perceives — a solid cross-section that morphs as the object passes through.', 'A 4D object shown as a rotating 3D shadow. Drag to orbit; spin it in 4D and move the slice space.', 'Three-dimensional cross-section. Drag to orbit the perceived solid.'],
+    '4to5': ['Hyperspace · 5D', 'Hyperspace · 4D', 'A 5D object: x,y,z are spatial, w₁ is colour, w₂ is brightness. Drag to orbit; spin in 5D.', 'What a 4D being perceives — a 4D cross-section (w₁ as colour) that morphs as the object passes through.', 'A 5D object: three axes spatial, the 4th shown as colour and the 5th as brightness. Drag to orbit; spin in 5D.', 'A four-dimensional cross-section, projected to 3D with its 4th axis as colour. Drag to orbit.'],
+  };
+  const h = heads[r];
+  $('upper-h').textContent = h[0]; $('lower-h').textContent = h[1];
+  $('upper-cap').textContent = h[2]; $('lower-cap').textContent = h[3];
+  C2.setAttribute('aria-label', h[4]); C1.setAttribute('aria-label', h[5]);
+  const titles = { '2to1': '2D ↔ 1D', '2to3': '2D ↔ 3D', '3to4': '3D ↔ 4D', '4to5': '4D ↔ 5D' };
+  document.title = 'Dimensional Ladder — ' + titles[r];
+}
+function switchRung(r) {
+  if (r === currentRung) return;
+  if (sweep.active) toggleSweep();
+  currentRung = r;
+  applyRungUI(); applyModeUI(); syncControls(); resizeAll();
+  markDirty(); saveDebounced(); updateHash(); pushHistory();
+  announce(r === '2to3' ? 'Switched to the 2D and 3D rung.' : 'Switched to the 2D and 1D rung.');
+}
+
+/* ============================================================
+   J12 · BOOT — load state, wire controls, RAF loop
+   ============================================================ */
+function wireControls() {
+  $('shape').addEventListener('change', (e) => { state.shape = e.target.value; rebuildObject(); markDirty(); saveDebounced(); updateHash(); pushHistory(); });
+  const liveRange = (id, fn) => { const el = $(id); el.addEventListener('input', (e) => { fn(parseFloat(e.target.value)); syncControls(); markDirty(); saveDebounced(); updateHash(); }); el.addEventListener('change', pushHistory); };
+  liveRange('size', (v) => state.size = v);
+  liveRange('rot', (v) => state.angle = v * Math.PI / 180);
+  liveRange('lang', (v) => state.line.angle = v * Math.PI / 180);
+  liveRange('loff', (v) => { const nrm = new Float64Array([-Math.sin(state.line.angle), Math.cos(state.line.angle)]); state.line.px = v * nrm[0]; state.line.py = v * nrm[1]; });
+  // rung 2↔3 controls
+  $('tab-2to1').addEventListener('click', () => switchRung('2to1'));
+  $('tab-2to3').addEventListener('click', () => switchRung('2to3'));
+  $('solid').addEventListener('change', (e) => { s3.solid = e.target.value; Rung23.rebuild(); markDirty(); saveDebounced(); updateHash(); pushHistory(); });
+  liveRange('size3', (v) => s3.size = v);
+  liveRange('rotx', (v) => s3.rotX = v * Math.PI / 180);
+  liveRange('roty', (v) => s3.rotY = v * Math.PI / 180);
+  liveRange('height', (v) => s3.height = v);
+  $('btn-view-reset').addEventListener('click', () => { s3.yaw = -0.62; s3.pitch = 0.46; markDirty(); saveDebounced(); updateHash(); toast('View angle reset'); });
+  // rung 3↔4 controls
+  $('tab-3to4').addEventListener('click', () => switchRung('3to4'));
+  $('solid4').addEventListener('change', (e) => { s4.solid = e.target.value; Rung34.rebuild(); markDirty(); saveDebounced(); updateHash(); pushHistory(); });
+  liveRange('size4', (v) => s4.size = v);
+  liveRange('rotxw', (v) => s4.rotXW = v * Math.PI / 180);
+  liveRange('rotyw', (v) => s4.rotYW = v * Math.PI / 180);
+  liveRange('height4', (v) => s4.height = v);
+  $('btn-view-reset4').addEventListener('click', () => { s4.yaw = -0.6; s4.pitch = 0.45; markDirty(); saveDebounced(); updateHash(); toast('View angle reset'); });
+  // rung 4↔5 controls
+  $('tab-4to5').addEventListener('click', () => switchRung('4to5'));
+  $('solid5').addEventListener('change', (e) => { s5.solid = e.target.value; Rung45.rebuild(); markDirty(); saveDebounced(); updateHash(); pushHistory(); });
+  liveRange('size5', (v) => s5.size = v);
+  liveRange('rota', (v) => s5.rotA = v * Math.PI / 180);
+  liveRange('rotb', (v) => s5.rotB = v * Math.PI / 180);
+  liveRange('rotc', (v) => s5.rotC = v * Math.PI / 180);
+  liveRange('height5', (v) => s5.height = v);
+  $('btn-view-reset5').addEventListener('click', () => { s5.yaw = -0.6; s5.pitch = 0.45; markDirty(); saveDebounced(); updateHash(); toast('View angle reset'); });
+  $('speed').addEventListener('input', (e) => { state.speed = parseFloat(e.target.value); $('speed-val').textContent = state.speed.toFixed(1) + '×'; });
+  $('enc').addEventListener('change', (e) => setEnc(e.target.value));
+  $('mode-slice').addEventListener('click', () => setMode('slice'));
+  $('mode-shadow').addEventListener('click', () => setMode('shadow'));
+  $('btn-play').addEventListener('click', toggleSweep);
+  $('btn-undo').addEventListener('click', undo); $('btn-redo').addEventListener('click', redo);
+  $('btn-share').addEventListener('click', share);
+  $('btn-theme').addEventListener('click', cycleTheme);
+  $('btn-help').addEventListener('click', () => openDrawer('help'));
+  $('drawer-close').addEventListener('click', closeDrawer);
+  $('scrim').addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeDrawer(); closeOnboard(); } });
+
+  // two-click reset
+  let resetArmed = 0;
+  $('btn-reset').addEventListener('click', () => {
+    if (Date.now() - resetArmed < 2500) { resetAll(); $('btn-reset').textContent = 'Reset'; }
+    else { resetArmed = Date.now(); $('btn-reset').textContent = 'Confirm?'; setTimeout(() => { $('btn-reset').textContent = 'Reset'; }, 2500); }
+  });
+}
+function resetAll() {
+  if (sweep.active) toggleSweep();
+  if (currentRung === '2to3') { Object.assign(s3, DEFAULTS3()); s3.cursor = [0, 0]; Rung23.rebuild(); }
+  else if (currentRung === '3to4') { Object.assign(s4, DEFAULTS4()); Rung34.rebuild(); }
+  else if (currentRung === '4to5') { Object.assign(s5, DEFAULTS5()); Rung45.rebuild(); }
+  else { const d = DEFAULTS(); state.shape = d.shape; state.pos = d.pos; state.angle = d.angle; state.size = d.size; state.line = d.line; state.cursor1D = d.cursor1D; rebuildObject(); }
+  setMode('slice'); setEnc('none'); syncControls(); markDirty(); saveNow(); updateHash(); pushHistory(); toast('Reset to defaults');
+}
+
+function share() {
+  updateHash();
+  const url = location.href;
+  (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => toast('Link copied to clipboard ✓')).catch(() => toast('Copy this URL from the address bar'));
+}
+function cycleTheme() {
+  const cur = document.documentElement.getAttribute('data-theme');
+  const next = cur === 'auto' ? 'light' : cur === 'light' ? 'dark' : 'auto';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('dimsim:theme', next); } catch (e) {}
+  toast('Theme: ' + next); markDirty();
+}
+
+function closeOnboard() { $('onboard').classList.remove('open'); try { localStorage.setItem(ONBOARD_KEY, '1'); } catch (e) {} }
+
+function resizeAll() { fitCanvas(C2, size2); fitCanvas(C1, size1); recomputePPU(); markDirty(); }
+
+function renderFrame() {
+  const R = activeModule();
+  if (R) { R.recompute(); R.drawUpper(); R.drawLower(); R.updateStatus(); }
+  else { recompute(); drawUpper(); drawLower(); updateStatus(); }
+}
+function loop(ts) {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  timePhase = ts / 1000;
+  if (sweep.active) {
+    sweep.t += (state.speed * (reduce ? 0.6 : 1)) * 0.016;
+    if (currentRung === '2to3') {
+      const amp = s3.size + 0.9;
+      sweep.h3 = reduce ? amp * Math.round(Math.sin(sweep.t * 1.1) * 4) / 4 : amp * Math.sin(sweep.t * 1.1);
+    } else if (currentRung === '3to4') {
+      const amp = s4.size + 0.9;
+      sweep.h4 = reduce ? amp * Math.round(Math.sin(sweep.t * 1.0) * 4) / 4 : amp * Math.sin(sweep.t * 1.0);
+    } else if (currentRung === '4to5') {
+      const amp = s5.size + 0.8;
+      sweep.h5 = reduce ? amp * Math.round(Math.sin(sweep.t * 0.95) * 4) / 4 : amp * Math.sin(sweep.t * 0.95);
+    } else {
+      const amp = state.size * 1.5 + 1;
+      if (state.mode === 'slice') sweep.offsetDelta = reduce ? amp * Math.round(Math.sin(sweep.t * 1.3) * 4) / 4 : amp * Math.sin(sweep.t * 1.3);
+      else sweep.angleDelta = sweep.t * 0.9;
+    }
+    dirty = true;
+  } else if (state.enc === 'time') dirty = true;
+  if (dirty) { renderFrame(); dirty = false; }
+  requestAnimationFrame(loop);
+}
+
+function boot() {
+  // theme
+  try { const t = localStorage.getItem('dimsim:theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+  wireControls();
+  // load: hash beats localStorage beats defaults
+  const hashState = decodeHash(), stored = loadStored();
+  const init = hashState || stored;
+  if (init) { try { applyState(init); } catch (e) { applyRungUI(); applyModeUI(); applyEncUI(); syncControls(); } }
+  else { applyRungUI(); applyModeUI(); applyEncUI(); syncControls(); }
+  history.length = 0; histIdx = -1; suppressHistory = true; pushHistory(); suppressHistory = false; updateHistButtons();
+
+  resizeAll();
+  if ('ResizeObserver' in window) { const ro = new ResizeObserver(resizeAll); ro.observe(C2); ro.observe(C1); }
+  window.addEventListener('resize', resizeAll);
+  window.addEventListener('beforeunload', saveNow);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveNow(); });
+
+  // onboarding (first run, or when launched without saved state)
+  let onboarded = false; try { onboarded = !!localStorage.getItem(ONBOARD_KEY); } catch (e) {}
+  if (!onboarded) $('onboard').classList.add('open');
+  $('ob-go').addEventListener('click', closeOnboard);
+  $('ob-tour').addEventListener('click', () => {
+    closeOnboard();
+    if (sweep.active) toggleSweep();
+    if (currentRung !== '2to1') switchRung('2to1');
+    state.shape = 'circle'; state.pos = [0, 0]; state.size = 2.4; state.line = { px: 0, py: 0, angle: 0 }; state.cursor1D = 0;
+    rebuildObject(); setMode('slice'); setEnc('hue'); syncControls();
+    if (!sweep.active) toggleSweep();
+  });
+
+  // Paint the first frame synchronously — RAF is paused while the tab is hidden.
+  renderFrame(); dirty = false;
+  requestAnimationFrame(loop);
+}
+boot();
+</script>
+</body>
+</html>
