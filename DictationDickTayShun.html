@@ -359,6 +359,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
   flex-direction: column;
   justify-content: center;
   padding: var(--space-4);
+  margin: 0 auto;
 }
 #intro h2 {
   font-size: 1.2rem;
@@ -447,6 +448,117 @@ footer {
   text-align: center;
   padding: var(--space-6);
 }
+
+/* --- TAB NAV --- */
+.tab-nav {
+  display: flex;
+  gap: var(--space-4);
+  justify-content: center;
+  padding: var(--space-1) 0;
+  max-width: 640px;
+  width: 100%;
+  flex-shrink: 0;
+}
+.tab-nav button {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  color: var(--text-dim);
+  min-height: 28px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab-nav button:hover { color: var(--text); }
+.tab-nav button.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* --- TAB PANELS --- */
+.tab-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  max-width: 640px;
+  width: 100%;
+}
+
+/* --- SCRAMBLER --- */
+#tab-scrambler {
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+.scrambler-desc {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  line-height: 1.5;
+}
+.scrambler-input {
+  font-family: var(--font);
+  font-size: 0.95rem;
+  background: var(--bg-input);
+  color: var(--text);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: var(--space-3);
+  resize: none;
+  height: 120px;
+  flex-shrink: 0;
+  transition: border-color 0.15s;
+  line-height: 1.6;
+}
+.scrambler-input:focus { outline: none; border-color: var(--accent); }
+.scrambler-input::placeholder { color: var(--text-dim); opacity: 0.6; }
+.scrambler-controls {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.scrambler-controls .stat-line {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-left: auto;
+}
+.scrambler-output {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  line-height: 1.8;
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+.scrambler-output .swapped {
+  color: var(--accent);
+  font-weight: 600;
+  cursor: help;
+}
+.scrambler-empty {
+  color: var(--text-dim);
+  text-align: center;
+  font-size: 0.85rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+.scrambler-empty .sub {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  max-width: 300px;
+}
 </style>
 </head>
 <body>
@@ -455,6 +567,13 @@ footer {
   <h1>Diction Dictation</h1>
   <p>Read the homophoned text. Listen to what it really says. Type the original.</p>
 </header>
+
+<nav class="tab-nav" role="tablist" aria-label="App sections">
+  <button role="tab" data-tab="game" class="active" aria-selected="true" aria-controls="tab-game">Dictation</button>
+  <button role="tab" data-tab="scrambler" aria-selected="false" aria-controls="tab-scrambler">Scrambler</button>
+</nav>
+
+<div id="tab-game" class="tab-panel" role="tabpanel">
 
 <!-- INTRO SCREEN -->
 <div id="intro">
@@ -508,6 +627,26 @@ footer {
   </div>
 
   <div id="resultArea" class="hidden"></div>
+</div>
+
+</div><!-- /tab-game -->
+
+<div id="tab-scrambler" class="tab-panel hidden" role="tabpanel">
+  <p class="scrambler-desc">
+    Paste any text and watch every homophone get swapped for an evil twin.
+  </p>
+  <textarea class="scrambler-input" id="scramblerInput" placeholder="Paste or type any text here..." spellcheck="false" aria-label="Text to scramble"></textarea>
+  <div class="scrambler-controls">
+    <button class="btn-speak" id="scrambleBtn" style="flex:none;">Scramble</button>
+    <button class="btn-secondary" id="copyBtn" style="display:none;">Copy</button>
+    <button class="btn-skip" id="clearScrambler" style="display:none;">Clear</button>
+    <span class="stat-line" id="scrambleStats"></span>
+  </div>
+  <div class="scrambler-output" id="scramblerOutput" style="display:none;"></div>
+  <div class="scrambler-empty" id="scramblerEmpty">
+    Type or paste some text above and hit Scramble
+    <span class="sub">"I would not know where to find you" becomes "Eye wood knot no wear too fined ewe"</span>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -901,6 +1040,279 @@ if ('speechSynthesis' in window) {
   speechSynthesis.getVoices();
   speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
 }
+
+// --- TAB NAVIGATION ---
+document.querySelectorAll('.tab-nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    document.querySelectorAll('.tab-nav button').forEach(b => {
+      b.classList.remove('active');
+      b.setAttribute('aria-selected', 'false');
+    });
+    btn.classList.add('active');
+    btn.setAttribute('aria-selected', 'true');
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+    document.getElementById('tab-' + btn.dataset.tab).classList.remove('hidden');
+  });
+});
+
+// --- HOMOPHONE SCRAMBLER ---
+const HOMOPHONE_GROUPS = [
+  ["i","eye"],
+  ["air","heir"],
+  ["aisle","i'll","isle"],
+  ["ate","eight"],
+  ["allowed","aloud"],
+  ["oar","ore"],
+  ["band","banned"],
+  ["bare","bear"],
+  ["base","bass"],
+  ["be","bee"],
+  ["bean","been"],
+  ["berry","bury"],
+  ["buy","by","bye"],
+  ["billed","build"],
+  ["blew","blue"],
+  ["board","bored"],
+  ["bold","bowled"],
+  ["brake","break"],
+  ["bread","bred"],
+  ["brews","bruise"],
+  ["browse","brows"],
+  ["carat","carrot"],
+  ["caught","court"],
+  ["cell","sell"],
+  ["cent","scent","sent"],
+  ["cereal","serial"],
+  ["chews","choose"],
+  ["chili","chilly"],
+  ["chord","cord"],
+  ["chute","shoot"],
+  ["cite","sight","site"],
+  ["coarse","course"],
+  ["colonel","kernel"],
+  ["cymbal","symbol"],
+  ["dear","deer"],
+  ["dew","do","due"],
+  ["discussed","disgust"],
+  ["ewe","you"],
+  ["feat","feet"],
+  ["find","fined"],
+  ["fir","fur"],
+  ["flaw","floor"],
+  ["flea","flee"],
+  ["flew","flu"],
+  ["flour","flower"],
+  ["for","four","fore"],
+  ["foul","fowl"],
+  ["genes","jeans"],
+  ["grate","great"],
+  ["groan","grown"],
+  ["guessed","guest"],
+  ["he'll","heal","heel"],
+  ["hear","here"],
+  ["higher","hire"],
+  ["him","hymn"],
+  ["hoarse","horse"],
+  ["hole","whole"],
+  ["hour","our"],
+  ["its","it's"],
+  ["knead","need"],
+  ["knew","new"],
+  ["knight","night"],
+  ["knot","not"],
+  ["know","no"],
+  ["laps","lapse"],
+  ["lead","led"],
+  ["least","leased"],
+  ["loan","lone"],
+  ["made","maid"],
+  ["mail","male"],
+  ["maize","maze"],
+  ["meat","meet"],
+  ["mind","mined"],
+  ["missed","mist"],
+  ["moan","mown"],
+  ["morning","mourning"],
+  ["none","nun"],
+  ["one","won"],
+  ["overseas","oversees"],
+  ["paced","paste"],
+  ["pain","pane"],
+  ["pair","pear"],
+  ["passed","past"],
+  ["patience","patients"],
+  ["pause","paws"],
+  ["peace","piece"],
+  ["peak","peek"],
+  ["pi","pie"],
+  ["plain","plane"],
+  ["pole","poll"],
+  ["poor","pour"],
+  ["pray","prey"],
+  ["presence","presents"],
+  ["profit","prophet"],
+  ["rain","reign"],
+  ["raise","rays"],
+  ["rap","wrap"],
+  ["raw","roar"],
+  ["read","red"],
+  ["real","reel"],
+  ["right","write","rite"],
+  ["road","rode","rowed"],
+  ["role","roll"],
+  ["rose","rows"],
+  ["sail","sale"],
+  ["sauce","source"],
+  ["saw","soar","sore"],
+  ["scene","seen"],
+  ["sea","see"],
+  ["seam","seem"],
+  ["seas","sees","seize"],
+  ["sew","sow"],
+  ["sighed","side"],
+  ["sighs","size"],
+  ["soared","sword"],
+  ["some","sum"],
+  ["sort","sought"],
+  ["stair","stare"],
+  ["stake","steak"],
+  ["stationary","stationery"],
+  ["steal","steel"],
+  ["suite","sweet"],
+  ["sundae","sunday"],
+  ["tea","tee"],
+  ["tense","tents"],
+  ["their","there","they're"],
+  ["threw","through"],
+  ["throne","thrown"],
+  ["thyme","time"],
+  ["tide","tied"],
+  ["to","too","two"],
+  ["toe","tow"],
+  ["wade","weighed"],
+  ["waist","waste"],
+  ["wait","weight"],
+  ["waive","wave"],
+  ["war","wore"],
+  ["warn","worn"],
+  ["way","weigh"],
+  ["we'd","weed"],
+  ["we'll","wheel"],
+  ["we've","weave"],
+  ["weak","week"],
+  ["wear","where"],
+  ["weather","whether"],
+  ["which","witch"],
+  ["whine","wine"],
+  ["whose","who's"],
+  ["wood","would"],
+  ["your","you're","yore"]
+];
+
+// Build lookup: word → array of alternative variants
+const HOMOPHONE_MAP = {};
+HOMOPHONE_GROUPS.forEach(group => {
+  group.forEach(word => {
+    HOMOPHONE_MAP[word] = group.filter(w => w !== word);
+  });
+});
+
+function applyCase(original, replacement) {
+  if (original.length > 1 && original === original.toUpperCase()) return replacement.toUpperCase();
+  if (original[0] === original[0].toUpperCase()) return replacement[0].toUpperCase() + replacement.slice(1);
+  return replacement;
+}
+
+function scrambleText(text) {
+  const tokens = text.split(/([a-zA-Z'’]+)/);
+  let swapCount = 0;
+  let wordCount = 0;
+
+  const result = tokens.map((token, idx) => {
+    if (idx % 2 === 0) return { text: token, isSwap: false };
+    wordCount++;
+    const normalized = token.toLowerCase().replace(/[’‘]/g, "'");
+    const variants = HOMOPHONE_MAP[normalized];
+    if (variants && variants.length > 0) {
+      const pick = variants[Math.floor(Math.random() * variants.length)];
+      swapCount++;
+      return { text: applyCase(token, pick), isSwap: true, original: token };
+    }
+    return { text: token, isSwap: false };
+  });
+
+  return { tokens: result, swapCount, wordCount };
+}
+
+// --- SCRAMBLER UI ---
+const scrambleBtn = document.getElementById('scrambleBtn');
+const copyBtn = document.getElementById('copyBtn');
+const clearScramblerBtn = document.getElementById('clearScrambler');
+const scramblerInput = document.getElementById('scramblerInput');
+const scramblerOutput = document.getElementById('scramblerOutput');
+const scramblerEmpty = document.getElementById('scramblerEmpty');
+const scrambleStats = document.getElementById('scrambleStats');
+
+scrambleBtn.addEventListener('click', () => {
+  const text = scramblerInput.value.trim();
+  if (!text) { showToast('Paste some text first'); scramblerInput.focus(); return; }
+
+  const { tokens, swapCount, wordCount } = scrambleText(text);
+  if (swapCount === 0) { showToast('No homophones found — try different text'); return; }
+
+  scramblerOutput.innerHTML = tokens.map(t => {
+    if (t.isSwap) return '<span class="swapped" title="was: ' + esc(t.original) + '">' + esc(t.text) + '</span>';
+    return esc(t.text);
+  }).join('');
+
+  scramblerOutput.style.display = '';
+  scramblerEmpty.style.display = 'none';
+  copyBtn.style.display = '';
+  clearScramblerBtn.style.display = '';
+  scrambleStats.textContent = swapCount + ' of ' + wordCount + ' words scrambled';
+});
+
+copyBtn.addEventListener('click', () => {
+  const text = scramblerOutput.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('Copied to clipboard');
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('Copied');
+  });
+});
+
+clearScramblerBtn.addEventListener('click', () => {
+  scramblerInput.value = '';
+  scramblerOutput.innerHTML = '';
+  scramblerOutput.style.display = 'none';
+  scramblerEmpty.style.display = '';
+  copyBtn.style.display = 'none';
+  clearScramblerBtn.style.display = 'none';
+  scrambleStats.textContent = '';
+  scramblerInput.focus();
+});
+
+// EASTER EGG: Ctrl+Shift+H in scrambler scrambles continuously for 2 seconds
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.shiftKey && e.key === 'H' && !document.getElementById('tab-scrambler').classList.contains('hidden')) {
+    const text = scramblerInput.value.trim();
+    if (!text) return;
+    let count = 0;
+    const id = setInterval(() => {
+      scrambleBtn.click();
+      if (++count >= 8) clearInterval(id);
+    }, 250);
+  }
+});
 </script>
 </body>
 </html>
