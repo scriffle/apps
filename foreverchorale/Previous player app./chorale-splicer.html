@@ -1,0 +1,2123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Chorale Splicer</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧬</text></svg>">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    :root {
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      
+      --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem;
+      --space-4: 1rem; --space-5: 1.5rem; --space-6: 2rem;
+      
+      --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+      --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+      
+      /* Dark theme - feels like a labyrinth */
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a24;
+      --bg-card: #16161f;
+      --text-primary: #e8e8ed;
+      --text-secondary: #9494a8;
+      --text-muted: #5c5c70;
+      --border: #2a2a3a;
+      --accent: #7c5cff;
+      --accent-hover: #9b7fff;
+      --accent-glow: rgba(124, 92, 255, 0.3);
+      --success: #4ade80;
+      --warning: #fbbf24;
+      --error: #f87171;
+      --splice-active: #ff6b9d;
+      --shadow: 0 4px 20px rgba(0,0,0,0.4);
+      --shadow-glow: 0 0 30px var(--accent-glow);
+    }
+    
+    [data-theme="light"] {
+      --bg-primary: #f5f5f7;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #e8e8ed;
+      --bg-card: #ffffff;
+      --text-primary: #1a1a24;
+      --text-secondary: #5c5c70;
+      --text-muted: #9494a8;
+      --border: #d4d4dc;
+      --accent: #6b4fd6;
+      --accent-hover: #5a3fc5;
+      --accent-glow: rgba(107, 79, 214, 0.2);
+      --splice-active: #e91e7c;
+      --shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+    
+    html { font-size: 16px; }
+    
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      transition: background-color 0.3s var(--ease-out);
+    }
+    
+    /* Header */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-2) var(--space-4);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-secondary);
+      gap: var(--space-3);
+    }
+    
+    .logo {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .logo-icon {
+      font-size: 1.25rem;
+    }
+    .logo-subtitle {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+    
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    
+    .load-status {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+    .load-status.loading {
+      color: var(--accent);
+    }
+    .load-status.ready {
+      color: var(--success);
+    }
+    
+    /* Buttons */
+    button {
+      font-family: var(--font-sans);
+      font-size: 0.75rem;
+      padding: var(--space-1) var(--space-2);
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.15s var(--ease-out);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-1);
+      min-height: 28px;
+    }
+    button:hover:not(:disabled) { 
+      background: var(--border); 
+      border-color: var(--text-muted); 
+    }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+    .btn-primary:hover:not(:disabled) { 
+      background: var(--accent-hover); 
+      box-shadow: var(--shadow-glow);
+    }
+    
+    .btn-icon { 
+      padding: var(--space-1); 
+      min-width: 28px;
+    }
+    
+    /* Main layout */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: var(--space-3);
+      gap: var(--space-3);
+      max-width: 1600px;
+      width: 100%;
+      margin: 0 auto;
+      overflow: hidden;
+    }
+    
+    /* Loading screen */
+    .loading-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-4);
+      padding: var(--space-6);
+      text-align: center;
+    }
+    .loading-screen.hidden { display: none; }
+    
+    .loading-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .loading-subtitle {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+    
+    .progress-bar {
+      width: 300px;
+      max-width: 100%;
+      height: 6px;
+      background: var(--bg-tertiary);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--splice-active));
+      border-radius: 3px;
+      transition: width 0.3s var(--ease-out);
+      width: 0%;
+    }
+    
+    .loading-stats {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    
+    /* Player area */
+    .player-area {
+      display: none;
+      flex-direction: column;
+      gap: var(--space-3);
+      flex: 1;
+      min-height: 0;
+    }
+    .player-area.visible { display: flex; }
+    
+    /* Path display */
+    .path-display {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: var(--space-2) var(--space-3);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    
+    .path-label {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      flex-shrink: 0;
+    }
+    
+    .path-items {
+      display: flex;
+      align-items: center;
+      gap: var(--space-1);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+    }
+    
+    .path-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-1);
+      padding: 2px 6px;
+      background: var(--bg-tertiary);
+      border-radius: 4px;
+      color: var(--text-secondary);
+    }
+    .path-item.current {
+      background: var(--accent);
+      color: white;
+    }
+    .path-item .chorale-num {
+      font-weight: 600;
+    }
+    .path-item .measure {
+      opacity: 0.7;
+    }
+    
+    .path-arrow {
+      color: var(--text-muted);
+      font-size: 0.625rem;
+    }
+    
+    /* Current info bar */
+    .info-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: var(--space-2) var(--space-3);
+      flex-wrap: wrap;
+    }
+    
+    .current-chorale {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .chorale-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .chorale-meta {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+    
+    .position-display {
+      font-family: var(--font-mono);
+      font-size: 1.1rem;
+      background: var(--bg-primary);
+      padding: var(--space-1) var(--space-3);
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .position-display .measure { color: var(--accent); font-weight: 600; }
+    .position-display .beat { color: var(--text-secondary); }
+    .position-display .fermata { color: var(--warning); }
+    .position-display .splice-point { 
+      color: var(--splice-active); 
+      font-weight: 700;
+      animation: pulse 1s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    /* Transport */
+    .transport {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    
+    .transport-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      font-size: 1rem;
+      padding: 0;
+    }
+    
+    /* Main content area */
+    .content-area {
+      display: flex;
+      gap: var(--space-3);
+      flex: 1;
+      min-height: 0;
+    }
+    
+    /* Piano roll */
+    .piano-roll-panel {
+      flex: 1;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: var(--space-2);
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    
+    .piano-roll-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--space-2);
+      padding-bottom: var(--space-2);
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .panel-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    
+    .piano-roll-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      border-radius: 4px;
+      background: var(--bg-primary);
+      min-height: 200px;
+    }
+    
+    #pianoRollCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    
+    /* Voices display */
+    .voices-panel {
+      width: 120px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+    
+    .voice-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: var(--space-2);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    
+    .voice-label {
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .voice-note {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .voice-note.active { color: var(--accent); }
+    .voice-note.held { color: var(--text-secondary); }
+    .voice-note.rest { color: var(--text-muted); }
+    
+    .analysis-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: var(--space-2);
+      margin-top: auto;
+    }
+    .analysis-roman {
+      font-family: var(--font-mono);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-align: center;
+    }
+    
+    /* Splice palette */
+    .splice-panel {
+      width: 320px;
+      flex-shrink: 0;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: var(--space-3);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      overflow: hidden;
+    }
+    
+    .splice-panel.inactive {
+      opacity: 0.5;
+    }
+    
+    .splice-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: var(--space-2);
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .splice-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .splice-title .icon { font-size: 1rem; }
+    
+    .splice-status {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+    .splice-status.active {
+      color: var(--splice-active);
+      font-weight: 600;
+    }
+    
+    .approach-chord {
+      background: var(--bg-tertiary);
+      border-radius: 4px;
+      padding: var(--space-2);
+      text-align: center;
+    }
+    .approach-label {
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .approach-roman {
+      font-family: var(--font-mono);
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--warning);
+    }
+    
+    .options-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: var(--space-2);
+    }
+    .options-label {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    .options-count {
+      font-size: 0.65rem;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+    }
+    
+    .options-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+      padding-right: var(--space-1);
+    }
+    
+    .option-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: var(--space-2);
+      cursor: pointer;
+      transition: all 0.15s var(--ease-out);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .option-card:hover {
+      border-color: var(--accent);
+      background: var(--bg-tertiary);
+    }
+    .option-card.auditioning {
+      border-color: var(--splice-active);
+      box-shadow: 0 0 10px rgba(255, 107, 157, 0.3);
+    }
+    
+    .option-resolution {
+      font-family: var(--font-mono);
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--success);
+      min-width: 40px;
+    }
+    
+    .option-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .option-chorale {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .option-details {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+    
+    .option-actions {
+      display: flex;
+      gap: var(--space-1);
+    }
+    .option-btn {
+      padding: 4px 8px;
+      font-size: 0.65rem;
+      min-height: 24px;
+    }
+    .option-btn.audition {
+      background: var(--bg-tertiary);
+    }
+    .option-btn.select {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+    
+    .no-options {
+      text-align: center;
+      padding: var(--space-4);
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+    
+    .waiting-message {
+      text-align: center;
+      padding: var(--space-4);
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+    }
+    .waiting-message .hint {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: var(--space-2);
+    }
+    
+    /* Keyboard shortcuts */
+    .shortcuts {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-4);
+      padding: var(--space-2);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+    kbd {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      background: var(--bg-tertiary);
+      padding: 2px 6px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+    }
+    
+    /* Toast */
+    .toast-container {
+      position: fixed;
+      bottom: var(--space-4);
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      pointer-events: none;
+    }
+    .toast {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      padding: var(--space-2) var(--space-4);
+      border-radius: 6px;
+      box-shadow: var(--shadow);
+      font-size: 0.8rem;
+      animation: toast-in 0.3s var(--ease-spring);
+      pointer-events: auto;
+    }
+    .toast.success { border-left: 3px solid var(--success); }
+    .toast.error { border-left: 3px solid var(--error); }
+    .toast.splice { border-left: 3px solid var(--splice-active); }
+    
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-primary); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+    
+    /* Responsive */
+    @media (max-width: 900px) {
+      .content-area { flex-direction: column; }
+      .splice-panel { width: 100%; max-height: 300px; }
+      .voices-panel { flex-direction: row; width: 100%; }
+      .voice-card { flex: 1; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <span class="logo-icon">🧬</span>
+      <div>
+        <div>Chorale Splicer</div>
+        <div class="logo-subtitle">Infinite Bach Labyrinth</div>
+      </div>
+    </div>
+    <div class="header-controls">
+      <span class="load-status" id="loadStatus">Initializing...</span>
+      <button id="themeBtn" class="btn-icon" title="Toggle theme">🌙</button>
+    </div>
+  </header>
+  
+  <main>
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen">
+      <div class="loading-title">Loading Bach Chorales</div>
+      <div class="loading-subtitle">Indexing fermata cadences for splicing...</div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="loading-stats" id="loadingStats">0 / 370 chorales</div>
+    </div>
+    
+    <!-- Player Area -->
+    <div class="player-area" id="playerArea">
+      <!-- Path Display -->
+      <div class="path-display">
+        <span class="path-label">Path:</span>
+        <div class="path-items" id="pathItems">
+          <span class="path-item current">
+            <span class="chorale-num">—</span>
+          </span>
+        </div>
+      </div>
+      
+      <!-- Info Bar -->
+      <div class="info-bar">
+        <div class="current-chorale">
+          <div class="chorale-title" id="choraleTitle">Select a starting chorale</div>
+          <div class="chorale-meta" id="choraleMeta">—</div>
+        </div>
+        
+        <div class="transport">
+          <button class="transport-btn" id="toStartBtn" title="Restart (Home)">⏮</button>
+          <button class="transport-btn" id="prevBtn" title="Previous (←)">⏪</button>
+          <button class="transport-btn" id="nextBtn" title="Next (→)">⏩</button>
+          <button class="transport-btn" id="randomStartBtn" title="Random start (R)" class="btn-primary">🎲</button>
+        </div>
+        
+        <div class="position-display">
+          <span class="measure" id="measureNum">1</span>:<span class="beat" id="beatNum">1</span>
+          <span class="fermata" id="fermataIndicator" style="display:none;">𝄐</span>
+          <span class="splice-point" id="spliceIndicator" style="display:none;">⚡SPLICE</span>
+        </div>
+      </div>
+      
+      <!-- Main Content -->
+      <div class="content-area">
+        <!-- Voices Panel -->
+        <div class="voices-panel">
+          <div class="voice-card">
+            <div class="voice-label">Soprano</div>
+            <div class="voice-note" id="voiceSoprano">—</div>
+          </div>
+          <div class="voice-card">
+            <div class="voice-label">Alto</div>
+            <div class="voice-note" id="voiceAlto">—</div>
+          </div>
+          <div class="voice-card">
+            <div class="voice-label">Tenor</div>
+            <div class="voice-note" id="voiceTenor">—</div>
+          </div>
+          <div class="voice-card">
+            <div class="voice-label">Bass</div>
+            <div class="voice-note" id="voiceBass">—</div>
+          </div>
+          <div class="analysis-card">
+            <div class="voice-label" style="text-align:center;">Analysis</div>
+            <div class="analysis-roman" id="analysisRoman">—</div>
+          </div>
+        </div>
+        
+        <!-- Piano Roll -->
+        <div class="piano-roll-panel">
+          <div class="piano-roll-header">
+            <span class="panel-title">Piano Roll</span>
+            <div style="display:flex; gap:var(--space-2); align-items:center;">
+              <label style="font-size:0.65rem; color:var(--text-muted);">Width</label>
+              <input type="range" id="beatWidthSlider" min="30" max="120" value="60" style="width:80px;">
+            </div>
+          </div>
+          <div class="piano-roll-container">
+            <canvas id="pianoRollCanvas"></canvas>
+          </div>
+        </div>
+        
+        <!-- Splice Panel -->
+        <div class="splice-panel" id="splicePanel">
+          <div class="splice-header">
+            <div class="splice-title">
+              <span class="icon">🧬</span>
+              Splice Options
+            </div>
+            <div class="splice-status" id="spliceStatus">Waiting...</div>
+          </div>
+          
+          <div class="approach-chord" id="approachChord" style="display:none;">
+            <div class="approach-label">Approach Chord</div>
+            <div class="approach-roman" id="approachRoman">V</div>
+          </div>
+          
+          <div class="options-header" id="optionsHeader" style="display:none;">
+            <span class="options-label">Resolutions</span>
+            <span class="options-count" id="optionsCount">0 options</span>
+          </div>
+          
+          <div class="options-list" id="optionsList">
+            <div class="waiting-message">
+              <div>Navigate to a fermata approach chord</div>
+              <div class="hint">Press → to advance, options appear at cadences</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Shortcuts -->
+      <div class="shortcuts">
+        <span><kbd>←</kbd><kbd>→</kbd> Navigate</span>
+        <span><kbd>Space</kbd> Rewind</span>
+        <span><kbd>1-9</kbd> Select option</span>
+        <span><kbd>R</kbd> Random start</span>
+      </div>
+    </div>
+  </main>
+  
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script>
+    'use strict';
+    
+    // ============================================
+    // STATE
+    // ============================================
+    const state = {
+      // Library data
+      chorales: new Map(), // number -> {score, events, analysis, metadata}
+      cadenceIndex: [], // [{choraleNum, eventIndex, approachRoman, resolutionRoman, key, transposition}]
+      
+      // Loading
+      loading: true,
+      loaded: 0,
+      errors: 0,
+      
+      // Current playback
+      currentChorale: null,
+      currentEventIndex: 0,
+      currentEventPlayed: false,
+      
+      // Splice state
+      atSplicePoint: false,
+      currentOptions: [],
+      auditioningOption: null,
+      
+      // Path tracking
+      splicePath: [], // [{choraleNum, startEvent, key}]
+      
+      // Settings
+      beatWidth: 60,
+      transpositionOffset: 0 // semitones to transpose current playback
+    };
+    
+    const TOTAL_CHORALES = 370;
+    const KERN_PATH = './kern/chor';
+    
+    // ============================================
+    // MUSIC THEORY
+    // ============================================
+    const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    
+    // Valid resolutions from common approach chords
+    const VALID_RESOLUTIONS = {
+      'V': ['I', 'i', 'VI', 'vi', 'IV6', 'iv6'], // Authentic + deceptive
+      'V7': ['I', 'i', 'VI', 'vi'],
+      'V65': ['I', 'i'],
+      'V43': ['I', 'i', 'I6', 'i6'],
+      'V42': ['I6', 'i6'],
+      'viio': ['I', 'i'],
+      'viio6': ['I', 'i', 'I6', 'i6'],
+      'viio7': ['I', 'i', 'i6'],
+      'viiø7': ['I', 'i'],
+      'IV': ['I', 'V'],
+      'iv': ['i', 'V'],
+      'ii': ['V', 'V7'],
+      'iio': ['V', 'V7'],
+      'ii6': ['V', 'V7'],
+      'iio6': ['V', 'V7'],
+      'ii65': ['V', 'V7'],
+      'IV6': ['I', 'V'],
+      'N6': ['V', 'V7'], // Neapolitan
+      'It6': ['V'],  // Augmented 6th
+      'Fr6': ['V'],
+      'Ger6': ['V']
+    };
+    
+    // For matching, normalize roman numerals
+    function normalizeRoman(roman) {
+      if (!roman) return '';
+      // Remove figured bass for matching
+      return roman.replace(/[0-9]+/g, '').replace(/ø/g, 'o');
+    }
+    
+    function getApproachType(roman) {
+      const norm = normalizeRoman(roman);
+      // Check if it's a dominant function
+      if (norm === 'V' || norm.startsWith('V')) return 'dominant';
+      if (norm === 'viio' || norm.startsWith('viio')) return 'dominant';
+      if (norm === 'vii°' || norm.startsWith('vii°')) return 'dominant';
+      // Predominants
+      if (norm === 'ii' || norm.startsWith('ii')) return 'predominant';
+      if (norm === 'IV' || norm === 'iv') return 'predominant';
+      return 'other';
+    }
+    
+    // Check if resolution is compatible with approach
+    function isValidResolution(approachRoman, resolutionRoman) {
+      const validList = VALID_RESOLUTIONS[approachRoman];
+      if (validList) {
+        return validList.some(r => normalizeRoman(r) === normalizeRoman(resolutionRoman));
+      }
+      
+      // For approach chords not in our list, check by type
+      const approachType = getApproachType(approachRoman);
+      const resNorm = normalizeRoman(resolutionRoman);
+      
+      if (approachType === 'dominant') {
+        // Dominant resolves to tonic or deceptive
+        return ['I', 'i', 'VI', 'vi'].includes(resNorm);
+      }
+      
+      return false;
+    }
+    
+    // Parse key from kern key string
+    function parseKey(keyStr) {
+      if (!keyStr) return { tonic: 0, mode: 'major' };
+      const match = keyStr.match(/^([A-Ga-g])([#-]?)$/);
+      if (!match) return { tonic: 0, mode: 'major' };
+      
+      const noteName = match[1].toUpperCase();
+      const accidental = match[2];
+      const mode = match[1] === match[1].toLowerCase() ? 'minor' : 'major';
+      
+      let tonic = NOTE_NAMES.indexOf(noteName);
+      if (tonic === -1) tonic = 0;
+      if (accidental === '#') tonic = (tonic + 1) % 12;
+      if (accidental === '-') tonic = (tonic + 11) % 12;
+      
+      return { tonic, mode };
+    }
+    
+    // Calculate transposition needed to match keys
+    function getTransposition(fromKey, toKey) {
+      const from = parseKey(fromKey);
+      const to = parseKey(toKey);
+      
+      let offset = to.tonic - from.tonic;
+      
+      // Adjust for mode difference (if going major->minor or vice versa)
+      // Keep it simple: just match tonics for now
+      
+      return offset;
+    }
+    
+    // ============================================
+    // CHORD ANALYSIS (simplified from base version)
+    // ============================================
+    function midiToPitchClass(midi) {
+      return ((midi % 12) + 12) % 12;
+    }
+    
+    function getScaleDegree(pitchClass, tonic, mode) {
+      const interval = (pitchClass - tonic + 12) % 12;
+      const majorDegrees = { 0: 0, 2: 1, 4: 2, 5: 3, 7: 4, 9: 5, 11: 6 };
+      const minorDegrees = { 0: 0, 2: 1, 3: 2, 5: 3, 7: 4, 8: 5, 9: 5, 10: 6, 11: 6 };
+      const degrees = mode === 'minor' ? minorDegrees : majorDegrees;
+      return degrees[interval] !== undefined ? degrees[interval] : null;
+    }
+    
+    function identifyChord(pitchClasses, bassPitchClass, tonic, mode) {
+      if (pitchClasses.length === 0) return null;
+      const uniquePCs = [...new Set(pitchClasses)];
+      
+      const chordTypes = [
+        { intervals: [0, 4, 7], quality: 'major', symbol: '' },
+        { intervals: [0, 3, 7], quality: 'minor', symbol: '' },
+        { intervals: [0, 3, 6], quality: 'diminished', symbol: '°' },
+        { intervals: [0, 4, 8], quality: 'augmented', symbol: '+' },
+        { intervals: [0, 4, 7, 10], quality: 'dominant7', symbol: '7' },
+        { intervals: [0, 3, 7, 10], quality: 'minor7', symbol: '7' },
+        { intervals: [0, 3, 6, 10], quality: 'halfDim7', symbol: 'ø7' },
+        { intervals: [0, 3, 6, 9], quality: 'dim7', symbol: '°7' },
+      ];
+      
+      for (const pc of uniquePCs) {
+        for (const chordType of chordTypes) {
+          const expectedPCs = chordType.intervals.map(i => (pc + i) % 12);
+          const matches = expectedPCs.filter(epc => uniquePCs.includes(epc));
+          
+          if (matches.length >= Math.min(3, expectedPCs.length) && 
+              matches.length >= uniquePCs.length - 1) {
+            const rootDegree = getScaleDegree(pc, tonic, mode);
+            if (rootDegree === null) continue;
+            
+            let inversion = 0;
+            const bassInChord = expectedPCs.indexOf(bassPitchClass);
+            if (bassInChord === 1) inversion = 1;
+            else if (bassInChord === 2) inversion = 2;
+            else if (bassInChord === 3) inversion = 3;
+            
+            let quality = chordType.quality;
+            if (rootDegree === 4 && quality === 'minor') quality = 'major';
+            
+            return { root: pc, rootDegree, quality, symbol: chordType.symbol, inversion, bass: bassPitchClass };
+          }
+        }
+      }
+      
+      const bassDegree = getScaleDegree(bassPitchClass, tonic, mode);
+      return { root: bassPitchClass, rootDegree: bassDegree !== null ? bassDegree : 0, quality: 'major', symbol: '?', inversion: 0, bass: bassPitchClass };
+    }
+    
+    function chordToRoman(chord, mode) {
+      if (!chord || chord.rootDegree === null) return '?';
+      
+      const majorNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+      const minorNumerals = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii'];
+      
+      let numeral;
+      let quality = chord.quality;
+      
+      if (chord.rootDegree === 4) {
+        numeral = 'V';
+        if (quality === 'minor') quality = 'major';
+      } else {
+        if (quality === 'major' || quality === 'dominant7' || quality === 'augmented') {
+          numeral = majorNumerals[chord.rootDegree];
+        } else {
+          numeral = minorNumerals[chord.rootDegree];
+        }
+      }
+      
+      if (quality === 'diminished') numeral += '°';
+      else if (quality === 'augmented') numeral += '+';
+      else if (quality === 'halfDim7') numeral += 'ø7';
+      else if (quality === 'dim7') numeral += '°7';
+      else if (quality === 'dominant7' || quality === 'minor7') numeral += '7';
+      
+      if (chord.inversion === 1) {
+        numeral += quality.includes('7') ? '65' : '6';
+      } else if (chord.inversion === 2) {
+        numeral += quality.includes('7') ? '43' : '64';
+      } else if (chord.inversion === 3) {
+        numeral += '42';
+      }
+      
+      return numeral;
+    }
+    
+    function analyzeChords(events, keyStr) {
+      const key = parseKey(keyStr);
+      const analysis = [];
+      const currentlyHeld = [null, null, null, null];
+      
+      for (let i = 0; i < events.length; i++) {
+        const event = events[i];
+        const notes = [];
+        
+        for (let v = 0; v < event.voices.length; v++) {
+          const voice = event.voices[v];
+          if (voice.isAttack && voice.midi) {
+            currentlyHeld[v] = voice.midi;
+            notes.push({ voice: v, midi: voice.midi, isAttack: true });
+          } else if (voice.isHeld && currentlyHeld[v]) {
+            notes.push({ voice: v, midi: currentlyHeld[v], isAttack: false });
+          } else if (voice.isRest) {
+            currentlyHeld[v] = null;
+          }
+        }
+        
+        const allPitchClasses = notes.map(n => midiToPitchClass(n.midi));
+        const bassMidi = notes.find(n => n.voice === 3)?.midi;
+        const bassPitchClass = bassMidi !== null ? midiToPitchClass(bassMidi) : (allPitchClasses[0] || 0);
+        
+        const chord = identifyChord(allPitchClasses, bassPitchClass, key.tonic, key.mode);
+        const roman = chordToRoman(chord, key.mode);
+        
+        analysis.push({ chord, roman, pitchClasses: allPitchClasses, bassPitchClass });
+      }
+      
+      return analysis;
+    }
+    
+    // ============================================
+    // KERN PARSER
+    // ============================================
+    function parseKern(text) {
+      const lines = text.split('\n');
+      const score = {
+        title: '', composer: '', key: '', meter: '', tempo: 100,
+        spines: 0, voiceNames: [], lines: [], metadata: [],
+        sections: {}, expansionList: null
+      };
+      
+      let currentSection = null;
+      let lineIndex = 0;
+      
+      for (const line of lines) {
+        const trimmed = line.trim();
+        score.lines.push(trimmed);
+        
+        if (trimmed.startsWith('!!!OTL')) {
+          const match = trimmed.match(/!!!OTL[^:]*:\s*(.+)/);
+          if (match) score.title = match[1];
+        } else if (trimmed.startsWith('!!!COM:')) {
+          score.composer = trimmed.replace('!!!COM:', '').trim();
+        } else if (trimmed.startsWith('*M')) {
+          const match = trimmed.match(/\*M(\d+)\/(\d+)/);
+          if (match) score.meter = `${match[1]}/${match[2]}`;
+        } else if (trimmed.match(/^\*[A-Ga-g][#-]?:/)) {
+          score.key = trimmed.split('\t')[0].replace('*', '').replace(':', '');
+        } else if (trimmed.match(/^\*>\[/)) {
+          const match = trimmed.match(/^\*>\[([^\]]+)\]/);
+          if (match) score.expansionList = match[1].split(',').map(s => s.trim());
+        } else if (trimmed.match(/^\*>[A-Za-z]/) && !trimmed.includes('[')) {
+          const sectionName = trimmed.split('\t')[0].replace('*>', '');
+          if (currentSection && score.sections[currentSection]) {
+            score.sections[currentSection].endLine = lineIndex - 1;
+          }
+          currentSection = sectionName;
+          score.sections[sectionName] = { startLine: lineIndex, endLine: null };
+        }
+        lineIndex++;
+      }
+      
+      if (currentSection && score.sections[currentSection]) {
+        score.sections[currentSection].endLine = score.lines.length - 1;
+      }
+      
+      const kernLine = score.lines.find(l => l.includes('**kern'));
+      if (kernLine) score.spines = kernLine.split('\t').length;
+      
+      function parseEventsFromLines(startLine, endLine, measureOffset = 0) {
+        const events = [];
+        let currentVoiceState = new Array(score.spines).fill(null).map(() => ({
+          midi: null, noteName: '-', isHeld: false
+        }));
+        
+        let localMeasure = measureOffset;
+        let beatInMeasure = 0;
+        
+        for (let i = startLine; i <= endLine; i++) {
+          const trimmed = score.lines[i];
+          if (!trimmed || trimmed.startsWith('!') || trimmed.startsWith('*') || trimmed === '') continue;
+          
+          if (trimmed.startsWith('=')) {
+            const barMatch = trimmed.match(/=(\d+)/);
+            if (barMatch) {
+              localMeasure = parseInt(barMatch[1]) + measureOffset;
+              beatInMeasure = 0;
+            } else {
+              localMeasure++;
+              beatInMeasure = 0;
+            }
+            continue;
+          }
+          
+          const tokens = trimmed.split('\t');
+          if (tokens.length < score.spines) continue;
+          
+          let hasAttack = false;
+          const eventVoices = [];
+          let shortestDuration = Infinity;
+          let hasFermata = false;
+          
+          for (let j = 0; j < score.spines; j++) {
+            const token = tokens[j] || '.';
+            const voiceData = { midi: null, noteName: '-', isAttack: false, isHeld: false, isRest: false, hasFermata: false };
+            
+            if (token.includes(';')) {
+              voiceData.hasFermata = true;
+              hasFermata = true;
+            }
+            
+            if (token === '.') {
+              voiceData.midi = currentVoiceState[j].midi;
+              voiceData.noteName = currentVoiceState[j].noteName;
+              voiceData.isHeld = true;
+            } else if (token.includes('r')) {
+              voiceData.isRest = true;
+              voiceData.noteName = 'rest';
+              currentVoiceState[j] = { midi: null, noteName: '-', isHeld: false };
+            } else {
+              const parsed = parseKernNote(token);
+              if (parsed) {
+                voiceData.midi = parsed.midi;
+                voiceData.noteName = parsed.name;
+                voiceData.isAttack = true;
+                hasAttack = true;
+                currentVoiceState[j] = { midi: parsed.midi, noteName: parsed.name, isHeld: false };
+                if (parsed.duration < shortestDuration) shortestDuration = parsed.duration;
+              }
+            }
+            eventVoices.push(voiceData);
+          }
+          
+          if (hasAttack) {
+            const reversedVoices = [...eventVoices].reverse();
+            events.push({
+              measure: localMeasure,
+              beat: beatInMeasure,
+              voices: reversedVoices,
+              lineIndex: i + 1,
+              duration: shortestDuration === Infinity ? 1 : shortestDuration,
+              hasFermata: hasFermata
+            });
+            beatInMeasure += shortestDuration;
+          }
+        }
+        return events;
+      }
+      
+      let events = [];
+      if (score.expansionList && Object.keys(score.sections).length > 0) {
+        let measureOffset = 0;
+        for (const sectionName of score.expansionList) {
+          const section = score.sections[sectionName];
+          if (section) {
+            const sectionEvents = parseEventsFromLines(section.startLine, section.endLine, measureOffset);
+            if (sectionEvents.length > 0) {
+              const lastMeasure = sectionEvents[sectionEvents.length - 1].measure;
+              events = events.concat(sectionEvents);
+              measureOffset = lastMeasure;
+            }
+          }
+        }
+      } else {
+        events = parseEventsFromLines(0, score.lines.length - 1);
+      }
+      
+      return { score, events };
+    }
+    
+    function parseKernNote(token) {
+      const clean = token.replace(/[\[\];\(\)LJyq]/g, '');
+      const durMatch = clean.match(/^(\d+\.?)/);
+      let duration = 1;
+      if (durMatch) {
+        const durNum = parseInt(durMatch[1]);
+        duration = 4 / durNum;
+        if (durMatch[1].includes('.')) duration *= 1.5;
+      }
+      
+      const pitchMatch = clean.match(/([A-Ga-g]+)/);
+      if (!pitchMatch) return null;
+      
+      const pitchStr = pitchMatch[1];
+      const isLower = pitchStr[0] === pitchStr[0].toLowerCase();
+      const basePitch = pitchStr[0].toUpperCase();
+      const octaveCount = pitchStr.length;
+      
+      const pitchMap = { C: 60, D: 62, E: 64, F: 65, G: 67, A: 69, B: 71 };
+      let midi = pitchMap[basePitch];
+      
+      if (isLower) {
+        midi += (octaveCount - 1) * 12;
+      } else {
+        midi -= 12;
+        midi -= (octaveCount - 1) * 12;
+      }
+      
+      const sharps = (clean.match(/#/g) || []).length;
+      const flats = (clean.match(/-/g) || []).length;
+      midi += sharps - flats;
+      
+      const accidental = sharps > 0 ? '#'.repeat(sharps) : flats > 0 ? 'b'.repeat(flats) : '';
+      const octave = Math.floor(midi / 12) - 1;
+      const name = basePitch + accidental + octave;
+      
+      return { midi, name, duration };
+    }
+    
+    // ============================================
+    // LIBRARY LOADING & INDEXING
+    // ============================================
+    async function loadLibrary() {
+      state.loading = true;
+      state.loaded = 0;
+      state.errors = 0;
+      
+      const promises = [];
+      
+      for (let i = 1; i <= TOTAL_CHORALES; i++) {
+        const num = String(i).padStart(3, '0');
+        const url = `${KERN_PATH}${num}.krn`;
+        
+        promises.push(
+          fetch(url)
+            .then(res => {
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              return res.text();
+            })
+            .then(text => {
+              const { score, events } = parseKern(text);
+              const analysis = analyzeChords(events, score.key);
+              
+              state.chorales.set(i, {
+                number: i,
+                score,
+                events,
+                analysis,
+                key: score.key
+              });
+              
+              // Index fermata cadences
+              indexCadences(i, events, analysis, score.key);
+              
+              return i;
+            })
+            .catch(err => {
+              state.errors++;
+              return null;
+            })
+            .finally(() => {
+              state.loaded++;
+              updateLoadingUI();
+            })
+        );
+      }
+      
+      await Promise.all(promises);
+      
+      state.loading = false;
+      
+      console.log(`Loaded ${state.chorales.size} chorales, indexed ${state.cadenceIndex.length} cadences`);
+      
+      finishLoading();
+    }
+    
+    function indexCadences(choraleNum, events, analysis, key) {
+      // Find all fermata events and index the approach + resolution
+      for (let i = 0; i < events.length; i++) {
+        if (events[i].hasFermata && i > 0) {
+          // This is the resolution chord (fermata chord)
+          // The approach is the previous event
+          const approachAnalysis = analysis[i - 1];
+          const resolutionAnalysis = analysis[i];
+          
+          if (approachAnalysis && resolutionAnalysis) {
+            state.cadenceIndex.push({
+              choraleNum,
+              approachEventIndex: i - 1,
+              resolutionEventIndex: i,
+              approachRoman: approachAnalysis.roman,
+              resolutionRoman: resolutionAnalysis.roman,
+              key: key
+            });
+          }
+        }
+      }
+    }
+    
+    function findSpliceOptions(approachRoman, currentKey, currentChoraleNum) {
+      // Find all cadences with the same approach chord that resolve differently
+      // Must be from a DIFFERENT chorale
+      
+      const options = [];
+      const seenResolutions = new Set();
+      
+      for (const cadence of state.cadenceIndex) {
+        // Skip same chorale
+        if (cadence.choraleNum === currentChoraleNum) continue;
+        
+        // Match approach chord type
+        if (normalizeRoman(cadence.approachRoman) !== normalizeRoman(approachRoman)) continue;
+        
+        // Calculate transposition needed
+        const transposition = getTransposition(cadence.key, currentKey);
+        
+        // Create unique key for deduplication (resolution + chorale)
+        const resKey = `${cadence.resolutionRoman}-${cadence.choraleNum}`;
+        
+        // Limit to one example per resolution type per chorale for variety
+        const resTypeKey = normalizeRoman(cadence.resolutionRoman);
+        
+        const chorale = state.chorales.get(cadence.choraleNum);
+        if (!chorale) continue;
+        
+        options.push({
+          choraleNum: cadence.choraleNum,
+          choraleTitle: chorale.score.title,
+          resolutionEventIndex: cadence.resolutionEventIndex,
+          resolutionRoman: cadence.resolutionRoman,
+          originalKey: cadence.key,
+          transposition: transposition,
+          measure: chorale.events[cadence.resolutionEventIndex]?.measure || 1
+        });
+      }
+      
+      // Shuffle and limit options
+      shuffleArray(options);
+      
+      // Group by resolution type and take a few of each
+      const grouped = {};
+      for (const opt of options) {
+        const resType = normalizeRoman(opt.resolutionRoman);
+        if (!grouped[resType]) grouped[resType] = [];
+        if (grouped[resType].length < 3) { // Max 3 of each resolution type
+          grouped[resType].push(opt);
+        }
+      }
+      
+      // Flatten and re-shuffle
+      const result = Object.values(grouped).flat();
+      shuffleArray(result);
+      
+      return result.slice(0, 12); // Max 12 options shown
+    }
+    
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+    }
+    
+    // ============================================
+    // AUDIO
+    // ============================================
+    let audioCtx = null;
+    let activeOscillators = new Map();
+    
+    function getAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+    
+    function midiToFreq(midi) {
+      return 440 * Math.pow(2, (midi - 69) / 12);
+    }
+    
+    function playChord(voices, transposition = 0, volume = 0.15) {
+      const ctx = getAudioContext();
+      
+      // Stop previous notes
+      activeOscillators.forEach(({ osc, gain }) => {
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+        osc.stop(ctx.currentTime + 0.05);
+      });
+      activeOscillators.clear();
+      
+      voices.forEach((voice, idx) => {
+        if (voice.midi || voice.isHeld) {
+          const midi = (voice.midi || 60) + transposition;
+          const freq = midiToFreq(midi);
+          
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, ctx.currentTime);
+          
+          // Stagger voices slightly
+          const delay = idx === 3 ? 0 : (Math.random() * 0.03);
+          
+          gain.gain.setValueAtTime(0, ctx.currentTime + delay);
+          gain.gain.linearRampToValueAtTime(volume, ctx.currentTime + delay + 0.01);
+          
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(ctx.currentTime + delay);
+          
+          activeOscillators.set(idx, { osc, gain });
+        }
+      });
+    }
+    
+    function stopAudio() {
+      const ctx = audioCtx;
+      if (!ctx) return;
+      
+      activeOscillators.forEach(({ osc, gain }) => {
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+        osc.stop(ctx.currentTime + 0.05);
+      });
+      activeOscillators.clear();
+    }
+    
+    // ============================================
+    // UI ELEMENTS
+    // ============================================
+    const elements = {
+      loadingScreen: document.getElementById('loadingScreen'),
+      progressFill: document.getElementById('progressFill'),
+      loadingStats: document.getElementById('loadingStats'),
+      loadStatus: document.getElementById('loadStatus'),
+      playerArea: document.getElementById('playerArea'),
+      pathItems: document.getElementById('pathItems'),
+      choraleTitle: document.getElementById('choraleTitle'),
+      choraleMeta: document.getElementById('choraleMeta'),
+      measureNum: document.getElementById('measureNum'),
+      beatNum: document.getElementById('beatNum'),
+      fermataIndicator: document.getElementById('fermataIndicator'),
+      spliceIndicator: document.getElementById('spliceIndicator'),
+      voiceSoprano: document.getElementById('voiceSoprano'),
+      voiceAlto: document.getElementById('voiceAlto'),
+      voiceTenor: document.getElementById('voiceTenor'),
+      voiceBass: document.getElementById('voiceBass'),
+      analysisRoman: document.getElementById('analysisRoman'),
+      pianoRollCanvas: document.getElementById('pianoRollCanvas'),
+      beatWidthSlider: document.getElementById('beatWidthSlider'),
+      splicePanel: document.getElementById('splicePanel'),
+      spliceStatus: document.getElementById('spliceStatus'),
+      approachChord: document.getElementById('approachChord'),
+      approachRoman: document.getElementById('approachRoman'),
+      optionsHeader: document.getElementById('optionsHeader'),
+      optionsCount: document.getElementById('optionsCount'),
+      optionsList: document.getElementById('optionsList'),
+      toStartBtn: document.getElementById('toStartBtn'),
+      prevBtn: document.getElementById('prevBtn'),
+      nextBtn: document.getElementById('nextBtn'),
+      randomStartBtn: document.getElementById('randomStartBtn'),
+      themeBtn: document.getElementById('themeBtn'),
+      toastContainer: document.getElementById('toastContainer')
+    };
+    
+    function toast(message, type = 'info') {
+      const t = document.createElement('div');
+      t.className = `toast ${type}`;
+      t.textContent = message;
+      elements.toastContainer.appendChild(t);
+      setTimeout(() => {
+        t.style.opacity = '0';
+        setTimeout(() => t.remove(), 300);
+      }, 3000);
+    }
+    
+    function updateLoadingUI() {
+      const percent = (state.loaded / TOTAL_CHORALES) * 100;
+      elements.progressFill.style.width = `${percent}%`;
+      elements.loadingStats.textContent = `${state.loaded} / ${TOTAL_CHORALES} chorales`;
+      elements.loadStatus.textContent = `Loading ${state.loaded}/${TOTAL_CHORALES}`;
+      elements.loadStatus.className = 'load-status loading';
+    }
+    
+    function finishLoading() {
+      elements.loadingScreen.classList.add('hidden');
+      elements.playerArea.classList.add('visible');
+      elements.loadStatus.textContent = `${state.chorales.size} chorales, ${state.cadenceIndex.length} cadences`;
+      elements.loadStatus.className = 'load-status ready';
+      
+      // Start with random chorale
+      startRandomChorale();
+    }
+    
+    function startRandomChorale() {
+      const keys = Array.from(state.chorales.keys());
+      const randomNum = keys[Math.floor(Math.random() * keys.length)];
+      
+      startChorale(randomNum, 0, 0);
+    }
+    
+    function startChorale(choraleNum, eventIndex = 0, transposition = 0) {
+      const chorale = state.chorales.get(choraleNum);
+      if (!chorale) return;
+      
+      state.currentChorale = chorale;
+      state.currentEventIndex = eventIndex;
+      state.currentEventPlayed = false;
+      state.transpositionOffset = transposition;
+      state.atSplicePoint = false;
+      state.currentOptions = [];
+      
+      // Add to path
+      state.splicePath.push({
+        choraleNum,
+        startEvent: eventIndex,
+        key: chorale.key
+      });
+      
+      updateUI();
+      updatePathDisplay();
+      
+      toast(`Starting: ${chorale.score.title || `Chorale ${choraleNum}`}`, 'success');
+    }
+    
+    function updateUI() {
+      if (!state.currentChorale) return;
+      
+      const chorale = state.currentChorale;
+      const event = chorale.events[state.currentEventIndex];
+      const analysis = chorale.analysis[state.currentEventIndex];
+      
+      if (!event) return;
+      
+      // Title & meta
+      elements.choraleTitle.textContent = chorale.score.title || `Chorale ${chorale.number}`;
+      elements.choraleMeta.textContent = `#${chorale.number} · ${chorale.key || '?'} · ${chorale.score.meter || '4/4'}`;
+      
+      // Position
+      elements.measureNum.textContent = event.measure;
+      elements.beatNum.textContent = (event.beat + 1).toFixed(1);
+      
+      // Check if we're at a splice point (beat before fermata)
+      const nextEvent = chorale.events[state.currentEventIndex + 1];
+      state.atSplicePoint = nextEvent?.hasFermata || false;
+      
+      elements.fermataIndicator.style.display = event.hasFermata ? 'inline' : 'none';
+      elements.spliceIndicator.style.display = state.atSplicePoint ? 'inline' : 'none';
+      
+      // Voices
+      const voiceEls = [elements.voiceSoprano, elements.voiceAlto, elements.voiceTenor, elements.voiceBass];
+      event.voices.forEach((v, i) => {
+        if (voiceEls[i]) {
+          // Transpose note name for display
+          let displayName = v.noteName || '—';
+          if (state.transpositionOffset !== 0 && v.midi) {
+            const transposedMidi = v.midi + state.transpositionOffset;
+            const octave = Math.floor(transposedMidi / 12) - 1;
+            const pc = transposedMidi % 12;
+            displayName = NOTE_NAMES[pc] + octave;
+          }
+          
+          voiceEls[i].textContent = displayName;
+          voiceEls[i].className = 'voice-note';
+          if (v.isAttack) voiceEls[i].classList.add('active');
+          else if (v.isHeld) voiceEls[i].classList.add('held');
+          else if (v.isRest) voiceEls[i].classList.add('rest');
+        }
+      });
+      
+      // Analysis
+      elements.analysisRoman.textContent = analysis?.roman || '—';
+      
+      // Splice panel
+      updateSplicePanel(analysis?.roman);
+      
+      // Piano roll
+      renderPianoRoll();
+    }
+    
+    function updateSplicePanel(currentRoman) {
+      if (state.atSplicePoint) {
+        elements.splicePanel.classList.remove('inactive');
+        elements.spliceStatus.textContent = 'SPLICE POINT!';
+        elements.spliceStatus.classList.add('active');
+        
+        elements.approachChord.style.display = 'block';
+        elements.approachRoman.textContent = currentRoman || '?';
+        
+        // Find options
+        state.currentOptions = findSpliceOptions(
+          currentRoman,
+          state.currentChorale.key,
+          state.currentChorale.number
+        );
+        
+        elements.optionsHeader.style.display = 'flex';
+        elements.optionsCount.textContent = `${state.currentOptions.length} options`;
+        
+        renderSpliceOptions();
+      } else {
+        elements.splicePanel.classList.add('inactive');
+        elements.spliceStatus.textContent = 'Waiting...';
+        elements.spliceStatus.classList.remove('active');
+        elements.approachChord.style.display = 'none';
+        elements.optionsHeader.style.display = 'none';
+        
+        elements.optionsList.innerHTML = `
+          <div class="waiting-message">
+            <div>Navigate to a fermata approach chord</div>
+            <div class="hint">Press → to advance, options appear at cadences</div>
+          </div>
+        `;
+        
+        state.currentOptions = [];
+      }
+    }
+    
+    function renderSpliceOptions() {
+      if (state.currentOptions.length === 0) {
+        elements.optionsList.innerHTML = `<div class="no-options">No compatible resolutions found</div>`;
+        return;
+      }
+      
+      let html = '';
+      state.currentOptions.forEach((opt, idx) => {
+        const transText = opt.transposition === 0 ? '' : 
+          (opt.transposition > 0 ? `+${opt.transposition}` : `${opt.transposition}`);
+        
+        html += `
+          <div class="option-card" data-index="${idx}">
+            <div class="option-resolution">${opt.resolutionRoman}</div>
+            <div class="option-info">
+              <div class="option-chorale">#${opt.choraleNum}: ${opt.choraleTitle || 'Untitled'}</div>
+              <div class="option-details">m.${opt.measure} · ${opt.originalKey}${transText ? ` (${transText})` : ''}</div>
+            </div>
+            <div class="option-actions">
+              <button class="option-btn audition" data-action="audition" data-index="${idx}" title="Preview">👂</button>
+              <button class="option-btn select btn-primary" data-action="select" data-index="${idx}" title="Select">${idx + 1}</button>
+            </div>
+          </div>
+        `;
+      });
+      
+      elements.optionsList.innerHTML = html;
+    }
+    
+    function updatePathDisplay() {
+      let html = '';
+      
+      state.splicePath.forEach((step, idx) => {
+        if (idx > 0) {
+          html += `<span class="path-arrow">→</span>`;
+        }
+        
+        const isCurrent = idx === state.splicePath.length - 1;
+        const chorale = state.chorales.get(step.choraleNum);
+        
+        html += `
+          <span class="path-item ${isCurrent ? 'current' : ''}">
+            <span class="chorale-num">#${step.choraleNum}</span>
+            <span class="measure">m.${chorale?.events[step.startEvent]?.measure || 1}</span>
+          </span>
+        `;
+      });
+      
+      elements.pathItems.innerHTML = html;
+    }
+    
+    // ============================================
+    // PIANO ROLL RENDERING
+    // ============================================
+    const VOICE_COLORS = ['#ff6b6b', '#74c0fc', '#63e6be', '#ffe066'];
+    
+    function getPitchRange(events) {
+      let minMidi = 127, maxMidi = 0;
+      for (const event of events) {
+        for (const voice of event.voices) {
+          if (voice.midi) {
+            minMidi = Math.min(minMidi, voice.midi);
+            maxMidi = Math.max(maxMidi, voice.midi);
+          }
+        }
+      }
+      return { min: Math.max(0, minMidi - 2), max: Math.min(127, maxMidi + 2) };
+    }
+    
+    function renderPianoRoll() {
+      const canvas = elements.pianoRollCanvas;
+      const container = canvas.parentElement;
+      const ctx = canvas.getContext('2d');
+      
+      const rect = container.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      ctx.scale(dpr, dpr);
+      
+      const width = rect.width;
+      const height = rect.height;
+      
+      if (!state.currentChorale || state.currentChorale.events.length === 0) {
+        ctx.fillStyle = '#5c5c70';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('No score loaded', width / 2, height / 2);
+        return;
+      }
+      
+      const events = state.currentChorale.events;
+      const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim();
+      const borderColor = getComputedStyle(document.documentElement).getPropertyValue('--border').trim();
+      const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+      const spliceColor = getComputedStyle(document.documentElement).getPropertyValue('--splice-active').trim();
+      const warningColor = getComputedStyle(document.documentElement).getPropertyValue('--warning').trim();
+      
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, width, height);
+      
+      const pitchRange = getPitchRange(events);
+      const pitchSpan = pitchRange.max - pitchRange.min + 1;
+      const beatWidth = state.beatWidth;
+      
+      // Calculate event positions
+      const eventPositions = [];
+      let cumulativeX = 0;
+      for (let i = 0; i < events.length; i++) {
+        const eventWidth = events[i].duration * beatWidth;
+        eventPositions.push({ x: cumulativeX, width: eventWidth });
+        cumulativeX += eventWidth;
+      }
+      const totalWidth = cumulativeX;
+      
+      // Center on current event
+      const currentPos = eventPositions[state.currentEventIndex];
+      const currentCenter = currentPos.x + currentPos.width / 2;
+      let viewportOffset = currentCenter - width / 2;
+      viewportOffset = Math.max(0, Math.min(totalWidth - width, viewportOffset));
+      
+      // Draw grid
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 0.5;
+      for (let midi = pitchRange.min; midi <= pitchRange.max; midi++) {
+        if (midi % 12 === 0) {
+          const y = height - ((midi - pitchRange.min) / pitchSpan) * height;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+          ctx.stroke();
+        }
+      }
+      
+      // Draw events
+      let lastMeasure = -1;
+      const noteHeight = Math.max(4, Math.min(10, height / pitchSpan));
+      
+      for (let i = 0; i < events.length; i++) {
+        const event = events[i];
+        const pos = eventPositions[i];
+        const x = pos.x - viewportOffset;
+        
+        if (x + pos.width < 0 || x > width) continue;
+        
+        // Barline
+        if (event.measure !== lastMeasure && event.measure > 0) {
+          ctx.strokeStyle = '#5c5c70';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+          ctx.stroke();
+          lastMeasure = event.measure;
+        }
+        
+        // Highlight current
+        if (i === state.currentEventIndex) {
+          ctx.fillStyle = 'rgba(124, 92, 255, 0.2)';
+          ctx.fillRect(x, 0, pos.width, height);
+        }
+        
+        // Highlight fermata events
+        if (event.hasFermata) {
+          ctx.fillStyle = 'rgba(251, 191, 36, 0.15)';
+          ctx.fillRect(x, 0, pos.width, height);
+        }
+        
+        // Highlight splice approach
+        const nextEvent = events[i + 1];
+        if (nextEvent?.hasFermata) {
+          ctx.fillStyle = 'rgba(255, 107, 157, 0.15)';
+          ctx.fillRect(x, 0, pos.width, height);
+        }
+        
+        // Draw notes
+        for (let v = 0; v < event.voices.length; v++) {
+          const voice = event.voices[v];
+          if (voice.midi) {
+            const midi = voice.midi + state.transpositionOffset;
+            const y = height - ((midi - pitchRange.min - state.transpositionOffset + 0.5) / pitchSpan) * height - noteHeight / 2;
+            
+            ctx.fillStyle = voice.isAttack ? VOICE_COLORS[v] : (VOICE_COLORS[v] + '80');
+            ctx.fillRect(x + 1, y, pos.width - 2, noteHeight - 1);
+          }
+        }
+      }
+      
+      // Current position line
+      const currentX = currentPos.x + currentPos.width / 2 - viewportOffset;
+      ctx.strokeStyle = state.atSplicePoint ? spliceColor : accentColor;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(currentX, 0);
+      ctx.lineTo(currentX, height);
+      ctx.stroke();
+    }
+    
+    // ============================================
+    // NAVIGATION
+    // ============================================
+    function nextEvent() {
+      if (!state.currentChorale) return;
+      
+      // If at splice point, don't advance normally - must select an option
+      if (state.atSplicePoint && state.currentOptions.length > 0) {
+        toast('Select a splice option or press a number key', 'splice');
+        return;
+      }
+      
+      if (!state.currentEventPlayed) {
+        state.currentEventPlayed = true;
+        const event = state.currentChorale.events[state.currentEventIndex];
+        if (event) playChord(event.voices, state.transpositionOffset);
+        updateUI();
+        return;
+      }
+      
+      if (state.currentEventIndex < state.currentChorale.events.length - 1) {
+        state.currentEventIndex++;
+        state.currentEventPlayed = true;
+        const event = state.currentChorale.events[state.currentEventIndex];
+        if (event) playChord(event.voices, state.transpositionOffset);
+        updateUI();
+      } else {
+        // End of chorale - could auto-splice or just stop
+        toast('End of chorale - press R for random restart', 'info');
+      }
+    }
+    
+    function prevEvent() {
+      if (!state.currentChorale) return;
+      
+      if (state.currentEventIndex > 0) {
+        state.currentEventIndex--;
+        state.currentEventPlayed = true;
+        const event = state.currentChorale.events[state.currentEventIndex];
+        if (event) playChord(event.voices, state.transpositionOffset);
+        updateUI();
+      }
+    }
+    
+    function goToStart() {
+      if (!state.currentChorale) return;
+      
+      state.currentEventIndex = 0;
+      state.currentEventPlayed = false;
+      stopAudio();
+      updateUI();
+    }
+    
+    function auditionOption(index) {
+      if (index < 0 || index >= state.currentOptions.length) return;
+      
+      const opt = state.currentOptions[index];
+      const chorale = state.chorales.get(opt.choraleNum);
+      if (!chorale) return;
+      
+      const event = chorale.events[opt.resolutionEventIndex];
+      if (!event) return;
+      
+      // Calculate total transposition
+      const totalTransposition = state.transpositionOffset + opt.transposition;
+      
+      playChord(event.voices, totalTransposition, 0.2);
+      
+      // Update UI to show which is being auditioned
+      state.auditioningOption = index;
+      document.querySelectorAll('.option-card').forEach((card, i) => {
+        card.classList.toggle('auditioning', i === index);
+      });
+      
+      // Clear auditioning state after a moment
+      setTimeout(() => {
+        state.auditioningOption = null;
+        document.querySelectorAll('.option-card').forEach(card => {
+          card.classList.remove('auditioning');
+        });
+      }, 500);
+    }
+    
+    function selectOption(index) {
+      if (index < 0 || index >= state.currentOptions.length) return;
+      
+      const opt = state.currentOptions[index];
+      const chorale = state.chorales.get(opt.choraleNum);
+      if (!chorale) return;
+      
+      // Calculate cumulative transposition
+      const totalTransposition = state.transpositionOffset + opt.transposition;
+      
+      // Switch to new chorale at resolution point
+      state.currentChorale = chorale;
+      state.currentEventIndex = opt.resolutionEventIndex;
+      state.transpositionOffset = totalTransposition;
+      state.currentEventPlayed = true;
+      state.atSplicePoint = false;
+      
+      // Add to path
+      state.splicePath.push({
+        choraleNum: opt.choraleNum,
+        startEvent: opt.resolutionEventIndex,
+        key: opt.originalKey
+      });
+      
+      // Play the resolution
+      const event = chorale.events[opt.resolutionEventIndex];
+      if (event) playChord(event.voices, totalTransposition);
+      
+      updateUI();
+      updatePathDisplay();
+      
+      toast(`Spliced to #${opt.choraleNum}: ${opt.resolutionRoman}`, 'splice');
+    }
+    
+    // ============================================
+    // EVENT LISTENERS
+    // ============================================
+    function initEventListeners() {
+      // Transport
+      elements.nextBtn.addEventListener('click', nextEvent);
+      elements.prevBtn.addEventListener('click', prevEvent);
+      elements.toStartBtn.addEventListener('click', goToStart);
+      elements.randomStartBtn.addEventListener('click', () => {
+        state.splicePath = [];
+        state.transpositionOffset = 0;
+        startRandomChorale();
+      });
+      
+      // Beat width
+      elements.beatWidthSlider.addEventListener('input', (e) => {
+        state.beatWidth = parseInt(e.target.value);
+        renderPianoRoll();
+      });
+      
+      // Theme toggle
+      elements.themeBtn.addEventListener('click', () => {
+        const current = document.documentElement.getAttribute('data-theme');
+        const next = current === 'light' ? null : 'light';
+        if (next) {
+          document.documentElement.setAttribute('data-theme', next);
+        } else {
+          document.documentElement.removeAttribute('data-theme');
+        }
+        elements.themeBtn.textContent = next === 'light' ? '🌙' : '☀️';
+        renderPianoRoll();
+      });
+      
+      // Option clicks
+      elements.optionsList.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        
+        const action = btn.dataset.action;
+        const index = parseInt(btn.dataset.index);
+        
+        if (action === 'audition') {
+          auditionOption(index);
+        } else if (action === 'select') {
+          selectOption(index);
+        }
+      });
+      
+      // Option card click to select
+      elements.optionsList.addEventListener('dblclick', (e) => {
+        const card = e.target.closest('.option-card');
+        if (card) {
+          selectOption(parseInt(card.dataset.index));
+        }
+      });
+      
+      // Keyboard
+      document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT') return;
+        
+        switch (e.key) {
+          case 'ArrowRight':
+            e.preventDefault();
+            nextEvent();
+            break;
+          case 'ArrowLeft':
+            e.preventDefault();
+            prevEvent();
+            break;
+          case ' ':
+            e.preventDefault();
+            goToStart();
+            break;
+          case 'r':
+          case 'R':
+            e.preventDefault();
+            state.splicePath = [];
+            state.transpositionOffset = 0;
+            startRandomChorale();
+            break;
+          case '1': case '2': case '3': case '4': case '5':
+          case '6': case '7': case '8': case '9':
+            e.preventDefault();
+            const num = parseInt(e.key) - 1;
+            if (state.atSplicePoint && num < state.currentOptions.length) {
+              if (e.shiftKey) {
+                auditionOption(num);
+              } else {
+                selectOption(num);
+              }
+            }
+            break;
+          case 'Home':
+            e.preventDefault();
+            goToStart();
+            break;
+        }
+      });
+      
+      // Canvas click
+      elements.pianoRollCanvas.addEventListener('click', (e) => {
+        // Could implement click-to-seek here
+      });
+      
+      // Resize
+      const resizeObserver = new ResizeObserver(() => {
+        if (state.currentChorale) renderPianoRoll();
+      });
+      resizeObserver.observe(elements.pianoRollCanvas.parentElement);
+      
+      // Cleanup
+      window.addEventListener('beforeunload', stopAudio);
+    }
+    
+    // ============================================
+    // INIT
+    // ============================================
+    function init() {
+      initEventListeners();
+      loadLibrary();
+    }
+    
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0c0a09">
+<title>Chorale — Distributed Voice</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♫</text></svg>">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0c0a09; --fg:#fafaf9; --muted:#a8a29e; --line:#44403c;
+    --hue:40; --sat:70%;
+    --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;
+  }
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--fg);
+    font-family:var(--font);-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;}
+  body{display:flex;flex-direction:column;}
+
+  /* ---- Ambient backdrop: a full-screen field that breathes with each note ---- */
+  #ambient{position:fixed;inset:0;z-index:0;
+    background:radial-gradient(circle at 50% 42%,
+      hsl(var(--hue) var(--sat) 16%) 0%,
+      hsl(var(--hue) calc(var(--sat) - 20%) 7%) 60%,
+      #050403 100%);
+    transition:none;will-change:opacity;}
+  #glow{position:fixed;left:50%;top:42%;width:78vmin;height:78vmin;z-index:1;
+    transform:translate(-50%,-50%) scale(var(--pulse,0.6));
+    border-radius:50%;pointer-events:none;will-change:transform,opacity;
+    background:radial-gradient(circle,
+      hsl(var(--hue) 90% 62% / 0.55) 0%,
+      hsl(var(--hue) 85% 55% / 0.18) 40%,
+      transparent 70%);
+    opacity:var(--lum,0);mix-blend-mode:screen;}
+
+  /* ---- centre label (ambient view) ---- */
+  #center{position:fixed;inset:0;z-index:2;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:0.4rem;text-align:center;padding:1rem;}
+  #voiceName{font-size:clamp(2.4rem,12vw,5rem);font-weight:200;letter-spacing:0.04em;
+    color:hsl(var(--hue) 80% 85%);text-shadow:0 0 30px hsl(var(--hue) 90% 60% / .4);}
+  #noteName{font-size:clamp(1rem,5vw,1.6rem);font-weight:300;color:var(--muted);
+    font-variant-numeric:tabular-nums;min-height:1.4em;}
+  #hint{position:fixed;bottom:max(1rem,env(safe-area-inset-bottom));left:0;right:0;z-index:2;
+    text-align:center;font-size:.8rem;color:var(--muted);opacity:.6;}
+
+  /* ---- start overlay (audio unlock gesture) ---- */
+  #start{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:1.2rem;text-align:center;padding:2rem;
+    background:radial-gradient(circle at 50% 40%,#1c1917,#0c0a09);cursor:pointer;}
+  #start h1{font-weight:200;font-size:clamp(1.6rem,7vw,2.6rem);letter-spacing:.02em;}
+  #start p{color:var(--muted);max-width:32ch;line-height:1.5;font-weight:300;}
+  #start .badge{margin-top:.6rem;font-size:1rem;color:hsl(var(--hue) 80% 80%);
+    border:1px solid var(--line);border-radius:999px;padding:.5rem 1.1rem;}
+  #start .go{margin-top:1rem;font-size:1.05rem;padding:.9rem 2.2rem;border-radius:999px;
+    border:1px solid hsl(var(--hue) 70% 55%);background:hsl(var(--hue) 70% 50% / .12);
+    color:var(--fg);font-weight:400;}
+  .spin{display:inline-block;width:1em;height:1em;border:2px solid var(--line);
+    border-top-color:hsl(var(--hue) 80% 65%);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-.15em;}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  /* ---- info panel (toggle) ---- */
+  #info{position:fixed;z-index:15;inset:auto 0 0 0;z-index:15;
+    background:rgba(12,10,9,.94);backdrop-filter:blur(12px);
+    border-top:1px solid var(--line);border-radius:18px 18px 0 0;
+    padding:1.1rem 1.2rem max(1.2rem,env(safe-area-inset-bottom));
+    transform:translateY(100%);transition:transform .32s cubic-bezier(.22,1,.36,1);
+    max-height:82vh;overflow-y:auto;box-shadow:0 -10px 40px rgba(0,0,0,.5);}
+  #info.open{transform:translateY(0);}
+  #info h2{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);
+    margin:1.1rem 0 .5rem;font-weight:500;}
+  #info h2:first-child{margin-top:0;}
+  .row{display:flex;justify-content:space-between;gap:1rem;padding:.32rem 0;font-size:.92rem;
+    border-bottom:1px solid rgba(68,64,60,.4);}
+  .row .k{color:var(--muted);} .row .v{text-align:right;font-variant-numeric:tabular-nums;}
+  .seg{display:flex;gap:.4rem;flex-wrap:wrap;}
+  .seg button{flex:1 1 auto;min-width:3.2rem;min-height:44px;padding:.5rem;border-radius:10px;
+    border:1px solid var(--line);background:#1c1917;color:var(--fg);font-size:.9rem;font-family:inherit;}
+  .seg button.on{border-color:hsl(var(--hue) 70% 55%);background:hsl(var(--hue) 70% 50% / .18);
+    color:hsl(var(--hue) 80% 82%);}
+  .ctl{display:flex;align-items:center;gap:.8rem;padding:.4rem 0;}
+  .ctl label{flex:0 0 5.2rem;color:var(--muted);font-size:.88rem;}
+  input[type=range]{flex:1;accent-color:hsl(var(--hue) 70% 55%);height:30px;}
+  #grip{width:42px;height:5px;border-radius:3px;background:var(--line);margin:0 auto .9rem;}
+  .dot{display:inline-block;width:.55em;height:.55em;border-radius:50%;vertical-align:.02em;margin-right:.3em;}
+  .footer{margin-top:1rem;font-size:.72rem;color:var(--muted);text-align:center;line-height:1.5;}
+  @media (prefers-reduced-motion: reduce){.spin{animation:none}}
+</style>
+</head>
+<body>
+  <div id="ambient"></div>
+  <div id="glow"></div>
+
+  <div id="center">
+    <div id="voiceName">—</div>
+    <div id="noteName"></div>
+  </div>
+  <div id="hint">tap anywhere for details</div>
+
+  <!-- Start / audio-unlock -->
+  <div id="start">
+    <h1>Bach Chorale</h1>
+    <p>One voice of a four-part chorale will sound from this device, in time with every other device in the room.</p>
+    <div class="badge" id="startBadge"><span class="spin"></span> preparing…</div>
+    <div class="go" id="goBtn" hidden>Tap to join ♫</div>
+  </div>
+
+  <!-- Info / settings -->
+  <div id="info">
+    <div id="grip"></div>
+    <h2>Your voice</h2>
+    <div class="seg" id="voicePick"></div>
+
+    <h2>Now playing</h2>
+    <div class="row"><span class="k">Chorale</span><span class="v" id="iChorale">—</span></div>
+    <div class="row"><span class="k">Title</span><span class="v" id="iTitle">—</span></div>
+    <div class="row"><span class="k">Key</span><span class="v" id="iKey">—</span></div>
+    <div class="row"><span class="k">Your note</span><span class="v" id="iNote">—</span></div>
+    <div class="row"><span class="k">Position</span><span class="v" id="iPos">—</span></div>
+
+    <h2>Low register (bass)</h2>
+    <div class="seg" id="bassPick">
+      <button data-bass="0">Written</button>
+      <button data-bass="1">Octave&nbsp;up</button>
+      <button data-bass="2">Doubled</button>
+    </div>
+
+    <h2>Sound</h2>
+    <div class="ctl"><label>Volume</label><input id="vol" type="range" min="0" max="1" step="0.01"></div>
+    <div class="ctl"><label>Reverb</label><input id="rev" type="range" min="0" max="1" step="0.01"></div>
+
+    <h2>Sync</h2>
+    <div class="row"><span class="k">Clock offset</span><span class="v" id="iOffset">—</span></div>
+    <div class="row"><span class="k">Tempo</span><span class="v" id="iTempo">—</span></div>
+    <div class="row"><span class="k"><span class="dot" id="syncDot"></span>Status</span><span class="v" id="iSync">—</span></div>
+    <div class="seg" style="margin-top:.6rem"><button id="resyncBtn">Re-sync clock</button></div>
+
+    <div class="footer" id="footer"></div>
+  </div>
+
+<script>
+'use strict';
+(() => {
+  // ============================================================ constants
+  const VOICE_HUE = [46, 28, 168, 214];                 // S, A, T, B colours
+  const LOOKAHEAD_S = 1.5;                               // schedule this far ahead
+  const TICK_MS = 100;                                   // scheduler cadence
+  const LOW_MIDI = 55;                                   // notes below this = "low register"
+  const LS = 'chorale.settings.v1';
+
+  // ============================================================ state
+  let manifest=null, config=null;
+  let clockOffset=0, targetOffset=0, lastSync=0, syncQuality=null, synced=false, syncing=false;
+  const RESYNC_EVERY = 60000 + Math.random()*30000;    // per-device jitter so bursts don't align
+  let myVoice=0, myOnsets=[];                            // flattened onsets for my voice
+  let started=false, audio=null;
+  const S = loadSettings();
+
+  // ============================================================ helpers
+  const $=id=>document.getElementById(id);
+  const clamp=(x,a,b)=>x<a?a:x>b?b:x;
+  function loadSettings(){
+    let s={};
+    try{ s=JSON.parse(localStorage.getItem(LS))||{}; }catch(e){}
+    if(typeof s.voice!=='number'||s.voice<0||s.voice>3) s.voice=Math.floor(Math.random()*4); // random self-assign
+    if(typeof s.bass!=='number') s.bass=0;
+    if(typeof s.vol!=='number') s.vol=0.85;
+    if(typeof s.rev!=='number') s.rev=0.35;
+    return s;
+  }
+  function saveSettings(){ try{ localStorage.setItem(LS,JSON.stringify(S)); }catch(e){} }
+  const serverNow=()=>Date.now()+clockOffset;
+
+  const NOTE_NAMES=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+  const midiName=m=>m==null?'—':NOTE_NAMES[((m%12)+12)%12]+(Math.floor(m/12)-1);
+
+  // ============================================================ clock sync
+  // Reference = the static server's own clock, read from the HTTP `Date` header.
+  // Every device hits the same server, so all share one clock with no NTP worry.
+  // The header is 1s-resolution; we recover sub-second phase by intersecting the
+  // [serverSec, serverSec+1000) windows from many samples (with RTT slack).
+  async function sampleClock(){
+    const url=location.pathname+'?_clk='+Date.now()+Math.random();
+    const t0=Date.now();
+    let r;
+    try{ r=await fetch(url,{method:'HEAD',cache:'no-store'}); }catch(e){ return null; }
+    const t1=Date.now();
+    const dh=r.headers.get('Date');
+    if(!dh) return null;
+    const serverSec=Date.parse(dh);
+    if(isNaN(serverSec)) return null;
+    return {serverSec, localMid:(t0+t1)/2, rtt:t1-t0};
+  }
+  async function syncClock(snap){
+    // Each sample's offset lies in [serverSec - localMid - rtt/2,  serverSec+1000
+    // - localMid + rtt/2]; intersecting samples taken either side of a server-second
+    // tick collapses the Date header's 1s quantization to ~the sample spacing.
+    // Samples are SPACED (~64ms) rather than back-to-back: spacing diversifies the
+    // sub-second phases, and a small fixed budget (~24 requests over ~1.5s, which
+    // still spans a 1s boundary) avoids hammering the host when many devices join
+    // at once. An in-flight guard stops overlapping runs from stacking requests.
+    // ~64ms precision is far tighter than needed at 4s/beat.
+    if(syncing) return; syncing=true;
+    try{
+      const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+      const deadline=Date.now()+1600;
+      let low=-Infinity, high=Infinity, n=0; const secs=new Set();
+      while(Date.now()<deadline && n<24){
+        const s=await sampleClock();
+        if(s){
+          n++; secs.add(s.serverSec);
+          const lo=s.serverSec - s.localMid - s.rtt/2;
+          const hi=s.serverSec + 1000 - s.localMid + s.rtt/2;
+          if(lo>low) low=lo;
+          if(hi<high) high=hi;
+          if(secs.size>=2 && n>=8 && (high-low)<60) break;   // crossed a boundary → tight enough
+        }
+        await sleep(64);
+      }
+      if(n===0){ synced=false; updateSyncUI(); return; }      // fallback: device clock
+      targetOffset=(low+high)/2;
+      // Honest quality: contradictory windows (low>high) or no boundary crossing
+      // (secs.size<2, window still ~1s) are NOT a perfect lock — report the real
+      // uncertainty rather than collapsing it to 0.
+      syncQuality = low>high ? Math.round(low-high)+1000
+                  : secs.size<2 ? 1000
+                  : Math.round(high-low);
+      if(!synced || snap){ clockOffset=targetOffset; }        // first sync / post-resume: snap
+      synced=true; lastSync=Date.now();
+      updateSyncUI();
+    } finally { syncing=false; }
+  }
+
+  // ============================================================ position (pure fn of time)
+  // absBeat increases forever; catalogue position = absBeat mod totalBeats.
+  function absBeat(t){ return (t - config.epoch)/1000/config.secondsPerBeat; }
+  function locate(t){
+    const total=manifest.totalBeats;
+    let ab=absBeat(t);
+    let cat=ab%total; if(cat<0) cat+=total;
+    const chs=manifest.chorales;
+    // binary search: last chorale whose startBeat <= cat
+    let lo=0,hi=chs.length-1,idx=0;
+    while(lo<=hi){ const mid=(lo+hi)>>1; if(chs[mid].startBeat<=cat){ idx=mid; lo=mid+1; } else hi=mid-1; }
+    const ch=chs[idx];
+    const localBeat=cat-ch.startBeat;
+    const inGap=localBeat>ch.lengthBeats;             // between chorales = silence
+    return {ch, idx, localBeat, cat, inGap};
+  }
+
+  // ============================================================ build my onset list
+  function buildOnsets(){
+    myOnsets=[];
+    for(const ch of manifest.chorales){
+      const notes=ch.voices[myVoice]||[];
+      for(const n of notes){ myOnsets.push({beat:ch.startBeat+n[0], dur:n[1], midi:n[2]}); }
+    }
+    myOnsets.sort((a,b)=>a.beat-b.beat);              // already ordered, but be safe
+  }
+  // current sounding note for my voice at catalogue-beat `cat` (for visuals/readout)
+  function currentNote(cat){
+    let lo=0,hi=myOnsets.length-1,idx=-1;
+    while(lo<=hi){ const mid=(lo+hi)>>1; if(myOnsets[mid].beat<=cat){ idx=mid; lo=mid+1; } else hi=mid-1; }
+    if(idx<0) return null;
+    const n=myOnsets[idx];
+    if(cat>=n.beat && cat<n.beat+n.dur) return n;
+    return null;                                       // in a rest
+  }
+
+  // ============================================================ audio engine (organ)
+  function makeAudio(){
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    // organ timbre via additive periodic wave (drawbar-ish)
+    const partials=[0,1,0.5,0.32,0.16,0.08,0,0.06,0,0,0,0.04,0,0,0,0,0.03];
+    const real=new Float32Array(partials.length), imag=new Float32Array(partials.length);
+    for(let i=0;i<partials.length;i++) imag[i]=partials[i];
+    const wave=ctx.createPeriodicWave(real,imag,{disableNormalization:false});
+
+    const master=ctx.createGain(); master.gain.value=S.vol;
+    const tone=ctx.createBiquadFilter(); tone.type='lowpass'; tone.frequency.value=2600; tone.Q.value=0.4;
+    tone.connect(master); master.connect(ctx.destination);
+
+    // simple generated-impulse reverb for spaciousness
+    const conv=ctx.createConvolver(); conv.buffer=makeImpulse(ctx,2.6,2.2);
+    const wet=ctx.createGain(); wet.gain.value=S.rev;
+    conv.connect(wet); wet.connect(master);
+
+    return {ctx,wave,master,tone,wet,conv,
+      setVol:v=>master.gain.setTargetAtTime(v,ctx.currentTime,0.05),
+      setRev:v=>wet.gain.setTargetAtTime(v,ctx.currentTime,0.05)};
+  }
+  function makeImpulse(ctx,seconds,decay){
+    const rate=ctx.sampleRate, len=Math.floor(rate*seconds), buf=ctx.createBuffer(2,len,rate);
+    for(let c=0;c<2;c++){ const d=buf.getChannelData(c);
+      for(let i=0;i<len;i++){ d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay); } }
+    return buf;
+  }
+  // schedule one note: organ tone with gentle fade-in and fade-out
+  function scheduleNote(midi, at, durSec){
+    const {ctx,wave,tone,conv}=audio;
+    const start=Math.max(at, ctx.currentTime+0.005);
+    const atk=clamp(durSec*0.18,0.05,0.6);             // gentle bloom in
+    const rel=clamp(durSec*0.30,0.12,1.1);             // soft fade at the end
+
+    const freqs=[midi];
+    if(midi<LOW_MIDI && S.bass===1) freqs[0]=midi+12;   // octave up
+    if(midi<LOW_MIDI && S.bass===2) freqs.push(midi+12);// doubled
+    const peak=0.5/Math.sqrt(freqs.length);            // compensate when stacking oscillators
+
+    const env=ctx.createGain(); env.gain.value=0;
+    env.connect(tone); env.connect(conv);              // dry path + reverb SEND (into the convolver)
+
+    const oscs=[];
+    for(const m of freqs){
+      const o=ctx.createOscillator(); o.setPeriodicWave(wave);
+      o.frequency.value=440*Math.pow(2,(m-69)/12);
+      o.connect(env); o.start(start); o.stop(start+durSec+rel+0.05);
+      oscs.push(o);
+    }
+    const sustainEnd=Math.max(start+atk, start+durSec-rel*0.5);
+    env.gain.setValueAtTime(0,start);
+    env.gain.linearRampToValueAtTime(peak,start+atk);
+    env.gain.setValueAtTime(peak,sustainEnd);
+    env.gain.linearRampToValueAtTime(0.0001,start+durSec+rel);
+
+    pending.push({start, end:start+durSec+rel+0.05, env, oscs});
+  }
+  // stop notes committed to the graph but not yet sounding (used on re-anchor /
+  // voice switch so we never double up an onset that was already scheduled)
+  function cancelFuture(){
+    if(!audio) return;
+    const nowA=audio.ctx.currentTime;
+    pending=pending.filter(p=>{
+      if(p.start>nowA+0.01){
+        try{ p.env.gain.cancelScheduledValues(nowA); p.env.gain.setValueAtTime(0,nowA);
+          p.oscs.forEach(o=>{ try{o.stop(nowA);}catch(e){} }); }catch(e){}
+        return false;
+      }
+      return true;
+    });
+  }
+
+  // ============================================================ look-ahead scheduler
+  let cursorAbs=null, schedTimer=null, schedCount=0, pending=[], lastScheduledAbs=-Infinity;
+  function startScheduler(){
+    cancelFuture();                                    // drop anything from a previous voice/run
+    lastScheduledAbs=-Infinity;
+    cursorAbs=absBeat(serverNow());                    // start from "now" — join mid-stream
+    if(schedTimer) clearInterval(schedTimer);
+    schedTimer=setInterval(schedTick, TICK_MS);
+    schedTick();
+  }
+  // re-anchor after a stall/suspend: stale committed notes are wrong now, so
+  // cancel the un-played ones and allow re-scheduling from the corrected clock.
+  function reanchor(){ cancelFuture(); lastScheduledAbs=-Infinity; cursorAbs=null; }
+  let tickEntries=0;
+  function schedTick(){
+    tickEntries++;
+    if(!audio||audio.ctx.state!=='running') return;
+    const total=manifest.totalBeats;
+    const nowS=serverNow(), nowA=audio.ctx.currentTime;
+    if(pending.length) pending=pending.filter(p=>p.end>nowA-0.5);   // prune finished
+    const aheadAbs=absBeat(nowS+LOOKAHEAD_S*1000);
+    if(cursorAbs==null || cursorAbs<absBeat(nowS)-0.001) cursorAbs=absBeat(nowS); // join / recover → now
+    let guard=0;
+    while(cursorAbs<aheadAbs && guard++<2000){
+      const cycle=Math.floor(cursorAbs/total);
+      const catBeat=cursorAbs-cycle*total;
+      const nxt=nextOnset(catBeat);
+      if(!nxt){ cursorAbs=(cycle+1)*total; continue; }  // none left this cycle → next loop
+      const onsetAbs=cycle*total+nxt.beat;
+      if(onsetAbs>=aheadAbs) break;
+      if(onsetAbs<=lastScheduledAbs){ cursorAbs=onsetAbs+1e-6; continue; } // already committed → don't double
+      // map server-time → audio-clock time (self-correcting each tick)
+      const onsetServerMs=config.epoch+onsetAbs*config.secondsPerBeat*1000;
+      const at=nowA+(onsetServerMs-nowS)/1000;
+      scheduleNote(nxt.midi, at, nxt.dur*config.secondsPerBeat);
+      schedCount++;
+      lastScheduledAbs=onsetAbs;
+      cursorAbs=onsetAbs+1e-6;
+    }
+  }
+  function nextOnset(catBeat){
+    // first onset with beat >= catBeat
+    let lo=0,hi=myOnsets.length-1,idx=-1;
+    while(lo<=hi){ const mid=(lo+hi)>>1; if(myOnsets[mid].beat>=catBeat){ idx=mid; hi=mid-1; } else lo=mid+1; }
+    return idx<0?null:myOnsets[idx];
+  }
+
+  // ============================================================ visuals (rAF)
+  function frame(){
+    requestAnimationFrame(frame);
+    // slew clock offset toward target (smooth corrections)
+    if(clockOffset!==targetOffset){
+      const d=targetOffset-clockOffset;
+      clockOffset += Math.abs(d)<1?d:d*0.06;
+    }
+    if(!manifest||!started) return;
+    const t=serverNow();
+    const {ch,localBeat,cat,inGap}=locate(t);
+    const n=inGap?null:currentNote(cat);
+
+    // envelope-ish luminance for the glow
+    let lum=0;
+    if(n){
+      const into=cat-n.beat, dur=n.dur;
+      const atk=clamp(dur*0.18,0.05/config.secondsPerBeat,0.6/config.secondsPerBeat);
+      const rel=clamp(dur*0.30,0.12/config.secondsPerBeat,1.1/config.secondsPerBeat);
+      lum = into<atk ? into/atk
+          : into>dur-rel ? Math.max(0,(dur-into)/rel)
+          : 1;
+    }
+    const glow=$('glow');
+    glow.style.setProperty('--lum', (lum*0.9).toFixed(3));
+    glow.style.setProperty('--pulse', (0.55+lum*0.5).toFixed(3));
+    $('noteName').textContent = n? midiName(n.midi) : (inGap? '· breath ·' : '·');
+
+    // info panel live fields (only when open, to save work)
+    if($('info').classList.contains('open')){
+      $('iChorale').textContent='#'+ch.num+'  ('+(locate(t).idx+1)+'/'+manifest.chorales.length+')';
+      $('iTitle').textContent=ch.title||'—';
+      $('iKey').textContent=fmtKey(ch.key);
+      $('iNote').textContent=n?midiName(n.midi):(inGap?'breath':'rest');
+      $('iPos').textContent=localBeat.toFixed(1)+' / '+ch.lengthBeats.toFixed(0)+' beats';
+    }
+  }
+  function fmtKey(k){ if(!k) return '—'; const t=k[0]; const acc=k.includes('#')?'♯':k.includes('-')?'♭':'';
+    return t.toUpperCase()+acc+(t===t.toLowerCase()?' minor':' major'); }
+
+  // ============================================================ UI wiring
+  function applyHue(){
+    const h=VOICE_HUE[myVoice];
+    document.documentElement.style.setProperty('--hue',h);
+    $('voiceName').textContent=manifest?manifest.voiceNames[myVoice]:'—';
+    document.querySelector('meta[name=theme-color]').setAttribute('content','hsl('+h+' 60% 8%)');
+  }
+  function buildVoicePicker(){
+    const wrap=$('voicePick'); wrap.innerHTML='';
+    manifest.voiceNames.forEach((nm,i)=>{
+      const b=document.createElement('button'); b.textContent=nm;
+      if(i===myVoice) b.classList.add('on');
+      b.onclick=()=>{ if(i===myVoice)return; myVoice=i; S.voice=i; saveSettings();
+        buildOnsets(); applyHue(); buildVoicePicker(); cursorAbs=null; if(started) startScheduler(); };
+      wrap.appendChild(b);
+    });
+  }
+  function markSeg(sel,attr,val){ document.querySelectorAll(sel+' button').forEach(b=>
+    b.classList.toggle('on', +b.dataset[attr]===val)); }
+
+  function updateSyncUI(){
+    const dot=$('syncDot');
+    if(!synced){ dot.style.background='#dc2626'; $('iSync').textContent='device clock (no server)'; }
+    else { const good=syncQuality!=null&&syncQuality<400;
+      dot.style.background=good?'#15803d':'#d97706';
+      $('iSync').textContent=(good?'locked':'coarse')+' ±'+(syncQuality??'?')+'ms'; }
+    $('iOffset').textContent=(clockOffset>=0?'+':'')+Math.round(clockOffset)+' ms';
+    $('iTempo').textContent=config?config.secondsPerBeat+' s / crotchet':'—';
+  }
+
+  // ============================================================ lifecycle
+  async function boot(){
+    applyHue();                                         // colour before data (uses random voice)
+    let mOk=false;
+    try{
+      [manifest,config]=await Promise.all([
+        fetch('manifest.json',{cache:'force-cache'}).then(r=>r.json()),
+        fetch('config.json',{cache:'no-store'}).then(r=>r.json()),
+      ]);
+      mOk=true;
+    }catch(e){
+      $('startBadge').innerHTML='⚠ could not load chorale data';
+      return;
+    }
+    // URL tempo override for solo auditioning (desyncs from others — dev only)
+    const sp=new URLSearchParams(location.search).get('spb');
+    if(sp && +sp>0) config.secondsPerBeat=+sp;
+
+    myVoice=S.voice;
+    buildOnsets(); applyHue(); buildVoicePicker();
+    markSeg('#bassPick','bass',S.bass);
+    $('vol').value=S.vol; $('rev').value=S.rev;
+    $('footer').textContent='Distributed Bach — '+manifest.chorales.length+
+      ' chorales · v'+manifest.version+' · tap the score of phones to fill a room.';
+
+    await syncClock();
+    $('startBadge').innerHTML='You are the <b>'+manifest.voiceNames[myVoice]+'</b>';
+    $('goBtn').hidden=false;
+    requestAnimationFrame(frame);
+    // periodic resync: only while visible (audio is suspended when hidden) and on
+    // a per-device jittered cadence so devices don't burst the host in unison.
+    setInterval(()=>{ if(document.visibilityState==='visible' && Date.now()-lastSync>RESYNC_EVERY) syncClock(); }, 15000);
+  }
+
+  let wakeLock=null;
+  async function requestWake(){
+    try{ if('wakeLock' in navigator) wakeLock=await navigator.wakeLock.request('screen'); }catch(e){}
+  }
+
+  function join(){
+    if(started) return; started=true;
+    audio=makeAudio();
+    $('start').style.display='none';
+    requestWake();                                      // keep screen awake (installation)
+    startScheduler();                                   // timer runs; schedTick waits for ctx 'running'
+    audio.ctx.resume().catch(()=>{});                   // a later tap re-attempts (pointerdown handler)
+  }
+
+  // events
+  $('start').addEventListener('click', join);
+  $('center').addEventListener('click', ()=>$('info').classList.toggle('open'));
+  $('hint').addEventListener('click', e=>{e.stopPropagation();$('info').classList.add('open');});
+  $('grip').parentElement.addEventListener('click', e=>{ if(e.target.id==='grip'||e.target.id==='info') $('info').classList.remove('open'); });
+  $('bassPick').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b)return;
+    S.bass=+b.dataset.bass; saveSettings(); markSeg('#bassPick','bass',S.bass); });
+  $('vol').addEventListener('input', e=>{ S.vol=+e.target.value; saveSettings(); if(audio)audio.setVol(S.vol); });
+  $('rev').addEventListener('input', e=>{ S.rev=+e.target.value; saveSettings(); if(audio)audio.setRev(S.rev); });
+  $('resyncBtn').addEventListener('click', ()=>{ syncClock(); });
+
+  // iOS suspends the AudioContext on lock/interruption and resume() outside a
+  // gesture often rejects — any tap recovers it (and the scheduler resumes once
+  // ctx.state is 'running' again).
+  document.addEventListener('pointerdown', ()=>{
+    if(audio && audio.ctx.state!=='running') audio.ctx.resume().catch(()=>{});
+  });
+
+  // resilience: on returning to the app, re-sync clock + re-anchor, resume audio
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState==='visible' && started){
+      if(audio) audio.ctx.resume().catch(()=>{});
+      requestWake();                                    // wake lock is released on hide
+      reanchor();                                       // drop stale committed notes, re-anchor to now
+      syncClock(true);                                  // snap (post-background discontinuity, not drift)
+      fetch('config.json',{cache:'no-store'}).then(r=>r.json()).then(c=>{
+        const sp=new URLSearchParams(location.search).get('spb');
+        config=c; if(sp&&+sp>0) config.secondsPerBeat=+sp; updateSyncUI();
+      }).catch(()=>{});
+    }
+  });
+
+  // debug handle for field diagnostics (harmless; useful on-site for a distributed install)
+  window.__chorale={
+    get voice(){return myVoice;}, get synced(){return synced;}, get quality(){return syncQuality;},
+    get offset(){return clockOffset;}, get state(){return audio?audio.ctx.state:'no-audio';},
+    get sched(){return schedCount;}, get ticks(){return tickEntries;}, get cursorAbs(){return cursorAbs;}, now:serverNow,
+    tick(){return schedTick();}, render(){return frame();}, locate, currentNote,
+    pos(){ const t=serverNow(); const L=locate(t); const n=L.inGap?null:currentNote(L.cat);
+      return {chorale:L.ch.num, title:L.ch.title, idx:L.idx, localBeat:+L.localBeat.toFixed(2),
+        note:n?midiName(n.midi):(L.inGap?'breath':'rest')}; },
+    manifest(){return manifest;}, config(){return config;},
+  };
+
+  boot();
+})();
+</script>
+</body>
+</html>
