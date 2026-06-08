@@ -21,7 +21,7 @@ Output:
   config.json    — epoch + secondsPerBeat (tiny, hand-editable, the "performance")
 """
 
-import json, os, re, sys, glob
+import json, os, re, sys, glob, html, hashlib
 
 # ---- the "performance" constants (musical feel; tempo lives in config.json) ----
 HOLD_EXTRA_BEATS   = 2.0    # extra beats the phrase-final (fermata) chord is held
@@ -33,6 +33,13 @@ MANIFEST_VERSION   = 1
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 KERN_DIR = os.path.join(HERE, "kern")
+TITLES_PATH = os.path.join(HERE, "titles.json")   # German title -> {en, zh}; see gen_titles.py
+
+try:
+    with open(TITLES_PATH, encoding="utf-8") as _tf:
+        TRANSLATIONS = json.load(_tf)
+except FileNotFoundError:
+    TRANSLATIONS = {}
 
 PITCH_MAP = {'C': 60, 'D': 62, 'E': 64, 'F': 65, 'G': 67, 'A': 69, 'B': 71}
 
@@ -218,6 +225,13 @@ def parse_chorale(path):
             voice_notes[j].append([round(ns, 5), round(nd, 5), n['midi']])
             length = max(length, ns + nd)
 
+    # Humdrum stores non-ASCII (German umlauts, ß) as SGML entities — &uuml; &ouml;
+    # &auml; &szlig; — so the title reads ASCII on disk. Decode to real Unicode here
+    # (manifest is UTF-8 / JSON-escaped) so the player shows "Schmücke", not
+    # "Schm&uuml;cke". html.unescape covers all named + numeric entities.
+    if meta['title']:
+        meta['title'] = html.unescape(meta['title'])
+
     # reverse to Soprano,Alto,Tenor,Bass
     voices_satb = [voice_notes[3], voice_notes[2], voice_notes[1], voice_notes[0]]
     return meta, voices_satb, round(length, 5)
@@ -236,8 +250,14 @@ def main():
         if not res:
             continue
         meta, voices, length = res
+        title = meta['title'] or meta['file']
+        tr = TRANSLATIONS.get(title)
+        if tr is None:
+            warnings.append(f"{meta['file']}: no EN/ZH translation for title {title!r}")
+            tr = {}
         chorales.append({
-            'num': meta['num'], 'title': meta['title'] or meta['file'],
+            'num': meta['num'], 'title': title,
+            'titleEn': tr.get('en'), 'titleZh': tr.get('zh'),
             'key': meta['key'], 'bwv': meta['bwv'],
             'startBeat': round(global_beat, 5), 'lengthBeats': length,
             'voices': voices,
@@ -252,16 +272,34 @@ def main():
         'totalBeats': round(global_beat, 5),
         'chorales': chorales,
     }
+    # Serialize the manifest once and hash it: the hash is a content fingerprint the
+    # player appends as ?v=<hash> so a changed manifest is re-fetched fresh while an
+    # unchanged one stays hard-cached (immutable per content version).
+    manifest_str = json.dumps(manifest, separators=(',', ':'))
+    manifest_hash = hashlib.md5(manifest_str.encode('utf-8')).hexdigest()[:12]
+
+    config_path = os.path.join(HERE, 'config.json')
     config = {
         'version': MANIFEST_VERSION,
         'epoch': EPOCH_MS,
         'secondsPerBeat': SECONDS_PER_BEAT,
         'master': {'volume': 1.0},
     }
+    # Preserve hand-edited performance settings (tempo, epoch, volume) across rebuilds —
+    # config.json is the editable "performance" file; only version + hash are refreshed.
+    try:
+        with open(config_path, encoding='utf-8') as f:
+            existing = json.load(f)
+        for k in ('epoch', 'secondsPerBeat', 'master'):
+            if k in existing:
+                config[k] = existing[k]
+    except (FileNotFoundError, ValueError):
+        pass
+    config['manifestHash'] = manifest_hash
 
     with open(os.path.join(HERE, 'manifest.json'), 'w') as f:
-        json.dump(manifest, f, separators=(',', ':'))
-    with open(os.path.join(HERE, 'config.json'), 'w') as f:
+        f.write(manifest_str)
+    with open(config_path, 'w') as f:
         json.dump(config, f, indent=2)
 
     # ---- validation report ----

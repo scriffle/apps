@@ -48,7 +48,7 @@
   #detail{transform:translateX(calc((1 - var(--pg,0)) * 100%));
     padding:max(1.1rem,env(safe-area-inset-top)) 1rem 1rem;}
   #programme{height:100%;max-width:32rem;margin:0 auto;display:flex;flex-direction:column;
-    gap:.4rem;overflow-y:auto;-webkit-overflow-scrolling:touch;justify-content:safe center;
+    gap:.4rem;overflow:hidden;justify-content:safe center;
     padding:1.5rem 0 4rem;}
   #progHead{text-align:center;font-size:.72rem;text-transform:uppercase;letter-spacing:.14em;
     color:var(--muted);margin-bottom:.6rem;}
@@ -563,11 +563,26 @@
         + progRow(chs[(idx+2)%N],'next n2')
         + progRow(chs[(idx+3)%N],'next n3');
       $('programme').innerHTML=h;
+      fitProgramme();                                     // no scrollbar: hide overflowing "up next" rows
     }
     const ch=L.ch, n=L.inGap?null:currentNote(L.cat);
     const fill=$('progFill'); if(fill) fill.style.width=(clamp(L.localBeat/ch.lengthBeats,0,1)*100).toFixed(1)+'%';
     const note=$('progNote'); if(note) note.textContent=n?midiName(n.midi):(L.inGap?'· breath ·':'rest');
     const pos=$('progPos'); if(pos) pos.textContent=L.localBeat.toFixed(0)+' / '+ch.lengthBeats.toFixed(0)+' beats';
+  }
+
+  // fit without a scrollbar: keep Previous + Now, drop the last "Up next" row(s)
+  // (and their caption) until the programme no longer overflows its height.
+  function fitProgramme(){
+    const wrap=$('programme'); if(!wrap) return;
+    const nexts=[].slice.call(wrap.querySelectorAll('.prog-row.next'));
+    const cap=[].slice.call(wrap.querySelectorAll('.prog-cap')).filter(c=>/up next/i.test(c.textContent))[0];
+    nexts.forEach(r=>{ r.style.display=''; });
+    if(cap) cap.style.display='';
+    for(let i=nexts.length-1; i>=0 && wrap.scrollHeight>wrap.clientHeight+1; i--){
+      nexts[i].style.display='none';
+    }
+    if(cap && nexts.every(r=>r.style.display==='none')) cap.style.display='none';
   }
 
   // ============================================================ swipe pager
@@ -694,6 +709,13 @@
     const sp=new URLSearchParams(location.search).get('spb');
     if(sp && +sp>0) config.secondsPerBeat=+sp;
 
+    // field diagnostic: a manifest without translations / with raw &…; entities means a
+    // STALE manifest.json is being served — rebuild (build_manifest.py) and redeploy.
+    const c0=manifest.chorales&&manifest.chorales[0];
+    if(c0 && (!c0.titleEn || /&[a-z]+;/i.test(c0.title||''))){
+      console.warn('[chorale] stale manifest.json (no translations / unescaped umlauts) — rebuild + redeploy manifest.json & config.json');
+    }
+
     myVoice=S.voice;
     buildOnsets(); applyHue(); buildVoicePicker();
     markSeg('#bassPick','bass',S.bass);
@@ -735,6 +757,7 @@
   $('hint').addEventListener('click', e=>{e.stopPropagation();$('info').classList.add('open');});
   $('grip').parentElement.addEventListener('click', e=>{ if(e.target.id==='grip'||e.target.id==='info') $('info').classList.remove('open'); });
   $('langPick').addEventListener('click', e=>{ const b=e.target.closest('button'); if(b) setLang(b.dataset.lang); });
+  window.addEventListener('resize', ()=>{ if(manifest) renderDetail(true); });   // re-fit programme on rotate/resize
   $('bassPick').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b)return;
     S.bass=+b.dataset.bass; saveSettings(); markSeg('#bassPick','bass',S.bass); });
   $('vol').addEventListener('input', e=>{ S.vol=+e.target.value; saveSettings(); if(audio)audio.setVol(S.vol); });
