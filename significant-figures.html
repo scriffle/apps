@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Significant Figures Instructor</title>
+<style>
+  :root {
+    /* Colour tokens — colourblind-safe (Okabe–Ito derived). Retune the whole app here. */
+    --c-signif:  #0072B2;  /* significant digit (non-zero)                  */
+    --c-capt:    var(--c-signif);  /* significant captive zero — same blue  */
+    --c-trail:   var(--c-signif);  /* significant trailing zero — same blue */
+    --c-pad:     #8A9099;  /* padding / leading zero                        */
+    --c-amb:     #E69F00;  /* ambiguous trailing zero (no decimal point)    */
+    --c-struct:  #5F6368;  /* structural: sign, point, ×10ⁿ                 */
+    --c-bar:     #CC3366;  /* bar-notation overline                         */
+
+    --bg: #0f1419;
+    --panel: #1a2129;
+    --panel-2: #222b35;
+    --ink: #e8edf2;
+    --ink-dim: #9aa6b2;
+    --line: #2c3742;
+    --accent: #4aa3ff;
+    --ok: #3ddc97;
+    --no: #ff8080;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.45;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 18px 20px 40px; }
+  header h1 { font-size: 1.3rem; margin: 0 0 2px; letter-spacing: -0.01em; }
+  header p { margin: 0 0 12px; color: var(--ink-dim); font-size: 0.9rem; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 13px 16px; margin-bottom: 11px; }
+
+  /* ---- mode tabs ---- */
+  .tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+  .tab { padding: 8px 18px; border-radius: 9px 9px 0 0; border: 1px solid var(--line); border-bottom: none;
+         background: var(--panel-2); color: var(--ink-dim); cursor: pointer; font-size: 0.92rem; }
+  .tab.active { background: var(--panel); color: var(--ink); border-color: var(--accent); }
+
+  /* ---- input row ---- */
+  .input-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: stretch; }
+  #numInput {
+    flex: 1 1 280px; min-width: 0;
+    font-size: 1.2rem; font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    padding: 10px 13px; border-radius: 9px;
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--ink);
+  }
+  #numInput:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(74,163,255,0.18); }
+  select { font-size: 0.92rem; padding: 10px 12px; border-radius: 9px; background: var(--panel-2); border: 1px solid var(--line); color: var(--ink); cursor: pointer; }
+
+  .examples { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-family: ui-monospace, Menlo, monospace; font-size: 0.8rem; padding: 4px 9px; border-radius: 999px;
+          cursor: pointer; background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-dim); }
+  .chip:hover { color: var(--ink); border-color: var(--accent); }
+
+  /* ---- rendered number (explore) ---- */
+  .display-card { text-align: center; padding: 16px 16px 14px; }
+  .display { font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+             font-size: clamp(1.9rem, 7vw, 2.9rem); letter-spacing: 0.04em; word-break: break-word; min-height: 1.2em; }
+  .display .digit, .q-number .digit { position: relative; padding-bottom: 2px; transition: background 0.12s; cursor: default; }
+  .display .digit.click { cursor: pointer; }
+  .display .digit.click:hover { background: rgba(255,255,255,0.07); border-radius: 4px; }
+
+  .r-signif { color: var(--c-signif); border-bottom: 4px solid var(--c-signif); }
+  .r-capt   { color: var(--c-capt);   border-bottom: 4px solid var(--c-capt); }
+  .r-trail  { color: var(--c-trail);  border-bottom: 4px dashed var(--c-trail); }
+  .r-pad    { color: var(--c-pad); opacity: 0.75; }
+  .r-amb    { color: var(--c-amb);    border-bottom: 4px dotted var(--c-amb); }
+  .r-struct { color: var(--c-struct); }
+  .q-plain  { color: var(--ink); }
+  .barred   { border-top: 4px solid var(--c-bar); }
+  .display sup, .q-number sup { font-size: 0.55em; }
+
+  .count-line { margin-top: 12px; font-size: 1.02rem; color: var(--ink-dim); }
+  .count-line b { color: var(--ink); font-size: 1.3rem; }
+  .conv-chips { margin-top: 10px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .conv-chip { font-size: 0.83rem; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); }
+  .conv-chip.active { border-color: var(--accent); color: var(--ink); }
+  .conv-chip b { color: var(--accent); }
+
+  .error { color: #ff7a7a; font-family: ui-monospace, monospace; }
+
+  /* ---- ambiguity resolver ---- */
+  .resolver { background: rgba(230,159,0,0.08); border: 1px solid rgba(230,159,0,0.35); }
+  .resolver h3 { margin: 0 0 4px; font-size: 0.98rem; color: var(--c-amb); }
+  .resolver p { margin: 0 0 9px; font-size: 0.88rem; color: var(--ink-dim); }
+  .sci-forms { display: flex; flex-wrap: wrap; gap: 9px; }
+  .sci-form { font-family: ui-monospace, Menlo, monospace; font-size: 1.02rem; padding: 8px 12px; border-radius: 9px;
+              background: var(--panel-2); border: 1px solid var(--line); cursor: pointer; }
+  .sci-form:hover { border-color: var(--accent); }
+  .sci-form small { display: block; color: var(--ink-dim); font-size: 0.7rem; margin-top: 1px; }
+
+  /* ---- legend & explanation ---- */
+  .legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(205px, 1fr)); gap: 4px 16px; }
+  .legend-item { display: flex; align-items: center; gap: 9px; font-size: 0.85rem; }
+  .swatch { font-family: ui-monospace, monospace; font-weight: 700; width: 1.6em; text-align: center; }
+
+  .explain { list-style: none; padding: 0; margin: 0; }
+  .explain li { display: flex; gap: 12px; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 0.88rem; text-align: left; }
+  .explain li:last-child { border-bottom: none; }
+  .explain .pos { font-family: ui-monospace, monospace; font-weight: 700; font-size: 1.1rem; min-width: 1.4em; text-align: center; }
+  .explain .role-name { font-weight: 600; }
+  .explain .why { color: var(--ink-dim); }
+
+  h2.section { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-dim); margin: 0 0 8px; }
+  .source { font-size: 0.78rem; color: var(--ink-dim); margin-top: 6px; }
+  .source a { color: var(--accent); }
+  .hint { font-size: 0.8rem; color: var(--ink-dim); margin-top: 7px; }
+
+  /* ---- practice mode (fixed layout — nothing above the buttons moves) ---- */
+  .practice-settings { display: flex; gap: 14px; flex-wrap: wrap; }
+  .practice-settings label { display: flex; flex-direction: column; gap: 4px; font-size: 0.7rem;
+                             text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-dim); }
+  .practice-stage { text-align: center; }
+  .q-category { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin-top: 4px; }
+  .q-number { height: 76px; display: flex; align-items: center; justify-content: center;
+              font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; font-size: clamp(1.8rem, 6vw, 2.6rem);
+              letter-spacing: 0.04em; overflow: hidden; }
+  .q-prompt { font-size: 0.95rem; color: var(--ink-dim); }
+  .q-answer { min-height: 54px; display: flex; align-items: center; justify-content: center; margin-top: 8px; }
+  .num-btns { display: flex; gap: 7px; flex-wrap: wrap; justify-content: center; }
+  .num-btn { width: 46px; height: 46px; font-size: 1.2rem; border-radius: 10px; border: 1px solid var(--line);
+             background: var(--panel-2); color: var(--ink); cursor: pointer; }
+  .num-btn:hover:not(:disabled) { border-color: var(--accent); }
+  .num-btn:disabled { cursor: default; opacity: 0.55; }
+  .num-btn.correct { background: #1f6b4a; border-color: var(--ok); color: #fff; opacity: 1; }
+  .num-btn.wrong { background: #6b2020; border-color: var(--no); color: #fff; opacity: 1; }
+  .type-answer { display: flex; gap: 10px; justify-content: center; }
+  .type-answer input { width: 100px; font-size: 1.2rem; text-align: center; padding: 9px; border-radius: 9px;
+                       background: var(--panel-2); border: 1px solid var(--line); color: var(--ink); }
+  .q-verdict { font-weight: 600; font-size: 1.02rem; margin-top: 14px; }
+  .q-verdict.ok { color: var(--ok); }
+  .q-verdict.no { color: var(--no); }
+  .q-actions { display: flex; gap: 12px; justify-content: center; margin-top: 10px; }
+  .primary-btn { padding: 9px 18px; border-radius: 9px; border: none; background: var(--accent); color: #03121f;
+                 font-weight: 600; cursor: pointer; font-size: 0.92rem; }
+  .primary-btn:hover { filter: brightness(1.08); }
+  .ghost-btn { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: transparent;
+               color: var(--ink-dim); cursor: pointer; font-size: 0.85rem; }
+  .ghost-btn:hover { color: var(--ink); border-color: var(--accent); }
+  .q-rule { font-size: 0.85rem; color: var(--ink-dim); min-height: 1em; margin-top: 10px; }
+  #qHint { min-height: 1em; }
+  #qExplain { max-width: 560px; margin: 8px auto 0; }
+
+  .score-row { display: flex; gap: 22px; flex-wrap: wrap; margin-bottom: 12px; }
+  .stat { display: flex; flex-direction: column; }
+  .stat b { font-size: 1.5rem; color: var(--ink); }
+  .stat span { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-dim); }
+  .bycat { display: flex; flex-direction: column; gap: 1px; margin-bottom: 12px; }
+  .bycat-row { display: flex; justify-content: space-between; font-size: 0.84rem; padding: 5px 0; border-bottom: 1px solid var(--line); }
+  .bycat-row span:last-child { color: var(--ink-dim); font-family: ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Significant Figures Instructor</h1>
+    <p>Learn what every digit does — then test yourself.</p>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-mode="explore">Explore</button>
+    <button class="tab" data-mode="practice">Practice</button>
+  </nav>
+
+  <!-- ============ EXPLORE MODE ============ -->
+  <div id="exploreMode">
+    <div class="card">
+      <div class="input-row">
+        <input id="numInput" type="text" inputmode="text" autocomplete="off" spellcheck="false"
+               placeholder="e.g. 0.00452,  1500,  1.50×10³,  6.022e23" value="1500" />
+        <select id="convSelect" title="Significant-figures convention">
+          <option value="vcaa">VCAA</option>
+          <option value="strict">Strict / International</option>
+          <option value="bar">Bar notation</option>
+        </select>
+      </div>
+      <div class="examples" id="examples"></div>
+      <div class="hint" id="convHint"></div>
+    </div>
+
+    <div class="card display-card">
+      <div class="display" id="display"></div>
+      <div class="count-line" id="countLine"></div>
+      <div class="conv-chips" id="convChips"></div>
+    </div>
+
+    <div class="card resolver" id="resolver" style="display:none">
+      <h3>⚠ This number is ambiguous</h3>
+      <p id="resolverText"></p>
+      <div class="sci-forms" id="sciForms"></div>
+    </div>
+
+    <div class="card">
+      <h2 class="section">Legend</h2>
+      <div class="legend">
+        <div class="legend-item"><span class="swatch r-signif">5</span> Significant digit (non-zero)</div>
+        <div class="legend-item"><span class="swatch r-capt">0</span> Significant zero (captive — between digits)</div>
+        <div class="legend-item"><span class="swatch r-trail">0</span> Significant zero (trailing — after decimal)</div>
+        <div class="legend-item"><span class="swatch r-pad">0</span> Padding / placeholder (leading zero)</div>
+        <div class="legend-item"><span class="swatch r-amb">0</span> Ambiguous trailing zero (no decimal point)</div>
+        <div class="legend-item"><span class="swatch r-struct">.</span> Structural (sign, point, ×10ⁿ)</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="section">Digit-by-digit</h2>
+      <ul class="explain" id="explain"></ul>
+    </div>
+
+    <div class="card">
+      <h2 class="section">Convention reference</h2>
+      <div id="ruleText" style="font-size:0.88rem"></div>
+      <div class="source">
+        Reference: VCAA — <em>VCE Study Design, Measurement terms</em>.
+        <a href="https://www.vcaa.vic.edu.au/curriculum/vce-curriculum/vce-study-designs" target="_blank" rel="noopener">vcaa.vic.edu.au</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PRACTICE MODE ============ -->
+  <div id="practiceMode" style="display:none">
+    <div class="card">
+      <div class="practice-settings">
+        <label>Difficulty
+          <select id="qDiff">
+            <option value="easy">Easy</option>
+            <option value="medium" selected>Medium</option>
+            <option value="hard">Hard</option>
+            <option value="exam">Exam mix</option>
+          </select>
+        </label>
+        <label>Convention
+          <select id="qConv">
+            <option value="vcaa">VCAA</option>
+            <option value="strict">Strict / International</option>
+          </select>
+        </label>
+        <label>Answer by
+          <select id="qInputMode">
+            <option value="buttons">Buttons</option>
+            <option value="type">Typing</option>
+          </select>
+        </label>
+      </div>
+      <div class="hint" id="qConvHint"></div>
+    </div>
+
+    <!-- Above the action buttons sit ONLY fixed-size, content-independent elements
+         (a fixed-height number box, constant prompt text, and the always-8-button answer
+         row), so the controls never move. Everything that changes when you answer —
+         verdict, category, explanation — lives in the feedback region BELOW the buttons
+         and only ever grows downward. -->
+    <div class="card practice-stage">
+      <div class="q-number display" id="qDisplay"></div>
+      <div class="q-prompt">How many significant figures?</div>
+      <div class="q-answer" id="qAnswerArea"></div>
+      <div class="q-actions">
+        <button class="ghost-btn" id="qHintBtn">Show hint</button>
+        <button class="primary-btn" id="qNextBtn">Next →</button>
+      </div>
+      <div class="q-verdict" id="qVerdict"></div>
+      <div class="q-category" id="qCategory"></div>
+      <div class="hint" id="qHint"></div>
+      <div class="q-rule" id="qRuleNote"></div>
+      <ul class="explain" id="qExplain"></ul>
+    </div>
+
+    <div class="card">
+      <h2 class="section">Progress</h2>
+      <div class="score-row">
+        <div class="stat"><b id="qScore">0</b><span>correct</span></div>
+        <div class="stat"><b id="qTotal">0</b><span>attempted</span></div>
+        <div class="stat"><b id="qStreak">0</b><span>streak</span></div>
+        <div class="stat"><b id="qPct">—</b><span>accuracy</span></div>
+      </div>
+      <div class="bycat" id="qByCat"></div>
+      <button class="ghost-btn" id="qResetBtn">Reset progress</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   1. PARSE — raw string → structured pieces
+   ============================================================ */
+function parseNumber(raw) {
+  let s = (raw || "").trim();
+  if (!s) return { ok: false, error: "" };
+
+  s = s.replace(/−/g, "-").replace(/×/g, "x");
+  const sup = { "⁰":"0","¹":"1","²":"2","³":"3","⁴":"4","⁵":"5","⁶":"6","⁷":"7","⁸":"8","⁹":"9","⁺":"+","⁻":"-" };
+  s = s.replace(/[⁰¹²³⁴-⁹⁺⁻]/g, ch => sup[ch]);
+
+  let uncertainty = null;
+  const um = s.split(/\s*(?:±|\+\/-)\s*/);
+  if (um.length === 2) { s = um[0].trim(); uncertainty = um[1].trim(); }
+
+  s = s.replace(/\s*[xX]\s*10\s*\^?\s*/g, "e").replace(/\s*\*\s*10\s*\^?\s*/g, "e");
+
+  let mant = s, expStr = null;
+  const em = s.split(/[eE]/);
+  if (em.length === 2) { mant = em[0].trim(); expStr = em[1].trim(); }
+  const isSci = expStr !== null && expStr !== "";
+  if (isSci && !/^[+-]?\d+$/.test(expStr)) return { ok: false, error: "Bad exponent: “" + expStr + "”" };
+
+  const m = mant.match(/^([+-]?)(\d*)(\.?)(\d*)$/);
+  if (!m || (m[2] === "" && m[4] === "")) return { ok: false, error: "Not a recognised number" };
+  const mantSign = m[1] === "-" ? "-" : (m[1] === "+" ? "+" : "");
+  const hasDecimal = m[3] === ".";
+  const intPart = m[2];
+  const fracPart = hasDecimal ? m[4] : null;
+  if (intPart === "" && !hasDecimal) return { ok: false, error: "Not a recognised number" };
+
+  return { ok: true, mantSign, intPart, fracPart, hasDecimal, isSci, expStr, uncertainty };
+}
+
+/* ============================================================
+   2. CLASSIFY — assign each digit a role under a convention
+   ============================================================ */
+function classify(p, convention, barIdx) {
+  const D = (p.intPart || "") + (p.fracPart || "");
+  const intLen = (p.intPart || "").length;
+  const n = D.length;
+  const firstNZ = D.search(/[1-9]/);
+  let lastNZ = -1; for (let i = n - 1; i >= 0; i--) if (D[i] !== "0") { lastNZ = i; break; }
+
+  const cells = [];
+  const role = new Array(n).fill("pad");
+
+  if (firstNZ === -1) {
+    for (let i = 0; i < n; i++) role[i] = (p.hasDecimal && i >= intLen) ? "trail" : "pad";
+    const sigCount = role.filter(r => r === "trail").length;
+    for (let i = 0; i < n; i++) cells.push({ ch: D[i], role: role[i], idx: i, intLen });
+    return { cells, sigCount, firstNonZero: -1, lastSigIdx: -1, D, intLen, allZero: true };
+  }
+
+  let sigEnd;
+  if (p.hasDecimal || p.isSci) sigEnd = n - 1;
+  else if (convention === "vcaa") sigEnd = n - 1;
+  else if (convention === "bar") sigEnd = (barIdx == null) ? lastNZ : Math.max(lastNZ, barIdx);
+  else sigEnd = lastNZ;                                   // strict
+
+  for (let i = 0; i < n; i++) {
+    if (i < firstNZ) role[i] = "pad";
+    else if (i <= sigEnd) role[i] = (D[i] !== "0") ? "signif" : (i < lastNZ ? "capt" : "trail");
+    else role[i] = "amb";
+  }
+
+  const sigCount = sigEnd - firstNZ + 1;
+  for (let i = 0; i < n; i++)
+    cells.push({ ch: D[i], role: role[i], idx: i, intLen, barred: convention === "bar" && i >= firstNZ && i <= sigEnd });
+  return { cells, sigCount, firstNonZero: firstNZ, lastSigIdx: sigEnd, D, intLen, allZero: false };
+}
+
+function countFor(p, convention) { return classify(p, convention, null).sigCount; }
+
+/* ============================================================
+   3. AMBIGUITY — resolved scientific forms
+   ============================================================ */
+function sciResolutions(p) {
+  const D = (p.intPart || "") + (p.fracPart || "");
+  const firstNZ = D.search(/[1-9]/);
+  if (firstNZ === -1) return null;
+  let lastNZ = -1; for (let i = D.length - 1; i >= 0; i--) if (D[i] !== "0") { lastNZ = i; break; }
+  const minK = lastNZ - firstNZ + 1, maxK = D.length - firstNZ;
+  if (minK >= maxK) return null;
+  const sig = D.slice(firstNZ);
+  const exp = (p.intPart.length - 1) - firstNZ;
+  const forms = [];
+  for (let k = minK; k <= maxK; k++) {
+    let digits = sig.slice(0, k); while (digits.length < k) digits += "0";
+    forms.push({ mant: digits.length > 1 ? digits[0] + "." + digits.slice(1) : digits[0], exp, k });
+  }
+  return { forms, minK, maxK };
+}
+
+/* ============================================================
+   4. SHARED RENDER HELPERS (used by both modes)
+   ============================================================ */
+const ROLE_INFO = {
+  signif: { name: "Significant non-zero", cls: "r-signif", why: "A non-zero digit is always significant." },
+  capt:   { name: "Significant zero (captive)", cls: "r-capt", why: "A zero between significant digits is always significant." },
+  trail:  { name: "Significant zero (trailing)", cls: "r-trail", why: "A trailing zero after a decimal point shows measured precision, so it is significant." },
+  pad:    { name: "Padding (leading zero)", cls: "r-pad", why: "A leading zero only locates the decimal point — it is never significant." },
+  amb:    { name: "Ambiguous trailing zero", cls: "r-amb", why: "A trailing zero in a whole number with no decimal point — significant under VCAA, not under the strict convention. Scientific notation removes the doubt." },
+  struct: { name: "Structural", cls: "r-struct", why: "A sign, decimal point, or ×10ⁿ scale — not itself a significant figure." }
+};
+const superDigits = { "0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹","-":"⁻","+":"" };
+function supStr(s) { return String(s).split("").map(c => superDigits[c] ?? c).join(""); }
+function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
+
+/* Build the coloured number. opts.plain → neutral (no role colours / no tooltips). */
+function buildNumberHtml(p, res, convention, opts) {
+  opts = opts || {};
+  const ttl = s => opts.plain ? "" : s;
+  let html = "";
+  if (p.mantSign === "-") html += '<span class="digit r-struct" title="' + ttl("Negative sign — structural, not a significant figure") + '">−</span>';
+  else if (p.mantSign === "+") html += '<span class="digit r-struct" title="' + ttl("Positive sign — structural") + '">+</span>';
+
+  const clickable = opts.clickable && convention === "bar" && !p.hasDecimal && !p.isSci;
+  res.cells.forEach(cell => {
+    if (cell.idx === res.intLen && p.hasDecimal)
+      html += '<span class="digit r-struct" title="' + ttl("Decimal point — structural") + '">.</span>';
+    const info = ROLE_INFO[cell.role];
+    const roleCls = opts.plain ? "q-plain" : info.cls;
+    const barCls = (!opts.plain && cell.barred) ? " barred" : "";
+    const clk = clickable ? " click" : "";
+    html += '<span class="digit ' + roleCls + barCls + clk + '" data-idx="' + cell.idx + '" title="' + ttl(info.name + " — " + info.why) + '">' + cell.ch + "</span>";
+  });
+  if (p.hasDecimal && (p.fracPart === "" || p.fracPart === null))
+    html += '<span class="digit r-struct" title="' + ttl("Trailing decimal point — makes the preceding zeros significant") + '">.</span>';
+  if (p.isSci)
+    html += '<span class="r-struct" title="' + ttl("×10 raised to the exponent — sets the scale / order of magnitude, not significant figures") + '"> × 10<sup>' + supStr(p.expStr) + "</sup></span>";
+  if (p.uncertainty)
+    html += '<span class="r-struct" title="' + ttl("Stated uncertainty — confirms the last significant digit") + '"> ± ' + escapeHtml(p.uncertainty) + "</span>";
+  return html;
+}
+
+function buildExplainHtml(res) {
+  return res.cells.map(cell => {
+    const info = ROLE_INFO[cell.role];
+    return '<li><span class="pos ' + info.cls + '">' + cell.ch + '</span><span><span class="role-name">' +
+           info.name + '</span><br><span class="why">' + info.why + "</span></span></li>";
+  }).join("");
+}
+
+/* ============================================================
+   5. EXPLORE MODE
+   ============================================================ */
+let barIndex = null;
+
+function render() {
+  const raw = document.getElementById("numInput").value;
+  const convention = document.getElementById("convSelect").value;
+  const p = parseNumber(raw);
+  const display = document.getElementById("display");
+  const countLine = document.getElementById("countLine");
+  const convChips = document.getElementById("convChips");
+  const explain = document.getElementById("explain");
+  const resolver = document.getElementById("resolver");
+
+  if (!p.ok) {
+    display.innerHTML = p.error ? '<span class="error">' + escapeHtml(p.error) + "</span>" : '<span class="r-pad">…</span>';
+    countLine.textContent = ""; convChips.innerHTML = ""; explain.innerHTML = ""; resolver.style.display = "none";
+    return;
+  }
+
+  const res = classify(p, convention, barIndex);
+  display.innerHTML = buildNumberHtml(p, res, convention, { clickable: true });
+  if (convention === "bar" && !p.hasDecimal && !p.isSci) {
+    display.querySelectorAll(".digit.click").forEach(el =>
+      el.addEventListener("click", () => { barIndex = parseInt(el.getAttribute("data-idx"), 10); render(); }));
+  }
+
+  const convLabel = { vcaa: "VCAA", strict: "Strict", bar: "Bar notation" }[convention];
+  countLine.innerHTML = "<b>" + res.sigCount + "</b> significant figure" + (res.sigCount === 1 ? "" : "s") + ' <span style="opacity:.6">(' + convLabel + ")</span>";
+
+  const vc = countFor(p, "vcaa"), sc = countFor(p, "strict");
+  convChips.innerHTML = (vc !== sc) ? (chip("VCAA", vc, convention === "vcaa") + chip("Strict", sc, convention === "strict")) : "";
+
+  const amb = sciResolutions(p);
+  if (amb && !p.isSci) {
+    resolver.style.display = "";
+    document.getElementById("resolverText").innerHTML =
+      "In plain form, the trailing zeros could be significant (VCAA: <b>" + amb.maxK + " s.f.</b>) or just placeholders (strict: <b>" +
+      amb.minK + " s.f.</b>). Scientific notation removes the doubt — click one to apply:";
+    const sf = document.getElementById("sciForms"); sf.innerHTML = "";
+    amb.forms.forEach(f => {
+      const div = document.createElement("div");
+      div.className = "sci-form";
+      div.innerHTML = f.mant + " × 10<sup>" + supStr(f.exp) + "</sup><small>" + f.k + " significant figures</small>";
+      div.addEventListener("click", () => { document.getElementById("numInput").value = f.mant + "×10" + supStr(f.exp); barIndex = null; render(); });
+      sf.appendChild(div);
+    });
+  } else resolver.style.display = "none";
+
+  explain.innerHTML = buildExplainHtml(res);
+}
+function chip(label, n, active) { return '<span class="conv-chip' + (active ? " active" : "") + '">' + label + ": <b>" + n + "</b></span>"; }
+
+const CONV_HINT = {
+  vcaa:   "VCAA: a whole number with no decimal point counts every digit as significant — 1500 has 4 s.f.",
+  strict: "Strict/international: trailing zeros in a whole number with no decimal point are NOT counted — 1500 has 2 s.f.",
+  bar:    "Bar notation: click a trailing zero to mark it as the last significant figure (drawn with an overline)."
+};
+const RULE_TEXT = {
+  vcaa: "<b>VCAA rules:</b><br>• Leading zeros are not significant (0.0043 → 2 s.f.)<br>• Captive zeros are significant (4.302 → 4 s.f.)<br>• Trailing zeros after a decimal point are significant (42.00 → 4 s.f.)<br>• Whole numbers with no decimal point have as many s.f. as digits (400 → 3 s.f.)<br>• Every digit in scientific notation is significant (4.320×10⁻⁶ → 4 s.f.)",
+  strict: "<b>Strict / international convention:</b><br>Same as VCAA except: trailing zeros in a whole number with <em>no</em> decimal point are treated as ambiguous and NOT counted (1500 → 2 s.f.). Write it in scientific notation, add a decimal point (1500.), or use a bar to make the precision explicit.",
+  bar: "<b>Bar (vinculum) notation:</b><br>An overline is placed over the last significant digit, so 1500 with the bar on the first 0 means 3 s.f. Click a digit above to set it."
+};
+
+const EXAMPLES = ["0.00452", "1500", "1.200", "0.500", "1002", "100.", "6.022e23", "1.50×10³", "-0.0340", "0.0", "1.5 ± 0.2"];
+const exWrap = document.getElementById("examples");
+EXAMPLES.forEach(ex => {
+  const b = document.createElement("button");
+  b.className = "chip"; b.textContent = ex;
+  b.addEventListener("click", () => { document.getElementById("numInput").value = ex; barIndex = null; render(); });
+  exWrap.appendChild(b);
+});
+function onConvChange() {
+  barIndex = null;
+  const c = document.getElementById("convSelect").value;
+  document.getElementById("convHint").textContent = CONV_HINT[c];
+  document.getElementById("ruleText").innerHTML = RULE_TEXT[c];
+  render();
+}
+document.getElementById("numInput").addEventListener("input", () => { barIndex = null; render(); });
+document.getElementById("convSelect").addEventListener("change", onConvChange);
+onConvChange();
+
+/* ============================================================
+   6. PRACTICE MODE  (stable layout — controls never move)
+   ============================================================ */
+function rint(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+function pick(a) { return a[rint(0, a.length - 1)]; }
+function nz() { return String(rint(1, 9)); }          // 1–9
+function dig() { return String(rint(0, 9)); }         // 0–9
+function zeros(n) { return "0".repeat(n); }
+
+const GEN = {
+  whole() { let n = rint(2, 4), s = ""; for (let i = 0; i < n; i++) s += nz(); return s; },
+  leading() { let n = rint(2, 3), s = "0." + zeros(rint(1, 3)) + nz(); for (let i = 1; i < n; i++) s += nz(); return s; },
+  captive() {
+    if (Math.random() < 0.5) return nz() + zeros(rint(1, 2)) + nz() + (Math.random() < 0.4 ? nz() : "");
+    return nz() + (Math.random() < 0.5 ? nz() : "") + "." + zeros(rint(1, 2)) + nz();
+  },
+  trailDec() {
+    const zeroInt = Math.random() < 0.4;
+    const intp = zeroInt ? "0" : nz() + (Math.random() < 0.5 ? nz() : "");
+    const lead = (zeroInt && Math.random() < 0.5) ? zeros(rint(1, 2)) : "";
+    const sig = lead === "" ? nz() + (Math.random() < 0.5 ? dig() : "") : nz();
+    return intp + "." + lead + sig + zeros(rint(1, 3));
+  },
+  bareTrail() { return nz() + (Math.random() < 0.5 ? dig() : "") + zeros(rint(1, 3)); },
+  trailDot() { return nz() + (Math.random() < 0.5 ? dig() : "") + zeros(rint(1, 2)) + "."; },
+  sci() {
+    let n = rint(1, 3), mant = nz();
+    if (n > 1) { mant += "."; for (let i = 1; i < n; i++) mant += dig(); }
+    let exp = rint(2, 12) * (Math.random() < 0.4 ? -1 : 1);
+    return mant + "×10" + supStr(String(exp));
+  },
+  combined() { return "0." + zeros(rint(1, 3)) + nz() + zeros(rint(1, 2)) + nz() + (Math.random() < 0.7 ? "0" : ""); },
+  allzero() { return "0." + zeros(rint(1, 3)); },
+  advanced() {
+    if (Math.random() < 0.5) return "-0." + zeros(rint(1, 2)) + nz() + (Math.random() < 0.5 ? "0" : nz());
+    return nz() + "." + dig() + " ± 0." + nz();
+  }
+};
+const CAT_META = {
+  whole:     { label: "Whole number", hint: "Every non-zero digit is significant." },
+  leading:   { label: "Leading zeros", hint: "Leading zeros only place the decimal point — they are never significant." },
+  captive:   { label: "Captive zeros", hint: "A zero between two significant digits is always significant." },
+  trailDec:  { label: "Trailing zeros (decimal)", hint: "Trailing zeros to the right of a decimal point are significant." },
+  bareTrail: { label: "Trailing zeros (whole number)", hint: "No decimal point: under VCAA all digits count; under strict, trailing zeros do not." },
+  trailDot:  { label: "Trailing decimal point", hint: "An explicit trailing decimal point makes the zeros before it significant." },
+  sci:       { label: "Scientific notation", hint: "Every digit in the mantissa is significant; the ×10ⁿ is only scale." },
+  combined:  { label: "Combined", hint: "Apply each rule: leading zeros (no), captive zeros (yes), trailing zeros after the decimal (yes)." },
+  allzero:   { label: "Zero", hint: "The leading 0 is padding; each zero after the decimal counts as precision." },
+  advanced:  { label: "Advanced", hint: "The sign and the ± uncertainty are structural — classify the value's digits." }
+};
+const DIFF = {
+  easy:   ["whole", "leading", "captive"],
+  medium: ["whole", "leading", "captive", "trailDec", "sci"],
+  hard:   ["leading", "captive", "trailDec", "bareTrail", "trailDot", "combined", "allzero", "sci"],
+  exam:   ["whole", "leading", "captive", "trailDec", "bareTrail", "trailDot", "combined", "allzero", "sci", "advanced"]
+};
+
+let quizState = null;
+let quizStats = loadStats();
+
+function loadStats() {
+  try { const s = JSON.parse(localStorage.getItem("sigfig-quiz")); if (s && s.byCat) return s; } catch (e) {}
+  return { score: 0, total: 0, streak: 0, byCat: {} };
+}
+function saveStats() { try { localStorage.setItem("sigfig-quiz", JSON.stringify(quizStats)); } catch (e) {} }
+
+function generateQuestion() {
+  const conv = document.getElementById("qConv").value;
+  const cats = DIFF[document.getElementById("qDiff").value];
+  let raw, p, cat, tries = 0;
+  do { cat = pick(cats); raw = GEN[cat](); p = parseNumber(raw); tries++; } while (!p.ok && tries < 25);
+  const res = classify(p, conv, null);
+  quizState = { raw, p, res, answer: res.sigCount, cat, conv, answered: false };
+  renderQuestion();
+}
+function renderQuestion() {
+  const { p, res, conv } = quizState;
+  document.getElementById("qCategory").textContent = "";         // category revealed only after answering
+  document.getElementById("qDisplay").innerHTML = buildNumberHtml(p, res, conv, { plain: true });
+  const v = document.getElementById("qVerdict"); v.textContent = ""; v.className = "q-verdict";
+  document.getElementById("qHint").textContent = "";
+  document.getElementById("qRuleNote").textContent = "";
+  document.getElementById("qExplain").innerHTML = "";
+  renderAnswerArea();
+}
+function renderAnswerArea() {
+  const mode = document.getElementById("qInputMode").value;
+  const area = document.getElementById("qAnswerArea");
+  if (mode === "buttons") {
+    let h = '<div class="num-btns">';
+    for (let i = 1; i <= 8; i++) h += '<button class="num-btn" data-v="' + i + '">' + i + "</button>";
+    area.innerHTML = h + "</div>";
+    area.querySelectorAll(".num-btn").forEach(b => b.addEventListener("click", () => submitAnswer(parseInt(b.dataset.v, 10))));
+  } else {
+    area.innerHTML = '<div class="type-answer"><input id="qTypeInput" type="number" min="0" max="20" placeholder="?"><button class="primary-btn" id="qSubmitBtn">Check</button></div>';
+    const inp = document.getElementById("qTypeInput");
+    const go = () => { const v = parseInt(inp.value, 10); if (!isNaN(v)) submitAnswer(v); };
+    document.getElementById("qSubmitBtn").addEventListener("click", go);
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+    inp.focus();
+  }
+}
+function submitAnswer(value) {
+  if (!quizState || quizState.answered) return;
+  quizState.answered = true;
+  const correct = value === quizState.answer;
+  quizStats.total++;
+  if (correct) { quizStats.score++; quizStats.streak++; } else quizStats.streak = 0;
+  const bc = quizStats.byCat[quizState.cat] || (quizStats.byCat[quizState.cat] = { c: 0, t: 0 });
+  bc.t++; if (correct) bc.c++;
+  saveStats(); renderStats();
+  showFeedback(correct, value);
+}
+function showFeedback(correct, value) {
+  const { p, res, answer, cat, conv } = quizState;
+  document.getElementById("qCategory").textContent = CAT_META[cat].label;
+  // recolour the SAME number box in place — no new element, no layout shift
+  document.getElementById("qDisplay").innerHTML = buildNumberHtml(p, res, conv, {});
+  const v = document.getElementById("qVerdict");
+  v.className = "q-verdict " + (correct ? "ok" : "no");
+  const plural = answer === 1 ? "" : "s";
+  v.innerHTML = correct
+    ? "✓ Correct — <b>" + answer + "</b> significant figure" + plural
+    : "✗ Not quite — you said " + value + ", it's <b>" + answer + "</b> significant figure" + plural;
+  document.getElementById("qRuleNote").textContent = CAT_META[cat].hint;
+  document.getElementById("qExplain").innerHTML = buildExplainHtml(res);
+  document.querySelectorAll("#qAnswerArea .num-btn").forEach(b => {
+    b.disabled = true;
+    const bv = parseInt(b.dataset.v, 10);
+    if (bv === answer) b.classList.add("correct"); else if (bv === value && !correct) b.classList.add("wrong");
+  });
+  const ti = document.getElementById("qTypeInput"); if (ti) ti.disabled = true;
+  const sb = document.getElementById("qSubmitBtn"); if (sb) sb.disabled = true;
+  document.getElementById("qNextBtn").focus({ preventScroll: true });
+}
+function renderStats() {
+  document.getElementById("qScore").textContent = quizStats.score;
+  document.getElementById("qTotal").textContent = quizStats.total;
+  document.getElementById("qStreak").textContent = quizStats.streak;
+  document.getElementById("qPct").textContent = quizStats.total ? Math.round(100 * quizStats.score / quizStats.total) + "%" : "—";
+  const rows = Object.keys(quizStats.byCat).map(k => {
+    const o = quizStats.byCat[k];
+    return '<div class="bycat-row"><span>' + (CAT_META[k] ? CAT_META[k].label : k) + "</span><span>" +
+           o.c + "/" + o.t + " (" + Math.round(100 * o.c / o.t) + "%)</span></div>";
+  });
+  document.getElementById("qByCat").innerHTML = rows.join("") || '<span class="hint">No attempts yet — pick a difficulty and start.</span>';
+}
+
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+  t.classList.add("active");
+  const mode = t.dataset.mode;
+  document.getElementById("exploreMode").style.display = mode === "explore" ? "" : "none";
+  document.getElementById("practiceMode").style.display = mode === "practice" ? "" : "none";
+  if (mode === "practice" && !quizState) generateQuestion();
+}));
+document.getElementById("qNextBtn").addEventListener("click", generateQuestion);
+document.getElementById("qDiff").addEventListener("change", generateQuestion);
+document.getElementById("qConv").addEventListener("change", () => {
+  document.getElementById("qConvHint").textContent = CONV_HINT[document.getElementById("qConv").value];
+  generateQuestion();
+});
+document.getElementById("qInputMode").addEventListener("change", () => { if (quizState && !quizState.answered) renderAnswerArea(); });
+document.getElementById("qHintBtn").addEventListener("click", () => { if (quizState) document.getElementById("qHint").textContent = CAT_META[quizState.cat].hint; });
+document.getElementById("qResetBtn").addEventListener("click", () => { quizStats = { score: 0, total: 0, streak: 0, byCat: {} }; saveStats(); renderStats(); });
+document.getElementById("qConvHint").textContent = CONV_HINT[document.getElementById("qConv").value];
+renderStats();
+</script>
+</body>
+</html>

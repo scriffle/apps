@@ -35,9 +35,9 @@
 
   /* ---- swipeable stage: page 0 = ambient (#center), page 1 = programme (#detail) ---- */
   #stage{position:fixed;inset:0;z-index:2;overflow:hidden;touch-action:pan-y;}
-  #center,#detail{position:absolute;inset:0;will-change:transform;}
-  #stage.snapping #center,#stage.snapping #detail{transition:transform .32s cubic-bezier(.22,1,.36,1);}
-  @media (prefers-reduced-motion: reduce){#stage.snapping #center,#stage.snapping #detail{transition:none;}}
+  #center,#detail,#roll{position:absolute;inset:0;will-change:transform;}
+  #stage.snapping #center,#stage.snapping #detail,#stage.snapping #roll{transition:transform .32s cubic-bezier(.22,1,.36,1);}
+  @media (prefers-reduced-motion: reduce){#stage.snapping #center,#stage.snapping #detail,#stage.snapping #roll{transition:none;}}
 
   /* ---- centre label (ambient view = page 0) ---- */
   #center{display:flex;flex-direction:column;
@@ -47,9 +47,15 @@
   /* ---- programme (detail view = page 1) ---- */
   #detail{transform:translateX(calc((1 - var(--pg,0)) * 100%));
     padding:max(1.1rem,env(safe-area-inset-top)) 1rem 1rem;}
+
+  /* ---- piano roll (watch view = page 2) ---- */
+  #roll{transform:translateX(calc((2 - var(--pg,0)) * 100%));background:#0a0908;}
+  #rollCanvas{display:block;width:100%;height:100%;}
   #programme{height:100%;max-width:32rem;margin:0 auto;display:flex;flex-direction:column;
     gap:.4rem;overflow:hidden;justify-content:safe center;
-    padding:1.5rem 0 4rem;}
+    padding:1rem 0 3rem;
+    scrollbar-width:none;}                               /* no scrollbar (belt-and-suspenders) */
+  #programme::-webkit-scrollbar{display:none;}
   #progHead{text-align:center;font-size:.72rem;text-transform:uppercase;letter-spacing:.14em;
     color:var(--muted);margin-bottom:.6rem;}
   .prog-cap{font-size:.62rem;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);
@@ -154,9 +160,10 @@
     <div id="detail">
       <div id="programme"><!-- rows injected by renderDetail() --></div>
     </div>
+    <div id="roll"><canvas id="rollCanvas"></canvas></div>
   </div>
-  <div id="dots"><i class="on"></i><i></i></div>
-  <div id="hint">swipe ← for programme · tap for settings</div>
+  <div id="dots"><i class="on"></i><i></i><i></i></div>
+  <div id="hint">swipe for programme &amp; notes · tap for settings</div>
 
   <!-- transient toast (e.g. pending voice change) -->
   <div id="toast" role="status" aria-live="polite"></div>
@@ -226,7 +233,8 @@
   const RESYNC_EVERY = 60000 + Math.random()*30000;    // per-device jitter so bursts don't align
   let myVoice=0, myOnsets=[];                            // flattened onsets for my voice
   let pendingVoice=null, switchAbs=Infinity;            // deferred voice change: applies on next note
-  let pg=0;                                              // swipe page: 0 = ambient, 1 = programme
+  let pg=0;                                              // swipe page: 0 = ambient, 1 = programme, 2 = piano roll
+  let allNotes=[], midiLo=127, midiHi=0;                 // all-voice note list (abs beats) for the piano roll
   let started=false, audio=null;
   const S = loadSettings();
 
@@ -347,6 +355,19 @@
       for(const n of notes){ myOnsets.push({beat:ch.startBeat+n[0], dur:n[1], midi:n[2]}); }
     }
     myOnsets.sort((a,b)=>a.beat-b.beat);              // already ordered, but be safe
+  }
+  // all four voices flattened to absolute catalogue beats — for the piano-roll view
+  function buildAllNotes(){
+    allNotes=[]; midiLo=127; midiHi=0;
+    for(const ch of manifest.chorales){
+      for(let v=0;v<4;v++){
+        for(const n of (ch.voices[v]||[])){
+          allNotes.push({beat:ch.startBeat+n[0], dur:n[1], midi:n[2], v});
+          if(n[2]<midiLo) midiLo=n[2]; if(n[2]>midiHi) midiHi=n[2];
+        }
+      }
+    }
+    allNotes.sort((a,b)=>a.beat-b.beat);
   }
   // current sounding note for my voice at catalogue-beat `cat` (for visuals/readout)
   function currentNote(cat){
@@ -521,8 +542,9 @@
       $('iNote').textContent=n?midiName(n.midi):(inGap?'breath':'rest');
       $('iPos').textContent=localBeat.toFixed(1)+' / '+ch.lengthBeats.toFixed(0)+' beats';
     }
-    // programme view (only when it's the visible page, to save work)
+    // secondary pages: render only the visible one (save work)
     if(pg===1) renderDetail();
+    else if(pg===2) renderRoll();
   }
   function fmtKey(k){ if(!k) return '—'; const t=k[0]; const acc=k.includes('#')?'♯':k.includes('-')?'♭':'';
     return t.toUpperCase()+acc+(t===t.toLowerCase()?' minor':' major'); }
@@ -571,25 +593,87 @@
     const pos=$('progPos'); if(pos) pos.textContent=L.localBeat.toFixed(0)+' / '+ch.lengthBeats.toFixed(0)+' beats';
   }
 
-  // fit without a scrollbar: keep Previous + Now, drop the last "Up next" row(s)
-  // (and their caption) until the programme no longer overflows its height.
+  // fit without a scrollbar: drop the trailing "Up next" row(s) first, then (only if
+  // still too tall) the "Previous" row — so the Now chorale is never clipped.
   function fitProgramme(){
     const wrap=$('programme'); if(!wrap) return;
-    const nexts=[].slice.call(wrap.querySelectorAll('.prog-row.next'));
-    const cap=[].slice.call(wrap.querySelectorAll('.prog-cap')).filter(c=>/up next/i.test(c.textContent))[0];
-    nexts.forEach(r=>{ r.style.display=''; });
-    if(cap) cap.style.display='';
-    for(let i=nexts.length-1; i>=0 && wrap.scrollHeight>wrap.clientHeight+1; i--){
-      nexts[i].style.display='none';
+    const rows=[].slice.call(wrap.querySelectorAll('.prog-row'));
+    const caps=[].slice.call(wrap.querySelectorAll('.prog-cap'));
+    const capByName=n=>caps.filter(c=>new RegExp(n,'i').test(c.textContent))[0];
+    const nexts=rows.filter(r=>r.classList.contains('next'));
+    const prev=rows.filter(r=>r.classList.contains('prev'))[0];
+    const capUp=capByName('up next'), capPrev=capByName('previous');
+    const tooTall=()=>wrap.scrollHeight>wrap.clientHeight+1;
+    rows.forEach(r=>{ r.style.display=''; }); caps.forEach(c=>{ c.style.display=''; });
+    for(let i=nexts.length-1; i>=0 && tooTall(); i--) nexts[i].style.display='none';
+    if(capUp && nexts.every(r=>r.style.display==='none')) capUp.style.display='none';
+    if(prev && tooTall()){ prev.style.display='none'; if(capPrev) capPrev.style.display='none'; }
+  }
+
+  // ============================================================ piano roll (page 2, watch-only)
+  // Auto-scrolling roll: time on x (current beat centred), pitch on y (higher = up),
+  // each voice in its colour, the device's own voice brightest. Pure canvas redraw.
+  function lbIndex(beat){ let lo=0,hi=allNotes.length; while(lo<hi){ const m=(lo+hi)>>1; if(allNotes[m].beat<beat) lo=m+1; else hi=m; } return lo; }
+  function rrect(ctx,x,y,w,h,r){ r=Math.min(r,w/2,h/2); ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+  function voiceFill(v,own,sounding){
+    const h=VOICE_HUE[v];
+    if(own) return sounding ? 'hsl('+h+' 95% 72%)' : 'hsl('+h+' 88% 62%)';
+    return sounding ? 'hsl('+h+' 60% 58% / 0.65)' : 'hsl('+h+' 48% 50% / 0.34)';
+  }
+  function renderRoll(){
+    const cv=$('rollCanvas'); if(!cv||!manifest||!allNotes.length) return;
+    const W=cv.clientWidth, H=cv.clientHeight; if(!W||!H) return;
+    const dpr=window.devicePixelRatio||1;
+    if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){ cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); }
+    const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+    const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#0b0a09'); g.addColorStop(1,'#060504');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+    const total=manifest.totalBeats, nowCat=locate(serverNow()).cat;
+    const VISIBLE=10, ppb=W/VISIBLE, centerX=W/2;
+    const padT=14, padB=10, span=Math.max(1,midiHi-midiLo), innerH=H-padT-padB;
+    const noteH=clamp(innerH/(span+2),5,16);
+    const yFor=m=> padT + (1-(m-midiLo)/span)*innerH;
+
+    // octave grid lines + C labels
+    ctx.textBaseline='middle'; ctx.font='10px '+getComputedStyle(document.body).fontFamily;
+    for(let m=Math.ceil(midiLo/12)*12; m<=midiHi; m+=12){
+      const y=yFor(m);
+      ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+      ctx.fillStyle='rgba(168,162,158,0.45)'; ctx.fillText('C'+(m/12-1),4,y);
     }
-    if(cap && nexts.every(r=>r.style.display==='none')) cap.style.display='none';
+
+    // collect visible notes, plus wrap copies across the loop seam
+    const half=VISIBLE/2+2, MAXDUR=8, vis=[];
+    const collect=(loB,hiB,off)=>{
+      for(let i=lbIndex(loB-MAXDUR); i<allNotes.length; i++){
+        const n=allNotes[i]; if(n.beat>hiB) break; if(n.beat+n.dur<loB) continue;
+        const rel=n.beat+off-nowCat, x=centerX+rel*ppb, w=Math.max(2,n.dur*ppb-1.5);
+        if(x+w<0||x>W) continue;
+        vis.push({x,w,y:yFor(n.midi)-noteH/2,v:n.v,own:n.v===myVoice,sounding:rel<=0&&rel+n.dur>0});
+      }
+    };
+    collect(Math.max(0,nowCat-half), Math.min(total,nowCat+half), 0);
+    if(nowCat-half<0) collect(total+(nowCat-half), total, -total);
+    if(nowCat+half>total) collect(0, (nowCat+half)-total, total);
+    vis.sort((a,b)=>(a.own?1:0)-(b.own?1:0));            // device's own voice drawn on top
+    for(const r of vis){
+      ctx.fillStyle=voiceFill(r.v,r.own,r.sounding);
+      rrect(ctx,r.x,r.y,r.w,noteH,Math.min(4,noteH/2)); ctx.fill();
+      if(r.own&&r.sounding){ ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.lineWidth=1.5;
+        rrect(ctx,r.x,r.y,r.w,noteH,Math.min(4,noteH/2)); ctx.stroke(); }
+    }
+    ctx.fillStyle='rgba(250,250,249,0.16)'; ctx.fillRect(centerX-1,0,2,H);   // centred playhead
   }
 
   // ============================================================ swipe pager
   function setPg(frac){ $('stage').style.setProperty('--pg', frac); }
-  function updateDots(){ const d=$('dots').children; d[0].classList.toggle('on',pg===0); d[1].classList.toggle('on',pg===1); }
-  function snapTo(i){ pg=clamp(Math.round(i),0,1); $('stage').classList.add('snapping'); setPg(pg); updateDots();
-    if(pg===1) renderDetail(true); }
+  function updateDots(){ const d=$('dots').children; for(let i=0;i<d.length;i++) d[i].classList.toggle('on', i===pg); }
+  function snapTo(i){ pg=clamp(Math.round(i),0,2); $('stage').classList.add('snapping'); setPg(pg); updateDots();
+    if(pg===1) renderDetail(true); else if(pg===2) renderRoll(); }
   let pStart=null, dragging=false, moved=false;
   function onDown(e){
     pStart={x:e.clientX,y:e.clientY,id:e.pointerId}; dragging=false; moved=false;
@@ -605,17 +689,18 @@
       else return;
     }
     moved=true; e.preventDefault();
-    const w=window.innerWidth||1, frac=clamp(pg - dx/w, 0, 1);
+    const w=window.innerWidth||1, frac=clamp(pg - dx/w, 0, 2);
     setPg(frac);
-    if(frac>0.02) renderDetail();                          // populate as it slides into view
+    if(frac>0.02 && frac<2) renderDetail();                // programme region sliding in
+    if(frac>1.02) renderRoll();                            // piano-roll region sliding in
   }
   function onUp(e){
     if(!pStart||e.pointerId!==pStart.id) return;
     const dx=e.clientX-pStart.x, w=window.innerWidth||1;
     if(dragging){
-      const frac=clamp(pg - dx/w,0,1);
-      let target = Math.abs(dx)>w*0.25 ? (dx<0?1:0) : Math.round(frac);   // flick/threshold → flip, else nearest
-      snapTo(target);
+      const frac=clamp(pg - dx/w,0,2);
+      let target = Math.abs(dx)>w*0.25 ? pg+(dx<0?1:-1) : Math.round(frac);  // flick → one page, else nearest
+      snapTo(clamp(target,0,2));
     } else if(!moved){
       $('info').classList.toggle('open');                  // a tap (no drag) → settings, as before
     }
@@ -717,7 +802,7 @@
     }
 
     myVoice=S.voice;
-    buildOnsets(); applyHue(); buildVoicePicker();
+    buildOnsets(); buildAllNotes(); applyHue(); buildVoicePicker();
     markSeg('#bassPick','bass',S.bass);
     applyLangUI();                                       // highlight current language + build programme
     $('vol').value=S.vol; $('rev').value=S.rev;
@@ -789,7 +874,7 @@
   window.__chorale={
     get voice(){return myVoice;}, get pending(){return pendingVoice;}, get switchAbs(){return switchAbs;},
     pick(i){return onVoicePick(i);}, toast:showToast,
-    get page(){return pg;}, setPage(i){return snapTo(i);}, renderDetail, setLang, get lang(){return S.lang;},
+    get page(){return pg;}, setPage(i){return snapTo(i);}, renderDetail, renderRoll, setLang, get lang(){return S.lang;},
     get synced(){return synced;}, get quality(){return syncQuality;},
     get offset(){return clockOffset;}, get state(){return audio?audio.ctx.state:'no-audio';},
     get sched(){return schedCount;}, get ticks(){return tickEntries;}, get cursorAbs(){return cursorAbs;}, now:serverNow,
