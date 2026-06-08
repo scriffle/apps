@@ -33,9 +33,51 @@
       transparent 70%);
     opacity:var(--lum,0);mix-blend-mode:screen;}
 
-  /* ---- centre label (ambient view) ---- */
-  #center{position:fixed;inset:0;z-index:2;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;gap:0.4rem;text-align:center;padding:1rem;}
+  /* ---- swipeable stage: page 0 = ambient (#center), page 1 = programme (#detail) ---- */
+  #stage{position:fixed;inset:0;z-index:2;overflow:hidden;touch-action:pan-y;}
+  #center,#detail{position:absolute;inset:0;will-change:transform;}
+  #stage.snapping #center,#stage.snapping #detail{transition:transform .32s cubic-bezier(.22,1,.36,1);}
+  @media (prefers-reduced-motion: reduce){#stage.snapping #center,#stage.snapping #detail{transition:none;}}
+
+  /* ---- centre label (ambient view = page 0) ---- */
+  #center{display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:0.4rem;text-align:center;padding:1rem;
+    transform:translateX(calc(var(--pg,0) * -100%));}
+
+  /* ---- programme (detail view = page 1) ---- */
+  #detail{transform:translateX(calc((1 - var(--pg,0)) * 100%));
+    padding:max(1.1rem,env(safe-area-inset-top)) 1rem 1rem;}
+  #programme{height:100%;max-width:32rem;margin:0 auto;display:flex;flex-direction:column;
+    gap:.4rem;overflow-y:auto;-webkit-overflow-scrolling:touch;justify-content:safe center;
+    padding:1.5rem 0 4rem;}
+  #progHead{text-align:center;font-size:.72rem;text-transform:uppercase;letter-spacing:.14em;
+    color:var(--muted);margin-bottom:.6rem;}
+  .prog-cap{font-size:.62rem;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);
+    opacity:.65;margin:.55rem 0 .1rem .2rem;}
+  .prog-row{border:1px solid transparent;border-radius:14px;padding:.55rem .8rem;
+    background:rgba(28,25,23,.5);}
+  .prog-row .meta{display:flex;justify-content:space-between;gap:1rem;font-size:.68rem;
+    color:var(--muted);opacity:.85;margin-bottom:.12rem;font-variant-numeric:tabular-nums;}
+  .prog-row .de{font-size:1rem;font-weight:400;line-height:1.25;}
+  .prog-row .tr{font-size:.85rem;color:var(--muted);line-height:1.25;margin-top:.1rem;}
+  .prog-row.prev{opacity:.45;}
+  .prog-row.next.n1{opacity:.75;} .prog-row.next.n2{opacity:.55;} .prog-row.next.n3{opacity:.4;}
+  .prog-row.now{background:hsl(var(--hue) 40% 18% / .55);border-color:hsl(var(--hue) 70% 55% / .7);
+    box-shadow:0 0 26px hsl(var(--hue) 80% 50% / .18);padding:.8rem .9rem;}
+  .prog-row.now .de{font-size:1.3rem;font-weight:500;color:hsl(var(--hue) 80% 86%);}
+  .prog-row.now .tr{font-size:1rem;color:hsl(var(--hue) 30% 82%);}
+  .prog-bar{height:4px;border-radius:2px;background:rgba(255,255,255,.12);margin-top:.65rem;overflow:hidden;}
+  .prog-bar>i{display:block;height:100%;width:0;background:hsl(var(--hue) 75% 58%);
+    border-radius:2px;transition:width .2s linear;}
+  .prog-now-foot{display:flex;justify-content:space-between;gap:1rem;margin-top:.4rem;
+    font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums;}
+
+  /* ---- page indicator dots ---- */
+  #dots{position:fixed;left:0;right:0;z-index:3;display:flex;gap:.5rem;justify-content:center;
+    pointer-events:none;bottom:max(2.6rem,calc(env(safe-area-inset-bottom) + 1.9rem));}
+  #dots i{width:.5rem;height:.5rem;border-radius:50%;background:var(--line);
+    transition:background .2s,transform .2s;}
+  #dots i.on{background:hsl(var(--hue) 75% 60%);transform:scale(1.25);}
   #voiceName{font-size:clamp(2.4rem,12vw,5rem);font-weight:200;letter-spacing:0.04em;
     color:hsl(var(--hue) 80% 85%);text-shadow:0 0 30px hsl(var(--hue) 90% 60% / .4);}
   #noteName{font-size:clamp(1rem,5vw,1.6rem);font-weight:300;color:var(--muted);
@@ -77,10 +119,24 @@
     border:1px solid var(--line);background:#1c1917;color:var(--fg);font-size:.9rem;font-family:inherit;}
   .seg button.on{border-color:hsl(var(--hue) 70% 55%);background:hsl(var(--hue) 70% 50% / .18);
     color:hsl(var(--hue) 80% 82%);}
+  .seg button.pending{border-style:dashed;border-color:hsl(var(--hue) 70% 60%);
+    color:hsl(var(--hue) 80% 82%);animation:pend 1.1s ease-in-out infinite;}
+  @keyframes pend{0%,100%{opacity:.5}50%{opacity:1}}
+  @media (prefers-reduced-motion: reduce){.seg button.pending{animation:none;opacity:.85}}
   .ctl{display:flex;align-items:center;gap:.8rem;padding:.4rem 0;}
   .ctl label{flex:0 0 5.2rem;color:var(--muted);font-size:.88rem;}
   input[type=range]{flex:1;accent-color:hsl(var(--hue) 70% 55%);height:30px;}
   #grip{width:42px;height:5px;border-radius:3px;background:var(--line);margin:0 auto .9rem;}
+
+  /* ---- transient toast ---- */
+  #toast{position:fixed;left:50%;top:max(1.1rem,env(safe-area-inset-top));z-index:25;
+    transform:translate(-50%,-18px);max-width:86vw;text-align:center;
+    background:rgba(28,25,23,.94);backdrop-filter:blur(10px);
+    border:1px solid hsl(var(--hue) 65% 50% / .6);color:var(--fg);
+    padding:.7rem 1.2rem;border-radius:999px;font-size:.92rem;font-weight:400;
+    box-shadow:0 8px 30px rgba(0,0,0,.5);opacity:0;pointer-events:none;
+    transition:opacity .28s ease,transform .28s ease;}
+  #toast.show{opacity:1;transform:translate(-50%,0);}
   .dot{display:inline-block;width:.55em;height:.55em;border-radius:50%;vertical-align:.02em;margin-right:.3em;}
   .footer{margin-top:1rem;font-size:.72rem;color:var(--muted);text-align:center;line-height:1.5;}
   @media (prefers-reduced-motion: reduce){.spin{animation:none}}
@@ -90,11 +146,20 @@
   <div id="ambient"></div>
   <div id="glow"></div>
 
-  <div id="center">
-    <div id="voiceName">—</div>
-    <div id="noteName"></div>
+  <div id="stage">
+    <div id="center">
+      <div id="voiceName">—</div>
+      <div id="noteName"></div>
+    </div>
+    <div id="detail">
+      <div id="programme"><!-- rows injected by renderDetail() --></div>
+    </div>
   </div>
-  <div id="hint">tap anywhere for details</div>
+  <div id="dots"><i class="on"></i><i></i></div>
+  <div id="hint">swipe ← for programme · tap for settings</div>
+
+  <!-- transient toast (e.g. pending voice change) -->
+  <div id="toast" role="status" aria-live="polite"></div>
 
   <!-- Start / audio-unlock -->
   <div id="start">
@@ -110,9 +175,17 @@
     <h2>Your voice</h2>
     <div class="seg" id="voicePick"></div>
 
+    <h2>Language</h2>
+    <div class="seg" id="langPick">
+      <button data-lang="de">Deutsch</button>
+      <button data-lang="en">English</button>
+      <button data-lang="zh">中文</button>
+    </div>
+
     <h2>Now playing</h2>
     <div class="row"><span class="k">Chorale</span><span class="v" id="iChorale">—</span></div>
-    <div class="row"><span class="k">Title</span><span class="v" id="iTitle">—</span></div>
+    <div class="row"><span class="k">German</span><span class="v" id="iTitle">—</span></div>
+    <div class="row" id="iTrRow"><span class="k" id="iTrLang">English</span><span class="v" id="iTitleTr">—</span></div>
     <div class="row"><span class="k">Key</span><span class="v" id="iKey">—</span></div>
     <div class="row"><span class="k">Your note</span><span class="v" id="iNote">—</span></div>
     <div class="row"><span class="k">Position</span><span class="v" id="iPos">—</span></div>
@@ -141,7 +214,7 @@
 'use strict';
 (() => {
   // ============================================================ constants
-  const VOICE_HUE = [46, 28, 168, 214];                 // S, A, T, B colours
+  const VOICE_HUE = [52, 0, 130, 214];                  // S yellow, A red, T green, B blue
   const LOOKAHEAD_S = 1.5;                               // schedule this far ahead
   const TICK_MS = 100;                                   // scheduler cadence
   const LOW_MIDI = 55;                                   // notes below this = "low register"
@@ -152,6 +225,8 @@
   let clockOffset=0, targetOffset=0, lastSync=0, syncQuality=null, synced=false, syncing=false;
   const RESYNC_EVERY = 60000 + Math.random()*30000;    // per-device jitter so bursts don't align
   let myVoice=0, myOnsets=[];                            // flattened onsets for my voice
+  let pendingVoice=null, switchAbs=Infinity;            // deferred voice change: applies on next note
+  let pg=0;                                              // swipe page: 0 = ambient, 1 = programme
   let started=false, audio=null;
   const S = loadSettings();
 
@@ -164,14 +239,31 @@
     if(typeof s.voice!=='number'||s.voice<0||s.voice>3) s.voice=Math.floor(Math.random()*4); // random self-assign
     if(typeof s.bass!=='number') s.bass=0;
     if(typeof s.vol!=='number') s.vol=0.85;
-    if(typeof s.rev!=='number') s.rev=0.35;
+    if(typeof s.rev!=='number') s.rev=0;
+    if(s.lang!=='de'&&s.lang!=='en'&&s.lang!=='zh'){     // first load: follow the phone's language
+      const nl=(navigator.language||'en').toLowerCase();
+      s.lang = nl.startsWith('zh')?'zh' : nl.startsWith('de')?'de' : 'en';
+    }
     return s;
   }
   function saveSettings(){ try{ localStorage.setItem(LS,JSON.stringify(S)); }catch(e){} }
   const serverNow=()=>Date.now()+clockOffset;
 
+  let toastTimer=null;
+  function showToast(msg){
+    const el=$('toast'); if(!el) return;
+    el.textContent=msg; el.classList.add('show');
+    if(toastTimer) clearTimeout(toastTimer);
+    toastTimer=setTimeout(()=>el.classList.remove('show'), 2600);
+  }
+
   const NOTE_NAMES=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
   const midiName=m=>m==null?'—':NOTE_NAMES[((m%12)+12)%12]+(Math.floor(m/12)-1);
+
+  // title in the chosen language (fall back to German), + helpers for the programme view
+  const LANG_LABEL={de:'Deutsch',en:'English',zh:'中文'};
+  function titleFor(ch,l){ return l==='en'?(ch.titleEn||ch.title) : l==='zh'?(ch.titleZh||ch.title) : ch.title; }
+  const esc=s=>(s==null?'':String(s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 
   // ============================================================ clock sync
   // Reference = the static server's own clock, read from the HTTP `Date` header.
@@ -360,6 +452,11 @@
     const nowS=serverNow(), nowA=audio.ctx.currentTime;
     if(pending.length) pending=pending.filter(p=>p.end>nowA-0.5);   // prune finished
     const aheadAbs=absBeat(nowS+LOOKAHEAD_S*1000);
+    if(pendingVoice!==null && absBeat(nowS)>=switchAbs-1e-9){   // current note done → become new voice
+      myVoice=pendingVoice; S.voice=myVoice; saveSettings();
+      pendingVoice=null; switchAbs=Infinity;
+      buildOnsets(); applyHue(); buildVoicePicker();
+    }
     if(cursorAbs==null || cursorAbs<absBeat(nowS)-0.001) cursorAbs=absBeat(nowS); // join / recover → now
     let guard=0;
     while(cursorAbs<aheadAbs && guard++<2000){
@@ -369,6 +466,7 @@
       if(!nxt){ cursorAbs=(cycle+1)*total; continue; }  // none left this cycle → next loop
       const onsetAbs=cycle*total+nxt.beat;
       if(onsetAbs>=aheadAbs) break;
+      if(pendingVoice!==null && onsetAbs>=switchAbs) break;   // hold OLD voice at the switch point
       if(onsetAbs<=lastScheduledAbs){ cursorAbs=onsetAbs+1e-6; continue; } // already committed → don't double
       // map server-time → audio-clock time (self-correcting each tick)
       const onsetServerMs=config.epoch+onsetAbs*config.secondsPerBeat*1000;
@@ -418,13 +516,106 @@
     if($('info').classList.contains('open')){
       $('iChorale').textContent='#'+ch.num+'  ('+(locate(t).idx+1)+'/'+manifest.chorales.length+')';
       $('iTitle').textContent=ch.title||'—';
+      $('iTitleTr').textContent=titleFor(ch,S.lang)||'—';
       $('iKey').textContent=fmtKey(ch.key);
       $('iNote').textContent=n?midiName(n.midi):(inGap?'breath':'rest');
       $('iPos').textContent=localBeat.toFixed(1)+' / '+ch.lengthBeats.toFixed(0)+' beats';
     }
+    // programme view (only when it's the visible page, to save work)
+    if(pg===1) renderDetail();
   }
   function fmtKey(k){ if(!k) return '—'; const t=k[0]; const acc=k.includes('#')?'♯':k.includes('-')?'♭':'';
     return t.toUpperCase()+acc+(t===t.toLowerCase()?' minor':' major'); }
+
+  // ============================================================ programme (detail page)
+  function progRow(ch,cls){
+    const tr = S.lang!=='de' ? titleFor(ch,S.lang) : '';
+    return '<div class="prog-row '+cls+'">'
+      + '<div class="meta"><span>#'+ch.num+'</span><span>'+esc(fmtKey(ch.key))+'</span></div>'
+      + '<div class="de">'+esc(ch.title||'—')+'</div>'
+      + (tr && tr!==ch.title ? '<div class="tr">'+esc(tr)+'</div>' : '')
+      + '</div>';
+  }
+  function nowRow(ch){
+    const tr = S.lang!=='de' ? titleFor(ch,S.lang) : '';
+    return '<div class="prog-row now">'
+      + '<div class="meta"><span>#'+ch.num+'</span><span>'+esc(fmtKey(ch.key))+'</span></div>'
+      + '<div class="de">'+esc(ch.title||'—')+'</div>'
+      + (tr && tr!==ch.title ? '<div class="tr">'+esc(tr)+'</div>' : '')
+      + '<div class="prog-bar"><i id="progFill"></i></div>'
+      + '<div class="prog-now-foot"><span id="progNote">·</span><span id="progPos">—</span></div>'
+      + '</div>';
+  }
+  let lastDetailIdx=-1, lastDetailLang=null;
+  // rebuild the list only when the chorale or language changes; refresh the now-row
+  // progress/note every call (cheap). Called from frame() while page 1 is visible.
+  function renderDetail(force){
+    if(!manifest) return;
+    const chs=manifest.chorales, N=chs.length;
+    const L=locate(serverNow()), idx=L.idx;
+    if(force || idx!==lastDetailIdx || S.lang!==lastDetailLang){
+      lastDetailIdx=idx; lastDetailLang=S.lang;
+      let h='<div id="progHead">Programme · '+(idx+1)+' / '+N+'</div>';
+      h+='<div class="prog-cap">Previous</div>'+progRow(chs[(idx-1+N)%N],'prev');
+      h+='<div class="prog-cap">Now</div>'+nowRow(chs[idx]);
+      h+='<div class="prog-cap">Up next</div>'
+        + progRow(chs[(idx+1)%N],'next n1')
+        + progRow(chs[(idx+2)%N],'next n2')
+        + progRow(chs[(idx+3)%N],'next n3');
+      $('programme').innerHTML=h;
+    }
+    const ch=L.ch, n=L.inGap?null:currentNote(L.cat);
+    const fill=$('progFill'); if(fill) fill.style.width=(clamp(L.localBeat/ch.lengthBeats,0,1)*100).toFixed(1)+'%';
+    const note=$('progNote'); if(note) note.textContent=n?midiName(n.midi):(L.inGap?'· breath ·':'rest');
+    const pos=$('progPos'); if(pos) pos.textContent=L.localBeat.toFixed(0)+' / '+ch.lengthBeats.toFixed(0)+' beats';
+  }
+
+  // ============================================================ swipe pager
+  function setPg(frac){ $('stage').style.setProperty('--pg', frac); }
+  function updateDots(){ const d=$('dots').children; d[0].classList.toggle('on',pg===0); d[1].classList.toggle('on',pg===1); }
+  function snapTo(i){ pg=clamp(Math.round(i),0,1); $('stage').classList.add('snapping'); setPg(pg); updateDots();
+    if(pg===1) renderDetail(true); }
+  let pStart=null, dragging=false, moved=false;
+  function onDown(e){
+    pStart={x:e.clientX,y:e.clientY,id:e.pointerId}; dragging=false; moved=false;
+    if(!$('info').classList.contains('open')) $('stage').classList.remove('snapping');
+  }
+  function onMove(e){
+    if(!pStart||e.pointerId!==pStart.id) return;
+    if($('info').classList.contains('open')) return;     // no paging while the settings sheet is open
+    const dx=e.clientX-pStart.x, dy=e.clientY-pStart.y;
+    if(!dragging){
+      if(Math.abs(dx)>8 && Math.abs(dx)>Math.abs(dy)){ dragging=true; try{$('stage').setPointerCapture(pStart.id);}catch(_){ } }
+      else if(Math.abs(dy)>10){ pStart=null; return; }    // vertical intent → let the programme scroll
+      else return;
+    }
+    moved=true; e.preventDefault();
+    const w=window.innerWidth||1, frac=clamp(pg - dx/w, 0, 1);
+    setPg(frac);
+    if(frac>0.02) renderDetail();                          // populate as it slides into view
+  }
+  function onUp(e){
+    if(!pStart||e.pointerId!==pStart.id) return;
+    const dx=e.clientX-pStart.x, w=window.innerWidth||1;
+    if(dragging){
+      const frac=clamp(pg - dx/w,0,1);
+      let target = Math.abs(dx)>w*0.25 ? (dx<0?1:0) : Math.round(frac);   // flick/threshold → flip, else nearest
+      snapTo(target);
+    } else if(!moved){
+      $('info').classList.toggle('open');                  // a tap (no drag) → settings, as before
+    }
+    pStart=null; dragging=false;
+  }
+
+  // ============================================================ language toggle
+  function applyLangUI(){
+    const lab=$('iTrLang'), row=$('iTrRow');
+    if(lab) lab.textContent=LANG_LABEL[S.lang]||'Translation';
+    if(row) row.style.display = S.lang==='de' ? 'none' : '';
+    document.querySelectorAll('#langPick button').forEach(b=>b.classList.toggle('on', b.dataset.lang===S.lang));
+    if(manifest) renderDetail(true);                       // re-render programme in the new language
+  }
+  function setLang(l){ if(l!=='de'&&l!=='en'&&l!=='zh') return; S.lang=l; saveSettings(); applyLangUI(); }
 
   // ============================================================ UI wiring
   function applyHue(){
@@ -438,10 +629,38 @@
     manifest.voiceNames.forEach((nm,i)=>{
       const b=document.createElement('button'); b.textContent=nm;
       if(i===myVoice) b.classList.add('on');
-      b.onclick=()=>{ if(i===myVoice)return; myVoice=i; S.voice=i; saveSettings();
-        buildOnsets(); applyHue(); buildVoicePicker(); cursorAbs=null; if(started) startScheduler(); };
+      if(i===pendingVoice) b.classList.add('pending');
+      b.onclick=()=>onVoicePick(i);
       wrap.appendChild(b);
     });
+  }
+  function onVoicePick(i){
+    if(!started){                                      // pre-join: no audio yet → switch at once
+      if(i===myVoice) return;
+      myVoice=i; S.voice=i; saveSettings(); buildOnsets(); applyHue(); buildVoicePicker(); cursorAbs=null;
+      return;
+    }
+    if(i===myVoice){                                   // tap your current voice → cancel a pending change
+      if(pendingVoice!==null){ pendingVoice=null; switchAbs=Infinity; buildVoicePicker();
+        startScheduler(); showToast('Staying on '+manifest.voiceNames[myVoice]); }
+      return;
+    }
+    requestVoiceSwitch(i);                             // defer to the next note
+  }
+  // Deferred voice change: keep playing the current note, then become voice `i` from
+  // the next onset. We drop already-scheduled upcoming OLD-voice notes (the sounding
+  // note keeps ringing out), freeze the scheduler at the switch beat, and flip voices
+  // in schedTick once real time reaches it — so a device never sounds two voices.
+  function requestVoiceSwitch(i){
+    const total=manifest.totalBeats, ab=absBeat(serverNow());
+    const cycle=Math.floor(ab/total), cat=ab-cycle*total;
+    const cur=currentNote(cat);
+    switchAbs = cur ? (cycle*total + cur.beat + cur.dur) : ab;  // end of current note, else now (a rest)
+    pendingVoice=i;
+    cancelFuture();                                    // remove upcoming OLD notes; sounding note survives
+    cursorAbs=switchAbs; lastScheduledAbs=-Infinity;   // resume scheduling exactly at the switch point
+    buildVoicePicker();
+    showToast('Change pending on new note');
   }
   function markSeg(sel,attr,val){ document.querySelectorAll(sel+' button').forEach(b=>
     b.classList.toggle('on', +b.dataset[attr]===val)); }
@@ -461,10 +680,11 @@
     applyHue();                                         // colour before data (uses random voice)
     let mOk=false;
     try{
-      [manifest,config]=await Promise.all([
-        fetch('manifest.json',{cache:'force-cache'}).then(r=>r.json()),
-        fetch('config.json',{cache:'no-store'}).then(r=>r.json()),
-      ]);
+      // config is tiny + always fresh; it carries the manifest's content hash so we can
+      // hard-cache the (large, immutable) manifest yet still re-fetch it when it changes.
+      config=await fetch('config.json',{cache:'no-store'}).then(r=>r.json());
+      const murl='manifest.json'+(config.manifestHash?'?v='+encodeURIComponent(config.manifestHash):'');
+      manifest=await fetch(murl,{cache:'force-cache'}).then(r=>r.json());
       mOk=true;
     }catch(e){
       $('startBadge').innerHTML='⚠ could not load chorale data';
@@ -477,6 +697,7 @@
     myVoice=S.voice;
     buildOnsets(); applyHue(); buildVoicePicker();
     markSeg('#bassPick','bass',S.bass);
+    applyLangUI();                                       // highlight current language + build programme
     $('vol').value=S.vol; $('rev').value=S.rev;
     $('footer').textContent='Distributed Bach — '+manifest.chorales.length+
       ' chorales · v'+manifest.version+' · tap the score of phones to fill a room.';
@@ -506,9 +727,14 @@
 
   // events
   $('start').addEventListener('click', join);
-  $('center').addEventListener('click', ()=>$('info').classList.toggle('open'));
+  // stage handles tap (→ settings) and horizontal swipe (→ programme); see onDown/onMove/onUp
+  $('stage').addEventListener('pointerdown', onDown);
+  $('stage').addEventListener('pointermove', onMove, {passive:false});
+  $('stage').addEventListener('pointerup', onUp);
+  $('stage').addEventListener('pointercancel', ()=>{ if(pStart){ snapTo(pg); pStart=null; dragging=false; } });
   $('hint').addEventListener('click', e=>{e.stopPropagation();$('info').classList.add('open');});
   $('grip').parentElement.addEventListener('click', e=>{ if(e.target.id==='grip'||e.target.id==='info') $('info').classList.remove('open'); });
+  $('langPick').addEventListener('click', e=>{ const b=e.target.closest('button'); if(b) setLang(b.dataset.lang); });
   $('bassPick').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b)return;
     S.bass=+b.dataset.bass; saveSettings(); markSeg('#bassPick','bass',S.bass); });
   $('vol').addEventListener('input', e=>{ S.vol=+e.target.value; saveSettings(); if(audio)audio.setVol(S.vol); });
@@ -538,7 +764,10 @@
 
   // debug handle for field diagnostics (harmless; useful on-site for a distributed install)
   window.__chorale={
-    get voice(){return myVoice;}, get synced(){return synced;}, get quality(){return syncQuality;},
+    get voice(){return myVoice;}, get pending(){return pendingVoice;}, get switchAbs(){return switchAbs;},
+    pick(i){return onVoicePick(i);}, toast:showToast,
+    get page(){return pg;}, setPage(i){return snapTo(i);}, renderDetail, setLang, get lang(){return S.lang;},
+    get synced(){return synced;}, get quality(){return syncQuality;},
     get offset(){return clockOffset;}, get state(){return audio?audio.ctx.state:'no-audio';},
     get sched(){return schedCount;}, get ticks(){return tickEntries;}, get cursorAbs(){return cursorAbs;}, now:serverNow,
     tick(){return schedTick();}, render(){return frame();}, locate, currentNote,
