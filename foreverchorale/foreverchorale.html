@@ -913,6 +913,19 @@
   }
 
   // ============================================================ lifecycle
+  // re-fetch config.json; if the shared timeline moved (tempo/epoch changed via
+  // chorale-console.html) apply it and re-anchor so this device follows along.
+  function refreshConfig(reanchorIfChanged){
+    return fetch('config.json',{cache:'no-store'}).then(r=>r.json()).then(c=>{
+      const sp=new URLSearchParams(location.search).get('spb');
+      if(sp&&+sp>0) c.secondsPerBeat=+sp;
+      const changed = !config || c.epoch!==config.epoch || c.secondsPerBeat!==config.secondsPerBeat;
+      config=c;
+      if(changed && reanchorIfChanged && started) reanchor();   // timeline moved → drop stale schedule
+      updateSyncUI();
+      return changed;
+    }).catch(()=>{});
+  }
   async function boot(){
     applyHue();                                         // colour before data (uses random voice)
     let mOk=false;
@@ -953,6 +966,8 @@
     // periodic resync: only while visible (audio is suspended when hidden) and on
     // a per-device jittered cadence so devices don't burst the host in unison.
     setInterval(()=>{ if(document.visibilityState==='visible' && Date.now()-lastSync>RESYNC_EVERY) syncClock(); }, 15000);
+    // poll config.json so live tempo / next-chorale changes from chorale-console.html land here
+    setInterval(()=>{ if(document.visibilityState==='visible') refreshConfig(true); }, 20000);
   }
 
   let wakeLock=null;
@@ -1000,10 +1015,7 @@
       requestWake();                                    // wake lock is released on hide
       reanchor();                                       // drop stale committed notes, re-anchor to now
       syncClock(true);                                  // snap (post-background discontinuity, not drift)
-      fetch('config.json',{cache:'no-store'}).then(r=>r.json()).then(c=>{
-        const sp=new URLSearchParams(location.search).get('spb');
-        config=c; if(sp&&+sp>0) config.secondsPerBeat=+sp; updateSyncUI();
-      }).catch(()=>{});
+      refreshConfig(false);                             // pick up any config change (already re-anchored above)
     }
   });
 
@@ -1012,7 +1024,7 @@
     get voice(){return myVoice;}, get pending(){return pendingVoice;}, get switchAbs(){return switchAbs;},
     pick(i){return onVoicePick(i);}, toast:showToast,
     get page(){return pg;}, setPage(i){return snapTo(i);}, renderDetail, renderRoll, setLang, get lang(){return S.lang;},
-    chords(i){return chordsFor(i);},
+    chords(i){return chordsFor(i);}, refreshConfig,
     get synced(){return synced;}, get quality(){return syncQuality;},
     get offset(){return clockOffset;}, get state(){return audio?audio.ctx.state:'no-audio';},
     get sched(){return schedCount;}, get ticks(){return tickEntries;}, get cursorAbs(){return cursorAbs;}, now:serverNow,

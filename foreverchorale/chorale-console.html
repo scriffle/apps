@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chorale Console</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#0c0a09;--card:#1c1917;--fg:#fafaf9;--muted:#a8a29e;--line:#44403c;
+    --accent:#d6a84a;--good:#15803d;--warn:#d97706;
+    --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;--mono:ui-monospace,Menlo,Consolas,monospace;}
+  body{background:var(--bg);color:var(--fg);font-family:var(--font);line-height:1.45;
+    padding:max(1rem,env(safe-area-inset-top)) 1rem 4rem;-webkit-text-size-adjust:100%;}
+  .wrap{max-width:44rem;margin:0 auto;display:flex;flex-direction:column;gap:1rem;}
+  h1{font-weight:300;font-size:1.5rem;letter-spacing:.02em;display:flex;align-items:center;gap:.5rem;}
+  h1 .mk{font-size:1.6rem;color:var(--accent);}
+  h2{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);
+    font-weight:600;margin-bottom:.6rem;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1rem 1.1rem;}
+  .row{display:flex;justify-content:space-between;gap:1rem;padding:.3rem 0;font-size:.92rem;
+    border-bottom:1px solid rgba(68,64,60,.4);}
+  .row:last-child{border-bottom:none;}
+  .row .k{color:var(--muted);} .row .v{text-align:right;font-variant-numeric:tabular-nums;}
+  .big{font-size:1.15rem;font-weight:500;}
+  .dim{color:var(--muted);} .mono{font-family:var(--mono);}
+  label{display:block;font-size:.8rem;color:var(--muted);margin:.6rem 0 .25rem;}
+  input[type=text],input[type=number],select{width:100%;background:#0c0a09;color:var(--fg);
+    border:1px solid var(--line);border-radius:9px;padding:.55rem .65rem;font-size:1rem;font-family:inherit;}
+  input[type=range]{width:100%;accent-color:var(--accent);height:30px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;align-items:end;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr auto;gap:.6rem;align-items:end;}
+  button{font-family:inherit;font-size:.95rem;border-radius:10px;padding:.6rem 1rem;cursor:pointer;
+    border:1px solid var(--line);background:#292524;color:var(--fg);min-height:44px;}
+  button.primary{border-color:var(--accent);background:rgba(214,168,74,.16);color:#f3dca6;}
+  button:active{transform:translateY(1px);}
+  .btnrow{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.7rem;}
+  pre{background:#0c0a09;border:1px solid var(--line);border-radius:9px;padding:.7rem .8rem;
+    font-family:var(--mono);font-size:.82rem;overflow-x:auto;white-space:pre;color:#d6d3d1;}
+  .note{font-size:.8rem;color:var(--muted);margin-top:.6rem;line-height:1.5;}
+  .pill{display:inline-block;font-size:.72rem;padding:.1rem .5rem;border-radius:999px;
+    border:1px solid var(--line);color:var(--muted);}
+  .err{color:#fca5a5;}
+  .ok{color:#86efac;}
+  .changed{color:var(--accent);}
+  hr{border:none;border-top:1px solid var(--line);margin:.8rem 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><span class="mk">♫</span> Chorale Console</h1>
+  <div id="banner" class="card dim">Loading <span class="mono">config.json</span> &amp; <span class="mono">manifest.json</span>…</div>
+
+  <div id="app" hidden>
+    <!-- LIVE MONITOR -->
+    <div class="card">
+      <h2>Deployed config — live now <span class="pill" id="liveAge"></span></h2>
+      <div class="row"><span class="k">Now playing</span><span class="v big" id="liveNow">—</span></div>
+      <div class="row"><span class="k">Position</span><span class="v" id="livePos">—</span></div>
+      <div class="row"><span class="k">Tempo</span><span class="v" id="liveTempo">—</span></div>
+      <div class="row"><span class="k">Epoch</span><span class="v mono" id="liveEpoch">—</span></div>
+      <div class="btnrow"><button id="reloadBtn">↻ Reload live config</button></div>
+    </div>
+
+    <!-- TEMPO -->
+    <div class="card">
+      <h2>Crotchet duration &amp; tempo</h2>
+      <div class="grid2">
+        <div><label>Seconds per crotchet</label><input type="number" id="secIn" min="0.1" max="60" step="0.05"></div>
+        <div><label>BPM (crotchet = beat)</label><input type="number" id="bpmIn" min="1" max="600" step="0.1"></div>
+      </div>
+      <label>Tempo slider</label>
+      <input type="range" id="tempoRange" min="0.25" max="10" step="0.05">
+      <div class="row" style="margin-top:.5rem"><span class="k">Full catalogue cycle</span><span class="v" id="cycleLen">—</span></div>
+      <div class="note">Tempo lives only in <span class="mono">config.json</span> — no manifest rebuild needed.
+        Changing it re-maps time→position, so the program will <b>jump</b> unless you re-anchor below.</div>
+    </div>
+
+    <!-- POSITION / NEXT CHORALE -->
+    <div class="card">
+      <h2>Timeline position — "next chorale" pointer</h2>
+      <div class="btnrow" style="margin-top:0">
+        <button id="anchorLive">⇄ Continue from current live position (no jump)</button>
+      </div>
+      <hr>
+      <label>Jump the program to a chorale</label>
+      <input type="text" id="search" placeholder="filter by number or title…" autocomplete="off">
+      <select id="choraleSel" size="1" style="margin-top:.5rem"></select>
+      <div class="grid3" style="margin-top:.6rem">
+        <div><label>Start</label>
+          <select id="startMode"><option value="now">now</option><option value="lead">in N seconds</option></select></div>
+        <div><label>Lead (s)</label><input type="number" id="leadSec" min="0" max="3600" step="5" value="30"></div>
+        <div><button class="primary" id="jumpBtn">Set as next ▶</button></div>
+      </div>
+      <div class="note" id="jumpInfo"></div>
+      <hr>
+      <label>Epoch (advanced — ms since 1970 UTC)</label>
+      <input type="number" id="epochIn" step="1">
+      <div class="btnrow"><button id="resetEpoch">Reset to 2025-01-01</button></div>
+    </div>
+
+    <!-- OUTPUT -->
+    <div class="card">
+      <h2>New config <span class="pill changed" id="dirty" hidden>unsaved changes</span></h2>
+      <div class="row"><span class="k">Would play now</span><span class="v big" id="outNow">—</span></div>
+      <div class="row"><span class="k">Position</span><span class="v" id="outPos">—</span></div>
+      <div class="row"><span class="k">Tempo</span><span class="v" id="outTempo">—</span></div>
+      <pre id="jsonOut">—</pre>
+      <div class="btnrow">
+        <button class="primary" id="downloadBtn">⤓ Download config.json</button>
+        <button id="copyBtn">⧉ Copy JSON</button>
+        <button id="revertBtn">↺ Revert to live</button>
+      </div>
+      <div class="note">Deploy the downloaded <span class="mono">config.json</span> to your host (replace the existing one,
+        and keep it un-cached). Devices apply it within ~20&nbsp;s if config-polling is enabled in the player,
+        otherwise on their next reload. The <span class="mono">manifestHash</span> is preserved, so the manifest is not re-fetched.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+(() => {
+  const $=id=>document.getElementById(id);
+  let cfg=null, manifest=null, out=null, loadedAt=0;
+
+  // ---- position math (mirrors the player's locate()) ----
+  const absBeat=(t,epoch,spb)=>(t-epoch)/1000/spb;
+  function locate(t,epoch,spb){
+    const total=manifest.totalBeats, chs=manifest.chorales;
+    let cat=absBeat(t,epoch,spb)%total; if(cat<0) cat+=total;
+    let lo=0,hi=chs.length-1,idx=0;
+    while(lo<=hi){ const m=(lo+hi)>>1; if(chs[m].startBeat<=cat){ idx=m; lo=m+1; } else hi=m-1; }
+    const ch=chs[idx];
+    return {ch, idx, localBeat:cat-ch.startBeat, cat, inGap:(cat-ch.startBeat)>ch.lengthBeats};
+  }
+  const fmtKey=k=>{ if(!k) return ''; const t=k[0],acc=k.includes('#')?'♯':k.includes('-')?'♭':'';
+    return t.toUpperCase()+acc+(t===t.toLowerCase()?' min':' maj'); };
+  function nowText(L){
+    if(L.inGap) return '· breath / gap ·';
+    const ch=L.ch; const en=ch.titleEn?' — '+ch.titleEn:'';
+    return '#'+ch.num+'  '+ch.title+en;
+  }
+  function posText(L){
+    return (L.idx+1)+'/'+manifest.chorales.length+' · beat '+L.localBeat.toFixed(1)+' / '+L.ch.lengthBeats.toFixed(0)
+      +(L.ch.key?' · '+fmtKey(L.ch.key):'');
+  }
+  const tempoText=spb=>spb.toFixed(2)+' s/crotchet  ·  '+(60/spb).toFixed(1)+' BPM';
+  const fmtClock=ms=>{ const d=new Date(ms); return d.toLocaleTimeString(); };
+
+  // ---- load ----
+  async function load(){
+    try{
+      cfg=await fetch('config.json?_='+Date.now(),{cache:'no-store'}).then(r=>{if(!r.ok)throw 0;return r.json();});
+      const murl='manifest.json'+(cfg.manifestHash?'?v='+encodeURIComponent(cfg.manifestHash):'');
+      manifest=await fetch(murl,{cache:'force-cache'}).then(r=>{if(!r.ok)throw 0;return r.json();});
+    }catch(e){
+      $('banner').innerHTML='<span class="err">Could not load config.json / manifest.json.</span> '+
+        'Open this page from the same host that serves the chorale app (not a <span class="mono">file://</span> path).';
+      return;
+    }
+    loadedAt=Date.now();
+    out={ version:cfg.version, epoch:cfg.epoch, secondsPerBeat:cfg.secondsPerBeat,
+          master:cfg.master, manifestHash:cfg.manifestHash };
+    $('banner').hidden=true; $('app').hidden=false;
+    buildChoraleList(''); syncTempoInputs(); $('epochIn').value=out.epoch;
+    wire();
+    tick(); setInterval(tick,1000);
+  }
+
+  // ---- chorale picker ----
+  function buildChoraleList(filter){
+    const sel=$('choraleSel'); const f=filter.trim().toLowerCase();
+    const prev=sel.value;
+    sel.innerHTML='';
+    for(let i=0;i<manifest.chorales.length;i++){
+      const c=manifest.chorales[i];
+      const hay=(c.num+' '+c.title+' '+(c.titleEn||'')).toLowerCase();
+      if(f && hay.indexOf(f)<0) continue;
+      const o=document.createElement('option'); o.value=i;
+      o.textContent='#'+c.num+' — '+c.title+(c.titleEn?'  ('+c.titleEn+')':'');
+      sel.appendChild(o);
+    }
+    if(prev && [...sel.options].some(o=>o.value===prev)) sel.value=prev;
+    sel.size=Math.min(8,Math.max(2,sel.options.length));
+  }
+
+  // ---- tempo ----
+  function setSpb(v){
+    v=+v; if(!(v>0)||!isFinite(v)) return;
+    v=Math.max(0.05,Math.min(60,v));
+    out.secondsPerBeat=Math.round(v*1000)/1000;
+    syncTempoInputs(); markDirty();
+  }
+  function syncTempoInputs(){
+    const spb=out.secondsPerBeat;
+    if(document.activeElement!==$('secIn')) $('secIn').value=spb;
+    if(document.activeElement!==$('bpmIn')) $('bpmIn').value=+(60/spb).toFixed(2);
+    $('tempoRange').value=Math.min(10,Math.max(0.25,spb));
+    const hrs=manifest.totalBeats*spb/3600;
+    $('cycleLen').textContent=manifest.totalBeats.toLocaleString()+' beats · '+
+      (hrs>=1?hrs.toFixed(1)+' h':(hrs*60).toFixed(0)+' min');
+  }
+
+  // ---- epoch / position actions ----
+  function anchorToLive(){
+    // make OUT's position at "now" equal the deployed config's position at "now" (no jump)
+    const liveCat=locate(Date.now(),cfg.epoch,cfg.secondsPerBeat).cat;
+    out.epoch=Math.round(Date.now()-liveCat*out.secondsPerBeat*1000);
+    $('epochIn').value=out.epoch; markDirty();
+    $('jumpInfo').textContent='Anchored — the program continues from where it is now ('+nowText(locate(Date.now(),out.epoch,out.secondsPerBeat))+').';
+  }
+  function jumpToChorale(){
+    const idx=+$('choraleSel').value; if(isNaN(idx)||!manifest.chorales[idx]) return;
+    const ch=manifest.chorales[idx];
+    const lead=$('startMode').value==='lead' ? Math.max(0,+$('leadSec').value||0) : 0;
+    const startMs=Date.now()+lead*1000;
+    out.epoch=Math.round(startMs - ch.startBeat*out.secondsPerBeat*1000);
+    $('epochIn').value=out.epoch; markDirty();
+    $('jumpInfo').innerHTML='<span class="ok">#'+ch.num+' '+ch.title+'</span> will begin at <b>'+fmtClock(startMs)+'</b>'+
+      (lead?' (in '+lead+' s)':' (now)')+'. Deploy before then.';
+  }
+
+  // ---- render / output ----
+  function markDirty(){ render(); }
+  function jsonStr(){
+    // key order kept stable + readable; matches build_manifest.py output shape
+    const o={version:out.version, epoch:out.epoch, secondsPerBeat:out.secondsPerBeat,
+             master:out.master, manifestHash:out.manifestHash};
+    return JSON.stringify(o,null,2);
+  }
+  function isDirty(){ return out.epoch!==cfg.epoch || out.secondsPerBeat!==cfg.secondsPerBeat; }
+  function render(){
+    $('jsonOut').textContent=jsonStr();
+    $('dirty').hidden=!isDirty();
+    $('outTempo').textContent=tempoText(out.secondsPerBeat);
+  }
+
+  // ---- per-second tick (live + out monitors) ----
+  function tick(){
+    const now=Date.now();
+    const L=locate(now,cfg.epoch,cfg.secondsPerBeat);
+    $('liveNow').textContent=nowText(L);
+    $('livePos').textContent=posText(L);
+    $('liveTempo').textContent=tempoText(cfg.secondsPerBeat);
+    $('liveEpoch').textContent=cfg.epoch;
+    $('liveAge').textContent='loaded '+Math.round((now-loadedAt)/1000)+'s ago';
+    const O=locate(now,out.epoch,out.secondsPerBeat);
+    $('outNow').textContent=nowText(O);
+    $('outPos').textContent=posText(O);
+    render();
+  }
+
+  // ---- wiring ----
+  function wire(){
+    $('secIn').addEventListener('input',e=>setSpb(e.target.value));
+    $('bpmIn').addEventListener('input',e=>{ const b=+e.target.value; if(b>0) setSpb(60/b); });
+    $('tempoRange').addEventListener('input',e=>setSpb(e.target.value));
+    $('search').addEventListener('input',e=>buildChoraleList(e.target.value));
+    $('anchorLive').addEventListener('click',anchorToLive);
+    $('jumpBtn').addEventListener('click',jumpToChorale);
+    $('startMode').addEventListener('change',e=>{ $('leadSec').disabled=e.target.value!=='lead'; });
+    $('leadSec').disabled=true;
+    $('epochIn').addEventListener('input',e=>{ const v=Math.round(+e.target.value); if(isFinite(v)){ out.epoch=v; markDirty(); } });
+    $('resetEpoch').addEventListener('click',()=>{ out.epoch=1735689600000; $('epochIn').value=out.epoch; markDirty(); });
+    $('reloadBtn').addEventListener('click',()=>location.reload());
+    $('revertBtn').addEventListener('click',()=>{
+      out.epoch=cfg.epoch; out.secondsPerBeat=cfg.secondsPerBeat;
+      syncTempoInputs(); $('epochIn').value=out.epoch; $('jumpInfo').textContent=''; markDirty();
+    });
+    $('downloadBtn').addEventListener('click',()=>{
+      const blob=new Blob([jsonStr()+'\n'],{type:'application/json'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='config.json';
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    });
+    $('copyBtn').addEventListener('click',async()=>{
+      try{ await navigator.clipboard.writeText(jsonStr()); $('copyBtn').textContent='✓ Copied'; }
+      catch(e){ $('copyBtn').textContent='copy failed'; }
+      setTimeout(()=>$('copyBtn').textContent='⧉ Copy JSON',1400);
+    });
+  }
+
+  load();
+})();
+</script>
+</body>
+</html>
