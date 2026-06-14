@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Harmonic Solids</title>
+    <style>
+      :root {
+        --bg: #0a0c11;
+        --panel: rgba(18, 22, 30, 0.82);
+        --panel-border: rgba(120, 140, 180, 0.18);
+        --ink: #e7edf7;
+        --ink-dim: #8b97ac;
+        --accent: #9fb4ff;
+        --good: #5fd6a0;
+        --warn: #ffd166;
+        --bad: #ff6b6b;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; }
+      #app { position: fixed; inset: 0; }
+      canvas { display: block; }
+
+      .panel {
+        position: fixed;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 12px;
+        padding: 12px 14px;
+        backdrop-filter: blur(10px);
+        font-size: 13px;
+        line-height: 1.5;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+      }
+      .panel h2 { margin: 0 0 8px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); font-weight: 600; }
+
+      #controls { top: 14px; left: 14px; width: 270px; max-height: calc(100vh - 28px); overflow-y: auto; }
+      .beatstrip { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 2px; }
+      .beatchip {
+        background: #11151e; border: 1px solid var(--panel-border); color: var(--ink);
+        border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer; font-family: inherit;
+        display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 34px;
+      }
+      .beatchip.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+      .beatchip.playing { background: var(--accent); color: #0a0c11; }
+      .beatchip small { font-size: 9px; color: var(--ink-dim); }
+      .beatchip.playing small { color: #0a0c11; }
+      #controls label { display: block; font-size: 11px; color: var(--ink-dim); margin: 8px 0 2px; text-transform: uppercase; letter-spacing: 0.06em; }
+      #controls input[type="text"] {
+        width: 100%; background: #0c0f16; border: 1px solid var(--panel-border); color: var(--ink);
+        border-radius: 7px; padding: 7px 9px; font-size: 14px; font-family: inherit;
+      }
+      #controls input[type="text"].bad { border-color: var(--bad); }
+      .row { display: flex; gap: 8px; align-items: center; }
+      .row > * { flex: 1; }
+      button.seg, .octave button {
+        background: #11151e; border: 1px solid var(--panel-border); color: var(--ink);
+        border-radius: 7px; padding: 6px 8px; font-size: 13px; cursor: pointer; font-family: inherit;
+      }
+      button.seg.on { background: var(--accent); color: #0a0c11; border-color: var(--accent); font-weight: 600; }
+      .hint { font-size: 11px; color: var(--ink-dim); margin-top: 8px; }
+
+      #readout { top: 14px; right: 14px; width: 250px; }
+      #readout .big { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+      #readout .kv { display: flex; justify-content: space-between; gap: 10px; }
+      #readout .kv span:first-child { color: var(--ink-dim); }
+      #readout .bar { height: 7px; border-radius: 4px; background: #0c0f16; overflow: hidden; margin: 4px 0 10px; }
+      #readout .bar > i { display: block; height: 100%; width: 0%; transition: width 0.18s ease; }
+      .seat-state { font-weight: 600; }
+
+      #how { bottom: 14px; left: 14px; width: 330px; }
+      #how p { margin: 6px 0 0; color: var(--ink-dim); font-size: 12px; }
+      #how .tag { color: var(--warn); font-weight: 600; }
+      #how summary { cursor: pointer; color: var(--ink); list-style: none; }
+      #how summary::-webkit-details-marker { display: none; }
+
+      #debug { bottom: 14px; right: 14px; width: 320px; max-height: 44vh; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+      #debug .t { display: flex; gap: 8px; align-items: baseline; }
+      #debug .t .mark { width: 14px; }
+      #debug .pass { color: var(--good); }
+      #debug .fail { color: var(--bad); }
+      #debug .num { color: var(--accent); }
+      #debug h2 .sum { float: right; text-transform: none; letter-spacing: 0; }
+
+      .legend { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 16px; font-size: 11px; color: var(--ink-dim); }
+      .legend b { color: var(--ink); font-weight: 600; }
+
+      #explore { bottom: 14px; left: 50%; transform: translateX(-50%); width: 460px; max-height: 46vh; overflow-y: auto; }
+      .exweights { margin: 8px 0 2px; }
+      .exweights .wrow { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--ink-dim); margin: 3px 0; }
+      .exweights .wrow span { flex: 0 0 92px; }
+      .exweights .wrow input[type="range"] { flex: 1; }
+      .exweights .wrow b { flex: 0 0 28px; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+      .exlist { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+      .exrow {
+        display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: center;
+        background: #0e1220; border: 1px solid var(--panel-border); border-radius: 7px; padding: 6px 9px; cursor: pointer;
+      }
+      .exrow:hover, .exrow.hot { border-color: var(--accent); background: #141a2c; }
+      .exrow .rk { color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+      .exrow .pitches { font-weight: 600; }
+      .exrow .pitches small { color: var(--ink-dim); font-weight: 400; margin-left: 6px; }
+      .exrow .cost { font-variant-numeric: tabular-nums; color: var(--ink-dim); font-size: 11px; text-align: right; }
+      .exrow .flag { color: var(--warn); font-size: 10px; }
+      .exrow.parallel .flag { color: var(--bad); }
+
+      /* onboarding overlay */
+      #intro {
+        position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+        background: radial-gradient(ellipse at 50% 40%, rgba(20, 26, 42, 0.72), rgba(6, 8, 14, 0.92));
+        backdrop-filter: blur(6px); transition: opacity 0.5s ease;
+      }
+      #intro.hide { opacity: 0; pointer-events: none; }
+      .intro-card {
+        width: min(620px, 92vw); background: var(--panel); border: 1px solid var(--panel-border);
+        border-radius: 18px; padding: 26px 30px; box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+      }
+      .intro-card h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.01em; }
+      .intro-card .lede { margin: 0 0 14px; font-size: 15px; color: var(--ink); }
+      .intro-card p { margin: 0 0 12px; font-size: 13px; line-height: 1.62; color: var(--ink-dim); }
+      .intro-card .caveat { font-size: 12px; border-left: 2px solid var(--warn); padding-left: 12px; }
+      .intro-actions { display: flex; align-items: center; gap: 14px; margin-top: 18px; }
+      .intro-actions button { font-size: 14px; padding: 9px 18px; }
+      .intro-actions span { font-size: 11px; color: var(--ink-dim); }
+
+      #helpBtn {
+        position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 20;
+        width: 30px; height: 30px; border-radius: 50%; background: var(--panel); color: var(--ink-dim);
+        border: 1px solid var(--panel-border); cursor: pointer; font-size: 15px; font-weight: 700;
+      }
+      #helpBtn:hover { color: var(--ink); border-color: var(--accent); }
+
+      #initError {
+        display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 60;
+        background: #2a1416; border-bottom: 1px solid var(--bad); color: #ffd9d9;
+        padding: 12px 18px; font-size: 13px; line-height: 1.5;
+      }
+      #initError.show { display: block; }
+      #initError code { background: rgba(0, 0, 0, 0.35); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+    </style>
+    <!-- Libraries are vendored locally (vendor/) so the app is fully self-contained:
+         no CDN, no network at runtime — required for reliable VPS/nginx hosting and
+         so a blocked/slow CDN can never leave the UI dead. Still no build step. -->
+    <script src="./vendor/Tone.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./vendor/three.module.js",
+          "three/addons/": "./vendor/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <div id="intro">
+      <div class="intro-card">
+        <h1>Harmonic Solids</h1>
+        <p class="lede">Chords and notes are physical objects whose shape <em>is</em> the music theory — not a decoration of it.</p>
+        <p>
+          One model drives everything you see and hear. <b>Roughness</b> — sensory dissonance computed from the
+          <b>Plomp–Levelt</b> curve across six sawtooth harmonics per note — decides how things fit: consonant notes
+          <b style="color: var(--good)">seat flush</b>, tensions seat partway with an honest gap, and semitone clashes
+          <b style="color: var(--bad)">refuse</b> and strain. <b>Hue</b> comes from the pitch-class colour wheel, so
+          transposing just rotates colour. Chords float in a <b>voice-leading lattice</b> where physical distance is the
+          number of semitones the voices move. And the synth plays the exact spectrum the geometry was measured from, so
+          what you see and what you hear can never disagree.
+        </p>
+        <p class="caveat">
+          Honest about its limits: sensory roughness is only part of consonance — culture and learning matter too, and
+          this model doesn't capture them. The parallel-5ths penalty in the explorer is a Western convention, not physics.
+        </p>
+        <div class="intro-actions">
+          <button id="introBegin" class="seg on">Begin →</button>
+          <span>drag pegs · click the solid to hear it · ✦ suggest lines · toggle the lattice</span>
+        </div>
+      </div>
+    </div>
+
+    <button id="helpBtn" title="How this works">?</button>
+
+    <div id="initError">
+      <b>Couldn't start.</b> The 3D engine didn't initialize. Serve this over <b>http</b> — e.g.
+      <code>python3 tools/serve.py 8781</code> then open <code>http://localhost:8781</code> — don't open the file
+      directly (<code>file://</code> blocks JavaScript modules). Check the browser console for details.
+    </div>
+
+    <div class="panel" id="controls">
+      <h2>Progression</h2>
+      <input id="chordInput" type="text" value="Dm7 G7 Cmaj7" spellcheck="false" autocomplete="off" />
+      <div class="beatstrip" id="beatStrip"></div>
+      <div class="hint" id="chordPcs"></div>
+
+      <label>View</label>
+      <div class="row">
+        <button class="seg on" id="viewSingle">Single chord</button>
+        <button class="seg" id="viewLattice">Lattice</button>
+      </div>
+
+      <label>Melody peg — register</label>
+      <div class="row octave" id="octaveRow"></div>
+
+      <label>Voices</label>
+      <div class="row">
+        <button class="seg on" id="toggleMelody">Melody</button>
+        <button class="seg" id="toggleCounter">2nd line</button>
+      </div>
+
+      <label>Explore</label>
+      <div class="row">
+        <button class="seg" id="exploreBtn" style="flex: 2">✦ Suggest lines</button>
+      </div>
+
+      <label>Transport</label>
+      <div class="row">
+        <button class="seg" id="playBtn" style="flex: 2">▶ Play</button>
+        <button class="seg on" id="loopBtn">Loop</button>
+        <button class="seg" id="followBtn">Follow</button>
+      </div>
+      <div class="row" style="align-items: center; margin-top: 6px">
+        <span style="flex: 0 0 auto; color: var(--ink-dim); font-size: 11px">tempo</span>
+        <input id="tempo" type="range" min="40" max="200" value="96" style="flex: 1" />
+        <span id="tempoVal" style="flex: 0 0 auto; font-variant-numeric: tabular-nums">96</span>
+      </div>
+
+      <label>Audio — hear the same spectrum</label>
+      <div class="row">
+        <button class="seg" id="auditionBtn" style="flex: 2">▶ Audition beat</button>
+      </div>
+      <div class="row" style="margin-top: 6px">
+        <button class="seg mute on" data-voice="chord">Chord</button>
+        <button class="seg mute on" data-voice="melody">Melody</button>
+        <button class="seg mute on" data-voice="counter">2nd</button>
+      </div>
+      <div class="row" style="margin-top: 5px; gap: 8px">
+        <input type="range" class="gain" data-voice="chord" min="0" max="1" step="0.05" value="0.42" title="chord gain" />
+        <input type="range" class="gain" data-voice="melody" min="0" max="1" step="0.05" value="0.55" title="melody gain" />
+        <input type="range" class="gain" data-voice="counter" min="0" max="1" step="0.05" value="0.5" title="2nd-line gain" />
+      </div>
+      <div class="hint">Drag a peg over the chord; seating depth is live sensory roughness. <b>Space</b>/click solid auditions. Mute and judge by eye, then unmute — they should agree.</div>
+    </div>
+
+    <div class="panel" id="readout">
+      <h2>Live fit</h2>
+      <div class="big" id="roPitch">—</div>
+      <div class="seat-state" id="roState">drag a peg</div>
+      <div class="bar"><i id="roBar"></i></div>
+      <div class="kv"><span>peg fit roughness</span><span id="roFit">—</span></div>
+      <div class="kv"><span>seat depth</span><span id="roSeat">—</span></div>
+      <div class="kv"><span>sonority roughness</span><span id="roSon">—</span></div>
+      <div class="kv"><span>interval-class vector</span><span id="roIcv">—</span></div>
+    </div>
+
+    <div class="panel" id="debug">
+      <h2>Acceptance tests <span class="sum" id="debugSum">—</span></h2>
+      <div id="debugList"></div>
+    </div>
+
+    <div class="legend">
+      <span><b>seat</b> depth = fit</span>
+      <span><b>hue</b> = pitch class</span>
+      <span><b>glow</b> = roughness</span>
+    </div>
+
+    <div class="panel" id="explore" style="display: none">
+      <h2>Suggest <span id="exMode" style="color: var(--accent); text-transform: none">melody</span> for <span id="exBeat" style="color: var(--ink); text-transform: none"></span><span id="exClose" style="float: right; cursor: pointer; color: var(--ink-dim)">✕</span></h2>
+      <div class="row">
+        <button class="seg on" id="exCounter">+ 2nd line</button>
+        <span style="flex: 0 0 auto; color: var(--ink-dim); font-size: 11px">show</span>
+        <select id="exTopN" style="flex: 0 0 auto; background: #0c0f16; color: var(--ink); border: 1px solid var(--panel-border); border-radius: 6px; padding: 4px">
+          <option>4</option>
+          <option selected>6</option>
+          <option>8</option>
+          <option>12</option>
+        </select>
+      </div>
+      <div class="exweights">
+        <div class="wrow"><span>roughness</span><input type="range" id="wRough" min="0" max="2" step="0.1" value="1" /><b id="wRoughV">1.0</b></div>
+        <div class="wrow"><span>voice-leading</span><input type="range" id="wVL" min="0" max="2" step="0.1" value="0.6" /><b id="wVLV">0.6</b></div>
+        <div class="wrow">
+          <span>∥ 5ths/8ves</span><input type="range" id="wPar" min="0" max="2" step="0.1" value="0.8" /><button class="seg on" id="wParToggle" style="flex: 0 0 auto; padding: 2px 8px">on</button>
+        </div>
+      </div>
+      <div class="hint">Hover a row or ghost peg to hear the beat; click to commit. <b>∥5ths/8ves is a Western convention, not psychoacoustics.</b></div>
+      <div id="exList" class="exlist"></div>
+    </div>
+
+    <!-- Onboarding dismissal is wired INLINE, not in app.js, so the dialog can
+         always be closed the instant the page parses — independent of Three.js /
+         Tone.js loading from the CDN (otherwise a slow/blocked CDN leaves the
+         Begin button dead). Multiple escape paths: button, backdrop, Esc. -->
+    <script>
+      (function () {
+        var intro = document.getElementById('intro');
+        if (!intro) return;
+        function hide() {
+          intro.classList.add('hide');
+          try {
+            localStorage.setItem('hs_intro_seen', '1');
+          } catch (e) {}
+        }
+        function show() {
+          intro.classList.remove('hide');
+        }
+        var begin = document.getElementById('introBegin');
+        if (begin) begin.addEventListener('click', hide);
+        intro.addEventListener('click', function (e) {
+          if (e.target === intro) hide(); // click the dimmed backdrop, outside the card
+        });
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape') hide();
+        });
+        var help = document.getElementById('helpBtn');
+        if (help) help.addEventListener('click', show);
+        try {
+          if (localStorage.getItem('hs_intro_seen')) intro.classList.add('hide');
+        } catch (e) {}
+        window.__introHide = hide; // let app.js reuse it without re-binding
+      })();
+
+      // If the module never initializes (file:// blocking modules, a missing
+      // vendor file, or a runtime error), surface it instead of a silent dead UI.
+      window.addEventListener('error', function (e) {
+        if (e && e.message) window.__lastError = e.message;
+      });
+      setTimeout(function () {
+        if (!window.HS) {
+          var b = document.getElementById('initError');
+          if (b) b.classList.add('show');
+        }
+      }, 4000);
+    </script>
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
