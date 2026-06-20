@@ -71,6 +71,7 @@
 
   /* --- voice switcher (Pass 1 & 2 only): menu built from assets/voices.json --- */
   function buildVoiceSwitch(data, locked) {
+    var isPass1 = /\/pass1\//.test(PAGE);                // dialogue voices (pass1only) appear on Pass 1 only
     var wrap = document.createElement('div');
     wrap.className = 'voice-switch' + (locked ? ' is-locked' : '');
 
@@ -89,6 +90,7 @@
     }
 
     function addOption(parent, v) {
+      if (v.pass1only && !isPass1) return;               // gate dialogue voices to Pass 1
       var o = document.createElement('option');
       o.value = v.id;
       o.textContent = v.label;
@@ -102,7 +104,7 @@
       var og = document.createElement('optgroup');
       og.label = g.label;
       (g.voices || []).forEach(function (v) { addOption(og, v); });
-      sel.appendChild(og);
+      if (og.children.length) sel.appendChild(og);       // drop a group emptied by Pass-1 gating
     });
 
     wrap.appendChild(label);
@@ -112,7 +114,8 @@
 
   /* swap the narration of [data-vc] chunks to the selected voice; VCAA = the in-page baseline */
   function setupVoiceSwap(sel, defaultId) {
-    var PAGEKEY = (PAGE.match(/\/pass[12]\/([^\/.]+)\.html/) || [])[1];
+    var PAGEKEY = (document.body && document.body.getAttribute('data-voicekey'))   // per-page override (e.g. pass1/investigation, to avoid the pass1/pass2 'investigation' clash)
+               || (PAGE.match(/\/pass[12]\/([^\/.]+)\.html/) || [])[1];
     if (!PAGEKEY) return;
     var nodes = [].slice.call(document.querySelectorAll('[data-vc]'));
     var baseline = {};                                   // data-vc -> the page's VCAA innerHTML
