@@ -139,14 +139,25 @@
         .then(function (d) { store = d; apply(id); })
         .catch(function (e) { if (window.console) console.warn('voice content load failed —', e); });
     }
-    sel.addEventListener('change', function () { select(sel.value); });
+    var touched = false;
+    sel.addEventListener('change', function () { touched = true; select(sel.value); });
 
-    var saved = null;                                    // restore the reader's last voice
-    try { saved = localStorage.getItem(KEY); } catch (e) {}
-    if (saved && saved !== defaultId) {
-      var opt = sel.querySelector('option[value="' + saved + '"]');
-      if (opt && !opt.disabled) { sel.value = saved; select(saved); }
-    }
+    // Load this page's voices up front so the menu reflects what is actually authored HERE.
+    // The menu is global (assets/voices.json), but a page may carry only a subset of voices
+    // (e.g. Pass 1 pages have only "ai"/"socratic"); grey the rest so every selectable voice works.
+    fetch(assetURL('voices/' + PAGEKEY + '.json'))
+      .then(function (r) { return r.ok ? r.json() : {}; })
+      .then(function (d) {
+        store = d || {};
+        [].forEach.call(sel.options, function (o) {
+          if (o.value !== defaultId && !store[o.value]) o.disabled = true;   // not authored on this page → unselectable
+        });
+        if (touched) return;                             // reader already picked — don't override
+        var saved = null;                                // restore the reader's last voice if it exists here
+        try { saved = localStorage.getItem(KEY); } catch (e) {}
+        if (saved && saved !== defaultId && store[saved]) { sel.value = saved; apply(saved); }
+      })
+      .catch(function (e) { if (window.console) console.warn('voice content load failed —', e); });
   }
 
   (function () {
