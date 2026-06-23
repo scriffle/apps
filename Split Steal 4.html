@@ -1,0 +1,1531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="Split or Steal classroom game tracker — large, readable, projector-friendly.">
+<title>Split or Steal — Classroom Tracker</title>
+<style>
+/* ============================================================
+   RESET
+   ============================================================ */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+/* ============================================================
+   THEME VARIABLES
+   High-contrast, projector-friendly. No decorative web fonts
+   (they can fail to load); a heavy system sans reads best at
+   distance. --scale lets the teacher size the whole UI to the room.
+   ============================================================ */
+:root {
+  --scale: 1;
+  --base: clamp(17px, 1.7vw, 26px);
+
+  --bg:        #0e1726;
+  --bg-2:      #152134;
+  --card:      #1b2b44;
+  --card-2:    #213450;
+  --line:      #355072;
+  --line-soft: #28405e;
+
+  --text:      #f4f8ff;
+  --text-dim:  #9fb6d4;
+  --text-mute: #6f88a8;
+
+  --accent:    #4cc2ff;   /* primary / round / pot   */
+  --split:     #2fd27a;   /* cooperate               */
+  --steal:     #ffb02e;   /* betray (single)         */
+  --danger:    #ff5d6c;   /* mutual betray / destroy */
+  --gold:      #ffd34d;   /* winner                  */
+
+  --split-bg:  rgba(47,210,122,.16);
+  --steal-bg:  rgba(255,176,46,.16);
+  --danger-bg: rgba(255,93,108,.16);
+  --accent-bg: rgba(76,194,255,.14);
+  --gold-bg:   rgba(255,211,77,.18);
+
+  --radius: 14px;
+  --radius-sm: 9px;
+  --gap: clamp(.6rem, 1.4vw, 1.1rem);
+  --pad: clamp(.7rem, 1.6vw, 1.3rem);
+  --shadow: 0 6px 24px rgba(0,0,0,.35);
+  --fast: .14s ease;
+  --med: .25s ease;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+html {
+  font-size: calc(var(--base) * var(--scale));
+  height: 100%;
+}
+body {
+  height: 100%;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+.header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  flex-wrap: wrap;
+  padding: clamp(.5rem,1.2vw,1rem) clamp(.9rem,2vw,1.6rem);
+  padding-top: max(clamp(.5rem,1.2vw,1rem), env(safe-area-inset-top));
+  background: var(--bg-2);
+  border-bottom: 2px solid var(--line-soft);
+}
+.brand {
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: .01em;
+  white-space: nowrap;
+}
+.brand .or { color: var(--text-mute); font-weight: 600; }
+.brand .split { color: var(--split); }
+.brand .steal { color: var(--steal); }
+
+.stats {
+  display: flex;
+  gap: clamp(1rem, 2.5vw, 2.4rem);
+  flex-wrap: wrap;
+}
+.stat { text-align: center; line-height: 1.05; }
+.stat-label {
+  display: block;
+  font-size: .62rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  font-weight: 700;
+}
+.stat-value { font-size: 1.5rem; font-weight: 800; }
+.stat-value.round { color: var(--accent); }
+.stat-value.active { color: var(--text); }
+.stat-value.pot { color: var(--gold); }
+
+.tools { display: flex; align-items: center; gap: .4rem; }
+.tool-btn {
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  width: 2.1em; height: 2.1em;
+  display: grid; place-items: center;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--fast), border-color var(--fast);
+}
+.tool-btn:hover { background: var(--card-2); border-color: var(--accent); }
+.tool-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.scale-readout {
+  min-width: 3.2em; text-align: center;
+  font-size: .8rem; font-weight: 700; color: var(--text-dim);
+}
+
+/* ============================================================
+   TABS
+   ============================================================ */
+.tabs {
+  flex-shrink: 0;
+  display: flex;
+  gap: .25rem;
+  padding: 0 clamp(.6rem,1.6vw,1.4rem);
+  background: var(--bg-2);
+  border-bottom: 2px solid var(--line-soft);
+}
+.tab {
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  padding: .7rem 1.2rem;
+  background: none;
+  border: none;
+  border-bottom: 4px solid transparent;
+  color: var(--text-mute);
+  cursor: pointer;
+  transition: color var(--fast), border-color var(--fast);
+}
+.tab:hover { color: var(--text); }
+.tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.tab:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+.tab .k { font-size: .65em; opacity: .5; margin-left: .4em; }
+
+/* ============================================================
+   PANELS
+   ============================================================ */
+.main { flex: 1; position: relative; overflow: hidden; }
+.panel {
+  position: absolute; inset: 0;
+  padding: clamp(.8rem,1.8vw,1.5rem);
+  padding-bottom: max(clamp(.8rem,1.8vw,1.5rem), env(safe-area-inset-bottom));
+  overflow-y: auto;
+  display: none;
+}
+.panel.active { display: block; }
+.panel::-webkit-scrollbar { width: 12px; }
+.panel::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; }
+
+/* ============================================================
+   BUTTONS (generic)
+   ============================================================ */
+.btn {
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: .02em;
+  padding: .65em 1.1em;
+  background: var(--card);
+  color: var(--text);
+  border: 2px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--fast), border-color var(--fast), transform var(--fast), opacity var(--fast);
+}
+.btn:hover { background: var(--card-2); border-color: var(--accent); }
+.btn:active { transform: scale(.97); }
+.btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #06223a; border-color: var(--accent); }
+.btn-primary:hover { background: #66ccff; border-color: #66ccff; }
+.btn-danger { color: var(--danger); border-color: var(--danger); }
+.btn-danger:hover { background: var(--danger-bg); border-color: var(--danger); }
+.btn-ghost { background: transparent; }
+.btn-row { display: flex; gap: var(--gap); flex-wrap: wrap; align-items: center; }
+
+/* ============================================================
+   SETUP TAB
+   ============================================================ */
+.setup { max-width: 60rem; margin: 0 auto; }
+.section-title {
+  font-size: 1.2rem; font-weight: 800; margin-bottom: .7rem;
+  color: var(--accent); letter-spacing: .02em;
+}
+.setup-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap);
+}
+@media (max-width: 720px) { .setup-grid { grid-template-columns: 1fr; } }
+label.fld { display: block; font-size: .8rem; font-weight: 700; color: var(--text-dim); margin-bottom: .4rem; }
+.names {
+  width: 100%;
+  height: clamp(12rem, 38vh, 22rem);
+  resize: vertical;
+  background: var(--card);
+  color: var(--text);
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--pad);
+  font: inherit;
+  font-size: 1.05rem;
+  line-height: 1.45;
+}
+.names:focus { outline: none; border-color: var(--accent); }
+.preview {
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--pad);
+  overflow: auto;
+  max-height: clamp(14rem, 44vh, 24rem);
+}
+.preview-head { font-size: .85rem; font-weight: 700; color: var(--text-dim); margin-bottom: .6rem; }
+.preview-head b { color: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+.chip {
+  background: var(--accent-bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: .25em .8em;
+  font-size: .9rem; font-weight: 600;
+}
+.chip.dup { border-color: var(--steal); color: var(--steal); }
+
+/* Game-settings block */
+.settings-block { margin-top: 1.6rem; border-top: 2px solid var(--line-soft); padding-top: 1.2rem; }
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: var(--gap); align-items: end; }
+.field { display: flex; flex-direction: column; gap: .35rem; }
+.field > label { font-size: .8rem; font-weight: 700; color: var(--text-dim); }
+.field input[type="number"], .field input[type="text"], .field select {
+  font: inherit; font-size: 1rem; font-weight: 600;
+  background: var(--card); color: var(--text);
+  border: 2px solid var(--line); border-radius: var(--radius-sm);
+  padding: .45em .6em; width: 100%;
+}
+.field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+.field input:disabled { opacity: .4; }
+.field .check { display: flex; flex-direction: row; align-items: center; gap: .5rem; font-size: .9rem; font-weight: 700; color: var(--text); cursor: pointer; }
+.field .check input { width: 1.3em; height: 1.3em; accent-color: var(--accent); cursor: pointer; }
+.cfg-preview { margin-top: .9rem; color: var(--text-dim); font-size: .95rem; }
+.cfg-preview b { color: var(--accent); font-weight: 800; }
+
+/* ============================================================
+   GAME TAB
+   ============================================================ */
+.game-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--gap); flex-wrap: wrap; margin-bottom: var(--gap);
+}
+.round-title { font-size: 1.6rem; font-weight: 800; }
+.round-title .num { color: var(--accent); }
+.round-title .final { color: var(--gold); font-size: .7em; margin-left: .5em; letter-spacing:.1em; }
+.view-toggle { display: inline-flex; border: 2px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
+.view-toggle button {
+  font: inherit; font-size: .85rem; font-weight: 800; text-transform: uppercase;
+  padding: .45em 1em; background: var(--card); color: var(--text-dim); border: none; cursor: pointer;
+}
+.view-toggle button[aria-pressed="true"] { background: var(--accent); color: #06223a; }
+
+.banner {
+  display: none;
+  text-align: center;
+  font-size: 1.7rem; font-weight: 800;
+  padding: clamp(.8rem,2vw,1.5rem);
+  border-radius: var(--radius);
+  margin-bottom: var(--gap);
+}
+.banner.show { display: block; }
+.banner.win  { background: var(--gold-bg);  border: 3px solid var(--gold);   color: var(--gold); }
+.banner.over { background: var(--danger-bg); border: 3px solid var(--danger); color: var(--danger); }
+
+/* Matchup grid */
+.matchups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  gap: clamp(.45rem, 1vw, .8rem);
+  margin-bottom: var(--gap);
+}
+.matchups.focus {
+  grid-template-columns: 1fr;
+  max-width: 56rem;
+  margin-inline: auto;
+}
+
+.match {
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  padding: clamp(.5rem, 1.1vw, .85rem);
+  transition: border-color var(--fast), opacity var(--fast);
+  will-change: transform;
+}
+.match.done { border-color: var(--line-soft); }
+.match.win { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-bg); }
+
+.vs-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: .4rem;
+  margin-bottom: .5rem;
+}
+.who { text-align: center; min-width: 0; }
+.who .name {
+  font-size: 1.25rem; font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.who .coins { font-size: .95rem; font-weight: 800; color: var(--accent); }
+.who.qual .coins { color: var(--split); }
+.who.out { opacity: .5; }
+.who .tag { display:block; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color: var(--text-mute); }
+.vs { font-size: 1rem; font-weight: 800; color: var(--text-mute); }
+
+.single-row { display:flex; align-items:center; justify-content:space-between; gap:.6rem; margin-bottom:.5rem; }
+.single-row .name { font-size: 1.25rem; font-weight: 800; overflow-wrap:anywhere; }
+.single-row .coins { font-size: .95rem; font-weight: 800; color: var(--accent); }
+.single-row .lbl { font-size:.75rem; font-weight:700; color: var(--text-mute); text-transform:uppercase; letter-spacing:.08em; }
+
+.choices { display: grid; gap: .35rem; }
+.choices.pair { grid-template-columns: 1fr 1fr; }
+.outcome {
+  font: inherit;
+  font-size: .92rem; font-weight: 800;
+  padding: .5em .55em;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--line);
+  background: var(--card-2);
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--fast), border-color var(--fast), transform var(--fast);
+  overflow-wrap: anywhere;
+}
+.outcome:active { transform: scale(.97); }
+.outcome:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.outcome.split  { border-color: var(--split); }
+.outcome.split:hover  { background: var(--split-bg); }
+.outcome.steal  { border-color: var(--steal); }
+.outcome.steal:hover  { background: var(--steal-bg); }
+.outcome.both   { border-color: var(--danger); grid-column: 1 / -1; }
+.outcome.both:hover   { background: var(--danger-bg); }
+.outcome.advance { border-color: var(--accent); }
+.outcome.advance:hover { background: var(--accent-bg); }
+
+.result {
+  text-align: center;
+  font-size: 1.05rem; font-weight: 800;
+  padding: .35em;
+}
+.result.split { color: var(--split); }
+.result.steal { color: var(--steal); }
+.result.both  { color: var(--danger); }
+.result.advance { color: var(--accent); }
+.match .undo-link {
+  display: block; margin: .3rem auto 0; font: inherit; font-size: .85rem; font-weight: 700;
+  background: none; border: none; color: var(--text-mute); cursor: pointer; text-decoration: underline;
+}
+.match .undo-link:hover { color: var(--danger); }
+
+/* Focus-mode emphasis (overrides the compact grid sizing) */
+.matchups.focus .match { padding: clamp(1rem, 3vw, 2rem); }
+.matchups.focus .vs-row, .matchups.focus .single-row { margin-bottom: clamp(1rem, 2.5vw, 1.6rem); }
+.matchups.focus .choices { gap: .6rem; }
+.matchups.focus .who .name, .matchups.focus .single-row .name { font-size: clamp(2rem, 6vw, 4rem); }
+.matchups.focus .who .coins, .matchups.focus .single-row .coins { font-size: clamp(1.2rem, 3vw, 2rem); }
+.matchups.focus .outcome { font-size: clamp(1.1rem, 2.6vw, 1.7rem); padding: .85em .6em; }
+.matchups.focus .result { font-size: clamp(1.4rem, 3.5vw, 2.4rem); }
+.focus-nav { display:flex; align-items:center; justify-content:center; gap:1rem; margin-top: var(--gap); }
+.focus-nav .count { font-size: 1.1rem; font-weight: 800; color: var(--text-dim); min-width: 6em; text-align:center; }
+
+/* Scoreboard */
+.scoreboard { margin-top: 1.4rem; border-top: 2px solid var(--line-soft); padding-top: 1rem; }
+.score-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+  gap: .5rem;
+}
+.score {
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-left-width: 6px;
+  border-radius: var(--radius-sm);
+  padding: .5em .7em;
+}
+.score .nm { font-size: 1.05rem; font-weight: 700; overflow-wrap:anywhere; }
+.score .amt { font-size: 1.1rem; font-weight: 800; color: var(--accent); white-space: nowrap; }
+.score .st { font-size: .62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-mute); display:block; text-align:right; }
+.score.qual  { border-left-color: var(--split); }
+.score.qual .amt { color: var(--split); }
+.score.short { border-left-color: var(--steal); }
+.score.out   { border-left-color: var(--danger); opacity: .55; }
+.score.out .amt { color: var(--text-mute); }
+.score.winner { border-color: var(--gold); border-left-color: var(--gold); background: var(--gold-bg); }
+.score.winner .amt { color: var(--gold); }
+
+/* ============================================================
+   CONFIRM PANEL (inline, non-modal)
+   ============================================================ */
+.confirm {
+  display: none;
+  background: var(--card);
+  border: 3px solid var(--accent);
+  border-radius: var(--radius);
+  padding: var(--pad);
+  margin-bottom: var(--gap);
+}
+.confirm.show { display: block; }
+.confirm.warn { border-color: var(--danger); }
+.confirm h3 { font-size: 1.2rem; margin-bottom: .4rem; }
+.confirm p { color: var(--text-dim); margin-bottom: .8rem; }
+.redist { background: var(--bg-2); border-left: 5px solid var(--split); padding: .7em .9em; border-radius: var(--radius-sm); margin-bottom: .8rem; }
+
+/* ============================================================
+   HISTORY TAB
+   ============================================================ */
+.history-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--gap); max-width: 80rem; }
+@media (max-width: 820px) { .history-grid { grid-template-columns: 1fr; } }
+.card-box { background: var(--card); border: 2px solid var(--line); border-radius: var(--radius); padding: var(--pad); margin-bottom: var(--gap); }
+.card-box h3 { font-size: 1.15rem; color: var(--accent); border-bottom: 2px solid var(--line-soft); padding-bottom: .4rem; margin-bottom: .7rem; }
+.round-block { margin-bottom: 1rem; }
+.round-block .rh { font-size: 1rem; font-weight: 800; color: var(--steal); margin-bottom: .35rem; }
+.log-line {
+  padding: .45em .7em; margin-bottom: .3rem; font-size: .95rem;
+  background: var(--bg-2); border-left: 5px solid var(--line); border-radius: 5px;
+}
+.log-line.split { border-left-color: var(--split); }
+.log-line.steal { border-left-color: var(--steal); }
+.log-line.both  { border-left-color: var(--danger); }
+.log-line.auto  { border-left-color: var(--text-mute); font-style: italic; color: var(--text-dim); }
+.log-line.system{ border-left-color: var(--accent); color: var(--text-dim); }
+.ledger-row { display: flex; justify-content: space-between; gap: .6rem; padding: .45em .7em; margin-bottom: .3rem; background: var(--bg-2); border-left: 5px solid var(--steal); border-radius: 5px; font-size: .95rem; }
+.ledger-row .ct { font-weight: 800; color: var(--steal); white-space: nowrap; }
+.elim-row { display: flex; justify-content: space-between; gap:.6rem; padding: .45em .7em; margin-bottom: .3rem; background: var(--danger-bg); border-left: 5px solid var(--danger); border-radius: 5px; font-size: .95rem; }
+.elim-row .rd { color: var(--text-mute); font-weight: 700; font-size: .85rem; white-space: nowrap; }
+.empty { color: var(--text-mute); font-style: italic; text-align: center; padding: 1.4rem; }
+
+/* ============================================================
+   RULES TAB
+   ============================================================ */
+.rules { max-width: 52rem; margin: 0 auto; }
+.rules ol { list-style: none; counter-reset: r; }
+.rules ol > li { counter-increment: r; position: relative; padding-left: 2.4em; margin-bottom: .9rem; font-size: 1.05rem; }
+.rules ol > li::before {
+  content: counter(r); position: absolute; left: 0; top: -.1em;
+  width: 1.6em; height: 1.6em; display: grid; place-items: center;
+  background: var(--accent-bg); border: 2px solid var(--accent); color: var(--accent);
+  border-radius: 50%; font-weight: 800; font-size: .85em;
+}
+.rules ul { margin: .5em 0 0 .4em; list-style: none; }
+.rules ul li { padding-left: 1.4em; position: relative; margin-bottom: .35em; color: var(--text-dim); }
+.rules ul li::before { content: "→"; position: absolute; left: 0; color: var(--steal); font-weight: 800; }
+.rules .o-split { color: var(--split); font-weight: 800; }
+.rules .o-steal { color: var(--steal); font-weight: 800; }
+.rules .o-both  { color: var(--danger); font-weight: 800; }
+.keys { margin-top: 1.6rem; border-top: 2px solid var(--line-soft); padding-top: 1rem; }
+.key-row { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: .5rem; }
+kbd {
+  font: inherit; font-size: .8rem; font-weight: 800;
+  background: var(--card); border: 1px solid var(--line); border-bottom-width: 3px;
+  border-radius: 6px; padding: .15em .55em;
+}
+
+/* ============================================================
+   TOASTS
+   ============================================================ */
+.toasts { position: fixed; bottom: 1.2rem; right: 1.2rem; display: flex; flex-direction: column; gap: .5rem; z-index: 50; }
+.toast {
+  background: var(--card); border: 2px solid var(--accent); border-radius: var(--radius-sm);
+  padding: .7em 1.1em; font-size: 1rem; font-weight: 700; box-shadow: var(--shadow);
+  animation: tin .25s ease, tout .3s ease 2.7s forwards;
+  max-width: 22rem;
+}
+.toast.success { border-color: var(--split); }
+.toast.error { border-color: var(--danger); }
+@keyframes tin  { from { transform: translateX(120%); opacity: 0; } }
+@keyframes tout { to   { transform: translateY(14px); opacity: 0; } }
+
+@keyframes pulse { 50% { filter: brightness(1.5); } }
+
+/* ============================================================
+   PRINT
+   ============================================================ */
+@media print {
+  .header .tools, .tabs, .game-bar, .confirm, .toasts, .view-toggle, .focus-nav, .outcome, .undo-link { display: none !important; }
+  body { background: #fff; color: #000; overflow: visible; }
+  .panel { position: static; display: block !important; overflow: visible; }
+  .match, .card-box, .score { break-inside: avoid; border-color: #999; }
+}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="brand"><span class="split">Split</span> <span class="or">or</span> <span class="steal">Steal</span></div>
+  <div class="stats" aria-live="polite">
+    <div class="stat"><span class="stat-label">Round</span><span class="stat-value round" id="sRound">—</span></div>
+    <div class="stat"><span class="stat-label">Players</span><span class="stat-value active" id="sActive">—</span></div>
+    <div class="stat"><span class="stat-label">Pot</span><span class="stat-value pot" id="sPot">—</span></div>
+  </div>
+  <div class="tools">
+    <button class="tool-btn" id="textDown" title="Smaller text" aria-label="Decrease text size">A−</button>
+    <span class="scale-readout" id="scaleReadout">100%</span>
+    <button class="tool-btn" id="textUp" title="Larger text" aria-label="Increase text size">A+</button>
+    <button class="tool-btn" id="fsBtn" title="Fullscreen (F)" aria-label="Toggle fullscreen">⛶</button>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="Sections">
+  <button class="tab" role="tab" data-tab="setup" aria-selected="true">Setup<span class="k">1</span></button>
+  <button class="tab" role="tab" data-tab="game" aria-selected="false">Game<span class="k">2</span></button>
+  <button class="tab" role="tab" data-tab="history" aria-selected="false">History<span class="k">3</span></button>
+  <button class="tab" role="tab" data-tab="rules" aria-selected="false">Rules<span class="k">?</span></button>
+</nav>
+
+<main class="main">
+  <!-- ===================== SETUP ===================== -->
+  <section class="panel active" id="p-setup" role="tabpanel" aria-label="Setup">
+    <div class="setup">
+      <h2 class="section-title">Add players</h2>
+      <div class="setup-grid">
+        <div>
+          <label class="fld" for="names">One name per line</label>
+          <textarea id="names" class="names" placeholder="Alice&#10;Bob&#10;Charlie&#10;Diana&#10;…"></textarea>
+        </div>
+        <div>
+          <div class="preview-head">Players: <b id="pCount">0</b><span id="pDupNote"></span></div>
+          <div class="preview"><div class="chips" id="pChips"><span class="empty">No names yet</span></div></div>
+        </div>
+      </div>
+      <div class="settings-block">
+        <h2 class="section-title">Game settings</h2>
+        <div class="settings-grid">
+          <div class="field">
+            <label for="cfgStart">Starting amount per player</label>
+            <input type="number" id="cfgStart" min="1" max="100000" step="1" value="10">
+          </div>
+          <div class="field">
+            <label for="cfgDenom">Denomination</label>
+            <select id="cfgDenom">
+              <option value="dollars">Dollars ($)</option>
+              <option value="points">Points</option>
+              <option value="xp">XP</option>
+              <option value="custom">Custom…</option>
+            </select>
+          </div>
+          <div class="field" id="cfgCustomWrap" hidden>
+            <label for="cfgCustom">Custom unit label</label>
+            <input type="text" id="cfgCustom" maxlength="12" placeholder="e.g. gold, stars, ⭐">
+          </div>
+          <div class="field">
+            <label class="check" for="cfgCharityOn"><input type="checkbox" id="cfgCharityOn" checked> Charity threshold</label>
+            <input type="number" id="cfgCharity" min="1" max="100000" step="1" value="40" aria-label="Charity threshold value">
+          </div>
+        </div>
+        <div class="cfg-preview" id="cfgPreview"></div>
+      </div>
+      <div class="btn-row" style="margin-top: var(--gap);">
+        <button class="btn btn-primary" id="startBtn">Start Game</button>
+        <button class="btn" id="demoBtn">Load Demo Names</button>
+        <button class="btn btn-danger btn-ghost" id="clearNamesBtn">Clear</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== GAME ===================== -->
+  <section class="panel" id="p-game" role="tabpanel" aria-label="Game">
+    <div class="game-bar">
+      <div class="round-title">Round <span class="num" id="roundNum">1</span><span class="final" id="finalTag" hidden>· FINAL SHOWDOWN</span></div>
+      <div class="view-toggle" role="group" aria-label="View mode">
+        <button id="viewGrid" aria-pressed="true">Grid</button>
+        <button id="viewFocus" aria-pressed="false">Focus</button>
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-bottom: var(--gap);">
+      <button class="btn btn-primary" id="nextBtn" disabled>Next Round ▸</button>
+      <button class="btn" id="undoBtn" disabled>↶ Undo</button>
+      <button class="btn" id="redoBtn" disabled>↷ Redo</button>
+      <button class="btn" id="resetRoundBtn">Reset Round</button>
+      <button class="btn btn-ghost" id="newGameBtn">New Game</button>
+      <button class="btn btn-danger btn-ghost" id="fullResetBtn">Full Reset</button>
+    </div>
+
+    <!-- confirm panels -->
+    <div class="confirm" id="cNext">
+      <h3>Proceed to next round?</h3>
+      <div class="redist" id="redistInfo"></div>
+      <div class="btn-row"><button class="btn btn-primary" id="cNextOk">Proceed ▸</button><button class="btn btn-ghost" data-close>Cancel</button></div>
+    </div>
+    <div class="confirm warn" id="cNew">
+      <h3>Start a new game?</h3>
+      <p>Everyone resets to $10 with the same players. The current game's history is cleared.</p>
+      <div class="btn-row"><button class="btn btn-primary" id="cNewOk">New Game</button><button class="btn btn-ghost" data-close>Cancel</button></div>
+    </div>
+    <div class="confirm warn" id="cFull">
+      <h3>Full reset?</h3>
+      <p>This clears everything — players, scores and history — and returns to Setup.</p>
+      <div class="btn-row"><button class="btn btn-danger" id="cFullOk">Full Reset</button><button class="btn btn-ghost" data-close>Cancel</button></div>
+    </div>
+
+    <div class="banner" id="banner" role="status" aria-live="assertive"></div>
+
+    <div class="matchups" id="matchups"></div>
+    <div class="focus-nav" id="focusNav" hidden>
+      <button class="btn" id="focusPrev">◂ Prev</button>
+      <span class="count" id="focusCount">1 / 1</span>
+      <button class="btn" id="focusNext">Next ▸</button>
+    </div>
+
+    <div class="scoreboard">
+      <h2 class="section-title">Scoreboard <span id="charityNote" style="font-size:.7em;color:var(--text-mute);font-weight:600;"></span></h2>
+      <div class="score-grid" id="scoreGrid"></div>
+    </div>
+  </section>
+
+  <!-- ===================== HISTORY ===================== -->
+  <section class="panel" id="p-history" role="tabpanel" aria-label="History">
+    <div class="history-grid">
+      <div>
+        <div class="card-box">
+          <h3>Round-by-round log</h3>
+          <div id="logBox"><div class="empty">No rounds played yet</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="card-box">
+          <h3>Betrayal ledger</h3>
+          <div id="ledgerBox"><div class="empty">No betrayals yet</div></div>
+        </div>
+        <div class="card-box">
+          <h3>Eliminated</h3>
+          <div id="elimBox"><div class="empty">No eliminations yet</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== RULES ===================== -->
+  <section class="panel" id="p-rules" role="tabpanel" aria-label="Rules">
+    <div class="rules">
+      <h2 class="section-title">How it works</h2>
+      <ol>
+        <li>Every player starts with <strong id="ruleStart">$10</strong>.</li>
+        <li>Each round, players are randomly paired. The same pair is never matched two rounds in a row, and no player is ever left out.</li>
+        <li>Each pair's result is one of:
+          <ul>
+            <li><span class="o-split">Both Split</span> — both keep their money.</li>
+            <li><span class="o-steal">One Steals</span> — the stealer takes <em>both</em> stacks; the other is eliminated.</li>
+            <li><span class="o-both">Both Steal</span> — both are eliminated; their money goes into the pot.</li>
+          </ul>
+        </li>
+        <li>If there's an odd number of players, one <strong>auto-advances</strong> (never the same person twice in a row).</li>
+        <li>Pot money (from mutual steals) is shared evenly among the survivors at the start of the next round.</li>
+        <li id="ruleCharity">Reaching <strong>$40</strong> qualifies a player for the charity donation.</li>
+        <li><strong>Final showdown:</strong> play continues until two players remain and face off:
+          <ul>
+            <li>Both Split → they share the pot.</li>
+            <li>One Steals → the stealer wins everything.</li>
+            <li>Both Steal → the pot is lost and nobody wins.</li>
+          </ul>
+          A lone survivor wins the whole pot.
+        </li>
+      </ol>
+      <div class="keys">
+        <h3 class="section-title" style="font-size:1rem;">Keyboard shortcuts</h3>
+        <div class="key-row"><span>Switch tabs</span><span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></span></div>
+        <div class="key-row"><span>Undo / Redo</span><span><kbd>Ctrl/⌘ Z</kbd> <kbd>Ctrl/⌘ Y</kbd></span></div>
+        <div class="key-row"><span>Text size</span><span><kbd>+</kbd> <kbd>−</kbd></span></div>
+        <div class="key-row"><span>Fullscreen</span><span><kbd>F</kbd></span></div>
+        <div class="key-row"><span>Close panel</span><span><kbd>Esc</kbd></span></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+"use strict";
+(function () {
+  // ============================================================
+  // CONSTANTS
+  // ============================================================
+  const STARTING_COINS = 10;
+  const CHARITY = 40;
+  const STORAGE = "splitStealGame.v2";
+  const SETTINGS = "splitStealSettings.v1";
+  const MAX_HISTORY = 100;
+
+  // ============================================================
+  // STATE
+  //   gameData() = the serialisable core (players, pot, round,
+  //   matchups, pairing memory, narrative history). Undo/redo and
+  //   per-round snapshots live OUTSIDE this so snapshots stay flat.
+  // ============================================================
+  const state = {
+    gameStarted: false,
+    gameEnded: false,
+    currentRound: 1,
+    players: [],          // {id, name, coins, active, winner}
+    pot: 0,               // lost funds awaiting redistribution
+    matchups: [],         // {type:'pair'|'single', a, b?, resolved, outcome, result}
+    lastAuto: null,       // id of last auto-advanced player
+    prevPairKeys: [],     // pair keys from the previous round
+    history: { betrayals: {}, eliminations: [], log: [] },
+    // denomination + scoring options chosen on the Setup tab
+    config: { startCoins: STARTING_COINS, denom: "dollars", customUnit: "", charityOn: true, charity: CHARITY },
+    ui: { view: "grid", focusIndex: 0 }
+  };
+
+  let undoStack = [];
+  let redoStack = [];
+  let roundStarts = {};   // roundNumber -> serialised game data at round start
+  let settings = { scale: 1 };
+
+  // ============================================================
+  // SMALL HELPERS
+  // ============================================================
+  const $ = (id) => document.getElementById(id);
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  function escapeHtml(t) { const d = document.createElement("div"); d.textContent = String(t); return d.innerHTML; }
+
+  // ---- denomination formatting -------------------------------------------
+  function denomFormat(cfg, n) {
+    switch (cfg.denom) {
+      case "points": return n + " pts";
+      case "xp":     return n + " XP";
+      case "custom": return n + (cfg.customUnit ? " " + cfg.customUnit : "");
+      default:       return "$" + n;   // dollars
+    }
+  }
+  function fmt(n) { return denomFormat(state.config, n); }
+
+  // ---- setup form <-> config ---------------------------------------------
+  function readSetupForm() {
+    const start = Math.max(1, Math.min(100000, parseInt($("cfgStart").value, 10) || STARTING_COINS));
+    const charity = Math.max(1, Math.min(100000, parseInt($("cfgCharity").value, 10) || CHARITY));
+    const denom = $("cfgDenom").value;
+    return {
+      startCoins: start,
+      denom: ["dollars","points","xp","custom"].includes(denom) ? denom : "dollars",
+      customUnit: $("cfgCustom").value.trim().slice(0, 12),
+      charityOn: $("cfgCharityOn").checked,
+      charity: charity
+    };
+  }
+  function populateSetupForm(cfg) {
+    $("cfgStart").value = cfg.startCoins;
+    $("cfgDenom").value = cfg.denom;
+    $("cfgCustom").value = cfg.customUnit || "";
+    $("cfgCharityOn").checked = cfg.charityOn;
+    $("cfgCharity").value = cfg.charity;
+    syncSetupForm();
+  }
+  // reflect form-internal dependencies + live preview
+  function syncSetupForm() {
+    const cfg = readSetupForm();
+    $("cfgCustomWrap").hidden = cfg.denom !== "custom";
+    $("cfgCharity").disabled = !cfg.charityOn;
+    $("cfgPreview").innerHTML =
+      "Each player starts with <b>" + escapeHtml(denomFormat(cfg, cfg.startCoins)) + "</b>" +
+      (cfg.charityOn ? " · charity qualifies at <b>" + escapeHtml(denomFormat(cfg, cfg.charity)) + "</b>" : " · charity threshold off");
+  }
+  function onSetupChange() {
+    syncSetupForm();
+    settings.setupConfig = readSetupForm();
+    saveSettings();
+  }
+
+  function activePlayers() { return state.players.filter(p => p.active); }
+  function findPlayer(id) { return state.players.find(p => p.id === id); }
+  function pairKey(a, b) { return a < b ? a + "-" + b : b + "-" + a; }
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }
+  function prefersReducedMotion() {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+  // FLIP: slide cards from their previous positions to the new ones over 0.5s.
+  function flipReorder(wrap, oldRects) {
+    const cards = wrap.querySelectorAll(".match");
+    cards.forEach(el => {
+      const prev = oldRects[el.dataset.key];
+      if (!prev) return;                       // newly added card — no slide
+      const now = el.getBoundingClientRect();
+      const dx = prev.left - now.left, dy = prev.top - now.top;
+      if (!dx && !dy) return;                  // didn't move
+      el.style.transition = "none";
+      el.style.transform = "translate(" + dx + "px," + dy + "px)";  // invert
+    });
+    requestAnimationFrame(() => {              // play
+      cards.forEach(el => {
+        if (!oldRects[el.dataset.key]) return;
+        el.style.transition = "transform 0.5s ease";
+        el.style.transform = "";
+      });
+    });
+  }
+
+  function gameData() {
+    return {
+      gameStarted: state.gameStarted,
+      gameEnded: state.gameEnded,
+      currentRound: state.currentRound,
+      players: state.players,
+      pot: state.pot,
+      matchups: state.matchups,
+      lastAuto: state.lastAuto,
+      prevPairKeys: state.prevPairKeys,
+      history: state.history,
+      config: state.config
+    };
+  }
+  function applyData(d) {
+    state.gameStarted = d.gameStarted;
+    state.gameEnded = d.gameEnded;
+    state.currentRound = d.currentRound;
+    state.players = d.players;
+    state.pot = d.pot;
+    state.matchups = d.matchups;
+    state.lastAuto = d.lastAuto;
+    state.prevPairKeys = d.prevPairKeys;
+    state.history = d.history;
+    if (d.config) state.config = d.config;
+  }
+
+  // ============================================================
+  // UNDO / REDO  (single full-state snapshot stack)
+  //   pushUndo() before every mutating action; undo/redo swap
+  //   whole snapshots, so coins, eliminations, ledger and log all
+  //   revert together — no per-pair bookkeeping to get out of sync.
+  // ============================================================
+  function pushUndo() {
+    undoStack.push(clone(gameData()));
+    if (undoStack.length > MAX_HISTORY) undoStack.shift();
+    redoStack = [];
+  }
+  function undo() {
+    if (!undoStack.length) return;
+    redoStack.push(clone(gameData()));
+    applyData(undoStack.pop());
+    save(); renderAll(); toast("Undone");
+  }
+  function redo() {
+    if (!redoStack.length) return;
+    undoStack.push(clone(gameData()));
+    applyData(redoStack.pop());
+    save(); renderAll(); toast("Redone");
+  }
+
+  // ============================================================
+  // PAIRING  — never drops a player; avoids last round's pairs and
+  //   a repeat auto-advancer where possible (randomised retries).
+  // ============================================================
+  function buildMatchups(active, prevSet, lastAuto) {
+    const ids = active.map(p => p.id);
+    if (ids.length === 0) return { pairs: [], single: null };
+    if (ids.length === 1) return { pairs: [], single: ids[0] };
+
+    let best = null;
+    for (let attempt = 0; attempt < 300; attempt++) {
+      let order = shuffle(ids);
+      let single = null;
+      if (order.length % 2 === 1) {
+        const eligible = order.filter(id => id !== lastAuto);
+        single = eligible.length ? eligible[Math.floor(Math.random() * eligible.length)] : order[0];
+        order = order.filter(id => id !== single);
+      }
+      const pairs = [];
+      let repeats = 0;
+      for (let i = 0; i < order.length; i += 2) {
+        const a = order[i], b = order[i + 1];
+        pairs.push([a, b]);
+        if (prevSet.has(pairKey(a, b))) repeats++;
+      }
+      const singleBad = (single !== null && single === lastAuto) ? 1 : 0;
+      const score = repeats + singleBad;
+      if (score === 0) return { pairs, single };
+      if (!best || score < best.score) best = { pairs, single, score };
+    }
+    return { pairs: best.pairs, single: best.single };
+  }
+
+  function startRound() {
+    // remember the pairs we just played so we can avoid repeating them
+    state.prevPairKeys = state.matchups
+      .filter(m => m.type === "pair")
+      .map(m => pairKey(m.a, m.b));
+
+    const built = buildMatchups(activePlayers(), new Set(state.prevPairKeys), state.lastAuto);
+    state.matchups = built.pairs.map(([a, b]) => ({ type: "pair", a, b, resolved: false, outcome: null, result: null }));
+    if (built.single != null) {
+      state.matchups.push({ type: "single", a: built.single, resolved: false, outcome: null, result: null });
+      state.lastAuto = built.single;
+    }
+    state.ui.focusIndex = 0;
+    roundStarts[state.currentRound] = clone(gameData());
+  }
+
+  // ============================================================
+  // HISTORY (narrative) — keyed by player id, so duplicate names
+  //   never merge records.
+  // ============================================================
+  function logEntry(entry) {
+    let r = state.history.log.find(x => x.round === state.currentRound);
+    if (!r) { r = { round: state.currentRound, entries: [] }; state.history.log.push(r); }
+    r.entries.push(entry);
+  }
+  function recordBetrayal(stealer, victim) {
+    const k = stealer.id;
+    if (!state.history.betrayals[k]) state.history.betrayals[k] = { name: stealer.name, victims: [] };
+    state.history.betrayals[k].name = stealer.name;
+    state.history.betrayals[k].victims.push(victim.name);
+  }
+  function recordElimination(p) {
+    if (!state.history.eliminations.some(e => e.id === p.id)) {
+      state.history.eliminations.push({ id: p.id, name: p.name, round: state.currentRound });
+    }
+  }
+
+  // ============================================================
+  // RESOLVING A MATCHUP
+  // ============================================================
+  function resolveMatchup(index, outcome) {
+    if (state.gameEnded) return;
+    const m = state.matchups[index];
+    if (!m || m.resolved) return;
+
+    pushUndo();
+
+    if (m.type === "single") {
+      m.resolved = true; m.outcome = "advance"; m.result = "Advanced";
+      logEntry({ type: "auto", desc: findPlayer(m.a).name + " auto-advanced" });
+    } else {
+      const a = findPlayer(m.a), b = findPlayer(m.b);
+      switch (outcome) {
+        case "split":
+          m.result = "Both Split";
+          logEntry({ type: "split", desc: a.name + " & " + b.name + " both split" });
+          break;
+        case "stealA":
+          a.coins += b.coins; b.coins = 0; b.active = false;
+          recordBetrayal(a, b); recordElimination(b);
+          m.result = a.name + " stole";
+          logEntry({ type: "steal", desc: a.name + " stole from " + b.name });
+          break;
+        case "stealB":
+          b.coins += a.coins; a.coins = 0; a.active = false;
+          recordBetrayal(b, a); recordElimination(a);
+          m.result = b.name + " stole";
+          logEntry({ type: "steal", desc: b.name + " stole from " + a.name });
+          break;
+        case "both":
+          state.pot += a.coins + b.coins; a.coins = 0; b.coins = 0;
+          a.active = false; b.active = false;
+          recordElimination(a); recordElimination(b);
+          m.result = "Both stole — eliminated";
+          logEntry({ type: "both", desc: a.name + " & " + b.name + " both stole — eliminated" });
+          break;
+        default: undoStack.pop(); return; // unknown outcome, abort cleanly
+      }
+      m.outcome = outcome; m.resolved = true;
+    }
+
+    if (allResolved()) evaluateRoundEnd();
+    save(); renderAll();
+    advanceFocusIfDone();
+  }
+
+  function allResolved() { return state.matchups.length > 0 && state.matchups.every(m => m.resolved); }
+
+  // ============================================================
+  // END-OF-ROUND  — final-showdown rule (see Rules tab)
+  // ============================================================
+  function evaluateRoundEnd() {
+    const active = activePlayers();
+
+    if (active.length <= 1) {
+      if (active.length === 1) {
+        const w = active[0];
+        w.coins += state.pot; state.pot = 0;
+        endWin([w]);
+      } else {
+        endGameOver();
+      }
+      return;
+    }
+
+    if (active.length === 2) {
+      const [x, y] = active;
+      const headToHead = state.matchups.some(m =>
+        m.type === "pair" &&
+        ((m.a === x.id && m.b === y.id) || (m.a === y.id && m.b === x.id)));
+      if (headToHead) {
+        // both stayed active after facing off => both split => share the pot
+        sharePot(x, y);
+        endWin([x, y]);
+      }
+      // else: they were not matched this round — next round pairs them
+      // as the final showdown (Next Round becomes available).
+    }
+    // active >= 3 (or 2-not-yet-faced): continue; Next Round handles it.
+  }
+
+  function sharePot(x, y) {
+    if (state.pot <= 0) return;
+    const half = Math.floor(state.pot / 2);
+    const rem = state.pot % 2;
+    x.coins += half; y.coins += half;
+    if (rem > 0) (Math.random() < 0.5 ? x : y).coins += rem;
+    state.pot = 0;
+  }
+
+  function endWin(winners) {
+    state.gameEnded = true;
+    winners.forEach(w => { w.winner = true; });
+    logEntry({ type: "system", desc: winners.length === 1
+      ? winners[0].name + " wins the game (" + fmt(winners[0].coins) + ")"
+      : "Final split — " + winners.map(w => w.name + " " + fmt(w.coins)).join(" & ") });
+  }
+  function endGameOver() {
+    state.gameEnded = true;
+    logEntry({ type: "system", desc: "Game over — mutual betrayal, " + fmt(state.pot) + " lost" });
+  }
+
+  // ============================================================
+  // ROUND CONTROLS
+  // ============================================================
+  function showNextConfirm() {
+    if (!allResolved()) { toast("Resolve every matchup first", "error"); return; }
+    if (state.gameEnded) return;
+    const active = activePlayers().length;
+    const info = state.pot > 0
+      ? "<strong>" + escapeHtml(fmt(state.pot)) + "</strong> in the pot will be shared among <strong>" + active +
+        "</strong> players (~" + escapeHtml(fmt((state.pot / active).toFixed(2))) + " each)."
+      : "No pot to share this round.";
+    $("redistInfo").innerHTML = info;
+    openConfirm("cNext");
+  }
+  function confirmNext() {
+    closeConfirms();
+    pushUndo();
+    redistributePot();
+    state.currentRound++;
+    startRound();
+    save(); renderAll();
+    switchTab("game");
+    toast("Round " + state.currentRound + " started", "success");
+  }
+  function redistributePot() {
+    if (state.pot <= 0) return;
+    const active = activePlayers();
+    if (!active.length) { return; }
+    const base = Math.floor(state.pot / active.length);
+    const rem = state.pot % active.length;
+    active.forEach(p => { p.coins += base; });
+    if (rem > 0) active[Math.floor(Math.random() * active.length)].coins += rem;
+    state.pot = 0;
+  }
+
+  function resetRound() {
+    const snap = roundStarts[state.currentRound];
+    if (!snap) { toast("Nothing to reset", "error"); return; }
+    pushUndo();
+    applyData(clone(snap));
+    save(); renderAll();
+    toast("Round reset", "success");
+  }
+
+  function confirmNewGame() {
+    closeConfirms();
+    state.players.forEach(p => { p.coins = state.config.startCoins; p.active = true; p.winner = false; });
+    state.currentRound = 1;
+    state.pot = 0;
+    state.lastAuto = null;
+    state.prevPairKeys = [];
+    state.gameEnded = false;
+    state.matchups = [];
+    state.history = { betrayals: {}, eliminations: [], log: [] };
+    undoStack = []; redoStack = []; roundStarts = {};
+    startRound();
+    save(); renderAll();
+    toast("New game started", "success");
+  }
+
+  function confirmFullReset() {
+    closeConfirms();
+    state.gameStarted = false; state.gameEnded = false;
+    state.currentRound = 1; state.players = []; state.pot = 0;
+    state.matchups = []; state.lastAuto = null; state.prevPairKeys = [];
+    state.history = { betrayals: {}, eliminations: [], log: [] };
+    state.ui = { view: "grid", focusIndex: 0 };
+    undoStack = []; redoStack = []; roundStarts = {};
+    localStorage.removeItem(STORAGE);
+    $("names").value = "";
+    updatePreview();
+    renderAll();
+    switchTab("setup");
+    toast("Everything reset");
+  }
+
+  // ============================================================
+  // SETUP
+  // ============================================================
+  function parseNames(text) {
+    return text.split(/\n/).map(n => n.trim().replace(/\s+/g, " ")).filter(n => n.length > 0);
+  }
+  function updatePreview() {
+    const names = parseNames($("names").value);
+    const seen = new Map();
+    names.forEach(n => seen.set(n.toLowerCase(), (seen.get(n.toLowerCase()) || 0) + 1));
+    $("pCount").textContent = names.length;
+    const dupCount = [...seen.values()].filter(c => c > 1).length;
+    $("pDupNote").innerHTML = dupCount ? ' <span style="color:var(--steal)">· ' + dupCount + ' duplicate name(s)</span>' : "";
+    $("pChips").innerHTML = names.length
+      ? names.map(n => '<span class="chip' + (seen.get(n.toLowerCase()) > 1 ? " dup" : "") + '">' + escapeHtml(n) + "</span>").join("")
+      : '<span class="empty">No names yet</span>';
+  }
+  function startGame() {
+    const names = parseNames($("names").value);
+    if (names.length < 2) { toast("Need at least 2 players", "error"); return; }
+    state.config = readSetupForm();
+    state.players = names.map((name, i) => ({ id: i + 1, name, coins: state.config.startCoins, active: true, winner: false }));
+    state.gameStarted = true; state.gameEnded = false;
+    state.currentRound = 1; state.pot = 0;
+    state.lastAuto = null; state.prevPairKeys = []; state.matchups = [];
+    state.history = { betrayals: {}, eliminations: [], log: [] };
+    undoStack = []; redoStack = []; roundStarts = {};
+    startRound();
+    save(); renderAll();
+    switchTab("game");
+    toast("Game started with " + names.length + " players", "success");
+  }
+
+  // ============================================================
+  // RENDERING
+  // ============================================================
+  function renderAll() { renderStats(); updateDenomLabels(); renderGame(); renderHistory(); renderControls(); }
+
+  function renderStats() {
+    const started = state.gameStarted;
+    const total = state.players.reduce((s, p) => s + p.coins, 0) + state.pot;
+    $("sRound").textContent = started ? state.currentRound : "—";
+    $("sActive").textContent = started ? activePlayers().length : "—";
+    $("sPot").textContent = started ? fmt(total) : "—";
+  }
+
+  function qualClass(p) {
+    if (p.winner) return "winner";
+    if (!p.active) return "out";
+    if (!state.config.charityOn) return "";
+    return p.coins >= state.config.charity ? "qual" : "short";
+  }
+
+  // Refresh denomination/charity-dependent labels (Rules + scoreboard subtitle).
+  function updateDenomLabels() {
+    if ($("ruleStart")) $("ruleStart").textContent = fmt(state.config.startCoins);
+    const rc = $("ruleCharity");
+    if (rc) {
+      rc.hidden = !state.config.charityOn;
+      if (state.config.charityOn) rc.innerHTML = "Reaching <strong>" + escapeHtml(fmt(state.config.charity)) + "</strong> qualifies a player for the charity donation.";
+    }
+    if ($("charityNote")) $("charityNote").textContent = state.config.charityOn ? "(" + fmt(state.config.charity) + "+ qualifies for charity)" : "";
+  }
+
+  function renderGame() {
+    if (!state.gameStarted) {
+      $("matchups").innerHTML = '<div class="empty">Add players on the Setup tab to begin.</div>';
+      $("scoreGrid").innerHTML = "";
+      $("focusNav").hidden = true;
+      $("banner").className = "banner";
+      $("finalTag").hidden = true;
+      return;
+    }
+    $("roundNum").textContent = state.currentRound;
+    const isFinal = activePlayers().length === 2;
+    $("finalTag").hidden = !isFinal || state.gameEnded;
+
+    // banner
+    const banner = $("banner");
+    if (state.gameEnded) {
+      const winners = state.players.filter(p => p.winner);
+      if (winners.length === 1) {
+        banner.className = "banner show win";
+        banner.innerHTML = "🏆 " + escapeHtml(winners[0].name) + " wins with " + escapeHtml(fmt(winners[0].coins)) + "!";
+      } else if (winners.length > 1) {
+        banner.className = "banner show win";
+        banner.innerHTML = "🤝 " + winners.map(w => escapeHtml(w.name) + " " + escapeHtml(fmt(w.coins))).join(" &amp; ") + " — they shared the win!";
+      } else {
+        banner.className = "banner show over";
+        banner.innerHTML = "💀 Game over — mutual betrayal. " + escapeHtml(fmt(state.pot)) + " lost in the pot.";
+      }
+    } else {
+      banner.className = "banner";
+    }
+
+    // matchups
+    const wrap = $("matchups");
+    const focus = state.ui.view === "focus";
+    const wasFocus = wrap.classList.contains("focus");
+    wrap.className = "matchups" + (focus ? " focus" : "");
+    const ms = state.matchups;
+
+    if (focus) {
+      $("focusNav").hidden = ms.length <= 1;
+      const idx = Math.min(state.ui.focusIndex, Math.max(0, ms.length - 1));
+      state.ui.focusIndex = idx;
+      wrap.innerHTML = ms.length ? matchHtml(ms[idx], idx) : '<div class="empty">No matchups.</div>';
+      $("focusCount").textContent = (ms.length ? idx + 1 : 0) + " / " + ms.length;
+    } else {
+      $("focusNav").hidden = true;
+      // undecided cards on top, decided slide to the bottom (stable within each group)
+      const order = ms.map((m, i) => ({ m, i }))
+        .sort((p, q) => (p.m.resolved ? 1 : 0) - (q.m.resolved ? 1 : 0));
+      const animate = ms.length > 0 && !wasFocus && !prefersReducedMotion();
+      const oldRects = {};
+      if (animate) wrap.querySelectorAll(".match").forEach(el => { oldRects[el.dataset.key] = el.getBoundingClientRect(); });
+      wrap.innerHTML = ms.length ? order.map(o => matchHtml(o.m, o.i)).join("") : '<div class="empty">No matchups.</div>';
+      if (animate) flipReorder(wrap, oldRects);
+    }
+
+    // scoreboard
+    $("scoreGrid").innerHTML = state.players.map(p => {
+      const c = qualClass(p);
+      let st = "";
+      if (p.winner) st = "🏆 Winner";
+      else if (!p.active) st = "Out";
+      else if (state.config.charityOn) st = p.coins >= state.config.charity ? "✓ Qualified" : fmt(state.config.charity - p.coins) + " to go";
+      return '<div class="score ' + c + '"><span class="nm">' + escapeHtml(p.name) + '</span>' +
+        '<span><span class="amt">' + escapeHtml(fmt(p.coins)) + '</span><span class="st">' + escapeHtml(st) + "</span></span></div>";
+    }).join("");
+  }
+
+  function matchHtml(m, i) {
+    const ended = state.gameEnded;
+    if (m.type === "single") {
+      const a = findPlayer(m.a);
+      const cls = "match" + (m.resolved ? " done" : "") + (a.winner ? " win" : "");
+      const body = m.resolved
+        ? '<div class="result advance">Advanced</div>' + (ended ? "" : '<button class="undo-link" data-undo="' + i + '">undo</button>')
+        : '<button class="outcome advance" data-i="' + i + '" data-o="advance">Advance ' + escapeHtml(a.name) + " ▸</button>";
+      return '<div class="' + cls + '" data-key="s' + m.a + '">' +
+        '<div class="single-row"><span><span class="name">' + escapeHtml(a.name) + '</span> ' +
+        '<span class="coins">' + escapeHtml(fmt(a.coins)) + '</span></span><span class="lbl">Auto-advance</span></div>' +
+        '<div class="choices">' + body + "</div></div>";
+    }
+    const a = findPlayer(m.a), b = findPlayer(m.b);
+    const cls = "match" + (m.resolved ? " done" : "") + ((a.winner || b.winner) ? " win" : "");
+    let body;
+    if (m.resolved) {
+      const rc = m.outcome === "split" ? "split" : (m.outcome === "both" ? "both" : "steal");
+      body = '<div class="result ' + rc + '">' + escapeHtml(m.result) + "</div>" +
+        (ended ? "" : '<button class="undo-link" data-undo="' + i + '">undo</button>');
+    } else {
+      body = '<div class="choices pair">' +
+        '<button class="outcome split" data-i="' + i + '" data-o="split">🤝 Both Split</button>' +
+        '<button class="outcome both" data-i="' + i + '" data-o="both">💀 Both Steal</button>' +
+        '<button class="outcome steal" data-i="' + i + '" data-o="stealA">' + escapeHtml(a.name) + ' Steals 😈</button>' +
+        '<button class="outcome steal" data-i="' + i + '" data-o="stealB">' + escapeHtml(b.name) + ' Steals 😈</button>' +
+        "</div>";
+    }
+    return '<div class="' + cls + '" data-key="p' + pairKey(m.a, m.b) + '">' +
+      '<div class="vs-row">' +
+        '<span class="who ' + (state.config.charityOn && a.coins >= state.config.charity ? "qual " : "") + (a.active ? "" : "out") + '"><span class="name">' + escapeHtml(a.name) + '</span><span class="coins">' + escapeHtml(fmt(a.coins)) + '</span></span>' +
+        '<span class="vs">vs</span>' +
+        '<span class="who ' + (state.config.charityOn && b.coins >= state.config.charity ? "qual " : "") + (b.active ? "" : "out") + '"><span class="name">' + escapeHtml(b.name) + '</span><span class="coins">' + escapeHtml(fmt(b.coins)) + '</span></span>' +
+      "</div>" + body + "</div>";
+  }
+
+  function renderControls() {
+    $("nextBtn").disabled = !(state.gameStarted && !state.gameEnded && allResolved());
+    $("undoBtn").disabled = !undoStack.length;
+    $("redoBtn").disabled = !redoStack.length;
+    $("viewGrid").setAttribute("aria-pressed", String(state.ui.view === "grid"));
+    $("viewFocus").setAttribute("aria-pressed", String(state.ui.view === "focus"));
+  }
+
+  function renderHistory() {
+    // log
+    const log = state.history.log;
+    $("logBox").innerHTML = log.length
+      ? log.slice().sort((a, b) => a.round - b.round).map(r =>
+          '<div class="round-block"><div class="rh">Round ' + r.round + "</div>" +
+          r.entries.map(e => '<div class="log-line ' + e.type + '">' + escapeHtml(e.desc) + "</div>").join("") +
+          "</div>").join("")
+      : '<div class="empty">No rounds played yet</div>';
+
+    // betrayal ledger
+    const bs = Object.values(state.history.betrayals);
+    $("ledgerBox").innerHTML = bs.length
+      ? bs.sort((a, b) => b.victims.length - a.victims.length).map(b =>
+          '<div class="ledger-row"><span>' + escapeHtml(b.name) + " stole from: " +
+          b.victims.map(escapeHtml).join(", ") + '</span><span class="ct">×' + b.victims.length + "</span></div>").join("")
+      : '<div class="empty">No betrayals yet</div>';
+
+    // eliminations
+    const el = state.history.eliminations;
+    $("elimBox").innerHTML = el.length
+      ? el.map(e => '<div class="elim-row"><span>' + escapeHtml(e.name) + '</span><span class="rd">Round ' + e.round + "</span></div>").join("")
+      : '<div class="empty">No eliminations yet</div>';
+  }
+
+  // ============================================================
+  // FOCUS-MODE NAVIGATION
+  // ============================================================
+  function advanceFocusIfDone() {
+    if (state.ui.view !== "focus" || state.gameEnded) return;
+    const ms = state.matchups;
+    if (ms[state.ui.focusIndex] && ms[state.ui.focusIndex].resolved) {
+      const next = ms.findIndex((m, i) => i > state.ui.focusIndex && !m.resolved);
+      const any = ms.findIndex(m => !m.resolved);
+      state.ui.focusIndex = next >= 0 ? next : (any >= 0 ? any : state.ui.focusIndex);
+      renderGame();
+    }
+  }
+  function focusStep(d) {
+    const n = state.matchups.length; if (!n) return;
+    state.ui.focusIndex = (state.ui.focusIndex + d + n) % n;
+    renderGame();
+  }
+
+  // ============================================================
+  // TABS / CONFIRM PANELS
+  // ============================================================
+  function switchTab(tab) {
+    state.ui.tab = tab;
+    document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
+    document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === "p-" + tab));
+  }
+  function openConfirm(id) { closeConfirms(); $(id).classList.add("show"); }
+  function closeConfirms() { document.querySelectorAll(".confirm").forEach(c => c.classList.remove("show")); }
+
+  // ============================================================
+  // TOASTS
+  // ============================================================
+  function toast(msg, type) {
+    const t = document.createElement("div");
+    t.className = "toast" + (type ? " " + type : "");
+    t.textContent = msg;
+    $("toasts").appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+  }
+
+  // ============================================================
+  // TEXT SIZE / FULLSCREEN
+  // ============================================================
+  function applyScale() {
+    document.documentElement.style.setProperty("--scale", settings.scale);
+    $("scaleReadout").textContent = Math.round(settings.scale * 100) + "%";
+    saveSettings();
+  }
+  function bumpScale(d) {
+    settings.scale = Math.min(2.2, Math.max(0.7, Math.round((settings.scale + d) * 10) / 10));
+    applyScale();
+  }
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) { (document.documentElement.requestFullscreen || (() => {})).call(document.documentElement); }
+    else if (document.exitFullscreen) { document.exitFullscreen(); }
+  }
+
+  // ============================================================
+  // PERSISTENCE
+  // ============================================================
+  function save() {
+    try {
+      localStorage.setItem(STORAGE, JSON.stringify({
+        v: 2, data: gameData(), undoStack, redoStack, roundStarts, view: state.ui.view
+      }));
+    } catch (e) { /* storage may be full/disabled; game still works in-memory */ }
+  }
+  function load() {
+    let raw = null;
+    try { raw = localStorage.getItem(STORAGE); } catch (e) { return; }
+    if (!raw) return;
+    try {
+      const d = JSON.parse(raw);
+      if (!d || !d.data) return;
+      applyData(d.data);
+      undoStack = Array.isArray(d.undoStack) ? d.undoStack : [];
+      redoStack = Array.isArray(d.redoStack) ? d.redoStack : [];
+      roundStarts = d.roundStarts || {};
+      if (d.view === "grid" || d.view === "focus") state.ui.view = d.view;
+      if (state.gameStarted) switchTab("game");
+      toast("Game restored", "success");
+    } catch (e) { /* corrupt save — ignore and start fresh */ }
+  }
+  function loadSettings() {
+    try {
+      const s = JSON.parse(localStorage.getItem(SETTINGS) || "{}");
+      if (s && typeof s.scale === "number") settings.scale = Math.min(2.2, Math.max(0.7, s.scale));
+      if (s && s.setupConfig) settings.setupConfig = s.setupConfig;
+    } catch (e) { /* ignore */ }
+  }
+  function saveSettings() {
+    try { localStorage.setItem(SETTINGS, JSON.stringify(settings)); } catch (e) { /* ignore */ }
+  }
+
+  // ============================================================
+  // EVENTS
+  // ============================================================
+  function wire() {
+    document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.tab)));
+
+    $("names").addEventListener("input", updatePreview);
+    $("startBtn").addEventListener("click", startGame);
+    $("demoBtn").addEventListener("click", () => {
+      $("names").value = ["Emma","Liam","Olivia","Noah","Ava","Ethan","Sophia","Mason","Isabella","William","Mia","James","Charlotte","Benjamin","Amelia","Lucas","Harper","Henry"].join("\n");
+      updatePreview(); toast("Demo names loaded", "success");
+    });
+    $("clearNamesBtn").addEventListener("click", () => { $("names").value = ""; updatePreview(); });
+
+    // game-settings form
+    ["cfgStart", "cfgCustom", "cfgCharity"].forEach(id => $(id).addEventListener("input", onSetupChange));
+    $("cfgDenom").addEventListener("change", onSetupChange);
+    $("cfgCharityOn").addEventListener("change", onSetupChange);
+
+    $("nextBtn").addEventListener("click", showNextConfirm);
+    $("undoBtn").addEventListener("click", undo);
+    $("redoBtn").addEventListener("click", redo);
+    $("resetRoundBtn").addEventListener("click", resetRound);
+    $("newGameBtn").addEventListener("click", () => openConfirm("cNew"));
+    $("fullResetBtn").addEventListener("click", () => openConfirm("cFull"));
+    $("cNextOk").addEventListener("click", confirmNext);
+    $("cNewOk").addEventListener("click", confirmNewGame);
+    $("cFullOk").addEventListener("click", confirmFullReset);
+    document.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", closeConfirms));
+
+    $("viewGrid").addEventListener("click", () => { state.ui.view = "grid"; save(); renderGame(); renderControls(); });
+    $("viewFocus").addEventListener("click", () => { state.ui.view = "focus"; save(); renderGame(); renderControls(); });
+    $("focusPrev").addEventListener("click", () => focusStep(-1));
+    $("focusNext").addEventListener("click", () => focusStep(1));
+
+    // event delegation for outcome + undo buttons
+    $("matchups").addEventListener("click", (e) => {
+      const o = e.target.closest("[data-o]");
+      if (o) { resolveMatchup(Number(o.dataset.i), o.dataset.o); return; }
+      const u = e.target.closest("[data-undo]");
+      if (u) { undo(); }   // most recent action is this pair (single-stack model)
+    });
+
+    $("textDown").addEventListener("click", () => bumpScale(-0.1));
+    $("textUp").addEventListener("click", () => bumpScale(0.1));
+    $("fsBtn").addEventListener("click", toggleFullscreen);
+
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("beforeunload", save);
+    document.addEventListener("visibilitychange", () => { if (document.hidden) save(); });
+  }
+
+  function onKey(e) {
+    if (e.key === "Escape") { closeConfirms(); return; }
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && (e.key === "z" || e.key === "Z")) { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+    if (mod && (e.key === "y" || e.key === "Y")) { e.preventDefault(); redo(); return; }
+    if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+    if (e.key === "1") switchTab("setup");
+    else if (e.key === "2") switchTab("game");
+    else if (e.key === "3") switchTab("history");
+    else if (e.key === "?") switchTab("rules");
+    else if (e.key === "+" || e.key === "=") bumpScale(0.1);
+    else if (e.key === "-" || e.key === "_") bumpScale(-0.1);
+    else if (e.key === "f" || e.key === "F") toggleFullscreen();
+    else if ((e.key === "ArrowRight") && state.ui.view === "focus") focusStep(1);
+    else if ((e.key === "ArrowLeft") && state.ui.view === "focus") focusStep(-1);
+  }
+
+  // EASTER EGG: the Konami code briefly celebrates cooperation.
+  const KONAMI = ["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"];
+  let kp = 0;
+  document.addEventListener("keydown", (e) => {
+    if (e.key.toLowerCase() === KONAMI[kp] || e.key === KONAMI[kp]) {
+      kp++;
+      if (kp === KONAMI.length) { kp = 0; toast("🤝 Always Split! 🤝", "success"); document.body.style.animation = "pulse .5s ease 3"; setTimeout(() => document.body.style.animation = "", 1600); }
+    } else { kp = (e.key === KONAMI[0]) ? 1 : 0; }
+  });
+
+  // ============================================================
+  // INIT
+  // ============================================================
+  loadSettings();
+  applyScale();
+  populateSetupForm(Object.assign({}, state.config, settings.setupConfig || {}));
+  wire();
+  load();
+  if (state.gameStarted) populateSetupForm(state.config);  // mirror the restored game's settings
+  updatePreview();
+  renderAll();
+})();
+</script>
+</body>
+</html>

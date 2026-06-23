@@ -627,6 +627,37 @@
       border-left: 3px solid var(--accent);
     }
 
+    /* Small Chinese symbols */
+    .role-zh-term {
+      font-family: var(--font-body);
+      font-size: 1.05rem;
+      letter-spacing: 0.25em;
+      margin: 2px 0 6px;
+      color: var(--text-muted);
+    }
+
+    .role-zh-term.imposter { color: var(--imposter-glow); }
+    .role-zh-term.civilian { color: var(--civilian-dim); }
+    .role-zh-term:empty { display: none; }
+
+    .role-meaning-zh {
+      font-family: var(--font-body);
+      font-size: 0.95rem;
+      letter-spacing: 0.15em;
+      color: var(--accent-bright);
+      margin-top: 6px;
+    }
+
+    .role-meaning-zh:empty { display: none; }
+
+    .meaning-zh {
+      display: inline-block;
+      margin-top: 2px;
+      font-size: 0.9rem;
+      letter-spacing: 0.12em;
+      color: var(--accent-bright);
+    }
+
     /* Pass device screen */
     .pass-device {
       flex: 1;
@@ -868,6 +899,93 @@
       margin-left: 8px;
     }
 
+    /* Quick-fill generic players */
+    .quick-add {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .quick-add-label {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .stepper {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px;
+    }
+
+    .stepper-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      font-size: 1.3rem;
+      line-height: 1;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition);
+    }
+
+    .stepper-btn:hover:not(:disabled) {
+      background: rgba(168, 85, 247, 0.3);
+      color: #ffffff;
+    }
+
+    .stepper-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .stepper-value {
+      min-width: 32px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Inline replace-names confirmation */
+    .quick-add-confirm {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      background: var(--bg-card);
+      border: 1px solid var(--twist-glow);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      margin-bottom: 12px;
+    }
+
+    .quick-add-confirm.show {
+      display: flex;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .quick-add-confirm span {
+      flex: 1;
+      min-width: 140px;
+      font-size: 0.875rem;
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
     /* Category pills */
     .category-pills {
       display: flex;
@@ -1089,9 +1207,23 @@
           Player Names
           <span class="player-count-badge" id="player-count-badge">0 players</span>
         </label>
-        <textarea 
-          id="players-textarea" 
-          class="textarea" 
+        <div class="quick-add">
+          <span class="quick-add-label">Quick fill</span>
+          <div class="stepper">
+            <button type="button" class="stepper-btn" id="quick-minus" onclick="adjustQuickCount(-1)" aria-label="One fewer player">−</button>
+            <span class="stepper-value" id="quick-count" aria-live="polite">5</span>
+            <button type="button" class="stepper-btn" id="quick-plus" onclick="adjustQuickCount(1)" aria-label="One more player">+</button>
+          </div>
+          <button type="button" class="btn btn-sm btn-secondary" onclick="fillGenericPlayers()">Use Player 1–<span id="quick-count-label">5</span></button>
+        </div>
+        <div id="quick-add-confirm" class="quick-add-confirm">
+          <span>Replace the names you typed?</span>
+          <button type="button" class="btn btn-sm btn-ghost" onclick="hideQuickConfirm()">Keep mine</button>
+          <button type="button" class="btn btn-sm btn-danger" onclick="confirmFillGenericPlayers()">Replace</button>
+        </div>
+        <textarea
+          id="players-textarea"
+          class="textarea"
           placeholder="Enter one name per line:&#10;Alice&#10;Bob&#10;Charlie&#10;Diana"
           oninput="updatePlayerCount()"
         ></textarea>
@@ -1167,10 +1299,12 @@
           <div class="role-content">
             <p class="text-muted">You are a</p>
             <div class="role-badge" id="role-badge">CIVILIAN</div>
+            <div class="role-zh-term" id="role-zh-term"></div>
             <div id="role-word-container">
               <p>The secret word is:</p>
               <div class="secret-word small" id="role-word">WORD</div>
               <p class="role-meaning" id="role-meaning">meaning here</p>
+              <p class="role-meaning-zh" id="role-meaning-zh"></p>
             </div>
             <div id="role-imposter-container" style="display: none;">
               <p class="mb-2">You <strong>do NOT</strong> know the word.</p>
@@ -1302,189 +1436,189 @@
 
     // ==================== HETERONYM DATABASE ====================
     const HETERONYMS = [
-      { word: "ABSTRACT", meanings: ["summary; not concrete", "to remove"] },
-      { word: "ACCENT", meanings: ["way of speaking", "to emphasize"] },
-      { word: "ADDRESS", meanings: ["location", "to speak to"] },
-      { word: "AFFECT", meanings: ["emotion; feeling", "to influence"] },
-      { word: "AGGREGATE", meanings: ["gravel", "to combine"] },
-      { word: "APPROPRIATE", meanings: ["suitable", "to take for oneself"] },
-      { word: "ASSOCIATE", meanings: ["colleague", "to connect"] },
-      { word: "ATTRIBUTE", meanings: ["characteristic", "to assign"] },
-      { word: "AUGUST", meanings: ["dignified, majestic", "eighth month"] },
-      { word: "AXES", meanings: ["cutting tools", "reference lines"] },
-      { word: "BASS", meanings: ["low-pitched sound/instrument", "a type of fish"] },
-      { word: "BATON", meanings: ["conductor's stick", "truncheon"] },
-      { word: "BOLT", meanings: ["to secure firmly", "to run away quickly"] },
-      { word: "BOW", meanings: ["weapon for shooting arrows; ribbon knot", "to bend forward; front of a ship"] },
-      { word: "BREAKDOWN", meanings: ["failure", "to analyze"] },
-      { word: "BUCKLE", meanings: ["to fasten", "to collapse"] },
-      { word: "BUFFET", meanings: ["self-service meal", "to strike repeatedly"] },
-      { word: "BURY", meanings: ["town in England", "to inter"] },
-      { word: "CHAP", meanings: ["fellow", "to crack skin"] },
-      { word: "CLEAVE", meanings: ["to split apart", "to cling to"] },
-      { word: "CLIP", meanings: ["to fasten together", "to cut off"] },
-      { word: "CLOD", meanings: ["lump of earth", "stupid person"] },
-      { word: "CLOSE", meanings: ["to shut", "nearby"] },
-      { word: "COB", meanings: ["corn cob", "male swan"] },
-      { word: "COMBINE", meanings: ["harvesting machine", "to join together"] },
-      { word: "COMMUNE", meanings: ["community", "to communicate"] },
-      { word: "COMPACT", meanings: ["small case; agreement", "to compress"] },
-      { word: "COMPLEX", meanings: ["building group", "complicated"] },
-      { word: "COMPOUND", meanings: ["mixture; enclosure", "to make worse"] },
-      { word: "COMPRESS", meanings: ["bandage", "to make smaller"] },
-      { word: "CONCRETE", meanings: ["building material", "to solidify"] },
-      { word: "CONDUCT", meanings: ["behavior", "to lead"] },
-      { word: "CONGLOMERATE", meanings: ["corporation", "to gather"] },
-      { word: "CONSOLE", meanings: ["to comfort someone", "control panel; gaming device"] },
-      { word: "CONSUMMATE", meanings: ["perfect", "to complete"] },
-      { word: "CONTENT", meanings: ["what is contained", "satisfied, happy"] },
-      { word: "CONTRACT", meanings: ["agreement", "to shrink; to acquire"] },
-      { word: "CONVERSE", meanings: ["opposite", "to talk"] },
-      { word: "CONVICT", meanings: ["prisoner", "to find guilty"] },
-      { word: "COORDINATE", meanings: ["one of a set", "to organize"] },
-      { word: "DEFECT", meanings: ["flaw", "to abandon"] },
-      { word: "DEGENERATE", meanings: ["immoral person", "to decline"] },
-      { word: "DELEGATE", meanings: ["representative", "to assign"] },
-      { word: "DELIBERATE", meanings: ["intentional", "to consider"] },
-      { word: "DERBY", meanings: ["horse race", "city in England"] },
-      { word: "DESERT", meanings: ["arid sandy region", "to abandon"] },
-      { word: "DIFFUSE", meanings: ["to spread", "scattered"] },
-      { word: "DIGEST", meanings: ["summary", "to process food"] },
-      { word: "DISCOUNT", meanings: ["reduction", "to reduce; dismiss"] },
-      { word: "DO", meanings: ["to perform", "first note (music)"] },
-      { word: "DOES", meanings: ["performs", "plural of doe (female deer)"] },
-      { word: "DOGGED", meanings: ["persistent", "followed"] },
-      { word: "DOVE", meanings: ["a bird (symbol of peace)", "past tense of dive"] },
-      { word: "DRAWER", meanings: ["sliding storage compartment", "one who draws"] },
-      { word: "DUST", meanings: ["to remove particles", "to add particles"] },
-      { word: "ELABORATE", meanings: ["complex", "to expand"] },
-      { word: "ENTRANCE", meanings: ["a doorway; way in", "to fill with wonder"] },
-      { word: "ESCORT", meanings: ["companion", "to accompany"] },
-      { word: "EXCISE", meanings: ["tax", "to cut out"] },
-      { word: "EXCUSE", meanings: ["reason", "to forgive"] },
-      { word: "EXPLOIT", meanings: ["feat", "to take advantage"] },
-      { word: "EXTRACT", meanings: ["concentrate", "to remove"] },
-      { word: "FALLOUT", meanings: ["radioactive particles; consequence", "to quarrel"] },
-      { word: "FAST", meanings: ["quick", "firmly fixed"] },
-      { word: "FERMENT", meanings: ["yeast agent", "to undergo change"] },
-      { word: "FREQUENT", meanings: ["common", "to visit often"] },
-      { word: "GORE", meanings: ["blood; to pierce", "triangular insert"] },
-      { word: "GRAVE", meanings: ["burial site; serious", "slow tempo (music)"] },
-      { word: "HAM", meanings: ["pork leg", "unskilled"] },
-      { word: "HAZE", meanings: ["mist", "to bully"] },
-      { word: "HOSE", meanings: ["tube; stockings", "plural of ho"] },
-      { word: "HOUSE", meanings: ["dwelling", "to provide shelter"] },
-      { word: "IMPRESS", meanings: ["mark made", "to affect strongly"] },
-      { word: "INCENSE", meanings: ["aromatic substance burned", "to make very angry"] },
-      { word: "INDENT", meanings: ["notch", "to set in from margin"] },
-      { word: "INTERN", meanings: ["trainee", "to confine"] },
-      { word: "INTIMATE", meanings: ["close friend", "to suggest"] },
-      { word: "INVALID", meanings: ["a sick or disabled person", "not valid"] },
-      { word: "JOB", meanings: ["employment; task", "biblical figure"] },
-      { word: "KNOCKOUT", meanings: ["stunning blow; stunning person", "to render unconscious"] },
-      { word: "LEAD", meanings: ["to guide or direct", "a heavy metal (Pb)"] },
-      { word: "LEARNED", meanings: ["acquired knowledge", "scholarly"] },
-      { word: "LEFT", meanings: ["departed", "remaining"] },
-      { word: "LEGGED", meanings: ["ran", "having legs"] },
-      { word: "LIED", meanings: ["told falsehood", "German art song"] },
-      { word: "LIMA", meanings: ["a type of bean", "capital of Peru"] },
-      { word: "LIVE", meanings: ["to be alive; reside", "happening in real-time"] },
-      { word: "LIVER", meanings: ["organ in body", "one who lives"] },
-      { word: "LOON", meanings: ["water bird", "crazy person"] },
-      { word: "LOWER", meanings: ["to move down", "to frown; look threatening"] },
-      { word: "LUNGED", meanings: ["thrust forward", "having lungs"] },
-      { word: "MACLE", meanings: ["twin crystal", "printing defect"] },
-      { word: "MAKEUP", meanings: ["cosmetics", "to reconcile"] },
-      { word: "MATTE", meanings: ["dull finish", "metal smelting"] },
-      { word: "MICROMETER", meanings: ["measuring device", "one-millionth meter"] },
-      { word: "MINUTE", meanings: ["60 seconds", "extremely small"] },
-      { word: "MOBILE", meanings: ["able to move", "city in Alabama"] },
-      { word: "MODE", meanings: ["method; fashion", "musical scale"] },
-      { word: "MODERATE", meanings: ["person of moderate views", "to preside"] },
-      { word: "MOLE", meanings: ["animal; spot", "Mexican sauce"] },
-      { word: "MOPED", meanings: ["a small motorbike", "was gloomy"] },
-      { word: "NICE", meanings: ["pleasant", "city in France"] },
-      { word: "NUMBER", meanings: ["a numeral", "more numb"] },
-      { word: "OBJECT", meanings: ["thing", "to protest"] },
-      { word: "OVERSIGHT", meanings: ["supervision", "error; omission"] },
-      { word: "PALLED", meanings: ["became less appealing", "covered with a pall"] },
-      { word: "PANE", meanings: ["window glass", "bread (French)"] },
-      { word: "PASTY", meanings: ["pale, unhealthy looking", "a meat pie"] },
-      { word: "PATENT", meanings: ["exclusive right", "obvious; open"] },
-      { word: "PEAKED", meanings: ["having a peak", "sickly looking"] },
-      { word: "PERITONEAL", meanings: ["of the peritoneum", "relating to tension"] },
-      { word: "PERVERT", meanings: ["deviant", "to corrupt"] },
-      { word: "PICKUP", meanings: ["truck; act of picking up", "to lift; collect"] },
-      { word: "PINE", meanings: ["tree", "to yearn"] },
-      { word: "PIQUE", meanings: ["to irritate", "cotton fabric"] },
-      { word: "PLIES", meanings: ["layers; works at", "ballet moves"] },
-      { word: "POLE", meanings: ["long stick", "Polish person"] },
-      { word: "POLISH", meanings: ["to make shiny", "from Poland"] },
-      { word: "PRECIPITATE", meanings: ["chemical deposit", "to cause suddenly"] },
-      { word: "PRESENT", meanings: ["gift; current time", "to give; show"] },
-      { word: "PRIMER", meanings: ["introductory textbook", "undercoat paint; detonator"] },
-      { word: "PROCEEDS", meanings: ["money received", "continues"] },
-      { word: "PRODUCE", meanings: ["farm products", "to make"] },
-      { word: "PROJECT", meanings: ["undertaking", "to forecast"] },
-      { word: "PROSPECT", meanings: ["possibility", "to search"] },
-      { word: "PUSSY", meanings: ["cat", "full of pus"] },
-      { word: "PUTTING", meanings: ["placing", "golf stroke"] },
-      { word: "READING", meanings: ["looking at text", "town in England"] },
-      { word: "REBEL", meanings: ["insurgent", "to revolt"] },
-      { word: "RECALL", meanings: ["product withdrawal", "to remember"] },
-      { word: "RECOLLECT", meanings: ["to remember", "to collect again"] },
-      { word: "RECORD", meanings: ["audio", "to document"] },
-      { word: "REDRESS", meanings: ["to remedy", "to dress again"] },
-      { word: "REFUSE", meanings: ["to decline", "garbage, waste"] },
-      { word: "REJECT", meanings: ["discarded item", "to refuse"] },
-      { word: "RELAY", meanings: ["switch", "to pass along"] },
-      { word: "RENT", meanings: ["to lease", "torn"] },
-      { word: "RESENT", meanings: ["to feel bitter about", "sent again"] },
-      { word: "RESIGN", meanings: ["to quit", "to sign again"] },
-      { word: "RESUME", meanings: ["to continue after pause", "CV; work history document"] },
-      { word: "ROUTE", meanings: ["path", "to defeat utterly"] },
-      { word: "ROW", meanings: ["a line; to propel a boat", "an argument or fight"] },
-      { word: "SAKE", meanings: ["for the purpose of", "Japanese rice wine"] },
-      { word: "SANCTION", meanings: ["to approve", "to penalize"] },
-      { word: "SCREEN", meanings: ["to show (movie)", "to hide from view"] },
-      { word: "SECRETED", meanings: ["produced (gland)", "hidden away"] },
-      { word: "SECRETIVE", meanings: ["producing secretions", "keeping secrets"] },
-      { word: "SEED", meanings: ["to plant seeds", "to remove seeds"] },
-      { word: "SEGMENT", meanings: ["section", "to divide"] },
-      { word: "SEWER", meanings: ["underground drainage pipe", "one who sews"] },
-      { word: "SHOWER", meanings: ["water spray for bathing", "one who shows"] },
-      { word: "SLAVER", meanings: ["slave trader", "to drool"] },
-      { word: "SOPHISTICATE", meanings: ["to make complex", "sophisticated person"] },
-      { word: "SOW", meanings: ["to plant seeds", "a female pig"] },
-      { word: "STINGY", meanings: ["unwilling to spend", "able to sting"] },
-      { word: "STRIKE", meanings: ["to hit", "to discover (ore)"] },
-      { word: "STRIPED", meanings: ["having stripes", "made stripes"] },
-      { word: "SUBJECT", meanings: ["topic; person", "to expose"] },
-      { word: "SUPPOSED", meanings: ["assumed", "expected to"] },
-      { word: "SURVEY", meanings: ["questionnaire", "to examine"] },
-      { word: "SUSPECT", meanings: ["person of interest", "to doubt"] },
-      { word: "SYNDICATE", meanings: ["group", "to publish"] },
-      { word: "TANGIER", meanings: ["more tangy", "city in Morocco"] },
-      { word: "TEAR", meanings: ["to rip or pull apart", "liquid from the eye"] },
-      { word: "TEMPER", meanings: ["to moderate", "anger; mood"] },
-      { word: "THOU", meanings: ["you (archaic)", "thousand (slang)"] },
-      { word: "TOW", meanings: ["to pull", "fiber"] },
-      { word: "TOWER", meanings: ["tall structure", "one who tows"] },
-      { word: "TRANSPLANT", meanings: ["organ replacement", "to move plant"] },
-      { word: "TRIM", meanings: ["to cut off", "to add decoration"] },
-      { word: "TURNOUT", meanings: ["attendance", "a place to turn"] },
-      { word: "UPDATE", meanings: ["new information", "to modernize"] },
-      { word: "USE", meanings: ["purpose", "to employ"] },
-      { word: "VICE", meanings: ["immoral behavior", "a tool to hold items firm"] },
-      { word: "VIOLA", meanings: ["stringed instrument", "a type of flower"] },
-      { word: "VIOLATE", meanings: ["to break", "violet color"] },
-      { word: "WEATHER", meanings: ["to endure", "to wear away"] },
-      { word: "WICKED", meanings: ["evil", "liquid flowing"] },
-      { word: "WIND", meanings: ["moving air", "to turn or coil"] },
-      { word: "WINGED", meanings: ["having wings", "flew quickly"] },
-      { word: "WON", meanings: ["was victorious", "Korean currency"] },
-      { word: "WORKOUT", meanings: ["exercise session", "to exercise; solve"] },
-      { word: "WOUND", meanings: ["an injury", "past tense of wind (coil)"] }
+      { word: "ABSTRACT", meanings: ["summary; not concrete", "to remove"], zh: ["摘要", "抽取"] },
+      { word: "ACCENT", meanings: ["way of speaking", "to emphasize"], zh: ["口音", "强调"] },
+      { word: "ADDRESS", meanings: ["location", "to speak to"], zh: ["地址", "向…讲话"] },
+      { word: "AFFECT", meanings: ["emotion; feeling", "to influence"], zh: ["情感", "影响"] },
+      { word: "AGGREGATE", meanings: ["gravel", "to combine"], zh: ["碎石", "汇总"] },
+      { word: "APPROPRIATE", meanings: ["suitable", "to take for oneself"], zh: ["合适的", "占用"] },
+      { word: "ASSOCIATE", meanings: ["colleague", "to connect"], zh: ["同事", "联系"] },
+      { word: "ATTRIBUTE", meanings: ["characteristic", "to assign"], zh: ["特征", "归因于"] },
+      { word: "AUGUST", meanings: ["dignified, majestic", "eighth month"], zh: ["威严的", "八月"] },
+      { word: "AXES", meanings: ["cutting tools", "reference lines"], zh: ["斧头", "坐标轴"] },
+      { word: "BASS", meanings: ["low-pitched sound/instrument", "a type of fish"], zh: ["低音", "鲈鱼"] },
+      { word: "BATON", meanings: ["conductor's stick", "truncheon"], zh: ["指挥棒", "警棍"] },
+      { word: "BOLT", meanings: ["to secure firmly", "to run away quickly"], zh: ["闩住", "飞奔"] },
+      { word: "BOW", meanings: ["weapon for shooting arrows; ribbon knot", "to bend forward; front of a ship"], zh: ["弓；蝴蝶结", "鞠躬；船头"] },
+      { word: "BREAKDOWN", meanings: ["failure", "to analyze"], zh: ["故障", "分解"] },
+      { word: "BUCKLE", meanings: ["to fasten", "to collapse"], zh: ["扣紧", "压垮"] },
+      { word: "BUFFET", meanings: ["self-service meal", "to strike repeatedly"], zh: ["自助餐", "连续打击"] },
+      { word: "BURY", meanings: ["town in England", "to inter"], zh: ["伯里", "埋葬"] },
+      { word: "CHAP", meanings: ["fellow", "to crack skin"], zh: ["家伙", "皲裂"] },
+      { word: "CLEAVE", meanings: ["to split apart", "to cling to"], zh: ["劈开", "紧贴"] },
+      { word: "CLIP", meanings: ["to fasten together", "to cut off"], zh: ["夹住", "剪掉"] },
+      { word: "CLOD", meanings: ["lump of earth", "stupid person"], zh: ["土块", "蠢人"] },
+      { word: "CLOSE", meanings: ["to shut", "nearby"], zh: ["关闭", "附近"] },
+      { word: "COB", meanings: ["corn cob", "male swan"], zh: ["玉米芯", "雄天鹅"] },
+      { word: "COMBINE", meanings: ["harvesting machine", "to join together"], zh: ["联合收割机", "联合"] },
+      { word: "COMMUNE", meanings: ["community", "to communicate"], zh: ["公社", "交流"] },
+      { word: "COMPACT", meanings: ["small case; agreement", "to compress"], zh: ["粉盒；协议", "压缩"] },
+      { word: "COMPLEX", meanings: ["building group", "complicated"], zh: ["建筑群", "复杂"] },
+      { word: "COMPOUND", meanings: ["mixture; enclosure", "to make worse"], zh: ["混合物；院落", "加剧"] },
+      { word: "COMPRESS", meanings: ["bandage", "to make smaller"], zh: ["敷布", "压缩"] },
+      { word: "CONCRETE", meanings: ["building material", "to solidify"], zh: ["混凝土", "凝固"] },
+      { word: "CONDUCT", meanings: ["behavior", "to lead"], zh: ["行为", "带领"] },
+      { word: "CONGLOMERATE", meanings: ["corporation", "to gather"], zh: ["企业集团", "聚集"] },
+      { word: "CONSOLE", meanings: ["to comfort someone", "control panel; gaming device"], zh: ["安慰", "控制台；游戏机"] },
+      { word: "CONSUMMATE", meanings: ["perfect", "to complete"], zh: ["完美的", "完成"] },
+      { word: "CONTENT", meanings: ["what is contained", "satisfied, happy"], zh: ["内容", "满足的"] },
+      { word: "CONTRACT", meanings: ["agreement", "to shrink; to acquire"], zh: ["合同", "收缩；感染"] },
+      { word: "CONVERSE", meanings: ["opposite", "to talk"], zh: ["相反的", "交谈"] },
+      { word: "CONVICT", meanings: ["prisoner", "to find guilty"], zh: ["囚犯", "定罪"] },
+      { word: "COORDINATE", meanings: ["one of a set", "to organize"], zh: ["坐标", "协调"] },
+      { word: "DEFECT", meanings: ["flaw", "to abandon"], zh: ["缺陷", "叛逃"] },
+      { word: "DEGENERATE", meanings: ["immoral person", "to decline"], zh: ["堕落者", "衰退"] },
+      { word: "DELEGATE", meanings: ["representative", "to assign"], zh: ["代表", "委派"] },
+      { word: "DELIBERATE", meanings: ["intentional", "to consider"], zh: ["故意的", "审议"] },
+      { word: "DERBY", meanings: ["horse race", "city in England"], zh: ["赛马", "德比"] },
+      { word: "DESERT", meanings: ["arid sandy region", "to abandon"], zh: ["沙漠", "抛弃"] },
+      { word: "DIFFUSE", meanings: ["to spread", "scattered"], zh: ["扩散", "分散的"] },
+      { word: "DIGEST", meanings: ["summary", "to process food"], zh: ["摘要", "消化"] },
+      { word: "DISCOUNT", meanings: ["reduction", "to reduce; dismiss"], zh: ["折扣", "低估；不予理会"] },
+      { word: "DO", meanings: ["to perform", "first note (music)"], zh: ["做", "哆"] },
+      { word: "DOES", meanings: ["performs", "plural of doe (female deer)"], zh: ["做", "母鹿"] },
+      { word: "DOGGED", meanings: ["persistent", "followed"], zh: ["顽强的", "尾随"] },
+      { word: "DOVE", meanings: ["a bird (symbol of peace)", "past tense of dive"], zh: ["鸽子", "跳水"] },
+      { word: "DRAWER", meanings: ["sliding storage compartment", "one who draws"], zh: ["抽屉", "绘图者"] },
+      { word: "DUST", meanings: ["to remove particles", "to add particles"], zh: ["掸去灰尘", "撒粉"] },
+      { word: "ELABORATE", meanings: ["complex", "to expand"], zh: ["精心制作的", "详细阐述"] },
+      { word: "ENTRANCE", meanings: ["a doorway; way in", "to fill with wonder"], zh: ["入口", "使着迷"] },
+      { word: "ESCORT", meanings: ["companion", "to accompany"], zh: ["陪同者", "护送"] },
+      { word: "EXCISE", meanings: ["tax", "to cut out"], zh: ["消费税", "切除"] },
+      { word: "EXCUSE", meanings: ["reason", "to forgive"], zh: ["借口", "原谅"] },
+      { word: "EXPLOIT", meanings: ["feat", "to take advantage"], zh: ["功绩", "利用"] },
+      { word: "EXTRACT", meanings: ["concentrate", "to remove"], zh: ["浓缩物", "提取"] },
+      { word: "FALLOUT", meanings: ["radioactive particles; consequence", "to quarrel"], zh: ["放射性尘埃；后果", "争吵"] },
+      { word: "FAST", meanings: ["quick", "firmly fixed"], zh: ["快速的", "牢固的"] },
+      { word: "FERMENT", meanings: ["yeast agent", "to undergo change"], zh: ["酵母", "发酵"] },
+      { word: "FREQUENT", meanings: ["common", "to visit often"], zh: ["频繁的", "常去"] },
+      { word: "GORE", meanings: ["blood; to pierce", "triangular insert"], zh: ["血污；刺穿", "三角布"] },
+      { word: "GRAVE", meanings: ["burial site; serious", "slow tempo (music)"], zh: ["坟墓；严重", "庄板"] },
+      { word: "HAM", meanings: ["pork leg", "unskilled"], zh: ["火腿", "蹩脚"] },
+      { word: "HAZE", meanings: ["mist", "to bully"], zh: ["薄雾", "欺凌"] },
+      { word: "HOSE", meanings: ["tube; stockings", "plural of ho"], zh: ["软管；长袜", "婊子们"] },
+      { word: "HOUSE", meanings: ["dwelling", "to provide shelter"], zh: ["房屋", "收留"] },
+      { word: "IMPRESS", meanings: ["mark made", "to affect strongly"], zh: ["印记", "打动"] },
+      { word: "INCENSE", meanings: ["aromatic substance burned", "to make very angry"], zh: ["熏香", "激怒"] },
+      { word: "INDENT", meanings: ["notch", "to set in from margin"], zh: ["缺口", "缩进"] },
+      { word: "INTERN", meanings: ["trainee", "to confine"], zh: ["实习生", "拘禁"] },
+      { word: "INTIMATE", meanings: ["close friend", "to suggest"], zh: ["密友", "暗示"] },
+      { word: "INVALID", meanings: ["a sick or disabled person", "not valid"], zh: ["病人", "无效"] },
+      { word: "JOB", meanings: ["employment; task", "biblical figure"], zh: ["工作；任务", "约伯"] },
+      { word: "KNOCKOUT", meanings: ["stunning blow; stunning person", "to render unconscious"], zh: ["重击；尤物", "击昏"] },
+      { word: "LEAD", meanings: ["to guide or direct", "a heavy metal (Pb)"], zh: ["引导", "铅"] },
+      { word: "LEARNED", meanings: ["acquired knowledge", "scholarly"], zh: ["学到的", "博学的"] },
+      { word: "LEFT", meanings: ["departed", "remaining"], zh: ["离开了", "剩下的"] },
+      { word: "LEGGED", meanings: ["ran", "having legs"], zh: ["奔跑", "有腿的"] },
+      { word: "LIED", meanings: ["told falsehood", "German art song"], zh: ["撒谎", "艺术歌曲"] },
+      { word: "LIMA", meanings: ["a type of bean", "capital of Peru"], zh: ["利马豆", "利马"] },
+      { word: "LIVE", meanings: ["to be alive; reside", "happening in real-time"], zh: ["居住", "现场直播的"] },
+      { word: "LIVER", meanings: ["organ in body", "one who lives"], zh: ["肝脏", "生活者"] },
+      { word: "LOON", meanings: ["water bird", "crazy person"], zh: ["潜鸟", "疯子"] },
+      { word: "LOWER", meanings: ["to move down", "to frown; look threatening"], zh: ["降低", "皱眉怒视"] },
+      { word: "LUNGED", meanings: ["thrust forward", "having lungs"], zh: ["猛冲", "有肺的"] },
+      { word: "MACLE", meanings: ["twin crystal", "printing defect"], zh: ["双晶", "印刷瑕疵"] },
+      { word: "MAKEUP", meanings: ["cosmetics", "to reconcile"], zh: ["化妆品", "和解"] },
+      { word: "MATTE", meanings: ["dull finish", "metal smelting"], zh: ["亚光", "冰铜"] },
+      { word: "MICROMETER", meanings: ["measuring device", "one-millionth meter"], zh: ["千分尺", "微米"] },
+      { word: "MINUTE", meanings: ["60 seconds", "extremely small"], zh: ["分钟", "微小的"] },
+      { word: "MOBILE", meanings: ["able to move", "city in Alabama"], zh: ["可移动的", "莫比尔"] },
+      { word: "MODE", meanings: ["method; fashion", "musical scale"], zh: ["方式；时尚", "调式"] },
+      { word: "MODERATE", meanings: ["person of moderate views", "to preside"], zh: ["温和派", "主持"] },
+      { word: "MOLE", meanings: ["animal; spot", "Mexican sauce"], zh: ["鼹鼠；痣", "摩尔酱"] },
+      { word: "MOPED", meanings: ["a small motorbike", "was gloomy"], zh: ["小摩托车", "曾闷闷不乐"] },
+      { word: "NICE", meanings: ["pleasant", "city in France"], zh: ["宜人的", "尼斯"] },
+      { word: "NUMBER", meanings: ["a numeral", "more numb"], zh: ["数字", "更麻木的"] },
+      { word: "OBJECT", meanings: ["thing", "to protest"], zh: ["物体", "反对"] },
+      { word: "OVERSIGHT", meanings: ["supervision", "error; omission"], zh: ["监督", "疏忽；遗漏"] },
+      { word: "PALLED", meanings: ["became less appealing", "covered with a pall"], zh: ["失去了吸引力", "覆盖了棺罩"] },
+      { word: "PANE", meanings: ["window glass", "bread (French)"], zh: ["窗玻璃", "面包"] },
+      { word: "PASTY", meanings: ["pale, unhealthy looking", "a meat pie"], zh: ["苍白病态的", "肉馅饼"] },
+      { word: "PATENT", meanings: ["exclusive right", "obvious; open"], zh: ["专利", "明显的；公开的"] },
+      { word: "PEAKED", meanings: ["having a peak", "sickly looking"], zh: ["有尖顶的", "病恹恹的"] },
+      { word: "PERITONEAL", meanings: ["of the peritoneum", "relating to tension"], zh: ["腹膜的", "张力的"] },
+      { word: "PERVERT", meanings: ["deviant", "to corrupt"], zh: ["变态者", "使堕落"] },
+      { word: "PICKUP", meanings: ["truck; act of picking up", "to lift; collect"], zh: ["皮卡；捡起", "抬起；收集"] },
+      { word: "PINE", meanings: ["tree", "to yearn"], zh: ["松树", "渴望"] },
+      { word: "PIQUE", meanings: ["to irritate", "cotton fabric"], zh: ["激怒", "凸纹棉布"] },
+      { word: "PLIES", meanings: ["layers; works at", "ballet moves"], zh: ["层；从事", "屈膝"] },
+      { word: "POLE", meanings: ["long stick", "Polish person"], zh: ["杆", "波兰人"] },
+      { word: "POLISH", meanings: ["to make shiny", "from Poland"], zh: ["擦亮", "波兰的"] },
+      { word: "PRECIPITATE", meanings: ["chemical deposit", "to cause suddenly"], zh: ["沉淀物", "促成"] },
+      { word: "PRESENT", meanings: ["gift; current time", "to give; show"], zh: ["礼物；现在", "赠送；展示"] },
+      { word: "PRIMER", meanings: ["introductory textbook", "undercoat paint; detonator"], zh: ["入门书", "底漆；雷管"] },
+      { word: "PROCEEDS", meanings: ["money received", "continues"], zh: ["收益", "继续"] },
+      { word: "PRODUCE", meanings: ["farm products", "to make"], zh: ["农产品", "生产"] },
+      { word: "PROJECT", meanings: ["undertaking", "to forecast"], zh: ["项目", "预测"] },
+      { word: "PROSPECT", meanings: ["possibility", "to search"], zh: ["可能性", "勘探"] },
+      { word: "PUSSY", meanings: ["cat", "full of pus"], zh: ["猫", "化脓的"] },
+      { word: "PUTTING", meanings: ["placing", "golf stroke"], zh: ["放置", "推杆"] },
+      { word: "READING", meanings: ["looking at text", "town in England"], zh: ["阅读", "雷丁"] },
+      { word: "REBEL", meanings: ["insurgent", "to revolt"], zh: ["叛乱者", "反叛"] },
+      { word: "RECALL", meanings: ["product withdrawal", "to remember"], zh: ["召回", "回忆"] },
+      { word: "RECOLLECT", meanings: ["to remember", "to collect again"], zh: ["回忆", "重新收集"] },
+      { word: "RECORD", meanings: ["audio", "to document"], zh: ["录音", "记录"] },
+      { word: "REDRESS", meanings: ["to remedy", "to dress again"], zh: ["补救", "重新穿衣"] },
+      { word: "REFUSE", meanings: ["to decline", "garbage, waste"], zh: ["拒绝", "垃圾"] },
+      { word: "REJECT", meanings: ["discarded item", "to refuse"], zh: ["次品", "拒绝"] },
+      { word: "RELAY", meanings: ["switch", "to pass along"], zh: ["继电器", "传递"] },
+      { word: "RENT", meanings: ["to lease", "torn"], zh: ["租", "撕裂的"] },
+      { word: "RESENT", meanings: ["to feel bitter about", "sent again"], zh: ["怨恨", "重新发送"] },
+      { word: "RESIGN", meanings: ["to quit", "to sign again"], zh: ["辞职", "重新签署"] },
+      { word: "RESUME", meanings: ["to continue after pause", "CV; work history document"], zh: ["继续", "简历"] },
+      { word: "ROUTE", meanings: ["path", "to defeat utterly"], zh: ["路线", "彻底击溃"] },
+      { word: "ROW", meanings: ["a line; to propel a boat", "an argument or fight"], zh: ["一排；划船", "争吵"] },
+      { word: "SAKE", meanings: ["for the purpose of", "Japanese rice wine"], zh: ["为了", "清酒"] },
+      { word: "SANCTION", meanings: ["to approve", "to penalize"], zh: ["批准", "制裁"] },
+      { word: "SCREEN", meanings: ["to show (movie)", "to hide from view"], zh: ["放映", "遮蔽"] },
+      { word: "SECRETED", meanings: ["produced (gland)", "hidden away"], zh: ["分泌", "藏匿"] },
+      { word: "SECRETIVE", meanings: ["producing secretions", "keeping secrets"], zh: ["分泌的", "守口如瓶的"] },
+      { word: "SEED", meanings: ["to plant seeds", "to remove seeds"], zh: ["播种", "去籽"] },
+      { word: "SEGMENT", meanings: ["section", "to divide"], zh: ["部分", "分割"] },
+      { word: "SEWER", meanings: ["underground drainage pipe", "one who sews"], zh: ["下水道", "缝纫者"] },
+      { word: "SHOWER", meanings: ["water spray for bathing", "one who shows"], zh: ["淋浴", "展示者"] },
+      { word: "SLAVER", meanings: ["slave trader", "to drool"], zh: ["奴隶贩子", "流口水"] },
+      { word: "SOPHISTICATE", meanings: ["to make complex", "sophisticated person"], zh: ["使复杂化", "老练世故的人"] },
+      { word: "SOW", meanings: ["to plant seeds", "a female pig"], zh: ["播种", "母猪"] },
+      { word: "STINGY", meanings: ["unwilling to spend", "able to sting"], zh: ["吝啬的", "会蜇人的"] },
+      { word: "STRIKE", meanings: ["to hit", "to discover (ore)"], zh: ["击打", "发现"] },
+      { word: "STRIPED", meanings: ["having stripes", "made stripes"], zh: ["有条纹的", "划出条纹"] },
+      { word: "SUBJECT", meanings: ["topic; person", "to expose"], zh: ["主题；人", "使遭受"] },
+      { word: "SUPPOSED", meanings: ["assumed", "expected to"], zh: ["假定的", "应该的"] },
+      { word: "SURVEY", meanings: ["questionnaire", "to examine"], zh: ["问卷调查", "勘察"] },
+      { word: "SUSPECT", meanings: ["person of interest", "to doubt"], zh: ["嫌疑人", "怀疑"] },
+      { word: "SYNDICATE", meanings: ["group", "to publish"], zh: ["财团", "联合发表"] },
+      { word: "TANGIER", meanings: ["more tangy", "city in Morocco"], zh: ["更浓烈的", "丹吉尔"] },
+      { word: "TEAR", meanings: ["to rip or pull apart", "liquid from the eye"], zh: ["撕裂", "眼泪"] },
+      { word: "TEMPER", meanings: ["to moderate", "anger; mood"], zh: ["缓和", "脾气；情绪"] },
+      { word: "THOU", meanings: ["you (archaic)", "thousand (slang)"], zh: ["汝", "千"] },
+      { word: "TOW", meanings: ["to pull", "fiber"], zh: ["拖", "短麻纤维"] },
+      { word: "TOWER", meanings: ["tall structure", "one who tows"], zh: ["塔", "拖曳者"] },
+      { word: "TRANSPLANT", meanings: ["organ replacement", "to move plant"], zh: ["移植", "移栽"] },
+      { word: "TRIM", meanings: ["to cut off", "to add decoration"], zh: ["修剪", "装饰"] },
+      { word: "TURNOUT", meanings: ["attendance", "a place to turn"], zh: ["出席人数", "岔道"] },
+      { word: "UPDATE", meanings: ["new information", "to modernize"], zh: ["最新消息", "更新"] },
+      { word: "USE", meanings: ["purpose", "to employ"], zh: ["用途", "使用"] },
+      { word: "VICE", meanings: ["immoral behavior", "a tool to hold items firm"], zh: ["恶习", "台钳"] },
+      { word: "VIOLA", meanings: ["stringed instrument", "a type of flower"], zh: ["中提琴", "堇菜"] },
+      { word: "VIOLATE", meanings: ["to break", "violet color"], zh: ["违反", "紫罗兰色"] },
+      { word: "WEATHER", meanings: ["to endure", "to wear away"], zh: ["经受住", "侵蚀"] },
+      { word: "WICKED", meanings: ["evil", "liquid flowing"], zh: ["邪恶的", "吸液的"] },
+      { word: "WIND", meanings: ["moving air", "to turn or coil"], zh: ["风", "缠绕"] },
+      { word: "WINGED", meanings: ["having wings", "flew quickly"], zh: ["有翼的", "疾飞"] },
+      { word: "WON", meanings: ["was victorious", "Korean currency"], zh: ["获胜", "韩元"] },
+      { word: "WORKOUT", meanings: ["exercise session", "to exercise; solve"], zh: ["锻炼", "锻炼；解决"] },
+      { word: "WOUND", meanings: ["an injury", "past tense of wind (coil)"], zh: ["伤口", "缠绕（过去式）"] }
     ];
 
     const CATEGORIES = ["heteronyms", "other"];
@@ -1707,9 +1841,12 @@
       const savedNames = loadPlayerNames();
       if (savedNames && savedNames.length > 0) {
         document.getElementById('players-textarea').value = savedNames.join('\n');
+        // Seed the quick-fill stepper from the saved roster size
+        quickCount = Math.min(QUICK_MAX, Math.max(QUICK_MIN, savedNames.length));
       }
-      
+
       renderCategoryPills();
+      updateQuickCountUI();
       updatePlayerCount();
       
       // Check for resumable game
@@ -1978,6 +2115,8 @@
 
     function updatePlayerCount() {
       const textarea = document.getElementById('players-textarea');
+      // A pending "replace names?" prompt is stale once the user edits names directly
+      hideQuickConfirm();
       const parseResult = parsePlayerNames(textarea.value);
       const names = parseResult.names;
       const count = names.length;
@@ -2087,6 +2226,65 @@
       return parsePlayerNames(text).names;
     }
 
+    // ==================== QUICK FILL (GENERIC PLAYERS) ====================
+    const QUICK_MIN = 3;
+    const QUICK_MAX = 20; // matches MAX_PLAYERS in parsePlayerNames
+    let quickCount = 5;
+
+    /**
+     * True if the textarea is empty or holds only auto-generated "Player N" names.
+     * Used to decide whether quick-fill can safely overwrite without confirmation.
+     */
+    function isGenericOrEmpty(text) {
+      const names = parsePlayerNames(text).names;
+      if (names.length === 0) return true;
+      return names.every(n => /^player\s+\d+$/i.test(n));
+    }
+
+    function updateQuickCountUI() {
+      document.getElementById('quick-count').textContent = quickCount;
+      document.getElementById('quick-count-label').textContent = quickCount;
+      document.getElementById('quick-minus').disabled = quickCount <= QUICK_MIN;
+      document.getElementById('quick-plus').disabled = quickCount >= QUICK_MAX;
+    }
+
+    function adjustQuickCount(delta) {
+      quickCount = Math.min(QUICK_MAX, Math.max(QUICK_MIN, quickCount + delta));
+      updateQuickCountUI();
+    }
+
+    function showQuickConfirm() {
+      document.getElementById('quick-add-confirm').classList.add('show');
+    }
+
+    function hideQuickConfirm() {
+      document.getElementById('quick-add-confirm').classList.remove('show');
+    }
+
+    /**
+     * Fill the textarea with "Player 1".."Player N". If the user already typed
+     * custom names, ask before overwriting (inline, non-modal).
+     */
+    function fillGenericPlayers() {
+      const textarea = document.getElementById('players-textarea');
+      if (isGenericOrEmpty(textarea.value)) {
+        confirmFillGenericPlayers();
+      } else {
+        showQuickConfirm();
+      }
+    }
+
+    function confirmFillGenericPlayers() {
+      hideQuickConfirm();
+      const textarea = document.getElementById('players-textarea');
+      const names = [];
+      for (let i = 1; i <= quickCount; i++) {
+        names.push('Player ' + i);
+      }
+      textarea.value = names.join('\n');
+      updatePlayerCount();
+    }
+
     function selectImposters(count) {
       const playerCount = parsePlayerNames(document.getElementById('players-textarea').value).names.length;
       const maxImposters = getMaxImposters(playerCount);
@@ -2190,7 +2388,9 @@
             gameState.players.forEach((p, i) => {
               p.role = "civilian";
               p.word = gameState.allWords[i];
-              p.meaning = gameState.allWords[i].meanings[Math.random() < 0.5 ? 0 : 1];
+              const mIdx = Math.random() < 0.5 ? 0 : 1;
+              p.meaning = gameState.allWords[i].meanings[mIdx];
+              p.meaningZh = gameState.allWords[i].zh ? gameState.allWords[i].zh[mIdx] : "";
             });
             break;
             
@@ -2200,7 +2400,9 @@
             gameState.players.forEach(p => {
               p.role = "civilian";
               p.word = gameState.secretWord;
-              p.meaning = gameState.secretWord.meanings[Math.random() < 0.5 ? 0 : 1];
+              const mIdx = Math.random() < 0.5 ? 0 : 1;
+              p.meaning = gameState.secretWord.meanings[mIdx];
+              p.meaningZh = gameState.secretWord.zh ? gameState.secretWord.zh[mIdx] : "";
             });
             break;
             
@@ -2220,7 +2422,9 @@
               } else {
                 p.role = "civilian";
                 p.word = gameState.secretWord;
-                p.meaning = gameState.secretWord.meanings[Math.random() < 0.5 ? 0 : 1];
+                const mIdx = Math.random() < 0.5 ? 0 : 1;
+                p.meaning = gameState.secretWord.meanings[mIdx];
+                p.meaningZh = gameState.secretWord.zh ? gameState.secretWord.zh[mIdx] : "";
               }
             });
             break;
@@ -2295,18 +2499,27 @@
       const wordContainer = document.getElementById('role-word-container');
       const imposterContainer = document.getElementById('role-imposter-container');
       
+      const roleZhTerm = document.getElementById('role-zh-term');
+      const roleMeaningZh = document.getElementById('role-meaning-zh');
+
       if (player.role === "civilian") {
         roleBadge.textContent = "CIVILIAN";
         roleBadge.className = "role-badge civilian";
+        roleZhTerm.textContent = "平民";
+        roleZhTerm.className = "role-zh-term civilian";
         wordContainer.style.display = "block";
         imposterContainer.style.display = "none";
         roleWord.textContent = player.word.word;
         roleMeaning.textContent = player.meaning;
+        roleMeaningZh.textContent = player.meaningZh || "";
       } else {
         roleBadge.textContent = "IMPOSTER";
         roleBadge.className = "role-badge imposter";
+        roleZhTerm.textContent = "卧底";
+        roleZhTerm.className = "role-zh-term imposter";
         wordContainer.style.display = "none";
         imposterContainer.style.display = "block";
+        roleMeaningZh.textContent = "";
       }
       
       renderProgressDots('progress-dots-role');
@@ -2488,10 +2701,12 @@
         gameState.secretWord.word;
       
       const meaningsContainer = document.getElementById('summary-meanings');
-      meaningsContainer.innerHTML = gameState.secretWord.meanings.map(m => `
+      const summaryZh = gameState.secretWord.zh || [];
+      meaningsContainer.innerHTML = gameState.secretWord.meanings.map((m, i) => `
         <div class="meaning-item">
           <div class="meaning-text">
-            <p>${m}</p>
+            <p>${escapeHtml(m)}</p>
+            ${summaryZh[i] ? `<span class="meaning-zh">${escapeHtml(summaryZh[i])}</span>` : ''}
           </div>
         </div>
       `).join('');
