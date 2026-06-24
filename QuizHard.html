@@ -242,6 +242,8 @@
     <h2>Set up the game</h2>
     <p class="lead">Four houses, each with a deliberately <em>narrow</em> specialist subject (avoid broad topics — think "the Suez Canal", not "history"). No topic may overlap another, including Thom's secret round.</p>
 
+    <div class="field" style="margin-bottom:var(--space-3)"><label for="useHouses"><input type="checkbox" id="useHouses" style="width:auto;min-height:0;margin-inline-end:.4em">Use Quiz Hard house names &amp; colours</label><span class="hint">Off by default — generic Players 1–4 in cyan / magenta / white / orange. Tick for New / Brunning / Gwynton / Walker in dark gold / red / blue / green.</span></div>
+
     <div class="contestants" id="contestants"></div>
 
     <div class="card" style="margin-top:var(--space-4)">
@@ -363,12 +365,21 @@
 (function(){
   const VERSION='1.0.0';
   const LS_KEY='hardquiz_state_v1';
-  const PCOLORS=[
+  const HOUSE_PCOLORS=[
     {house:'New',      name:'Dark Gold', hex:'B8860B'},
     {house:'Brunning', name:'Dark Red',  hex:'8B0000'},
     {house:'Gwynton',  name:'Dark Blue', hex:'00008B'},
     {house:'Walker',   name:'Dark Green',hex:'006400'}
   ];
+  const GENERIC_PCOLORS=[
+    {house:'Player 1', name:'Cyan',    hex:'00FFFF'},
+    {house:'Player 2', name:'Magenta', hex:'FF00FF'},
+    {house:'Player 3', name:'Slate',   hex:'708090'},
+    {house:'Player 4', name:'Orange',  hex:'FFA500'}
+  ];
+  let PCOLORS=GENERIC_PCOLORS;
+  function setPalette(){PCOLORS=(state&&state.opt&&state.opt.useHouses)?HOUSE_PCOLORS:GENERIC_PCOLORS;}
+  function onColor(hex){const h=String(hex).replace('#','');const r=parseInt(h.substr(0,2),16),g=parseInt(h.substr(2,2),16),b=parseInt(h.substr(4,2),16);const L=(0.299*r+0.587*g+0.114*b)/255;return L>0.5?'#1a1404':'#fff';}
   function houseOf(name){const i=PCOLORS.findIndex(c=>c.house.toLowerCase()===String(name||'').trim().toLowerCase());return i>=0?PCOLORS[i].house:'';}
   const $=(s,r)=>(r||document).querySelector(s);
   const $$=(s,r)=>Array.from((r||document).querySelectorAll(s));
@@ -376,9 +387,9 @@
 
   /* ---------- STATE ---------- */
   const DEFAULTS=()=>({
-    contestants:[{name:'New',topic:''},{name:'Brunning',topic:''},{name:'Gwynton',topic:''},{name:'Walker',topic:''}],
+    contestants:[{name:'',topic:''},{name:'',topic:''},{name:'',topic:''},{name:'',topic:''}],
     tomsTopic:'',
-    opt:{difficulty:'standard',roast:'classic',era:'current',tomsPenalty:'-5',model:'claude',banter:false,zh:true,
+    opt:{difficulty:'standard',roast:'classic',era:'current',tomsPenalty:'-5',model:'claude',banter:false,zh:true,useHouses:false,
          cExpert:5,cBuffer:0,cFinal:8,cPeoples:25},
     ui:{tab:'setup',theme:'system'}
   });
@@ -454,10 +465,10 @@
     state.contestants.forEach((c,i)=>{
       const col=PCOLORS[i];
       const card=document.createElement('div');card.className='card ct-card';
-      card.style.setProperty('--c','#'+col.hex);card.style.setProperty('--c-on',col.hex==='B8860B'?'#1a1404':'#fff');
+      card.style.setProperty('--c','#'+col.hex);card.style.setProperty('--c-on',onColor(col.hex));
       card.innerHTML=
         '<div class="ct-head"><span class="chip">●&nbsp;'+esc(col.house)+' House</span><span class="hint">'+esc(col.name)+'</span></div>'+
-        '<div class="field"><label class="req" for="name'+i+'">House / team name</label>'+
+        '<div class="field"><label for="name'+i+'">House / team name <span class="hint" style="font-weight:400">(optional)</span></label>'+
           '<input type="text" id="name'+i+'" autocomplete="off" placeholder="'+esc(col.house)+'"></div>'+
         '<div class="field"><label class="req" for="topic'+i+'">Specialist topic</label>'+
           '<input type="text" id="topic'+i+'" autocomplete="off" placeholder="e.g. The Wars of the Roses" aria-describedby="topic'+i+'-err">'+
@@ -473,7 +484,7 @@
   function renderTuning(){
     const o=state.opt;
     $('#difficulty').value=o.difficulty;$('#roast').value=o.roast;$('#era').value=o.era;
-    $('#tomsPenalty').value=o.tomsPenalty;$('#model').value=o.model;$('#banter').checked=!!o.banter;$('#roast').disabled=!o.banter;$('#zh').checked=!!o.zh;
+    $('#tomsPenalty').value=o.tomsPenalty;$('#model').value=o.model;$('#banter').checked=!!o.banter;$('#roast').disabled=!o.banter;$('#zh').checked=!!o.zh;$('#useHouses').checked=!!o.useHouses;
     $('#cExpert').value=o.cExpert=5;$('#cBuffer').value=o.cBuffer=0;$('#cFinal').value=o.cFinal;$('#cPeoples').value=o.cPeoples;
     $('#tomsTopic').value=state.tomsTopic;
   }
@@ -482,6 +493,7 @@
     Object.keys(map).forEach(id=>$('#'+id).addEventListener('change',e=>{snapshot();state.opt[map[id]]=e.target.value;saveSoon();renderPromptMeta();}));
     $('#banter').addEventListener('change',e=>{snapshot();state.opt.banter=e.target.checked;$('#roast').disabled=!e.target.checked;saveSoon();renderPromptMeta();});
     $('#zh').addEventListener('change',e=>{snapshot();state.opt.zh=e.target.checked;saveSoon();renderPromptMeta();});
+    $('#useHouses').addEventListener('change',e=>{snapshot();state.opt.useHouses=e.target.checked;setPalette();saveSoon();renderContestants();renderLegend();validateSetup();renderPromptMeta();});
     ['cExpert','cBuffer','cFinal','cPeoples'].forEach(id=>$('#'+id).addEventListener('input',e=>{
       let v=parseInt(e.target.value,10);if(isNaN(v))return;state.opt[id]=v;saveSoon();renderPromptMeta();}));
     $('#cExpert').addEventListener('change',snapshot);
@@ -509,7 +521,7 @@
     if(tte){tte.textContent=tmsg;tte.classList.toggle('show',!!tmsg);}
     tt.setAttribute('aria-invalid',tmsg?'true':'false');if(tmsg)errs.push(tmsg);
 
-    const complete=state.contestants.every(c=>c.name.trim()&&c.topic.trim())&&state.tomsTopic.trim();
+    const complete=state.contestants.every(c=>c.topic.trim())&&state.tomsTopic.trim();
     const ok=complete&&errs.length===0;
     $('#setupBadge').hidden=ok;
     $('#setupOk').classList.toggle('show',ok);
@@ -1084,11 +1096,11 @@
 
   /* ---------- LEGEND ---------- */
   function renderLegend(){
-    $('#legend').innerHTML=PCOLORS.map((c,i)=>'<span class="chip" style="--c:#'+c.hex+';--c-on:'+(c.hex==='B8860B'?'#1a1404':'#fff')+'">'+esc(c.house)+' House · '+esc(c.name)+'</span>').join('');
+    $('#legend').innerHTML=PCOLORS.map((c,i)=>'<span class="chip" style="--c:#'+c.hex+';--c-on:'+onColor(c.hex)+'">'+esc(c.house)+' House · '+esc(c.name)+'</span>').join('');
   }
 
   /* ---------- RENDER ALL ---------- */
-  function renderAll(){renderContestants();renderTuning();renderLegend();applyTheme();validateSetup();renderPromptMeta();setTab(state.ui.tab||'setup');}
+  function renderAll(){setPalette();renderContestants();renderTuning();renderLegend();applyTheme();validateSetup();renderPromptMeta();setTab(state.ui.tab||'setup');}
 
   /* ---------- INIT ---------- */
   function init(){
