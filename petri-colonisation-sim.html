@@ -1,0 +1,2082 @@
+<!DOCTYPE html>
+<html lang="en-AU" data-version="1.0.0">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="A deterministic, log-zoomable simulation of a swab-and-culture prac. Inoculate a virtual petri dish, then zoom from the whole 90 mm plate down to single dividing cells.">
+<meta property="og:title" content="Swab and Culture: a zoomable colony simulation">
+<meta property="og:description" content="Watch bacterial colonies grow over a simulated week, zooming across five orders of magnitude.">
+<meta property="og:type" content="website">
+<title>Swab and Culture: a zoomable colony simulation</title>
+<style>
+  /* ---- reset ---- */
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }   /* author display rules must not override the hidden attribute */
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+
+  /* ---- theme variables ---- */
+  :root {
+    --bg: #f3efe6;
+    --panel: #fbf8f1;
+    --panel-2: #efe9da;
+    --ink: #232019;
+    --ink-soft: #57513f;
+    --line: #d8d0bd;
+    --accent: #3a6a4f;
+    --accent-ink: #ffffff;
+    --warn: #9a4b2e;
+    --focus: #1d6fb8;
+    --agar: #e3d9b8;
+    --agar-edge: #cdbf96;
+    --shadow: 0 6px 22px rgba(40, 34, 20, 0.18);
+    --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+    --space-5: 24px; --space-6: 32px;
+    --radius: 12px;
+    --t-fast: .15s; --t-mid: .25s;
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  :root[data-theme="dark"] {
+    --bg: #16140f;
+    --panel: #211e17;
+    --panel-2: #2b271d;
+    --ink: #ece6d6;
+    --ink-soft: #b3ac98;
+    --line: #3a352a;
+    --accent: #6fae84;
+    --accent-ink: #11140f;
+    --warn: #e0936f;
+    --focus: #6fb6f0;
+    --agar: #b9ad88;
+    --agar-edge: #9c906c;
+    --shadow: 0 8px 26px rgba(0, 0, 0, 0.5);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: clamp(14px, 1.6vw, 16px);
+    line-height: 1.45;
+    overflow: hidden;
+    transition: background var(--t-mid), color var(--t-mid);
+  }
+  .app {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  /* ---- skip link ---- */
+  .skip {
+    position: absolute; left: 8px; top: -48px; z-index: 60;
+    background: var(--accent); color: var(--accent-ink);
+    padding: 8px 14px; border-radius: 8px; text-decoration: none;
+    transition: top var(--t-fast);
+  }
+  .skip:focus { top: 8px; }
+
+  /* ---- header ---- */
+  header.bar {
+    display: flex; align-items: center; gap: var(--space-3);
+    padding: var(--space-2) var(--space-4);
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    min-height: 52px;
+  }
+  header .title { font-weight: 650; font-size: clamp(15px, 1.8vw, 18px); letter-spacing: .2px; margin: 0; }
+  header .title small { font-weight: 500; color: var(--ink-soft); font-size: .72em; margin-inline-start: 6px; }
+  header .spacer { flex: 1; }
+  .iconbtn {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+    width: 40px; height: 40px; display: inline-grid; place-items: center;
+    font-size: 18px; transition: background var(--t-fast), transform var(--t-fast);
+  }
+  .iconbtn:hover { background: var(--line); }
+  .iconbtn:active { transform: scale(0.94); }
+
+  /* ---- stage ---- */
+  main.stage { position: relative; overflow: hidden; min-height: 0; }
+  canvas#view { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  canvas#view.grabbing { cursor: grabbing; }
+
+  /* HUD: clock + scale */
+  .hud {
+    position: absolute; top: var(--space-3); left: var(--space-3);
+    display: flex; flex-direction: column; gap: var(--space-2);
+    pointer-events: none; max-width: min(46ch, 70vw);
+  }
+  .chip {
+    background: color-mix(in srgb, var(--panel) 88%, transparent);
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: var(--space-2) var(--space-3); box-shadow: var(--shadow);
+    backdrop-filter: blur(4px);
+  }
+  .clock .age { font-size: clamp(18px, 3vw, 26px); font-weight: 650; font-variant-numeric: tabular-nums; }
+  .clock .meta { color: var(--ink-soft); font-size: .82em; }
+  .phasewrap { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+  .phasedot { width: 10px; height: 10px; border-radius: 50%; background: var(--ink-soft); flex: none; }
+  .phase-lag .phasedot { background: #9a8f6a; }
+  .phase-exponential .phasedot { background: #3a8f5a; }
+  .phase-plateau .phasedot { background: #9a4b2e; }
+  .scaleline { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+  .scaleline .ruler { height: 4px; background: var(--ink); border-radius: 2px; min-width: 30px; }
+  .notch-name { font-weight: 600; }
+
+  /* right info chips */
+  .hud-right {
+    position: absolute; top: var(--space-3); right: var(--space-3);
+    display: flex; flex-direction: column; gap: var(--space-2);
+    align-items: flex-end; pointer-events: none; max-width: 40vw;
+  }
+  .cfu { font-variant-numeric: tabular-nums; }
+  .cfu b { font-size: 1.15em; }
+
+  /* zoom rail */
+  .zoomrail {
+    position: absolute; right: var(--space-3); top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    background: color-mix(in srgb, var(--panel) 88%, transparent);
+    border: 1px solid var(--line); border-radius: 14px; padding: 10px 8px;
+    box-shadow: var(--shadow);
+  }
+  .zoomrail input[type=range] { writing-mode: vertical-lr; direction: rtl; width: 28px; height: clamp(120px, 28vh, 240px); }
+  .zoomrail .zbtn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); }
+  .notch-pips { display: flex; flex-direction: column; gap: 2px; font-size: .68em; color: var(--ink-soft); align-items: center; }
+
+  /* inspect (jump to feature) bar */
+  .inspect {
+    position: absolute; top: var(--space-3); left: 50%; transform: translateX(-50%); z-index: 20;
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center;
+    background: color-mix(in srgb, var(--panel) 90%, transparent);
+    border: 1px solid var(--line); border-radius: 999px; padding: 5px 8px;
+    box-shadow: var(--shadow); backdrop-filter: blur(4px); max-width: 92vw;
+  }
+  .inspect .ib-label { color: var(--ink-soft); font-size: .76em; padding-inline-start: 4px; }
+  .inspect button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 6px 11px; font-size: .8em; min-height: 34px; white-space: nowrap; transition: background var(--t-fast); }
+  .inspect button:hover { background: var(--line); }
+
+  /* legend (adapts to the current zoom level) */
+  .legend {
+    position: absolute; left: var(--space-3); bottom: var(--space-3); z-index: 20;
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    border: 1px solid var(--line); border-radius: 10px; padding: 8px 11px;
+    box-shadow: var(--shadow); backdrop-filter: blur(4px);
+    font-size: .8em; max-width: min(62vw, 300px); pointer-events: auto;
+    max-height: min(60vh, 440px); overflow-y: auto;
+  }
+  .legend .legend-title { font-weight: 600; margin-bottom: 5px; font-style: italic; }
+  .legend .learn-head { font-weight: 600; margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--line); }
+  .legend li.learn-row { display: block; }
+  .legend .learn-topic { display: block; }
+  .legend .links { display: flex; flex-wrap: wrap; gap: 5px; margin: 3px 0 4px; }
+  .legend .extlink { font-size: .9em; padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2); color: var(--accent); text-decoration: none; }
+  .legend .extlink:hover { background: var(--line); }
+  .legend ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+  .legend li { display: flex; align-items: center; gap: 8px; }
+  .legend li.text-only { padding-inline-start: 22px; color: var(--ink-soft); }
+  .legend .sw { width: 14px; height: 8px; border-radius: 3px; border: 1px solid rgba(0,0,0,.25); flex: none; }
+  .legend .sw.coccus { width: 11px; height: 11px; border-radius: 50%; }
+  .legend .sw.dot { width: 9px; height: 9px; border-radius: 50%; }
+
+  /* colony identify popover */
+  .identify {
+    position: absolute; z-index: 25; max-width: 30ch;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: var(--shadow); padding: var(--space-3); pointer-events: auto;
+  }
+  .identify h3 { margin: 0 0 4px; font-size: 1em; font-style: italic; }
+  .identify .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-inline-end: 6px; vertical-align: middle; border: 1px solid var(--line); }
+  .identify dl { margin: 6px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: .86em; }
+  .identify dt { color: var(--ink-soft); }
+  .identify dd { margin: 0; }
+  .identify .close { position: absolute; top: 6px; right: 6px; background: none; border: none; font-size: 16px; width: 26px; height: 26px; border-radius: 6px; }
+  .identify .close:hover { background: var(--panel-2); }
+
+  /* ---- bottom control bar ---- */
+  footer.controls {
+    background: var(--panel); border-top: 1px solid var(--line);
+    padding: var(--space-2) var(--space-4) calc(var(--space-2) + env(safe-area-inset-bottom));
+    display: grid; gap: var(--space-2);
+  }
+  .ctl-row { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+  .ctl-group { display: flex; align-items: center; gap: var(--space-2); }
+  .ctl-group > label { color: var(--ink-soft); font-size: .82em; white-space: nowrap; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .seg button { background: var(--panel-2); border: none; padding: 8px 12px; min-height: 40px; font-size: .86em; border-inline-start: 1px solid var(--line); }
+  .seg button:first-child { border-inline-start: none; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .scrub { flex: 1 1 260px; display: flex; align-items: center; gap: var(--space-2); min-width: 200px; }
+  .scrub input[type=range] { flex: 1; height: 40px; }
+  .scrub .val { font-variant-numeric: tabular-nums; color: var(--ink-soft); min-width: 9ch; text-align: right; font-size: .85em; }
+  .pill { background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; min-height: 40px; display: inline-flex; align-items: center; gap: 8px; font-size: .85em; }
+  .pill[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+  .temp { display: flex; align-items: center; gap: var(--space-2); flex: 1 1 280px; min-width: 220px; }
+  .temp input[type=range] { flex: 1; height: 40px; }
+  .temp .tval { font-variant-numeric: tabular-nums; min-width: 11ch; text-align: right; font-size: .85em; color: var(--ink-soft); }
+  .temp.locked input { opacity: .5; }
+  input[type=range] { accent-color: var(--accent); }
+  input[type=range]:disabled { cursor: not-allowed; }
+
+  /* ---- drawers / panels ---- */
+  .scrim { position: fixed; inset: 0; background: rgba(20,16,8,.42); z-index: 40; opacity: 0; pointer-events: none; transition: opacity var(--t-mid); }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .drawer {
+    position: fixed; top: 0; bottom: 0; right: 0; z-index: 50;
+    width: min(420px, 92vw); background: var(--panel); border-inline-start: 1px solid var(--line);
+    box-shadow: var(--shadow); transform: translateX(100%); transition: transform var(--t-mid) var(--ease-spring);
+    display: flex; flex-direction: column;
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer header { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-4); border-bottom: 1px solid var(--line); }
+  .drawer header h2 { margin: 0; font-size: 1.05em; }
+  .drawer .body { padding: var(--space-4); overflow: auto; }
+  .drawer .body h3 { font-size: .95em; margin: var(--space-4) 0 var(--space-2); }
+  .drawer .body h3:first-child { margin-top: 0; }
+  .drawer .body p { margin: 0 0 var(--space-3); color: var(--ink-soft); font-size: .9em; }
+  .field { display: grid; gap: 6px; margin-bottom: var(--space-4); }
+  .field > label { font-weight: 600; font-size: .9em; }
+  .field .hint { color: var(--ink-soft); font-size: .82em; }
+  .field input[type=text] { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-height: 44px; color: var(--ink); font: inherit; flex: 1 1 140px; min-width: 120px; letter-spacing: .04em; }
+  .field .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .timenote { color: var(--ink-soft); font-size: .85em; display: inline-flex; align-items: center; gap: 6px; }
+  .timenote::before { content: "●"; color: var(--accent); }
+  .switch { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .switch button { background: var(--panel-2); border: none; padding: 8px 12px; min-height: 40px; font-size: .86em; }
+  .switch button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .danger { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, var(--line)); }
+  .btn { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; min-height: 44px; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+  .btn:hover { filter: brightness(0.97); }
+
+  details.note { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin-bottom: var(--space-3); background: var(--panel-2); }
+  details.note summary { cursor: pointer; font-weight: 600; font-size: .9em; }
+  details.note p { margin: 8px 0 0; }
+
+  /* ---- population graphs ---- */
+  .graph-scrim { position: fixed; inset: 0; z-index: 65; background: rgba(20,16,8,.5); display: grid; place-items: center; padding: var(--space-4); }
+  .graph-panel { width: min(820px, 96vw); max-height: 92vh; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; }
+  .graph-panel header { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .graph-panel header h2 { margin: 0; font-size: 1.05em; }
+  .graph-body { padding: var(--space-3) var(--space-4) 0; }
+  #graphCanvas { width: 100%; height: min(46vh, 360px); display: block; }
+  .graph-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 8px var(--space-4) 0; font-size: .82em; }
+  .graph-legend .gl { display: inline-flex; align-items: center; gap: 6px; }
+  .graph-legend .gl .ln { width: 18px; height: 3px; border-radius: 2px; flex: none; }
+  .graph-note { margin: 0; padding: 8px var(--space-4) var(--space-4); color: var(--ink-soft); font-size: .8em; }
+
+  /* ---- setup overlay ---- */
+  .setup-scrim { position: fixed; inset: 0; z-index: 70; background: var(--bg); display: grid; place-items: center; padding: var(--space-4); overflow: auto; }
+  .setup-scrim[hidden] { display: none; }
+  .setup {
+    width: min(560px, 100%); background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow); padding: clamp(18px, 4vw, 30px);
+  }
+  .setup h1 { margin: 0 0 6px; font-size: clamp(20px, 4vw, 26px); }
+  .setup .lede { color: var(--ink-soft); margin: 0 0 var(--space-5); }
+  .surfaces { display: grid; gap: var(--space-2); grid-template-columns: 1fr; margin-bottom: var(--space-4); }
+  @media (min-width: 520px) { .surfaces { grid-template-columns: 1fr 1fr 1fr; } }
+  .surface {
+    text-align: start; border: 2px solid var(--line); background: var(--panel-2);
+    border-radius: 12px; padding: var(--space-3); display: grid; gap: 4px; min-height: 96px;
+    transition: border-color var(--t-fast), transform var(--t-fast);
+  }
+  .surface:hover { transform: translateY(-2px); }
+  .surface[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--panel-2)); }
+  .surface .emoji { font-size: 22px; }
+  .surface .name { font-weight: 650; }
+  .surface .desc { color: var(--ink-soft); font-size: .82em; }
+  .surface .load { font-size: .78em; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+  /* ---- toast ---- */
+  .toasts { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 80; display: flex; flex-direction: column-reverse; gap: 8px; align-items: center; pointer-events: none; width: max-content; max-width: 90vw; }
+  .toast { background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; box-shadow: var(--shadow); font-size: .88em; opacity: 0; transform: translateY(8px); transition: opacity var(--t-fast), transform var(--t-fast); pointer-events: auto; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* ---- status bar (within footer) ---- */
+  .status { display: flex; align-items: center; gap: 10px; color: var(--ink-soft); font-size: .78em; flex-wrap: wrap; }
+  .status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .status .saved { font-variant-numeric: tabular-nums; }
+  .status .grow { flex: 1; }
+
+  /* ---- help overlay ---- */
+  kbd { background: var(--panel-2); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 1px 7px; font-size: .85em; font-family: ui-monospace, Menlo, monospace; }
+  .help-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; font-size: .9em; }
+  .help-grid .k { text-align: end; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: .001ms !important; animation-duration: .001ms !important; }
+  }
+  @media (max-width: 560px) {
+    .zoomrail { top: auto; bottom: 96px; right: var(--space-2); transform: none; }
+    .zoomrail input[type=range] { height: clamp(90px, 20vh, 150px); }
+    .hud-right { max-width: 55vw; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#view">Skip to the dish</a>
+<div class="sr-only" aria-live="polite" id="srStatus"></div>
+
+<div class="app">
+  <header class="bar">
+    <h1 class="title">Swab and Culture <small>zoomable colony sim</small></h1>
+    <span class="spacer"></span>
+    <button class="iconbtn" id="btnGraphs" title="Population graphs" aria-label="Population graphs">📈</button>
+    <button class="iconbtn" id="btnIntegrity" title="What is real, what is simplified" aria-label="What is real, what is simplified">i</button>
+    <button class="iconbtn" id="btnHelp" title="Keyboard shortcuts and help" aria-label="Keyboard shortcuts and help">?</button>
+    <button class="iconbtn" id="btnTheme" title="Toggle light or dark" aria-label="Toggle light or dark theme">◐</button>
+    <button class="iconbtn" id="btnSettings" title="Settings" aria-label="Settings">⚙</button>
+  </header>
+
+  <main class="stage" id="view">
+    <canvas id="viewCanvas" tabindex="0" role="application" aria-label="Petri dish view. Use plus and minus to zoom, arrow keys to pan, Enter to identify the centred colony."></canvas>
+
+    <div class="hud">
+      <div class="chip clock" id="clockChip">
+        <div class="age" id="ageText" aria-live="off">0 h</div>
+        <div class="meta" id="clockMeta">Colony age</div>
+        <div class="phasewrap" id="phaseWrap">
+          <span class="phasedot"></span>
+          <span id="phaseText">lag phase</span>
+        </div>
+      </div>
+      <div class="chip scaleline">
+        <span class="notch-name" id="notchName">Dish</span>
+        <span class="ruler" id="rulerBar"></span>
+        <span id="rulerLabel">90 mm</span>
+      </div>
+    </div>
+
+    <div class="hud-right">
+      <div class="chip cfu" id="cfuChip">
+        <div><b id="cfuVisible">0</b> visible colonies</div>
+        <div style="color:var(--ink-soft);font-size:.82em" id="cfuTotal">of 0 founding cells</div>
+      </div>
+    </div>
+
+    <div class="zoomrail" role="group" aria-label="Zoom">
+      <button class="zbtn" id="zoomIn" aria-label="Zoom in">+</button>
+      <input type="range" id="zoomSlider" min="0" max="1000" value="60" aria-label="Zoom level" aria-valuetext="Dish view">
+      <button class="zbtn" id="zoomOut" aria-label="Zoom out">−</button>
+      <div class="notch-pips" aria-hidden="true">
+        <span>cell</span><span>·</span><span>·</span><span>dish</span>
+      </div>
+    </div>
+
+    <div class="identify" id="identify" hidden role="dialog" aria-label="Colony identification"></div>
+
+    <div class="inspect" id="inspectBar" role="group" aria-label="Jump to a feature" hidden>
+      <span class="ib-label">Inspect</span>
+      <button data-feat="colony">Whole colony</button>
+      <button data-feat="edge">Growing edge</button>
+      <button data-feat="centre">Dead centre</button>
+    </div>
+
+    <div class="legend" id="cellLegend" hidden role="group" aria-label="Zoom level legend">
+      <div class="legend-title" id="legendTitle">Legend</div>
+      <ul></ul>
+    </div>
+  </main>
+
+  <footer class="controls">
+    <div class="ctl-row">
+      <div class="ctl-group" id="speedGroup" role="group" aria-label="Time speed" hidden>
+        <label>Speed</label>
+        <div class="seg" id="speedSeg">
+          <button data-mult="1" aria-pressed="true">Observation</button>
+          <button data-mult="3600" aria-pressed="false">Demo</button>
+          <button data-mult="86400" aria-pressed="false">Fast</button>
+        </div>
+      </div>
+      <button class="pill" id="liveToggle" aria-pressed="true" title="Follow real elapsed time">● Live</button>
+      <div class="scrub" id="scrubGroup" hidden>
+        <label for="scrubSlider" style="color:var(--ink-soft);font-size:.82em">Scrub</label>
+        <input type="range" id="scrubSlider" min="0" max="168" step="0.25" value="0" aria-label="Scrub to a point in the week, hours">
+        <span class="val" id="scrubVal">live</span>
+      </div>
+      <span class="timenote" id="timeNote">Real time. Come back over the week to watch it change.</span>
+    </div>
+    <div class="ctl-row">
+      <div class="temp" id="tempWrap">
+        <label for="tempSlider" style="color:var(--ink-soft);font-size:.82em;white-space:nowrap">Incubate</label>
+        <input type="range" id="tempSlider" min="15" max="30" step="0.5" value="23" aria-label="Incubate, temperature in degrees Celsius">
+        <span class="tval" id="tempVal">23 °C</span>
+      </div>
+      <div class="status" id="statusBar">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusMsg">Ready</span>
+        <span class="grow"></span>
+        <span class="saved" id="savedAt"></span>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- integrity drawer -->
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="integrityDrawer" role="dialog" aria-label="What is real, what is simplified" aria-modal="false">
+  <header>
+    <h2>What is real, what is simplified</h2>
+    <span class="spacer" style="flex:1"></span>
+    <button class="iconbtn" data-close aria-label="Close">✕</button>
+  </header>
+  <div class="body">
+    <p>This is a teaching model. The growth is honest in shape and order of magnitude, but several numbers are defaults, not measured constants for this dish.</p>
+    <h3>The plate is a biased subset, not a census</h3>
+    <p>Standard media classically recover near 1 percent of the cells actually present. Many environmental cells are viable but do not grow on this agar, so the dish under counts and over represents the easy growers.</p>
+    <h3>Room temperature, never 37 degrees</h3>
+    <p>Incubation here runs from 15 to 30 degrees. A 37 degree incubator would select for organisms that grow at body temperature, including potential human pathogens, so schools avoid it. That is why 37 is marked off on the temperature control.</p>
+    <h3>Radial rate is an order of magnitude default</h3>
+    <p>Colony radius grows at roughly 1 mm per day for bacteria. That figure is rounded from lab strains on defined agar. Mixed flora at room temperature are not well quantified, so treat it as a defensible default.</p>
+    <h3>The spreading mechanism is still being researched</h3>
+    <p>The model uses the observed fact that radius grows in a straight line over time. Whether that is driven by nutrient diffusion or by mechanical verticalisation of interior cells is an open question. Only the phenomenon is simulated.</p>
+    <h3>What-if temperature</h3>
+    <p>In what-if mode the slider reshapes the whole week from a single constant temperature. A real incubator's past would not change retroactively, so this is a thought experiment, not a record.</p>
+    <h3>Counting</h3>
+    <p>One colony grows from one founding cell, which is the basis of colony forming unit counting. A colony becomes a naked eye dot only once it holds millions of cells, so nothing is visible for about the first day even though division is well underway.</p>
+  </div>
+</aside>
+
+<!-- settings drawer -->
+<aside class="drawer" id="settingsDrawer" role="dialog" aria-label="Settings" aria-modal="false">
+  <header>
+    <h2>Settings</h2>
+    <span class="spacer" style="flex:1"></span>
+    <button class="iconbtn" data-close aria-label="Close">✕</button>
+  </header>
+  <div class="body">
+    <div class="field">
+      <label for="teacherCode">Teacher access</label>
+      <div class="row">
+        <input type="text" id="teacherCode" placeholder="Enter code" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="unlockHint">
+        <button class="btn" id="unlockBtn">Unlock</button>
+      </div>
+      <span class="hint" id="unlockHint">Time scrubbing and fast-forward are locked. Students watch in real time and return over the week. Enter the teacher code to unlock the speed and scrub controls.</span>
+    </div>
+    <div class="field">
+      <label>Temperature mode</label>
+      <div class="switch" id="tempModeSwitch" role="group" aria-label="Temperature mode">
+        <button data-mode="fixed" aria-pressed="true">Fixed</button>
+        <button data-mode="whatif" aria-pressed="false">What-if</button>
+      </div>
+      <span class="hint">Fixed locks the incubation temperature for the run, like a real incubator. What-if lets you drag the temperature any time and instantly reshape the whole week.</span>
+    </div>
+    <div class="field">
+      <label>Theme</label>
+      <div class="switch" id="themeSwitch" role="group" aria-label="Theme">
+        <button data-theme="light" aria-pressed="true">Light</button>
+        <button data-theme="dark" aria-pressed="false">Dark</button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="kSlider">Cells per colony at plateau (carrying capacity)</label>
+      <input type="range" id="kSlider" min="6" max="8" step="0.1" value="7" aria-label="Carrying capacity, log base 10 of cells">
+      <span class="hint" id="kHint">1e7 cells. Spans 1e6 to 1e8 depending on species and colony size.</span>
+    </div>
+    <div class="field">
+      <label>Start over</label>
+      <button class="btn danger" id="resetBtn">Discard this dish and inoculate a new one</button>
+      <span class="hint" id="resetHint">This clears the saved dish.</span>
+    </div>
+    <details class="note">
+      <summary>About</summary>
+      <p>Swab and Culture, version 1.0.0. A deterministic, closed form simulation. State is a maths function of elapsed time, a fixed seed, and the per colony parameters, so closing the tab and returning later shows real progress.</p>
+    </details>
+  </div>
+</aside>
+
+<!-- help drawer -->
+<aside class="drawer" id="helpDrawer" role="dialog" aria-label="Help and shortcuts" aria-modal="false">
+  <header>
+    <h2>Help and shortcuts</h2>
+    <span class="spacer" style="flex:1"></span>
+    <button class="iconbtn" data-close aria-label="Close">✕</button>
+  </header>
+  <div class="body">
+    <p>Swab a surface, then watch colonies grow over a simulated week. Zoom continuously from the whole dish down to single cells.</p>
+    <h3>Zoom levels</h3>
+    <div class="help-grid">
+      <span class="k">Dish</span><span>The 90 mm plate. Coloured colonies on agar.</span>
+      <span class="k">Cluster</span><span>One colony, its form, margin, elevation and colour.</span>
+      <span class="k">Microcolony</span><span>Packed cells, a dense growing edge and a starving centre.</span>
+      <span class="k">Single cell</span><span>A few cells dividing, taking up nutrient, excreting waste, dying.</span>
+    </div>
+    <h3>Keyboard</h3>
+    <div class="help-grid">
+      <span class="k"><kbd>+</kbd> <kbd>−</kbd></span><span>Zoom in and out</span>
+      <span class="k"><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd></span><span>Pan</span>
+      <span class="k"><kbd>Space</kbd></span><span>Pause or resume the clock</span>
+      <span class="k"><kbd>L</kbd></span><span>Return to live time</span>
+      <span class="k"><kbd>?</kbd></span><span>This help</span>
+      <span class="k"><kbd>Esc</kbd></span><span>Close a panel</span>
+    </div>
+    <h3>Reading the dish honestly</h3>
+    <p>Nothing is visible for about the first day. Colonies become naked eye dots near 24 to 48 hours, reach final size over a few days, and moulds appear later and overgrow. Use the integrity panel for what is real and what is simplified.</p>
+  </div>
+</aside>
+
+<!-- population graphs -->
+<div class="graph-scrim" id="graphScrim" hidden>
+  <div class="graph-panel" role="dialog" aria-label="Population over time" aria-modal="true">
+    <header>
+      <h2>Population over time</h2>
+      <span style="flex:1"></span>
+      <div class="switch" id="graphModes" role="group" aria-label="Graph mode">
+        <button data-mode="overview" aria-pressed="true">Living, dead, net</button>
+        <button data-mode="species" aria-pressed="false">By species</button>
+      </div>
+      <button class="iconbtn" id="graphClose" aria-label="Close graphs">✕</button>
+    </header>
+    <div class="graph-body">
+      <canvas id="graphCanvas"></canvas>
+    </div>
+    <div class="graph-legend" id="graphLegend"></div>
+    <p class="graph-note">A bacterial growth curve: lag, rapid growth, a plateau, then a death phase as nutrient runs out and waste builds up. The lines fill in up to the current time, and the dashed line marks now. Counts are a model, not a measurement.</p>
+  </div>
+</div>
+
+<!-- setup overlay -->
+<div class="setup-scrim" id="setupScrim">
+  <div class="setup" role="dialog" aria-label="Set up the experiment" aria-modal="true">
+    <h1>Swab a surface</h1>
+    <p class="lede">Pick where the swab came from. A dirtier, higher touch surface transfers more colony forming units, so more colonies will appear.</p>
+    <div class="surfaces" id="surfaces" role="group" aria-label="Surface">
+      <button class="surface" data-surface="clean" aria-pressed="false">
+        <span class="emoji" aria-hidden="true">🧼</span>
+        <span class="name">Freshly wiped bench</span>
+        <span class="desc">Low touch, just cleaned</span>
+        <span class="load">tens of CFU</span>
+      </button>
+      <button class="surface" data-surface="dirty" aria-pressed="true">
+        <span class="emoji" aria-hidden="true">🚪</span>
+        <span class="name">Door handle</span>
+        <span class="desc">Shared, high touch</span>
+        <span class="load">hundreds to thousands</span>
+      </button>
+      <button class="surface" data-surface="phone" aria-pressed="false">
+        <span class="emoji" aria-hidden="true">📱</span>
+        <span class="name">Phone screen</span>
+        <span class="desc">Skin and pocket flora</span>
+        <span class="load">hundreds</span>
+      </button>
+    </div>
+
+    <div class="field" id="setupTempField">
+      <label for="setupTemp">Incubation temperature</label>
+      <input type="range" id="setupTemp" min="15" max="30" step="0.5" value="23">
+      <span class="hint" id="setupTempHint">23 °C, room temperature. Schools stay at or below 30 and never use 37, which would favour pathogens. Warmer means faster growth.</span>
+    </div>
+
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:8px">
+      <button class="btn primary" id="inoculateBtn">Inoculate the dish</button>
+      <span class="hint" style="color:var(--ink-soft);font-size:.84em">Then watch, or come back tomorrow.</span>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+"use strict";
+(function () {
+  // =====================================================================
+  // 1. CONFIG  (SIM_DEFAULTS, verbatim from the technical model, section 11)
+  // =====================================================================
+  const SIM_DEFAULTS = {
+    timeMultiplier: 3600,            // sim seconds per real second. 3600 = 1 real s -> 1 sim h
+    dishDiameter_mm: 90,
+    surface: 'dirty',
+    inoculum: { clean: [10, 60], dirty: [200, 3000], phone: [120, 700] },
+    bacteria: {
+      g_min_37C: 30, Q10: 2, T_ref_C: 37, T_incubate_C: 23,
+      v_r_mm_per_h: 0.043, r_max_mm: [0.5, 2.5], K_cells: 1e7, t_lag_h: [2, 6]
+    },
+    mould: { v_r_mm_per_h: [0.21, 0.63], appear_after_h: [24, 72], r_max_mm: 35, probability: 0.05 },
+    speciesWeights: {
+      Staphylococcus_epidermidis: 0.30, Micrococcus_luteus: 0.25, Bacillus: 0.18,
+      Staphylococcus_aureus: 0.07, other_CoNS: 0.15, mould: 0.05
+    }
+  };
+
+  const DISH_R = SIM_DEFAULTS.dishDiameter_mm / 2;   // 45 mm
+  const DETECT_CELLS = 5e6;                          // naked-eye detection threshold (section 7.4)
+
+  // Per organism look and growth (generation times from section 4.1; morphology from 7.2/7.3).
+  const ORGANISMS = {
+    Staphylococcus_epidermidis: { label: 'Staphylococcus epidermidis', kind: 'bacteria', shape: 'coccus', colour: '#ece6d2', g: 30, vr: 0.043, rmax: [0.5, 1.4], K: 1.0e7, form: 'circular', margin: 'entire', elevation: 'convex', source: 'a common skin commensal' },
+    Micrococcus_luteus:        { label: 'Micrococcus luteus',        kind: 'bacteria', shape: 'coccus', colour: '#f0cf3a', g: 90, vr: 0.030, rmax: [0.4, 1.1], K: 8.0e6, form: 'circular', margin: 'entire', elevation: 'convex', source: 'skin and airborne dust, a slow grower' },
+    Bacillus:                  { label: 'Bacillus sp.',              kind: 'bacteria', shape: 'rod',    colour: '#d7d0ba', g: 25, vr: 0.058, rmax: [1.0, 2.5], K: 2.0e7, form: 'irregular', margin: 'undulate', elevation: 'raised', source: 'soil and the environment' },
+    Staphylococcus_aureus:     { label: 'Staphylococcus aureus',     kind: 'bacteria', shape: 'coccus', colour: '#d8a23a', g: 28, vr: 0.046, rmax: [0.6, 1.8], K: 1.2e7, form: 'circular', margin: 'entire', elevation: 'convex', source: 'skin and nasal flora' },
+    other_CoNS:                { label: 'Coagulase-negative staphylococci', kind: 'bacteria', shape: 'coccus', colour: '#e0dbc8', g: 35, vr: 0.040, rmax: [0.5, 1.4], K: 9.0e6, form: 'circular', margin: 'entire', elevation: 'convex', source: 'skin commensals' }
+  };
+  const MOULDS = [
+    { label: 'Penicillium sp.',  colour: '#6f8f57', source: 'airborne mould spores' },
+    { label: 'Aspergillus sp.',  colour: '#3a3a34', source: 'airborne mould spores' },
+    { label: 'Cladosporium sp.', colour: '#5d5a39', source: 'airborne mould spores' }
+  ];
+  // species weights with mould removed and renormalised, used when the mould cap is reached
+  const BACTERIA_WEIGHTS = {
+    Staphylococcus_epidermidis: 0.316, Micrococcus_luteus: 0.263, Bacillus: 0.189,
+    Staphylococcus_aureus: 0.074, other_CoNS: 0.158
+  };
+
+  // =====================================================================
+  // 2. DETERMINISTIC PRNG  (all randomness flows from the stored seed)
+  // =====================================================================
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function hash2(a, b) {
+    let h = 2166136261 >>> 0;
+    h = Math.imul(h ^ (a >>> 0), 16777619);
+    h = Math.imul(h ^ (b >>> 0), 16777619);
+    return h >>> 0;
+  }
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  function smoothstep(a, b, x) { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  // =====================================================================
+  // 3 + 4 + 5. ENGINE  (pure, closed form, evaluated at any sim time)
+  // =====================================================================
+  // Growth rate from generation time with Q10 temperature scaling (section 4).
+  function rAtTemp(g_min_37C, T) {
+    const rRef = Math.LN2 / (g_min_37C / 60);            // per hour at 37 C
+    return rRef * Math.pow(SIM_DEFAULTS.bacteria.Q10, (T - SIM_DEFAULTS.bacteria.T_ref_C) / 10);
+  }
+  // Logistic population per colony (section 3).
+  function population(c, t, T) {
+    if (t <= c.tlag) return 1;
+    const r = rAtTemp(c.g, T);
+    const K = c.K, N0 = 1;
+    return K / (1 + ((K - N0) / N0) * Math.exp(-r * (t - c.tlag)));
+  }
+  // Colony radius in mm (section 5): linear radial expansion after lag, capped at r_max.
+  // Bacteria additionally emerge sub-mm and grow into that size as the cell count climbs, so a
+  // colony does not pop into view already at full size; the cell count, not the clock, sets when
+  // it becomes a visible dot (section 7.4). Moulds stay time-linear, visible by their spreading mat.
+  function radiusMm(c, t, T) {
+    if (t <= c.tlag) return 0;
+    const cap = Math.min(c.rmax, c.rterr || Infinity);     // territorial cap (A): fronts meet and stop
+    if (c.kind === 'mould') return Math.min(c.vr * (t - c.tlag), cap);
+    const te = (c.tInhib && c.tInhib !== Infinity) ? Math.min(t, c.tInhib) : t;   // growth halts in a mould zone (C)
+    const linear = Math.min(c.vr * (te - c.tlag), cap);
+    const env = Math.pow(clamp(population(c, te, T) / c.K, 0, 1), 0.6);
+    return linear * env;
+  }
+  // Viable (living) cells: the logistic, then a death phase as nutrient runs out and waste builds up.
+  // The growth curve students learn: lag, log, stationary, death. Macro rendering still uses the
+  // logistic (total biomass) for size; living/dead are used by the population graphs.
+  function liveCells(c, t, T) {
+    const n = population(c, t, T);
+    const td = c.tlag + c.deathOnset;
+    const base = (t <= td) ? n : n * Math.pow(0.5, (t - td) / c.deathHalf);
+    return base * inhibFactor(c, t);   // mould antibiosis also kills nearby bacteria (shows in the graph)
+  }
+  // Cumulative dead = cells produced (the logistic plateau) minus those still viable.
+  function deadCells(c, t, T) { return Math.max(0, population(c, t, T) - liveCells(c, t, T)); }
+
+  // Mould antibiosis (C): a bacterial colony inside a mould's spreading inhibition zone is
+  // suppressed and cleared. c.tInhib is the closed-form time the zone reaches it (set at seeding).
+  function inhibFactor(c, t) {
+    if (!c.tInhib || c.tInhib === Infinity || t <= c.tInhib) return 1;
+    return Math.exp(-(t - c.tInhib) / 30);   // clears over ~30 h once the zone arrives
+  }
+
+  // Growth phase label.
+  function phaseOf(c, t, T) {
+    if (t <= c.tlag) return 'lag';                   // before measurable growth
+    const f = population(c, t, T) / c.K;
+    if (f > 0.9) return 'plateau';                   // saturated near carrying capacity
+    return 'exponential';                            // actively growing
+  }
+  // L0 visibility: bacteria gate on cell count near the detection threshold; mould on size.
+  function l0Visibility(c, t, T) {
+    if (c.kind === 'mould') return smoothstep(0.15, 0.6, 2 * radiusMm(c, t, T));
+    return smoothstep(DETECT_CELLS * 0.6, DETECT_CELLS * 1.6, population(c, t, T)) * inhibFactor(c, t);
+  }
+  // Doubling time, minutes, at a temperature (for the UI readout).
+  function doublingMins(T) { return (Math.LN2 / rAtTemp(SIM_DEFAULTS.bacteria.g_min_37C, T)) * 60; }
+
+  // =====================================================================
+  // 6. SEEDING  (CFU based, species weighted; section 6)
+  // =====================================================================
+  function pickWeighted(rng, weights) {
+    const r = rng(); let acc = 0;
+    for (const k in weights) { acc += weights[k]; if (r <= acc) return k; }
+    return Object.keys(weights)[0];
+  }
+  function rngRange(rng, a, b) { return a + (b - a) * rng(); }
+
+  function inoculumCount(rng, surface) {
+    const range = SIM_DEFAULTS.inoculum[surface] || SIM_DEFAULTS.inoculum.dirty;
+    const n = Math.round(rngRange(rng, range[0], range[1]));
+    return clamp(n, 1, 2000);   // soft cap for rendering
+  }
+
+  function buildColony(rng, seed, i, type, Kscale) {
+    // position: uniform within dish, biased a touch toward a streak path for realism
+    const ang = rng() * Math.PI * 2;
+    const rad = Math.sqrt(rng()) * DISH_R * 0.93;
+    const x = Math.cos(ang) * rad, y = Math.sin(ang) * rad;
+    if (type === 'mould') {
+      const m = MOULDS[Math.floor(rng() * MOULDS.length)];
+      return {
+        i, x, y, type: 'mould', kind: 'mould', shape: 'coccus', label: m.label, colour: m.colour, source: m.source,
+        form: 'filamentous', margin: 'filiform', elevation: 'flat',
+        g: 60, vr: rngRange(rng, SIM_DEFAULTS.mould.v_r_mm_per_h[0], SIM_DEFAULTS.mould.v_r_mm_per_h[1]),
+        rmax: SIM_DEFAULTS.mould.r_max_mm * rngRange(rng, 0.8, 1.0),
+        // appearance biased toward the later end of the 24 to 72 h window so bacteria lead and
+        // moulds emerge and overgrow over days 3 to 7, matching the timeline
+        K: 1e8, deathOnset: 1e9, deathHalf: 1e9,   // mould keeps spreading across the week, no death phase modelled
+        tlag: SIM_DEFAULTS.mould.appear_after_h[0] + (SIM_DEFAULTS.mould.appear_after_h[1] - SIM_DEFAULTS.mould.appear_after_h[0]) * Math.sqrt(rng()),
+        seed: hash2(seed, i + 7919), hue: rngRange(rng, -0.06, 0.06)
+      };
+    }
+    const o = ORGANISMS[type];
+    // r_max drawn with a bias toward the smaller end (most colonies stay small, a few grow large)
+    const rmax = lerp(o.rmax[0], o.rmax[1], Math.pow(rng(), 1.8));
+    return {
+      i, x, y, type, kind: 'bacteria', shape: o.shape, label: o.label, colour: o.colour, source: o.source,
+      form: o.form, margin: o.margin, elevation: o.elevation,
+      g: o.g * rngRange(rng, 0.92, 1.12),
+      vr: o.vr * rngRange(rng, 0.85, 1.15),
+      rmax: rmax,
+      K: o.K * Kscale * rngRange(rng, 0.7, 1.5),
+      tlag: rngRange(rng, SIM_DEFAULTS.bacteria.t_lag_h[0], SIM_DEFAULTS.bacteria.t_lag_h[1]),
+      deathOnset: rngRange(rng, 84, 156),   // hours after lag before the viable count starts to fall
+      deathHalf: rngRange(rng, 48, 110),    // half-life of the death phase, hours
+      seed: hash2(seed, i + 104729), hue: rngRange(rng, -0.05, 0.05)
+    };
+  }
+
+  // A. Territorial capping: each bacterial colony's radius is capped so its front meets the nearest
+  // neighbour's front at the growth-rate-weighted midpoint and stops, rather than overlapping.
+  // Deterministic (positions only), computed once at seeding via a spatial grid.
+  function computeTerritories(colonies) {
+    const cell = 6;                                  // mm grid
+    const grid = new Map();
+    const key = (gx, gy) => gx + ',' + gy;
+    const bacteria = [];
+    for (const c of colonies) {
+      if (c.kind !== 'bacteria') { c.rterr = Infinity; continue; }   // moulds overgrow, not capped
+      bacteria.push(c);
+      const k = key(Math.floor(c.x / cell), Math.floor(c.y / cell));
+      (grid.get(k) || grid.set(k, []).get(k)).push(c);
+    }
+    for (const c of bacteria) {
+      const gx = Math.floor(c.x / cell), gy = Math.floor(c.y / cell);
+      let cap = c.rmax;
+      for (let ix = gx - 1; ix <= gx + 1; ix++) {
+        for (let iy = gy - 1; iy <= gy + 1; iy++) {
+          const arr = grid.get(key(ix, iy)); if (!arr) continue;
+          for (const o of arr) {
+            if (o === c) continue;
+            const d = Math.hypot(o.x - c.x, o.y - c.y);
+            const share = d * c.vr / (c.vr + o.vr);  // rate-weighted share of the gap
+            if (share < cap) cap = share;
+          }
+        }
+      }
+      c.rterr = Math.max(cap, 0.05);
+    }
+  }
+
+  // C. Mould inhibition zones (antibiosis): for each bacterial colony, the closed-form time at which
+  // the nearest mould's spreading front plus a clear halo reaches it. Mould radius is linear in time,
+  // so the onset time inverts directly. After it, the bacterium is suppressed and clears.
+  function computeInhibition(colonies) {
+    const halo = 2.5;                                // mm clear zone beyond the mould edge
+    const moulds = colonies.filter(c => c.kind === 'mould');
+    for (const c of colonies) {
+      c.tInhib = Infinity;
+      if (c.kind !== 'bacteria' || !moulds.length) continue;
+      let best = Infinity;
+      for (const m of moulds) {
+        if (m.vr <= 0) continue;
+        const d = Math.hypot(m.x - c.x, m.y - c.y);
+        if (d > m.rmax + halo) continue;             // this mould never reaches it
+        const ti = m.tlag + Math.max(0, d - halo) / m.vr;
+        if (ti < best) best = ti;
+      }
+      c.tInhib = best;
+    }
+  }
+
+  // Reconstruct the full colony array from seed + surface deterministically (section 2.3 intent).
+  function seedDish(seed, surface, Kscale) {
+    const rng = mulberry32(seed);
+    const n = inoculumCount(rng, surface);
+    const maxMoulds = Math.min(4, Math.max(1, Math.round(n / 500)));   // a few spores landed, not 5% of every CFU
+    const colonies = [];
+    let mouldCount = 0;
+    for (let i = 0; i < n; i++) {
+      let type = pickWeighted(rng, SIM_DEFAULTS.speciesWeights);
+      if (type === 'mould') {
+        if (mouldCount >= maxMoulds) type = pickWeighted(rng, BACTERIA_WEIGHTS);   // cap reached, seed bacteria instead
+        else mouldCount++;
+      }
+      colonies.push(buildColony(rng, seed, i, type, Kscale));
+    }
+    // Guarantee at least one mould so the late overgrowth is always demonstrable.
+    if (mouldCount === 0 && colonies.length) {
+      const idx = Math.floor(rng() * colonies.length);
+      colonies[idx] = buildColony(rng, seed, idx, 'mould', Kscale);
+    }
+    computeTerritories(colonies);   // A: colony-vs-colony boundaries
+    computeInhibition(colonies);    // C: mould antibiosis zones
+    return { n, colonies };
+  }
+
+  // =====================================================================
+  // 5b. PERSISTENCE  (localStorage, one versioned JSON blob)
+  // =====================================================================
+  const STORAGE_KEY = 'bactsim.dish';
+  const SCHEMA_VERSION = 1;
+  let saveTimer = null;
+
+  function loadState() {
+    let raw;
+    try { raw = window.localStorage.getItem(STORAGE_KEY); }
+    catch (e) { return null; }                       // storage disabled
+    if (!raw) return null;
+    try {
+      const d = JSON.parse(raw);
+      if (!d || d.schemaVersion !== SCHEMA_VERSION) return null;
+      // a real dish always has a positive inoculation timestamp
+      if (typeof d.t_inoculation_wall !== 'number' || d.t_inoculation_wall <= 0) return null;
+      if (typeof d.seed !== 'number') return null;
+      return d;
+    } catch (e) { return null; }
+  }
+  function persist() {
+    if (!S.tInoc) return;                            // no dish inoculated yet, nothing to save
+    const d = {
+      schemaVersion: SCHEMA_VERSION,
+      t_inoculation_wall: S.tInoc,
+      seed: S.seed,
+      surface_type: S.surface,
+      time_multiplier: S.multiplier,
+      incubation_temp_C: S.temp,
+      temp_mode: S.tempMode,
+      theme: S.theme,
+      kScale: S.kScale,
+      unlocked: S.unlocked,
+      sim_anchor_hours: S.simAnchorHours,
+      sim_anchor_wall: S.simAnchorWall
+    };
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(d));
+      S.lastSaved = Date.now();
+      setSaved();
+    } catch (e) { /* quota or disabled: keep running in memory */ }
+  }
+  function scheduleSave() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(persist, 500);            // debounce
+  }
+
+  // =====================================================================
+  // STATE
+  // =====================================================================
+  const S = {
+    tInoc: 0, seed: 0, surface: 'dirty',
+    multiplier: SIM_DEFAULTS.timeMultiplier,
+    temp: 23, tempMode: 'fixed',
+    theme: 'light', kScale: 1, unlocked: false,
+    colonies: [], n: 0,
+    // view
+    live: true, paused: false, scrubT: null, pausedT: 0,
+    simAnchorHours: 0, simAnchorWall: 0,   // accumulated sim-hours + wall time at the last speed change
+    fov: 110, camX: 0, camY: 0, focus: null, focusOffX: 0, focusOffY: 0,
+    lastSaved: 0,
+    egg: false
+  };
+
+  // =====================================================================
+  // CANVAS + CAMERA
+  // =====================================================================
+  const canvas = document.getElementById('viewCanvas');
+  const ctx = canvas.getContext('2d');
+  let cssW = 0, cssH = 0, dpr = 1;
+
+  function resize() {
+    const stage = document.querySelector('.stage');
+    cssW = stage.clientWidth; cssH = stage.clientHeight;
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  const FOV_MAX = 110, FOV_MIN = 0.004;              // mm. 110 mm dish down to a 4 micron close-up, ~4.4 orders
+  function pxPerMm() { return Math.min(cssW, cssH) / S.fov; }   // fit to the smaller dimension so the whole dish shows
+  function worldToScreen(xmm, ymm) {
+    const p = pxPerMm();
+    return [cssW / 2 + (xmm - S.camX) * p, cssH / 2 + (ymm - S.camY) * p];
+  }
+  function screenToWorld(sx, sy) {
+    const p = pxPerMm();
+    return [(sx - cssW / 2) / p + S.camX, (sy - cssH / 2) / p + S.camY];
+  }
+  // zoom value 0..1 (slider 0..1000) maps log-linearly to field of view
+  function zoomToFov(z) { return FOV_MAX * Math.pow(FOV_MIN / FOV_MAX, z); }
+  function fovToZoom(fov) { return Math.log(fov / FOV_MAX) / Math.log(FOV_MIN / FOV_MAX); }
+
+  // layer weights from field of view (log centred gaussians), normalised
+  const NOTCH = [
+    { key: 'l0', name: 'Dish',        c: Math.log10(60) },
+    { key: 'l1', name: 'Cluster',     c: Math.log10(4) },
+    { key: 'l2', name: 'Microcolony', c: Math.log10(0.1) },
+    { key: 'l3', name: 'Single cell', c: Math.log10(0.012) }   // ~12 micron field holding a handful of ~1 micron cells
+  ];
+  const SIGMA = 0.72;
+  function layerAlphas(fov) {
+    const lf = Math.log10(fov);
+    const w = NOTCH.map(nch => Math.exp(-Math.pow((lf - nch.c) / SIGMA, 2)));
+    const sum = w.reduce((a, b) => a + b, 0) || 1;
+    const out = {}; NOTCH.forEach((nch, k) => out[nch.key] = w[k] / sum);
+    let bi = 0; for (let k = 1; k < w.length; k++) if (w[k] > w[bi]) bi = k;
+    out.dominant = NOTCH[bi];
+    return out;
+  }
+
+  // pick the colony nearest the camera centre as the zoom focus, preferring
+  // colonies that have actually emerged so we never dive into an invisible seed
+  function nearestColony(x, y) {
+    const t = simHours(), T = S.temp;
+    let best = null, bd = Infinity, anyBest = null, anyBd = Infinity;
+    for (const c of S.colonies) {
+      const d = (c.x - x) * (c.x - x) + (c.y - y) * (c.y - y);
+      if (d < anyBd) { anyBd = d; anyBest = c; }
+      if (radiusMm(c, t, T) > 0 && d < bd) { bd = d; best = c; }
+    }
+    return best || anyBest;
+  }
+
+  // =====================================================================
+  // TIME
+  // =====================================================================
+  // Live sim time accumulates so that a speed change folds prior elapsed time at the OLD
+  // multiplier and continues at the new one, with no discontinuous jump and no dependence on
+  // a single multiplier spanning the whole run. This keeps reload reconstruction exact.
+  function liveHours() {
+    return S.simAnchorHours + (Date.now() - S.simAnchorWall) / 3.6e6 * S.multiplier;
+  }
+  function simHours() {
+    if (S.scrubT !== null) return S.scrubT;          // scrubbing is a non-destructive preview
+    if (S.paused) return S.pausedT;                  // paused freezes the displayed time
+    return liveHours();
+  }
+  // change speed without jumping the clock: bank the elapsed time at the old multiplier first
+  function setMultiplier(m) {
+    S.simAnchorHours = liveHours();
+    S.simAnchorWall = Date.now();
+    S.multiplier = m;
+  }
+  function fmtAge(h) {
+    if (h < 1) return Math.round(h * 60) + ' min';
+    if (h < 48) return h.toFixed(1) + ' h';
+    return (h / 24).toFixed(1) + ' days';
+  }
+  function inocDateStr() {
+    if (!S.tInoc) return '';
+    try { return new Intl.DateTimeFormat('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(S.tInoc)); }
+    catch (e) { return ''; }
+  }
+  function capitalise(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+
+  // =====================================================================
+  // RENDER
+  // =====================================================================
+  // theme colours are cached so the render loop never calls getComputedStyle per frame
+  let themeBg = '#000', themeAgarFill = '#000', themeAgarEdge = '#000';
+  function refreshThemeColours() {
+    const cs = getComputedStyle(document.documentElement);
+    themeBg = cs.getPropertyValue('--bg').trim();
+    themeAgarFill = cs.getPropertyValue('--agar').trim();
+    themeAgarEdge = cs.getPropertyValue('--agar-edge').trim();
+  }
+  function agarColour() { return { fill: themeAgarFill, edge: themeAgarEdge }; }
+
+  // clip subsequent drawing to the agar circle so colonies (and fast moulds) stop at the dish wall
+  function clipToDish() {
+    const [cx, cy] = worldToScreen(0, 0);
+    const R = DISH_R * pxPerMm();
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip();
+  }
+
+  // specimen label written on the plate, like a marker note: surface swabbed and the date
+  function drawSpecimenLabel(alpha) {
+    if (S.fov <= 22 || !S.tInoc) return;               // only at the dish overview
+    const [lx, ly] = worldToScreen(0, DISH_R * 0.8);
+    if (ly < -20 || ly > cssH + 20) return;
+    const fs = clamp(2.7 * pxPerMm(), 9, 46);
+    const text = capitalise(surfaceName(S.surface)) + '   ·   ' + inocDateStr();
+    ctx.save();
+    ctx.font = '600 ' + fs + 'px -apple-system, system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const w = ctx.measureText(text).width, h = fs * 1.5, padX = fs * 0.55;
+    ctx.globalAlpha = clamp(alpha, 0, 1) * 0.5;             // light backing so it reads over dark colonies
+    ctx.fillStyle = 'rgba(250,247,238,0.9)';
+    roundRect(lx - w / 2 - padX, ly - h / 2, w + padX * 2, h, h / 2); ctx.fill();
+    ctx.globalAlpha = clamp(alpha, 0, 1) * 0.82;
+    ctx.fillStyle = '#2c2010';
+    ctx.fillText(text, lx, ly);
+    ctx.restore();
+  }
+
+  function drawDish(t, T) {
+    // agar disc in world coordinates, with an inverted plate look and lid condensation
+    const [cx, cy] = worldToScreen(0, 0);
+    const R = DISH_R * pxPerMm();
+    const ag = agarColour();
+    ctx.save();
+    // plate rim shadow
+    ctx.beginPath(); ctx.arc(cx, cy, R * 1.02, 0, Math.PI * 2);
+    ctx.fillStyle = ag.edge; ctx.fill();
+    // agar body with a soft dome gradient
+    const g = ctx.createRadialGradient(cx - R * 0.25, cy - R * 0.3, R * 0.1, cx, cy, R);
+    g.addColorStop(0, ag.fill);
+    g.addColorStop(0.82, ag.fill);
+    g.addColorStop(1, ag.edge);
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fillStyle = g; ctx.fill();
+    // clip to dish for condensation
+    ctx.clip();
+    // lid condensation: deterministic droplets near the top, drawn faint
+    const rng = mulberry32(hash2(S.seed, 555));
+    ctx.globalAlpha = 0.5;
+    for (let i = 0; i < 26; i++) {
+      const dx = (rng() * 2 - 1) * R * 0.9;
+      const dy = -R * 0.25 + (rng() * 2 - 1) * R * 0.55;
+      const rr = (0.3 + rng() * 0.8) * R * 0.01;
+      ctx.beginPath(); ctx.arc(cx + dx, cy + dy, rr, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  // draw all colonies as discs / morphology, LOD by on screen size
+  function drawColonies(t, T, alpha) {
+    const p = pxPerMm();
+    for (const c of S.colonies) {
+      const vis = l0Visibility(c, t, T);
+      if (vis < 0.012) continue;
+      const radMm = radiusMm(c, t, T);
+      if (radMm <= 0) continue;
+      const [sx, sy] = worldToScreen(c.x, c.y);
+      const r = radMm * p;
+      if (sx < -r - 4 || sx > cssW + r + 4 || sy < -r - 4 || sy > cssH + r + 4) continue;
+      ctx.globalAlpha = vis * alpha;
+      if (c.kind === 'mould') drawMould(c, sx, sy, r, t, T);
+      else if (r < 6) drawDot(c, sx, sy, r);
+      else drawRichColony(c, sx, sy, r, t, T);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawDot(c, sx, sy, r) {
+    ctx.beginPath(); ctx.arc(sx, sy, Math.max(0.6, r), 0, Math.PI * 2);
+    ctx.fillStyle = c.colour; ctx.fill();
+  }
+
+  function drawRichColony(c, sx, sy, r, t, T) {
+    const rng = mulberry32(c.seed);
+    // irregular margin for some forms
+    const lobes = c.margin === 'entire' ? 0 : (c.form === 'irregular' ? 10 : 14);
+    ctx.beginPath();
+    if (lobes === 0) {
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    } else {
+      const steps = 48;
+      for (let i = 0; i <= steps; i++) {
+        const a = i / steps * Math.PI * 2;
+        const wob = 1 + Math.sin(a * lobes + c.seed % 6) * 0.06 + (rng() - 0.5) * 0.04;
+        const px = sx + Math.cos(a) * r * wob, py = sy + Math.sin(a) * r * wob;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+    }
+    ctx.closePath();
+    // elevation shading: convex/umbonate get a domed highlight
+    const dome = c.elevation === 'flat' ? 0.0 : (c.elevation === 'raised' ? 0.25 : 0.5);
+    const g = ctx.createRadialGradient(sx - r * 0.3, sy - r * 0.3, r * 0.1, sx, sy, r);
+    g.addColorStop(0, shade(c.colour, 0.18 * (0.5 + dome)));
+    g.addColorStop(0.7, c.colour);
+    g.addColorStop(1, shade(c.colour, -0.16));
+    ctx.fillStyle = g; ctx.fill();
+    // central death zone tint once plateaued and large
+    if (phaseOf(c, t, T) === 'plateau' && r > 14) {
+      ctx.beginPath(); ctx.arc(sx, sy, r * 0.45, 0, Math.PI * 2);
+      ctx.fillStyle = shade(c.colour, -0.28); ctx.globalAlpha *= 0.55; ctx.fill(); ctx.globalAlpha /= 0.55;
+    }
+    // glossy highlight for shiny colonies
+    if (c.elevation !== 'flat') {
+      ctx.beginPath(); ctx.arc(sx - r * 0.32, sy - r * 0.34, r * 0.18, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.fill();
+    }
+  }
+
+  function drawMould(c, sx, sy, r, t, T) {
+    const rng = mulberry32(c.seed);
+    // zone of inhibition (antibiosis): faint clear halo just outside the mould where bacteria clear
+    const haloPx = 2.5 * pxPerMm();
+    if (haloPx > 3) {
+      const gh = ctx.createRadialGradient(sx, sy, r * 0.8, sx, sy, r + haloPx);
+      gh.addColorStop(0, 'rgba(244,239,224,0)');
+      gh.addColorStop(0.5, 'rgba(244,239,224,0.13)');
+      gh.addColorStop(1, 'rgba(244,239,224,0)');
+      ctx.beginPath(); ctx.arc(sx, sy, r + haloPx, 0, Math.PI * 2); ctx.fillStyle = gh; ctx.fill();
+    }
+    // fuzzy filamentous body: layered translucent blobs with radiating hyphae
+    const g = ctx.createRadialGradient(sx, sy, r * 0.1, sx, sy, r);
+    g.addColorStop(0, shade(c.colour, 0.2));
+    g.addColorStop(0.55, c.colour);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+    // hyphal fringe
+    if (r > 8) {
+      ctx.strokeStyle = shade(c.colour, -0.05); ctx.globalAlpha *= 0.5; ctx.lineWidth = Math.max(0.5, r * 0.01);
+      const spokes = 60;
+      for (let i = 0; i < spokes; i++) {
+        const a = (i / spokes) * Math.PI * 2 + rng() * 0.1;
+        const len = r * (0.9 + rng() * 0.28);
+        ctx.beginPath(); ctx.moveTo(sx + Math.cos(a) * r * 0.6, sy + Math.sin(a) * r * 0.6);
+        ctx.lineTo(sx + Math.cos(a) * len, sy + Math.sin(a) * len); ctx.stroke();
+      }
+      ctx.globalAlpha /= 0.5;
+    }
+  }
+
+  // L2: microcolony cross-section, packed cells with a dense growing edge and starving core
+  function drawMicrocolony(focus, t, T, alpha) {
+    if (!focus) return;
+    const [cx, cy] = worldToScreen(focus.x, focus.y);
+    const radMm = Math.max(radiusMm(focus, t, T), 0.02);
+    const R = radMm * pxPerMm();
+    const ph = phaseOf(focus, t, T);
+    const rng = mulberry32(hash2(focus.seed, 22));
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    // base density gradient: bright dense rim, darker centre
+    const g = ctx.createRadialGradient(cx, cy, R * 0.05, cx, cy, R);
+    const coreDark = ph === 'plateau' ? -0.45 : (ph === 'exponential' ? -0.22 : -0.05);
+    g.addColorStop(0, shade(focus.colour, coreDark));
+    g.addColorStop(0.6, shade(focus.colour, -0.05));
+    g.addColorStop(0.92, shade(focus.colour, 0.12));
+    g.addColorStop(1, shade(focus.colour, -0.1));
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+    // sprinkle representative cells, denser at the rim
+    const cellPx = Math.max(1.4, 0.001 * pxPerMm());   // ~1 micron cells
+    const target = clamp(Math.floor((R * R) / 90), 60, 1400);
+    ctx.clip();
+    for (let i = 0; i < target; i++) {
+      const a = rng() * Math.PI * 2;
+      const rr = Math.sqrt(rng()) * R;                 // uniform area
+      // bias a few more toward the rim (active growth)
+      const rim = rr > R * 0.82;
+      const px = cx + Math.cos(a) * rr, py = cy + Math.sin(a) * rr;
+      let col;
+      if (rr < R * 0.4 && ph === 'plateau') col = 'rgba(40,30,22,0.55)';     // dying core
+      else if (rim) col = shade(focus.colour, 0.22);                          // bright edge
+      else col = shade(focus.colour, (rng() - 0.5) * 0.2);
+      ctx.beginPath(); ctx.arc(px, py, cellPx * (0.7 + rng() * 0.6), 0, Math.PI * 2);
+      ctx.fillStyle = col; ctx.fill();
+    }
+    ctx.restore();
+    // growing edge ring label
+    ctx.globalAlpha = alpha * 0.9;
+    ctx.strokeStyle = shade(focus.colour, 0.3); ctx.lineWidth = Math.max(1, R * 0.02);
+    ctx.beginPath(); ctx.arc(cx, cy, R * 0.97, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // L3: single-cell agent model (section 8). Stepped only while visible.
+  const Agents = {
+    cells: [], nutrient: [], waste: [], inited: false, forSeed: null, last: 0,
+    init(focus, ph) {
+      this.cells = []; this.nutrient = []; this.waste = []; this.forSeed = focus ? focus.seed : 0;
+      this.isRod = !!(focus && focus.shape === 'rod');   // every cell in a colony shares its species shape
+      const rng = mulberry32(hash2(this.forSeed, 99));
+      const start = ph === 'lag' ? 3 : 6;
+      for (let i = 0; i < start; i++) {
+        this.cells.push(this.makeCell((rng() - 0.5) * 6, (rng() - 0.5) * 6, rng));
+      }
+      this.inited = true;
+    },
+    makeCell(x, y, rng) {
+      return { x, y, size: 0.5 + rng() * 0.4, state: 'growing', nutrient: 1, ang: rng() * Math.PI * 2, rod: this.isRod };
+    },
+    step(dt, focus, ph) {
+      if (!focus) return;
+      if (!this.inited || this.forSeed !== focus.seed) this.init(focus, ph);
+      const rng = mulberry32(hash2(focus.seed, (simHours() * 60 | 0)));   // sim-time keyed, not wall clock
+      const cap = ph === 'lag' ? 8 : (ph === 'exponential' ? 26 : 22);
+      const coreR = 5;                                 // microns; interior beyond this starves at plateau
+      for (const c of this.cells) {
+        const dist = Math.hypot(c.x, c.y);
+        // determine state from position and macro phase
+        if (ph === 'plateau' && dist < coreR * 0.7) c.state = 'dying';
+        else if (dist < coreR * 1.05 && ph !== 'lag' && rng() < 0.02) c.state = 'nutrient_limited';
+        else if (c.state !== 'dying' && c.state !== 'nutrient_limited') c.state = (c.size > 1.5 ? 'dividing' : 'growing');
+
+        if (c.state === 'growing') {
+          c.size += dt * (0.18 + rng() * 0.04);
+          if (rng() < 0.5) this.nutrient.push({ x: c.x + (rng() - 0.5) * 10, y: c.y + (rng() - 0.5) * 10, tx: c.x, ty: c.y, life: 1 });
+        } else if (c.state === 'dividing') {
+          if (this.cells.length < cap) {
+            const nx = c.x + Math.cos(c.ang) * 1.8, ny = c.y + Math.sin(c.ang) * 1.8;
+            const d = this.makeCell(nx, ny, rng); d.size = 0.6;
+            this.cells.push(d);
+            c.size = 0.7; c.x -= Math.cos(c.ang) * 0.8; c.y -= Math.sin(c.ang) * 0.8;
+            this.waste.push({ x: c.x, y: c.y, vx: (rng() - 0.5) * 4, vy: (rng() - 0.5) * 4, life: 1 });
+          }
+          c.state = 'growing';
+        } else if (c.state === 'dying') {
+          c.size = Math.max(0.3, c.size - dt * 0.1);
+        }
+      }
+      // recover an occasional limited cell when young
+      if (ph === 'exponential') for (const c of this.cells) if (c.state === 'nutrient_limited' && rng() < 0.01) c.state = 'growing';
+      // advance particles
+      for (const n of this.nutrient) { n.x += (n.tx - n.x) * dt * 1.6; n.y += (n.ty - n.y) * dt * 1.6; n.life -= dt * 0.7; }
+      for (const w of this.waste) { w.x += w.vx * dt; w.y += w.vy * dt; w.life -= dt * 0.5; }
+      this.nutrient = this.nutrient.filter(n => n.life > 0).slice(-45);
+      this.waste = this.waste.filter(w => w.life > 0).slice(-45);
+    },
+    draw(focus, alpha) {
+      if (!focus) return;
+      const [cx, cy] = worldToScreen(focus.x, focus.y);
+      const sc = 0.001 * pxPerMm();                    // px per micron (cell coords are in microns)
+      const colMap = { growing: focus.colour, dividing: shade(focus.colour, 0.3), nutrient_limited: '#b98b3e', dying: '#6c5132' };
+      ctx.save(); ctx.globalAlpha = alpha;
+      // faint nutrient haze around the cluster
+      const haze = ctx.createRadialGradient(cx, cy, 0, cx, cy, 12 * sc + 30);
+      haze.addColorStop(0, 'rgba(120,150,110,0.12)'); haze.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = haze; ctx.fillRect(0, 0, cssW, cssH);
+      // nutrient particles being drawn in toward cells (small green specks, distinct from cells)
+      for (const n of this.nutrient) {
+        ctx.globalAlpha = alpha * clamp(n.life, 0, 1) * 0.9;
+        ctx.beginPath(); ctx.arc(cx + n.x * sc, cy + n.y * sc, Math.max(1.2, 0.2 * sc), 0, Math.PI * 2);
+        ctx.fillStyle = '#5f8f4e'; ctx.fill();
+      }
+      // waste particles drifting out (small brown specks)
+      for (const w of this.waste) {
+        ctx.globalAlpha = alpha * clamp(w.life, 0, 1) * 0.55;
+        ctx.beginPath(); ctx.arc(cx + w.x * sc, cy + w.y * sc, Math.max(1, 0.17 * sc), 0, Math.PI * 2);
+        ctx.fillStyle = '#9a6b4a'; ctx.fill();
+      }
+      ctx.globalAlpha = alpha;
+      // cells, sized in microns: rods ~2 microns long, cocci ~1 micron across
+      for (const c of this.cells) {
+        const px = cx + c.x * sc, py = cy + c.y * sc;
+        const grow = 0.55 + c.size * 0.5;
+        const halfL = (c.rod ? 1.0 : 0.55) * grow * sc;
+        const halfW = (c.rod ? 0.42 : 0.55) * grow * sc;
+        ctx.save(); ctx.translate(px, py); ctx.rotate(c.ang);
+        ctx.fillStyle = colMap[c.state] || focus.colour;
+        roundRect(-halfL, -halfW, halfL * 2, halfW * 2, Math.min(halfL, halfW));
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.22)'; ctx.lineWidth = Math.max(0.5, 0.06 * sc); ctx.stroke();
+        ctx.restore();
+      }
+      ctx.restore(); ctx.globalAlpha = 1;
+    }
+  };
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // colour helper: lighten (>0) or darken (<0) a hex colour
+  function shade(hex, amt) {
+    const h = hex.replace('#', '');
+    let r = parseInt(h.substring(0, 2), 16), g = parseInt(h.substring(2, 4), 16), b = parseInt(h.substring(4, 6), 16);
+    if (amt >= 0) { r = r + (255 - r) * amt; g = g + (255 - g) * amt; b = b + (255 - b) * amt; }
+    else { r = r * (1 + amt); g = g * (1 + amt); b = b * (1 + amt); }
+    return 'rgb(' + (r | 0) + ',' + (g | 0) + ',' + (b | 0) + ')';
+  }
+
+  // =====================================================================
+  // MAIN LOOP
+  // =====================================================================
+  let lastFrame = 0;
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastFrame) / 1000) || 0.016;
+    lastFrame = now;
+    const t = simHours();
+    const T = S.temp;
+    const al = layerAlphas(S.fov);
+
+    // L0/L1 pan freely and the focus follows screen centre; the micro layers (L2/L3)
+    // lock the camera onto the focus colony so the cross-section and cells stay centred.
+    if (S.fov < 30) {
+      if (!S.focus) S.focus = nearestColony(S.camX, S.camY);   // may still be null on an empty dish
+      if (S.focus && S.fov < 0.6) { S.camX = S.focus.x + S.focusOffX; S.camY = S.focus.y + S.focusOffY; }
+      else if (S.focus) { S.focus = nearestColony(S.camX, S.camY); S.focusOffX = 0; S.focusOffY = 0; }
+    } else {
+      S.focus = null; S.focusOffX = 0; S.focusOffY = 0;
+    }
+
+    ctx.clearRect(0, 0, cssW, cssH);
+    // background
+    ctx.fillStyle = themeBg; ctx.fillRect(0, 0, cssW, cssH);
+
+    // macro view (dish + colonies) covers L0 and L1 continuously
+    const macroAlpha = clamp(al.l0 + al.l1, 0, 1);
+    if (macroAlpha > 0.01) {
+      ctx.globalAlpha = 1;
+      drawDish(t, T);
+      ctx.save(); clipToDish(); drawColonies(t, T, macroAlpha); ctx.restore();  // colonies cannot spill past the agar
+      drawSpecimenLabel(macroAlpha);
+    }
+    // micro layers for the focus colony
+    if (al.l2 > 0.01) drawMicrocolony(S.focus, t, T, clamp(al.l2 * 1.2, 0, 1));
+    if (al.l3 > 0.01) {
+      if (!S.paused) Agents.step(dt, S.focus, phaseOf(S.focus || { tlag: 0, g: 30, K: 1e7 }, t, T));
+      Agents.draw(S.focus, clamp(al.l3 * 1.2, 0, 1));
+    }
+
+    updateHUD(t, T, al);
+    requestAnimationFrame(frame);
+  }
+
+  // =====================================================================
+  // HUD / UI UPDATES
+  // =====================================================================
+  const el = (id) => document.getElementById(id);
+  function updateHUD(t, T, al) {
+    el('ageText').textContent = fmtAge(Math.max(0, t));
+    el('clockMeta').textContent = S.scrubT !== null ? 'Scrubbed time' : (S.paused ? 'Paused' : 'Colony age');
+    // dominant phase across visible colonies (use the focus or the median)
+    const ph = S.focus ? phaseOf(S.focus, t, T) : medianPhase(t, T);
+    const pw = el('phaseWrap');
+    pw.className = 'phasewrap phase-' + ph;
+    el('phaseText').textContent = ph + ' phase';
+    if (ph !== lastPhaseAnnounced) { lastPhaseAnnounced = ph; el('srStatus').textContent = 'Now in ' + ph + ' phase'; }
+    // notch + ruler
+    el('notchName').textContent = al.dominant.name;
+    updateRuler();
+    // CFU
+    let visible = 0;
+    for (const c of S.colonies) if (l0Visibility(c, t, T) > 0.5) visible++;
+    el('cfuVisible').textContent = visible.toLocaleString('en-AU');
+    el('cfuTotal').textContent = 'of ' + S.n.toLocaleString('en-AU') + ' founding cells';
+
+    updateLegend(al);
+  }
+
+  // legend adapts to the current zoom level: dish (none), colony morphology, microcolony zones, single cells
+  function legendItem(swStyle, swClass, text) {
+    const li = document.createElement('li');
+    if (swStyle === null) { li.className = 'text-only'; li.textContent = text; }
+    else {
+      const sp = document.createElement('span'); sp.className = 'sw' + (swClass ? ' ' + swClass : '');
+      sp.style.background = swStyle; li.appendChild(sp);
+      li.appendChild(document.createTextNode(' ' + text));
+    }
+    return li;
+  }
+  // external reference links (open in a new tab, no referrer leak)
+  function extChip(label, href, title) {
+    const a = document.createElement('a');
+    a.className = 'extlink'; a.textContent = label; a.href = href;
+    a.target = '_blank'; a.rel = 'noopener noreferrer'; if (title) a.title = title;
+    return a;
+  }
+  function learnRow(topicText, query, chatPrompt) {
+    const li = document.createElement('li'); li.className = 'learn-row';
+    const t = document.createElement('span'); t.className = 'learn-topic'; t.textContent = topicText; li.appendChild(t);
+    const links = document.createElement('span'); links.className = 'links';
+    const q = encodeURIComponent(query);
+    links.appendChild(extChip('wiki', 'https://en.wikipedia.org/w/index.php?search=' + q, 'Wikipedia: ' + query));
+    links.appendChild(extChip('images', 'https://www.google.com/search?tbm=isch&q=' + q, 'Image search'));
+    links.appendChild(extChip('video', 'https://www.youtube.com/results?search_query=' + q, 'YouTube'));
+    links.appendChild(extChip('search', 'https://www.google.com/search?q=' + q, 'Google'));
+    links.appendChild(extChip('ask AI', 'https://chatgpt.com/?q=' + encodeURIComponent(chatPrompt), 'Ask ChatGPT'));
+    li.appendChild(links);
+    return li;
+  }
+  let lastLegendSig = '';
+  function updateLegend(al) {
+    const legend = el('cellLegend');
+    const key = al.dominant.key;
+    if (key === 'l0') { if (!legend.hidden) { legend.hidden = true; } lastLegendSig = ''; return; }
+    const f = S.focus;
+    const sig = key + '|' + (f ? f.seed : 'none');
+    if (sig === lastLegendSig && !legend.hidden) return;
+    lastLegendSig = sig; legend.hidden = false;
+    const title = el('legendTitle');
+    const ul = legend.querySelector('ul');
+    ul.textContent = '';
+    const col = f ? f.colour : '#cdab5a';
+    if (key === 'l1') {
+      title.textContent = f ? f.label : 'One colony';
+      ul.appendChild(legendItem(col, null, 'This whole shape is one colony'));
+      if (f) {
+        ul.appendChild(legendItem(null, null, 'Form: ' + f.form));
+        ul.appendChild(legendItem(null, null, 'Edge: ' + f.margin));
+        ul.appendChild(legendItem(null, null, 'Profile: ' + f.elevation));
+        ul.appendChild(legendItem(null, null, f.kind === 'mould' ? 'Fuzzy, spreading mould' : 'Smooth bacteria'));
+      }
+    } else if (key === 'l2') {
+      title.textContent = 'Inside the colony';
+      ul.appendChild(legendItem(shade(col, 0.22), null, 'Bright rim, the growing edge'));
+      ul.appendChild(legendItem(col, null, 'Packed living cells'));
+      ul.appendChild(legendItem(shade(col, -0.42), null, 'Dark centre, starving and dying'));
+    } else {
+      const rod = f && f.shape === 'rod';
+      title.textContent = f ? f.label + (rod ? ', rods' : ', round cocci') : 'Single cells';
+      ul.appendChild(legendItem(col, rod ? null : 'coccus', 'Growing cell'));
+      ul.appendChild(legendItem(shade(col, 0.3), rod ? null : 'coccus', 'Dividing in two'));
+      ul.appendChild(legendItem('#b98b3e', null, 'Nutrient limited'));
+      ul.appendChild(legendItem('#6c5132', null, 'Dying, starved core'));
+      ul.appendChild(legendItem('#5f8f4e', 'dot', 'Nutrient, taken in'));
+      ul.appendChild(legendItem('#9a6b4a', 'dot', 'Waste out: CO2, water, acids'));
+      const lh = document.createElement('li'); lh.className = 'learn-head'; lh.textContent = 'Learn more'; ul.appendChild(lh);
+      const sp = f ? f.label : 'bacteria';
+      ul.appendChild(learnRow(sp, sp, 'Explain ' + sp + ' for a high school biology student: where it is found, its cell shape, and whether it is usually harmful.'));
+      ul.appendChild(learnRow('Waste: CO2, water, acids', 'bacterial waste products carbon dioxide water organic acids respiration fermentation', 'As bacteria grow on nutrient agar, what waste do they release, including carbon dioxide, water and organic acids, and how does it lower the pH and form a dying core?'));
+      ul.appendChild(learnRow('Nutrient agar', 'nutrient agar microbiology growth medium', 'What is nutrient agar, what is it made from, and why is it used to grow bacterial colonies in a petri dish?'));
+    }
+  }
+  function medianPhase(t, T) {
+    let lag = 0, ex = 0, pl = 0;
+    for (const c of S.colonies) { const p = phaseOf(c, t, T); if (p === 'lag') lag++; else if (p === 'exponential') ex++; else pl++; }
+    if (ex >= lag && ex >= pl) return 'exponential';
+    if (pl >= lag) return 'plateau';
+    return 'lag';
+  }
+  function updateRuler() {
+    // choose a tidy ruler length close to ~22% of the view width
+    const targetMm = S.fov * 0.22;
+    const nice = niceNumber(targetMm);
+    const px = nice * pxPerMm();
+    el('rulerBar').style.width = clamp(px, 16, cssW * 0.4) + 'px';
+    el('rulerLabel').textContent = fmtMm(nice);
+  }
+  function niceNumber(x) {
+    const e = Math.pow(10, Math.floor(Math.log10(x)));
+    const f = x / e;
+    const nf = f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10;
+    return nf * e;
+  }
+  function fmtMm(mm) {
+    if (mm >= 1) return (Number.isInteger(mm) ? mm : mm.toFixed(1)) + ' mm';
+    if (mm >= 0.001) return Math.round(mm * 1000) + ' µm';
+    return Math.round(mm * 1e6) + ' nm';
+  }
+
+  let lastPhaseAnnounced = '';
+  function setStatus(msg) { el('statusMsg').textContent = msg; el('srStatus').textContent = msg; }
+  function setSaved() {
+    if (!S.lastSaved) return;
+    el('savedAt').textContent = 'Saved';
+  }
+
+  // =====================================================================
+  // TOASTS
+  // =====================================================================
+  function toast(msg) {
+    const wrap = el('toasts');
+    const t = document.createElement('div');
+    t.className = 'toast'; t.textContent = msg;
+    wrap.appendChild(t);
+    requestAnimationFrame(() => t.classList.add('show'));
+    while (wrap.children.length > 3) wrap.removeChild(wrap.firstChild);
+    setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 250); }, 3600);
+  }
+
+  // =====================================================================
+  // CONTROLS WIRING
+  // =====================================================================
+  function setZoomFromFov() {
+    el('zoomSlider').value = Math.round(fovToZoom(S.fov) * 1000);
+    el('zoomSlider').setAttribute('aria-valuetext', layerAlphas(S.fov).dominant.name + ' view');
+  }
+  function setFov(fov, anchorSx, anchorSy, snap) {
+    fov = clamp(fov, FOV_MIN, FOV_MAX);
+    if (anchorSx != null) {
+      const [wx, wy] = screenToWorld(anchorSx, anchorSy);
+      S.fov = fov;
+      const [nx, ny] = screenToWorld(anchorSx, anchorSy);
+      S.camX += wx - nx; S.camY += wy - ny;
+    } else {
+      S.fov = fov;
+    }
+    // zooming in past the dish lands on the nearest emerged colony; snap recentres on it
+    // so the slider, buttons and keys reliably dive into a colony, not into an agar gap
+    if (S.fov < 30) {
+      const f = nearestColony(S.camX, S.camY);
+      if (f) { S.focus = f; if (snap) { S.camX = f.x; S.camY = f.y; } }
+    } else if (S.fov > 45) { S.focus = null; }
+    setZoomFromFov();
+  }
+
+  // jump the camera to an interesting part of the focused colony
+  function inspectFeature(which) {
+    const c = S.focus || nearestColony(S.camX, S.camY);
+    if (!c) { toast('No colony to inspect yet. Let some colonies appear first.'); return; }
+    S.focus = c; hideIdentify();
+    const R = Math.max(radiusMm(c, simHours(), S.temp), 0.04);
+    if (which === 'colony') {
+      S.focusOffX = 0; S.focusOffY = 0;
+      S.camX = c.x; S.camY = c.y;
+      S.fov = clamp(R * 4.5, 0.7, 14);                 // L1: the whole colony
+    } else {
+      S.fov = clamp(R * 0.5, 0.05, 0.35);              // L2: in among the cells
+      if (which === 'edge') { S.focusOffX = R * 0.92; S.focusOffY = 0; }   // the growing rim
+      else { S.focusOffX = 0; S.focusOffY = 0; }                          // the dying centre
+    }
+    setZoomFromFov();
+  }
+  el('inspectBar').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) inspectFeature(b.dataset.feat); });
+
+  el('zoomSlider').addEventListener('input', (e) => {
+    const z = e.target.value / 1000;
+    setFov(zoomToFov(z), null, null, true);
+  });
+  el('zoomIn').addEventListener('click', () => setFov(S.fov * 0.6, null, null, true));
+  el('zoomOut').addEventListener('click', () => setFov(S.fov / 0.6, null, null, true));
+
+  // wheel zoom around cursor
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const f = Math.exp(e.deltaY * 0.0014);
+    setFov(S.fov * f, e.clientX - rect.left, e.clientY - rect.top);
+  }, { passive: false });
+
+  // pointer drag to pan; pinch to zoom
+  const pointers = new Map();
+  let pinchDist = 0, dragged = false, downAt = null;
+  canvas.addEventListener('pointerdown', (e) => {
+    canvas.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    dragged = false; downAt = { x: e.clientX, y: e.clientY };
+    canvas.classList.add('grabbing');
+    if (pointers.size === 2) { const p = [...pointers.values()]; pinchDist = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y); }
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    const prev = pointers.get(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) {
+      const p = [...pointers.values()];
+      const d = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+      const rect = canvas.getBoundingClientRect();
+      const mx = (p[0].x + p[1].x) / 2 - rect.left, my = (p[0].y + p[1].y) / 2 - rect.top;
+      if (pinchDist > 0) setFov(S.fov * (pinchDist / d), mx, my);
+      pinchDist = d; dragged = true;
+      return;
+    }
+    const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+    if (Math.abs(e.clientX - downAt.x) + Math.abs(e.clientY - downAt.y) > 4) dragged = true;
+    if (S.fov < 0.6 && S.focus) {                      // micro scale: roam within the focus colony
+      S.focusOffX -= dx / pxPerMm(); S.focusOffY -= dy / pxPerMm();
+    } else {
+      S.camX -= dx / pxPerMm(); S.camY -= dy / pxPerMm();
+      if (S.fov < 30) S.focus = nearestColony(S.camX, S.camY);
+    }
+  });
+  function endPointer(e) {
+    if (pointers.has(e.pointerId)) pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinchDist = 0;
+    if (pointers.size === 0) canvas.classList.remove('grabbing');
+  }
+  canvas.addEventListener('pointerup', (e) => {
+    if (!dragged) handleClick(e);
+    endPointer(e);
+  });
+  canvas.addEventListener('pointercancel', endPointer);
+
+  // click a colony: identify and focus
+  function handleClick(e) {
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+    const [wx, wy] = screenToWorld(sx, sy);
+    const t = simHours(), T = S.temp;
+    // find a colony under the cursor (visible ones first)
+    let hit = null, hd = Infinity;
+    for (const c of S.colonies) {
+      const radMm = Math.max(radiusMm(c, t, T), S.fov * 0.01);
+      const d = Math.hypot(c.x - wx, c.y - wy);
+      if (d < radMm * 1.3 && d < hd && l0Visibility(c, t, T) > 0.2) { hd = d; hit = c; }
+    }
+    if (hit) {
+      S.focus = hit; S.camX = hit.x; S.camY = hit.y;   // centre it so a zoom dives into this colony
+      showIdentify(hit, sx, sy, t, T);
+    } else hideIdentify();
+  }
+
+  let identifyReturnFocus = null;
+  function showIdentify(c, sx, sy, t, T) {
+    const box = el('identify');
+    box.innerHTML = '';
+    const close = document.createElement('button'); close.className = 'close'; close.textContent = '✕';
+    close.setAttribute('aria-label', 'Close'); close.addEventListener('click', hideIdentify);
+    const h = document.createElement('h3'); h.textContent = c.label;
+    const sw = document.createElement('span'); sw.className = 'swatch'; sw.style.background = c.colour;
+    h.prepend(sw);
+    const dl = document.createElement('dl');
+    const rows = [
+      ['Type', c.kind === 'mould' ? 'Mould' : 'Bacteria'],
+      ['Form', c.form + ', ' + c.margin + ' margin'],
+      ['Elevation', c.elevation],
+      ['Diameter', fmtMm(2 * radiusMm(c, t, T))],
+      ['Cells', c.kind === 'mould' ? 'a filamentous mat' : approxCells(population(c, t, T))],
+      ['Usually from', c.source]
+    ];
+    for (const [k, v] of rows) {
+      const dt2 = document.createElement('dt'); dt2.textContent = k;
+      const dd = document.createElement('dd'); dd.textContent = v;
+      dl.appendChild(dt2); dl.appendChild(dd);
+    }
+    box.appendChild(close); box.appendChild(h); box.appendChild(dl);
+    box.hidden = false;
+    // position near the click, kept on screen
+    const bw = 240, bh = 200;
+    box.style.left = clamp(sx + 14, 8, cssW - bw - 8) + 'px';
+    box.style.top = clamp(sy + 14, 8, cssH - bh - 8) + 'px';
+    // move focus into the dialog so keyboard and screen-reader users can read and dismiss it
+    identifyReturnFocus = document.activeElement;
+    box.tabIndex = -1; box.focus();
+    el('srStatus').textContent = c.label + ', ' + (c.kind === 'mould' ? 'mould' : 'bacteria') + ', usually from ' + c.source;
+  }
+  function hideIdentify() {
+    el('identify').hidden = true;
+    if (identifyReturnFocus && identifyReturnFocus.focus) { identifyReturnFocus.focus(); }
+    identifyReturnFocus = null;
+  }
+  function approxCells(n) {
+    if (n < 1000) return Math.round(n) + ' cells';
+    if (n < 1e6) return (n / 1e3).toFixed(0) + ' thousand';
+    if (n < 1e9) return (n / 1e6).toFixed(1) + ' million';
+    return (n / 1e9).toFixed(1) + ' billion';
+  }
+
+  // speed presets
+  el('speedSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (!S.unlocked && +b.dataset.mult !== 1) return;  // acceleration is teacher-gated
+    if (S.scrubT !== null || S.paused) goLive();        // resume live before banking the elapsed time
+    setMultiplier(+b.dataset.mult);
+    [...e.currentTarget.children].forEach(x => x.setAttribute('aria-pressed', x === b));
+    const names = { 1: 'Observation, real time', 3600: 'Demo, 1 second is 1 hour', 86400: 'Fast, 1 second is 1 day' };
+    setStatus(names[S.multiplier] || 'Speed set');
+    scheduleSave();
+  });
+
+  // live / scrub
+  function goLive() {
+    // resuming from a pause continues from the frozen point rather than jumping forward by
+    // the paused duration; leaving a scrub simply returns to true elapsed time
+    if (S.paused) { S.simAnchorHours = S.pausedT; S.simAnchorWall = Date.now(); }
+    S.live = true; S.paused = false; S.scrubT = null;
+    el('liveToggle').setAttribute('aria-pressed', 'true');
+    el('liveToggle').textContent = '● Live';
+    el('scrubVal').textContent = 'live';
+  }
+  el('liveToggle').addEventListener('click', () => {
+    if (S.scrubT === null && !S.paused) { /* already live: pause */ S.pausedT = liveHours(); S.paused = true; el('liveToggle').textContent = '⏸ Paused'; el('liveToggle').setAttribute('aria-pressed', 'false'); }
+    else goLive();
+  });
+  el('scrubSlider').addEventListener('input', (e) => {
+    S.scrubT = +e.target.value;
+    el('scrubVal').textContent = fmtAge(S.scrubT);
+    el('liveToggle').setAttribute('aria-pressed', 'false');
+    el('liveToggle').textContent = '○ Live';
+  });
+  el('scrubSlider').addEventListener('change', () => { /* keep scrubbed until Live pressed */ });
+
+  // temperature
+  function applyTempUI() {
+    el('tempSlider').value = S.temp;
+    el('tempVal').textContent = S.temp.toFixed(S.temp % 1 ? 1 : 0) + ' °C, doubling ~' + Math.round(doublingMins(S.temp)) + ' min';
+    const wrap = el('tempWrap');
+    const locked = (S.tempMode === 'fixed');
+    el('tempSlider').disabled = locked;
+    wrap.classList.toggle('locked', locked);
+    if (locked) el('tempSlider').title = 'Locked for this run. Switch to what-if in settings to adjust.';
+    else el('tempSlider').title = 'Drag to reshape the whole week.';
+  }
+  el('tempSlider').addEventListener('input', (e) => {
+    if (S.tempMode === 'fixed') return;
+    S.temp = +e.target.value;
+    applyTempUI(); scheduleSave();
+  });
+
+  // =====================================================================
+  // DRAWERS
+  // =====================================================================
+  const scrim = el('scrim');
+  const DRAWER_IDS = ['integrityDrawer', 'settingsDrawer', 'helpDrawer'];
+  let openDrawer = null, lastFocused = null;
+  // a drawer is effectively modal (full-screen scrim), so mark the rest of the page inert
+  function setBackgroundInert(openId) {
+    const app = document.querySelector('.app');
+    if (openId) { app.inert = true; DRAWER_IDS.forEach(id => { el(id).inert = (id !== openId); }); }
+    else { app.inert = false; DRAWER_IDS.forEach(id => { el(id).inert = false; }); }
+  }
+  function openD(id) {
+    closeD();
+    const d = el(id); d.classList.add('open'); d.setAttribute('aria-modal', 'true'); scrim.classList.add('open');
+    openDrawer = d; lastFocused = document.activeElement;
+    setBackgroundInert(id);
+    const f = d.querySelector('button, input, [tabindex]'); if (f) f.focus();
+  }
+  function closeD() {
+    if (openDrawer) { openDrawer.classList.remove('open'); openDrawer.setAttribute('aria-modal', 'false'); openDrawer = null; }
+    scrim.classList.remove('open');
+    setBackgroundInert(null);
+    if (lastFocused && lastFocused.focus) { lastFocused.focus(); lastFocused = null; }
+  }
+  scrim.addEventListener('click', closeD);
+  document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeD));
+  el('btnIntegrity').addEventListener('click', () => openD('integrityDrawer'));
+  el('btnSettings').addEventListener('click', () => openD('settingsDrawer'));
+  el('btnHelp').addEventListener('click', () => openD('helpDrawer'));
+
+  // ---- population graphs ----
+  function speciesColour(k) { return k === 'mould' ? '#6f8f57' : ((ORGANISMS[k] && ORGANISMS[k].colour) || '#999'); }
+  function speciesLabel(k) { return k === 'mould' ? 'Mould' : ((ORGANISMS[k] && ORGANISMS[k].label) || k); }
+  function fmtCount(v) {
+    if (v < 1000) return '' + Math.round(v);
+    if (v < 1e6) return (v / 1e3).toFixed(v < 1e4 ? 1 : 0).replace(/\.0$/, '') + 'k';
+    if (v < 1e9) return (v / 1e6).toFixed(v < 1e7 ? 1 : 0).replace(/\.0$/, '') + 'M';
+    return (v / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
+  }
+  function computeGraphData() {
+    const T = S.temp, tmax = clamp(simHours(), 6, 168);
+    const NS = 100;
+    const ts = [], live = [], dead = [], net = [], species = {}, sk = [];
+    for (const c of S.colonies) { const k = c.type === 'mould' ? 'mould' : c.type; if (!species[k]) { species[k] = []; sk.push(k); } }
+    for (let i = 0; i < NS; i++) {
+      const t = tmax * i / (NS - 1);
+      ts.push(t);
+      let L = 0, D = 0; const sp = {}; for (const k of sk) sp[k] = 0;
+      for (const c of S.colonies) {
+        const l = liveCells(c, t, T);
+        L += l; D += deadCells(c, t, T);
+        sp[c.type === 'mould' ? 'mould' : c.type] += l;
+      }
+      live.push(L); dead.push(D); net.push(L + D);
+      for (const k of sk) species[k].push(sp[k]);
+    }
+    return { ts, live, dead, net, species, sk, tmax, now: clamp(simHours(), 0, 168) };
+  }
+  function drawGraphChart(g, canvas, d, mode) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const W = canvas.clientWidth || 600, H = canvas.clientHeight || 320;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+    const cs = getComputedStyle(document.documentElement);
+    const ink = cs.getPropertyValue('--ink').trim(), soft = cs.getPropertyValue('--ink-soft').trim(), line = cs.getPropertyValue('--line').trim();
+    const padL = 54, padR = 14, padT = 10, padB = 26, plotW = W - padL - padR, plotH = H - padT - padB;
+    const seriesList = mode === 'species' ? d.sk.map(k => d.species[k]) : [d.live, d.dead, d.net];
+    let maxV = 10; for (const s of seriesList) for (const v of s) if (v > maxV) maxV = v;
+    const yTop = Math.pow(10, Math.ceil(Math.log10(maxV))), xMax = Math.max(d.tmax, 1);
+    const X = t => padL + (t / xMax) * plotW;
+    const Y = v => padT + plotH - (Math.log10(Math.max(v, 1)) / Math.log10(yTop)) * plotH;
+    g.font = '11px -apple-system, sans-serif'; g.lineWidth = 1;
+    for (let e = 0; Math.pow(10, e) <= yTop + 0.5; e++) {
+      const y = Y(Math.pow(10, e));
+      g.strokeStyle = line; g.globalAlpha = .5; g.beginPath(); g.moveTo(padL, y); g.lineTo(W - padR, y); g.stroke(); g.globalAlpha = 1;
+      g.fillStyle = soft; g.textAlign = 'end'; g.fillText(fmtCount(Math.pow(10, e)), padL - 6, y + 3);
+    }
+    g.textAlign = 'center';
+    for (let day = 0; day * 24 <= xMax; day++) {
+      const x = X(day * 24);
+      g.strokeStyle = line; g.globalAlpha = .3; g.beginPath(); g.moveTo(x, padT); g.lineTo(x, padT + plotH); g.stroke(); g.globalAlpha = 1;
+      g.fillStyle = soft; g.fillText(day + 'd', x, H - 9);
+    }
+    const xn = X(d.now); g.strokeStyle = ink; g.globalAlpha = .55; g.setLineDash([4, 3]);
+    g.beginPath(); g.moveTo(xn, padT); g.lineTo(xn, padT + plotH); g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+    function plot(arr, colour, w) {
+      g.strokeStyle = colour; g.lineWidth = w; g.beginPath();
+      for (let i = 0; i < arr.length; i++) { const x = X(d.ts[i]), y = Y(arr[i]); if (i === 0) g.moveTo(x, y); else g.lineTo(x, y); }
+      g.stroke();
+    }
+    const legend = el('graphLegend'); legend.textContent = '';
+    function legendEntry(colour, text) { const sp = document.createElement('span'); sp.className = 'gl'; const ln = document.createElement('span'); ln.className = 'ln'; ln.style.background = colour; sp.appendChild(ln); sp.appendChild(document.createTextNode(text)); legend.appendChild(sp); }
+    if (mode === 'species') {
+      d.sk.forEach(k => { const col = speciesColour(k); plot(d.species[k], col, 2); legendEntry(col, speciesLabel(k)); });
+    } else {
+      plot(d.net, '#1d6fb8', 1.6); legendEntry('#1d6fb8', 'Net total (living + dead)');
+      plot(d.dead, '#9a4b2e', 2.2); legendEntry('#9a4b2e', 'Dead');
+      plot(d.live, '#3a8f5a', 2.6); legendEntry('#3a8f5a', 'Living (viable)');
+    }
+  }
+  function graphInert(on) { document.querySelector('.app').inert = on; DRAWER_IDS.forEach(id => el(id).inert = on); }
+  const Graph = {
+    open: false, mode: 'overview', timer: 0, cache: null,
+    show() {
+      if (!document.getElementById('setupScrim').hidden) return;   // need a dish first
+      this.open = true; el('graphScrim').hidden = false; graphInert(true);
+      this.cache = computeGraphData(); this.render();
+      this.timer = setInterval(() => { this.cache = computeGraphData(); this.render(); }, 1000);
+      el('graphClose').focus();
+    },
+    hide() { this.open = false; el('graphScrim').hidden = true; graphInert(false); clearInterval(this.timer); },
+    setMode(m) { this.mode = m; [...el('graphModes').children].forEach(x => x.setAttribute('aria-pressed', x.dataset.mode === m)); this.render(); },
+    render() { const c = el('graphCanvas'); if (this.cache) drawGraphChart(c.getContext('2d'), c, this.cache, this.mode); }
+  };
+  el('btnGraphs').addEventListener('click', () => Graph.show());
+  el('graphClose').addEventListener('click', () => Graph.hide());
+  el('graphScrim').addEventListener('click', (e) => { if (e.target === el('graphScrim')) Graph.hide(); });
+  el('graphModes').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) Graph.setMode(b.dataset.mode); });
+  window.addEventListener('resize', () => { if (Graph.open) Graph.render(); });
+
+  // theme
+  function applyTheme(t) {
+    S.theme = t;
+    document.documentElement.setAttribute('data-theme', t);
+    refreshThemeColours();
+    [...el('themeSwitch').children].forEach(x => x.setAttribute('aria-pressed', x.dataset.theme === t));
+  }
+  el('btnTheme').addEventListener('click', () => { applyTheme(S.theme === 'dark' ? 'light' : 'dark'); scheduleSave(); });
+  el('themeSwitch').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { applyTheme(b.dataset.theme); scheduleSave(); } });
+
+  // teacher access: real time only by default; the code unlocks speed presets and the scrub slider
+  function applyLock() {
+    const locked = !S.unlocked;
+    el('speedGroup').hidden = locked;
+    el('scrubGroup').hidden = locked;
+    el('timeNote').hidden = !locked;
+    if (locked) {
+      if (S.scrubT !== null || S.paused) goLive();     // drop any scrub and resume live
+      if (S.multiplier !== 1) setMultiplier(1);        // bank accelerated time, then run real time
+      [...el('speedSeg').children].forEach(x => x.setAttribute('aria-pressed', +x.dataset.mult === 1));
+    } else {
+      [...el('speedSeg').children].forEach(x => x.setAttribute('aria-pressed', +x.dataset.mult === S.multiplier));
+    }
+    updateUnlockUI();
+  }
+  function updateUnlockUI() {
+    const btn = el('unlockBtn'), input = el('teacherCode'), hint = el('unlockHint');
+    if (S.unlocked) {
+      btn.textContent = 'Lock again';
+      input.hidden = true;
+      hint.textContent = 'Unlocked. The speed presets and the scrub slider are available. Lock again to return students to real time.';
+    } else {
+      btn.textContent = 'Unlock';
+      input.hidden = false;
+      if (!hint.dataset.err) hint.textContent = 'Time scrubbing and fast-forward are locked. Students watch in real time and return over the week. Enter the teacher code to unlock the speed and scrub controls.';
+    }
+  }
+  function tryUnlock() {
+    const hint = el('unlockHint');
+    const code = el('teacherCode').value.trim().toLowerCase();
+    if (code === 'gofast') {
+      S.unlocked = true; delete hint.dataset.err; el('teacherCode').value = '';
+      applyLock(); persist();
+      toast('Teacher controls unlocked. Speed and scrub are available.');
+    } else {
+      hint.dataset.err = '1';
+      hint.textContent = 'That code is not recognised. Ask your teacher for the access code.';
+      el('teacherCode').focus();
+    }
+  }
+  el('unlockBtn').addEventListener('click', () => {
+    if (S.unlocked) {
+      S.unlocked = false; applyLock(); persist();      // applyLock banks any accelerated time
+      toast('Locked. Real time only, come back over the week.');
+    } else tryUnlock();
+  });
+  el('teacherCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); tryUnlock(); } });
+
+  // temperature mode
+  el('tempModeSwitch').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    S.tempMode = b.dataset.mode;
+    [...e.currentTarget.children].forEach(x => x.setAttribute('aria-pressed', x.dataset.mode === S.tempMode));
+    applyTempUI(); scheduleSave();
+    toast(S.tempMode === 'whatif' ? 'What-if mode, drag the temperature any time' : 'Fixed mode, temperature locked for the run');
+  });
+
+  // carrying capacity tunable
+  el('kSlider').addEventListener('input', (e) => {
+    const exp = +e.target.value;
+    S.kScale = Math.pow(10, exp) / SIM_DEFAULTS.bacteria.K_cells;
+    el('kHint').textContent = '1e' + exp.toFixed(1).replace('.0', '') + ' cells. Spans 1e6 to 1e8 depending on species and colony size.';
+    rebuildColonies(); scheduleSave();
+  });
+
+  // reset (two click confirm via toast pattern would suit; keep one button with explicit copy)
+  let resetArmed = false;
+  el('resetBtn').addEventListener('click', () => {
+    if (!resetArmed) {
+      resetArmed = true;
+      el('resetBtn').textContent = 'Tap again to confirm, this clears the dish';
+      el('resetBtn').classList.add('primary');
+      setTimeout(() => { resetArmed = false; el('resetBtn').textContent = 'Discard this dish and inoculate a new one'; el('resetBtn').classList.remove('primary'); }, 4000);
+      return;
+    }
+    try { window.localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+    S.tInoc = 0;            // stop the beforeunload handler re-saving the old dish during reload
+    closeD();
+    location.reload();
+  });
+
+  // =====================================================================
+  // KEYBOARD
+  // =====================================================================
+  window.addEventListener('keydown', (e) => {
+    if (e.target.matches('input, textarea')) return;
+    if (Graph.open) { if (e.key === 'Escape') Graph.hide(); return; }     // overlay captures keys
+    if (openDrawer) { if (e.key === 'Escape') closeD(); return; }
+    if (!el('setupScrim').hidden) return;              // no sim shortcuts until a dish is inoculated
+    const pan = S.fov * 0.12;
+    switch (e.key) {
+      case '+': case '=': setFov(S.fov * 0.7, null, null, true); break;
+      case '-': case '_': setFov(S.fov / 0.7, null, null, true); break;
+      case 'ArrowUp': S.camY -= pan; nudgeFocus(); e.preventDefault(); break;
+      case 'ArrowDown': S.camY += pan; nudgeFocus(); e.preventDefault(); break;
+      case 'ArrowLeft': S.camX -= pan; nudgeFocus(); e.preventDefault(); break;
+      case 'ArrowRight': S.camX += pan; nudgeFocus(); e.preventDefault(); break;
+      case ' ':
+        if (!S.paused) { S.pausedT = liveHours(); S.paused = true; el('liveToggle').textContent = '⏸ Paused'; el('liveToggle').setAttribute('aria-pressed', 'false'); }
+        else goLive();
+        e.preventDefault(); break;
+      case 'l': case 'L': goLive(); break;
+      case '?': openD('helpDrawer'); break;
+      case 'Enter': {
+        const c = S.focus || nearestColony(S.camX, S.camY);
+        if (c) { S.focus = c; const [px, py] = worldToScreen(c.x, c.y); showIdentify(c, clamp(px, 8, cssW - 248), clamp(py, 8, cssH - 210), simHours(), S.temp); }
+        e.preventDefault(); break;
+      }
+      case 'Escape': hideIdentify(); break;
+    }
+    eggKey(e.key);
+  });
+  function nudgeFocus() { if (S.fov < 30) S.focus = nearestColony(S.camX, S.camY); }
+
+  // EASTER EGG: type "agar" to reveal a hidden tardigrade roaming the single-cell view
+  let eggBuf = '';
+  function eggKey(k) {
+    eggBuf = (eggBuf + k.toLowerCase()).slice(-4);
+    if (eggBuf === 'agar') { S.egg = !S.egg; toast(S.egg ? 'A water bear wandered in. Zoom to a single cell.' : 'The water bear ambled off.'); }
+  }
+  // draw the tardigrade if the egg is on and we are deep at L3
+  const _agentsDraw = Agents.draw.bind(Agents);
+  Agents.draw = function (focus, alpha) {
+    _agentsDraw(focus, alpha);
+    if (S.egg && focus && S.fov < 0.01) {
+      const [cx, cy] = worldToScreen(focus.x, focus.y);
+      const t = Date.now() / 1000;
+      const x = cx + Math.sin(t * 0.6) * 60, y = cy + Math.cos(t * 0.4) * 36;
+      ctx.save(); ctx.globalAlpha = alpha * 0.9; ctx.font = '22px serif';
+      ctx.fillText('🐻', x, y); ctx.restore();   // a stand in water bear
+    }
+  };
+
+  // =====================================================================
+  // SETUP FLOW
+  // =====================================================================
+  let chosenSurface = 'dirty';
+  el('surfaces').addEventListener('click', (e) => {
+    const b = e.target.closest('.surface'); if (!b) return;
+    chosenSurface = b.dataset.surface;
+    [...el('surfaces').children].forEach(x => x.setAttribute('aria-pressed', x === b));
+  });
+  el('setupTemp').addEventListener('input', (e) => {
+    const v = +e.target.value;
+    el('setupTempHint').textContent = v + ' °C. Schools stay at or below 30 and never use 37, which would favour pathogens. Warmer means faster growth.';
+  });
+  el('inoculateBtn').addEventListener('click', () => {
+    const buf = new Uint32Array(1);
+    (window.crypto || {}).getRandomValues ? window.crypto.getRandomValues(buf) : (buf[0] = (Date.now() ^ (performance.now() * 1000)) >>> 0);
+    S.seed = buf[0] >>> 0;
+    S.surface = chosenSurface;
+    S.temp = +el('setupTemp').value;
+    S.tInoc = Date.now();
+    S.multiplier = 1;                                  // new dishes start in real time, come back over the week
+    S.simAnchorHours = 0; S.simAnchorWall = S.tInoc;
+    rebuildColonies();
+    el('setupScrim').hidden = true;
+    el('inspectBar').hidden = false;
+    persist();
+    toast('Dish inoculated. Watch it grow, or come back tomorrow.');
+    setStatus('Inoculated from a ' + surfaceName(S.surface));
+  });
+  function surfaceName(s) { return s === 'clean' ? 'freshly wiped bench' : s === 'phone' ? 'phone screen' : 'door handle'; }
+
+  function rebuildColonies() {
+    const r = seedDish(S.seed, S.surface, S.kScale);
+    S.colonies = r.colonies; S.n = r.n;
+    S.focus = null;          // drop any reference into the now-replaced colony array
+    Agents.inited = false;
+  }
+
+  // =====================================================================
+  // INIT
+  // =====================================================================
+  function init() {
+    resize();
+    window.addEventListener('resize', resize);
+    // system theme default
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const saved = loadState();
+    if (saved) {
+      S.seed = saved.seed; S.surface = saved.surface_type || 'dirty';
+      S.tInoc = saved.t_inoculation_wall; S.multiplier = saved.time_multiplier || SIM_DEFAULTS.timeMultiplier;
+      S.temp = typeof saved.incubation_temp_C === 'number' ? saved.incubation_temp_C : 23;
+      S.tempMode = saved.temp_mode === 'whatif' ? 'whatif' : 'fixed';
+      S.theme = saved.theme || (prefersDark ? 'dark' : 'light');
+      S.kScale = saved.kScale || 1;
+      S.unlocked = !!saved.unlocked;
+      S.simAnchorHours = typeof saved.sim_anchor_hours === 'number' ? saved.sim_anchor_hours : 0;
+      S.simAnchorWall = typeof saved.sim_anchor_wall === 'number' ? saved.sim_anchor_wall : S.tInoc;
+      if (!S.unlocked) S.multiplier = 1;               // locked dishes always run in real time
+      rebuildColonies();
+      el('setupScrim').hidden = true;
+      el('inspectBar').hidden = false;
+      const ageH = liveHours();
+      setStatus('Welcome back. This dish is about ' + fmtAge(Math.max(0, ageH)) + ' along.');
+    } else {
+      S.theme = prefersDark ? 'dark' : 'light';
+      el('setupScrim').hidden = false;
+      el('setupTemp').value = 23;
+    }
+    applyTheme(S.theme);
+    applyTempUI();
+    applyLock();
+    // reflect mode + speed + kSlider in settings
+    [...el('tempModeSwitch').children].forEach(x => x.setAttribute('aria-pressed', x.dataset.mode === S.tempMode));
+    [...el('speedSeg').children].forEach(x => x.setAttribute('aria-pressed', +x.dataset.mult === S.multiplier));
+    el('kSlider').value = Math.log10(SIM_DEFAULTS.bacteria.K_cells * S.kScale).toFixed(1);
+
+    // initial camera: whole dish
+    S.fov = 110; S.camX = 0; S.camY = 0; setZoomFromFov();
+
+    // persistence on hide / unload
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') persist(); });
+    window.addEventListener('beforeunload', persist);
+
+    requestAnimationFrame(frame);
+  }
+
+  // log10 helper for older engines
+  if (!Math.log10) Math.log10 = (x) => Math.log(x) / Math.LN10;
+
+  init();
+})();
+</script>
+</body>
+</html>
