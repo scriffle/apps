@@ -1,0 +1,1691 @@
+<!DOCTYPE html>
+<html lang="en" data-version="0.1.0">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Tokenised Audio Visualiser</title>
+<style>
+  :root {
+    --bg: #07080d;
+    --bg-soft: #0d1018;
+    --panel: rgba(18, 21, 32, 0.82);
+    --panel-border: rgba(255, 255, 255, 0.08);
+    --text: #e7e9f3;
+    --text-dim: #9aa0b8;
+    --accent: #6ea8ff;
+    --accent-2: #ff7ad9;
+    --good: #58e6a8;
+    --warn: #ffcf6e;
+    --bad: #ff6e7a;
+    --radius: 12px;
+    --space: clamp(8px, 1.4vw, 16px);
+    font-size: clamp(13px, 0.85vw + 10px, 16px);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; width: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  #app { position: fixed; inset: 0; display: grid; }
+  #stage-wrap { position: absolute; inset: 0; }
+  canvas#stage { display: block; width: 100%; height: 100%; touch-action: none; }
+
+  /* ---------- top bar ---------- */
+  #topbar {
+    position: absolute; inset-block-start: 0; inset-inline: 0;
+    display: flex; gap: var(--space); align-items: center; flex-wrap: wrap;
+    padding: calc(var(--space) * 0.8) var(--space);
+    padding-block-start: max(var(--space), env(safe-area-inset-top));
+    background: linear-gradient(180deg, rgba(5,6,12,0.78), rgba(5,6,12,0));
+    z-index: 5; pointer-events: none;
+  }
+  #topbar > * { pointer-events: auto; }
+  .brand { font-weight: 650; letter-spacing: 0.2px; margin-inline-end: auto; display: flex; align-items: baseline; gap: 8px; }
+  .brand small { color: var(--text-dim); font-weight: 500; font-size: 0.72em; }
+
+  .btn {
+    appearance: none; border: 1px solid var(--panel-border); background: var(--panel);
+    color: var(--text); border-radius: 10px; padding: 8px 14px; font: inherit; font-size: 0.88em;
+    cursor: pointer; min-height: 40px; display: inline-flex; align-items: center; gap: 8px;
+    transition: border-color .15s, transform .1s, background .15s; backdrop-filter: blur(10px);
+  }
+  .btn:hover { border-color: rgba(255,255,255,0.22); }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn.primary { background: linear-gradient(135deg, var(--accent), #4f7fe0); border-color: transparent; color: #06101f; font-weight: 650; }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .seg { display: inline-flex; border: 1px solid var(--panel-border); border-radius: 10px; overflow: hidden; background: var(--panel); }
+  .seg button { appearance: none; border: 0; background: transparent; color: var(--text-dim); padding: 8px 12px; font: inherit; font-size: 0.82em; cursor: pointer; min-height: 40px; }
+  .seg button[aria-pressed="true"] { background: rgba(110,168,255,0.18); color: var(--text); }
+
+  /* ---------- transport ---------- */
+  #transport {
+    position: absolute; inset-block-end: 0; inset-inline: 0; z-index: 5;
+    display: flex; align-items: center; gap: var(--space);
+    padding: var(--space);
+    padding-block-end: max(var(--space), env(safe-area-inset-bottom));
+    background: linear-gradient(0deg, rgba(5,6,12,0.82), rgba(5,6,12,0));
+    pointer-events: none;
+  }
+  #transport > * { pointer-events: auto; }
+  #playBtn { width: 46px; height: 46px; padding: 0; justify-content: center; border-radius: 50%; font-size: 1.1em; }
+  #seek { flex: 1; min-width: 120px; accent-color: var(--accent); height: 6px; }
+  .time { font-variant-numeric: tabular-nums; color: var(--text-dim); font-size: 0.82em; min-width: 5.2em; text-align: center; }
+
+  /* ---------- inspector ---------- */
+  #inspector {
+    position: absolute; inset-block: 0; inset-inline-end: 0; z-index: 6;
+    width: min(360px, 86vw); max-height: 100%;
+    background: var(--panel); border-inline-start: 1px solid var(--panel-border);
+    backdrop-filter: blur(16px);
+    display: flex; flex-direction: column;
+    transform: translateX(100%); transition: transform .28s cubic-bezier(.4,0,.2,1);
+    padding-block-start: max(var(--space), env(safe-area-inset-top));
+  }
+  #inspector.open { transform: translateX(0); }
+  #inspector header { display: flex; align-items: center; gap: 8px; padding: var(--space); border-block-end: 1px solid var(--panel-border); }
+  #inspector header h2 { font-size: 0.92em; margin: 0; margin-inline-end: auto; }
+  .insp-body { overflow-y: auto; padding: var(--space); display: flex; flex-direction: column; gap: 16px; }
+  .meta-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 0.82em; }
+  .meta-grid dt { color: var(--text-dim); }
+  .meta-grid dd { margin: 0; font-variant-numeric: tabular-nums; text-align: end; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 0.72em; padding: 3px 8px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid var(--panel-border); color: var(--text-dim); }
+  .section-title { font-size: 0.74em; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin-block-end: 6px; }
+  .control { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; margin-block-end: 10px; }
+  .control label { font-size: 0.82em; }
+  .control output { font-size: 0.78em; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .control input[type=range] { grid-column: 1 / -1; accent-color: var(--accent-2); height: 5px; }
+  .control select { grid-column: 2; background: var(--bg-soft); color: var(--text); border: 1px solid var(--panel-border); border-radius: 8px; padding: 4px 6px; font: inherit; font-size: 0.8em; }
+  #tokenLog { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72em; line-height: 1.5; max-height: 190px; overflow-y: auto; background: var(--bg-soft); border-radius: 8px; padding: 8px 10px; border: 1px solid var(--panel-border); }
+  #tokenLog .row { display: flex; gap: 8px; white-space: nowrap; }
+  #tokenLog .t { color: var(--text-dim); }
+  .tk { padding: 0 5px; border-radius: 5px; font-weight: 600; }
+  .tk.kick{background:rgba(255,120,80,.18);color:#ffb088} .tk.snare{background:rgba(255,120,217,.18);color:#ff9ee0}
+  .tk.hat{background:rgba(120,230,255,.18);color:#9be9ff} .tk.beat{background:rgba(110,168,255,.16);color:#a9c8ff}
+  .tk.downbeat{background:rgba(88,230,168,.18);color:#7af0c0} .tk.onset{background:rgba(255,255,255,.1);color:#cfd3e6}
+  .tk.section_change{background:rgba(255,207,110,.18);color:#ffd98a}
+  .tk.note{background:rgba(180,140,255,.20);color:#cbb2ff}
+  .tk.sustain{background:rgba(120,200,255,.16);color:#a9d8ff} .tk.partial{background:rgba(150,150,170,.16);color:#b9bdd0}
+
+  /* ---------- overlays ---------- */
+  #drop {
+    position: absolute; inset: 0; z-index: 10; display: grid; place-items: center; text-align: center;
+    background: radial-gradient(circle at 50% 40%, rgba(110,168,255,0.10), rgba(7,8,13,0.96));
+    transition: opacity .25s; padding: var(--space);
+  }
+  #drop.hide { opacity: 0; pointer-events: none; }
+  #drop .inner { max-width: 460px; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+  #drop h1 { font-size: clamp(1.4rem, 3.5vw, 2.1rem); margin: 0; font-weight: 700; letter-spacing: -0.5px; }
+  #drop p { color: var(--text-dim); margin: 0; line-height: 1.55; }
+  .dropzone { border: 1.5px dashed rgba(255,255,255,0.18); border-radius: 18px; padding: clamp(20px, 5vw, 40px); width: 100%; transition: border-color .2s, background .2s; }
+  .dropzone.drag { border-color: var(--accent); background: rgba(110,168,255,0.08); }
+  #progress { position: absolute; inset: 0; z-index: 9; display: none; place-items: center; background: rgba(7,8,13,0.82); backdrop-filter: blur(4px); }
+  #progress.show { display: grid; }
+  .prog-inner { width: min(420px, 80vw); text-align: center; display: flex; flex-direction: column; gap: 12px; }
+  .bar { position: relative; height: 8px; border-radius: 99px; background: rgba(255,255,255,0.08); overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .2s; }
+  /* indeterminate shimmer so the bar stays alive during the uninterruptible Essentia phase */
+  .bar::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent); background-size: 38% 100%; background-repeat: no-repeat; animation: progShimmer 1.1s linear infinite; }
+  @keyframes progShimmer { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+  #progLabel { color: var(--text-dim); font-size: 0.86em; }
+
+  #toast { position: absolute; inset-block-end: 84px; inset-inline: 0; display: flex; justify-content: center; z-index: 20; pointer-events: none; }
+  #toast .msg { background: var(--panel); border: 1px solid var(--panel-border); padding: 10px 16px; border-radius: 10px; font-size: 0.85em; opacity: 0; transform: translateY(8px); transition: opacity .2s, transform .2s; max-width: 86vw; }
+  #toast .msg.show { opacity: 1; transform: translateY(0); }
+  #toast .msg.bad { border-color: rgba(255,110,122,0.5); }
+
+  #cubeSection { display: none; }
+  body.cube-on #cubeSection { display: block; }
+
+  /* ---------- modals (help / projects / save) ---------- */
+  .modal { position: absolute; inset: 0; z-index: 12; display: none; place-items: center; background: rgba(7,8,13,0.78); backdrop-filter: blur(6px); padding: var(--space); }
+  .modal.show { display: grid; }
+  .modal .card { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 16px; padding: clamp(18px, 3vw, 28px); width: min(540px, 92vw); max-height: 86vh; overflow-y: auto; box-shadow: 0 24px 70px rgba(0,0,0,0.55); }
+  .modal h2 { margin: 0 0 10px; font-size: 1.1em; }
+  .modal p { color: var(--text-dim); line-height: 1.6; margin: 0 0 10px; }
+  .modal ul { color: var(--text-dim); line-height: 1.6; margin: 0 0 10px; padding-inline-start: 18px; }
+  .modal .note { color: var(--warn); font-size: 0.78em; }
+  .modal .row-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .modal input[type=text] { width: 100%; background: var(--bg-soft); color: var(--text); border: 1px solid var(--panel-border); border-radius: 10px; padding: 10px 12px; font: inherit; margin-block: 6px 4px; }
+  .proj-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--panel-border); border-radius: 10px; margin-block-end: 8px; }
+  .proj-item .pi-main { flex: 1; min-width: 0; cursor: pointer; }
+  .proj-item .pi-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .proj-item .pi-sub { font-size: 0.76em; color: var(--text-dim); }
+  .proj-item:hover { border-color: rgba(255,255,255,0.22); }
+  .proj-item .pi-del { color: var(--bad); padding: 6px 8px; min-height: 0; }
+  .hidden { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  @media (max-width: 560px) { #inspector { width: 100vw; } .brand small { display: none; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage-wrap"><canvas id="stage" aria-label="Audio visualisation"></canvas></div>
+
+  <div id="topbar">
+    <div class="brand">Tokenised Audio Visualiser <small>fft → events → render</small></div>
+    <button class="btn" id="loadBtn">▲ New</button>
+    <button class="btn" id="openTopBtn">☰ Open</button>
+    <button class="btn" id="saveBtn" disabled>⤓ Save</button>
+    <div class="seg" role="group" aria-label="Renderer">
+      <button id="rCanvas" aria-pressed="true">Canvas</button>
+      <button id="rPixi" aria-pressed="false">WebGL</button>
+      <button id="rCube" aria-pressed="false">Cube</button>
+    </div>
+    <button class="btn" id="inspBtn" aria-expanded="false">≣ Tokens</button>
+    <button class="btn" id="helpBtn" aria-label="How it works" title="How it works">?</button>
+  </div>
+
+  <div id="transport" class="hidden">
+    <button class="btn primary" id="playBtn" aria-label="Play">▶</button>
+    <span class="time" id="curTime">0:00</span>
+    <input type="range" id="seek" min="0" max="1000" value="0" step="1" aria-label="Seek" />
+    <span class="time" id="durTime">0:00</span>
+  </div>
+
+  <aside id="inspector" aria-label="Token inspector">
+    <header>
+      <h2>Token stream</h2>
+      <button class="btn" id="dlBtn" style="font-size:.78em;padding:6px 10px;min-height:34px">⤓ JSON</button>
+      <button class="btn" id="inspClose" aria-label="Close" style="padding:6px 10px;min-height:34px">✕</button>
+    </header>
+    <div class="insp-body">
+      <div>
+        <div class="section-title">Analysis</div>
+        <dl class="meta-grid" id="metaGrid"><dt>—</dt><dd>load a song</dd></dl>
+        <div class="chips" id="metaChips" style="margin-top:8px"></div>
+      </div>
+      <div>
+        <div class="section-title">Interpret parameters <span style="text-transform:none;color:var(--accent)">(re-runs instantly)</span></div>
+        <div class="control"><label for="cGamma">Intensity gamma</label><output id="oGamma">0.70</output><input type="range" id="cGamma" min="0.3" max="1.4" step="0.05" value="0.7"></div>
+        <div class="control"><label for="cSens">Onset sensitivity</label><output id="oSens">0.08</output><input type="range" id="cSens" min="0.02" max="0.30" step="0.01" value="0.08"></div>
+        <div class="control"><label for="cTon">Pitch sensitivity</label><output id="oTon">0.50</output><input type="range" id="cTon" min="0.05" max="0.95" step="0.05" value="0.5"></div>
+        <div class="control"><label for="cMeter">Beats per bar</label><select id="cMeter"><option>2</option><option>3</option><option selected>4</option><option>6</option></select></div>
+        <div class="control"><label for="cK">Section profiles (k)</label><select id="cK"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select></div>
+        <div class="section-title" style="margin-block-start:6px">Event sources <span style="text-transform:none;color:var(--text-dim)">(tens / bar)</span></div>
+        <div class="control"><label for="cSrcOn">Onsets</label><input type="checkbox" id="cSrcOn" checked style="grid-column:2;justify-self:end;width:18px;height:18px;accent-color:var(--accent-2)"></div>
+        <div class="control"><label for="cSrcSus">Sustain resample</label><input type="checkbox" id="cSrcSus" checked style="grid-column:2;justify-self:end;width:18px;height:18px;accent-color:var(--accent-2)"></div>
+        <div class="control"><label for="cSrcPart">Partials</label><input type="checkbox" id="cSrcPart" style="grid-column:2;justify-self:end;width:18px;height:18px;accent-color:var(--accent-2)"></div>
+        <div class="control"><label for="cGrid">Sustain grid</label><select id="cGrid"><option value="2">1/8</option><option value="4" selected>1/16</option><option value="8">1/32</option></select></div>
+        <div class="control"><label for="cPart">Partials / note</label><select id="cPart"><option>1</option><option>2</option><option selected>3</option><option>4</option></select></div>
+        <button class="btn" id="reBtn" style="width:100%">↻ Re-interpret</button>
+      </div>
+      <div>
+        <div class="section-title">Pitch space <span style="text-transform:none;color:var(--accent)">(live · 2D)</span></div>
+        <div class="control"><label for="cPx">Δpitch x-scale</label><output id="oPx">14 px</output><input type="range" id="cPx" min="4" max="40" step="1" value="14"></div>
+        <div class="control"><label for="cConn">Connect consecutive notes</label><input type="checkbox" id="cConn" checked style="grid-column:2;justify-self:end;width:18px;height:18px;accent-color:var(--accent-2)"></div>
+      </div>
+      <div id="cubeSection">
+        <div class="section-title">3D cube <span style="text-transform:none;color:var(--accent)">(live)</span></div>
+        <div class="control"><label for="cPreset">Axis preset</label><select id="cPreset"></select></div>
+        <div class="control"><label for="cAxX">X axis</label><select id="cAxX"></select></div>
+        <div class="control"><label for="cAxY">Y axis</label><select id="cAxY"></select></div>
+        <div class="control"><label for="cAxZ">Z axis</label><select id="cAxZ"></select></div>
+        <div class="control"><label for="cZoom">Zoom <span style="color:var(--text-dim);font-size:.85em">(scroll)</span></label><output id="oZoom">1.00×</output><input type="range" id="cZoom" min="0.4" max="3" step="0.05" value="1"></div>
+        <div class="control"><label for="cRot">Rotation</label><select id="cRot"><option value="orbit">Auto + drag</option><option value="auto">Auto only</option><option value="music">Music-driven</option></select></div>
+        <div class="control"><label for="cRotOn">Rotate</label><input type="checkbox" id="cRotOn" checked style="grid-column:2;justify-self:end;width:18px;height:18px;accent-color:var(--accent-2)"></div>
+        <div class="control"><label for="cRotSpd">Spin speed</label><output id="oRotSpd">0.18</output><input type="range" id="cRotSpd" min="0" max="0.8" step="0.02" value="0.18"></div>
+        <div class="control"><label for="cWire">Wireframe cube</label><input type="checkbox" id="cWire" style="grid-column:2;justify-self:end;width:18px;height:18px;accent-color:var(--accent-2)"></div>
+        <div class="control"><label for="cPersist">Persist (don't clear)</label><input type="checkbox" id="cPersist" style="grid-column:2;justify-self:end;width:18px;height:18px;accent-color:var(--accent-2)"></div>
+      </div>
+      <div>
+        <div class="section-title">Motion &amp; colour <span style="text-transform:none;color:var(--accent)">(live · all renderers)</span></div>
+        <div class="control"><label for="cPalette">Colour palette</label><select id="cPalette"></select></div>
+        <div class="control"><label for="cSize">Object size</label><output id="oSize">1.0×</output><input type="range" id="cSize" min="0.3" max="3" step="0.1" value="1"></div>
+        <div class="control"><label for="cFade">Fade time</label><output id="oFade">8.0 s</output><input type="range" id="cFade" min="1" max="20" step="0.5" value="8"></div>
+        <div class="control"><label for="cGrav">Gravity · fall &amp; vanish</label><input type="checkbox" id="cGrav" style="grid-column:2;justify-self:end;width:18px;height:18px;accent-color:var(--accent-2)"></div>
+        <div class="control"><label for="cGravA">Gravity accel</label><output id="oGravA">0.60</output><input type="range" id="cGravA" min="0" max="2" step="0.05" value="0.6"></div>
+        <div class="control"><label for="cTrail">Fall trails</label><input type="checkbox" id="cTrail" checked style="grid-column:2;justify-self:end;width:18px;height:18px;accent-color:var(--accent-2)"></div>
+      </div>
+      <div>
+        <div class="section-title">Saved settings <span style="text-transform:none;color:var(--text-dim)">(local)</span></div>
+        <div style="display:flex;gap:6px;margin-block-end:8px">
+          <input type="text" id="presetName" placeholder="name…" style="flex:1;min-width:0;background:var(--bg-soft);color:var(--text);border:1px solid var(--panel-border);border-radius:8px;padding:6px 8px;font:inherit;font-size:.8em">
+          <button class="btn" id="savePreset" style="font-size:.78em;padding:6px 10px;min-height:32px">Save</button>
+        </div>
+        <div class="control"><label for="userPresets">Load</label><select id="userPresets"></select></div>
+        <button class="btn" id="delPreset" style="width:100%;font-size:.76em;padding:6px">Delete selected</button>
+      </div>
+      <div>
+        <div class="section-title">Live dispatch <span id="tokCount" style="text-transform:none;color:var(--text-dim)"></span></div>
+        <div id="tokenLog" aria-live="off"></div>
+      </div>
+    </div>
+  </aside>
+
+  <div id="progress"><div class="prog-inner">
+    <div class="section-title">Analysing audio</div>
+    <div class="bar"><i id="progBar"></i></div>
+    <div id="progLabel">Decoding…</div>
+  </div></div>
+
+  <div id="drop"><div class="inner">
+    <h1>Upload a song to visualise.</h1>
+    <p>Your track is FFT-analysed into a stream of discrete musical <em>tokens</em> — notes, drums,
+       beats, sections — then rendered as a 2D event-space or a rotating 3D cube.</p>
+    <div class="dropzone" id="dropzone">
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        <button class="btn primary" id="pickBtn" style="font-size:1em;padding:12px 22px">New from audio</button>
+        <button class="btn" id="openDropBtn" style="font-size:1em;padding:12px 22px">Open project</button>
+      </div>
+      <p style="margin-top:12px;font-size:.82em">or drag &amp; drop · MP3, M4A/AAC, WAV, FLAC</p>
+    </div>
+  </div></div>
+
+  <div id="toast"><div class="msg" id="toastMsg"></div></div>
+
+  <!-- first-run / help explainer -->
+  <div id="help" class="modal"><div class="card">
+    <h2>How it works</h2>
+    <p>This tool decodes your audio, runs an <strong>FFT analysis</strong>, and turns it into a stream of
+       discrete musical <em>tokens</em> — pitched notes, kicks/snares/hi-hats, beats, and section
+       changes — then renders <em>one visual event per token</em>.</p>
+    <ul>
+      <li><strong>Renderers:</strong> a 2D <em>Canvas</em> / <em>WebGL</em> event-space, or a rotating 3D <em>Cube</em> point-cloud.</li>
+      <li><strong>≣ Tokens</strong> opens the controls — axis mapping, colour palette, motion, gravity, sources & sensitivity.</li>
+      <li><strong>Cube:</strong> drag to orbit, scroll to zoom; map any feature to X / Y / Z.</li>
+      <li><strong>⤓ Save</strong> keeps the audio + tokens + settings as a project in this browser; <strong>☰ Open</strong> reloads one.</li>
+    </ul>
+    <div class="row-actions"><button class="btn primary" id="helpClose">Got it</button></div>
+  </div></div>
+
+  <!-- open project (in-browser library) -->
+  <div id="projects" class="modal"><div class="card">
+    <h2>Open project</h2>
+    <div id="projList"></div>
+    <p id="projEmpty">No saved projects yet — load some audio and hit <strong>⤓ Save</strong>.</p>
+    <p class="note">Projects are stored in this browser only. Clearing browser data removes them.</p>
+    <div class="row-actions"><button class="btn" id="projClose">Close</button></div>
+  </div></div>
+
+  <!-- save project -->
+  <div id="saveDlg" class="modal"><div class="card">
+    <h2>Save project</h2>
+    <p>Saves the audio, the generated tokens, and your current settings in this browser.</p>
+    <input type="text" id="saveName" placeholder="Project name…" maxlength="80" />
+    <p class="note">Stored in this browser only — clearing browser data will remove it.</p>
+    <div class="row-actions"><button class="btn" id="saveCancel">Cancel</button><button class="btn primary" id="saveConfirm">Save</button></div>
+  </div></div>
+
+  <input type="file" id="fileInput" accept="audio/*,.mp3,.m4a,.aac,.wav,.flac,.ogg" class="hidden" />
+  <audio id="audio" crossorigin="anonymous" class="hidden"></audio>
+</div>
+
+<!-- ============================================================= -->
+<!--  STAGE 1 ANALYZE worker (Essentia + self-contained FFT)       -->
+<!--  Embedded as non-executing text; run via Blob URL at runtime. -->
+<!-- ============================================================= -->
+<script id="analyze-worker" type="text/js-worker">
+'use strict';
+// Essentia.js glue + core are PREPENDED to this worker (fetched on the main thread via reliable
+// CORS and inlined into the worker Blob) — there is NO importScripts here, because that classic
+// no-cors fetch proved flaky against the CDN. The .wasm bytes arrive with the analyze message and
+// we instantiate directly via {wasmBinary}, so the worker never touches the network at all.
+var essentia = null, essentiaInit = null;
+function getEssentia() {
+  if (essentiaInit) return essentiaInit;
+  essentiaInit = new Promise(function (resolve) {
+    // `Module` (classic Emscripten) + `Essentia` are inlined ahead of this code when the assets
+    // loaded; `Module.locateFile` (set in the blob prefix) points the wasm fetch at the CDN.
+    if (typeof Module === 'undefined' || typeof Essentia === 'undefined') { resolve(null); return; }
+    var settled = false;
+    var to = setTimeout(function () { if (!settled) { settled = true; resolve(null); } }, 12000);
+    var done = function () {
+      if (settled) return; settled = true; clearTimeout(to);
+      try { essentia = new Essentia(Module); } catch (e) { essentia = null; }
+      resolve(essentia);
+    };
+    if (Module.calledRun) done();
+    else { var prev = Module.onRuntimeInitialized; Module.onRuntimeInitialized = function () { if (prev) prev(); done(); }; }
+  });
+  return essentiaInit;
+}
+
+// ---------- tiny radix-2 FFT (in-place, power-of-two) ----------
+function fft(re, im) {
+  var n = re.length, i, j, bit, len, k, a, b, tr, ti, wr, wi, cwr, cwi, ang, ncwr;
+  for (i = 1, j = 0; i < n; i++) {
+    for (bit = n >> 1; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) { var t1 = re[i]; re[i] = re[j]; re[j] = t1; var t2 = im[i]; im[i] = im[j]; im[j] = t2; }
+  }
+  for (len = 2; len <= n; len <<= 1) {
+    ang = -2 * Math.PI / len; wr = Math.cos(ang); wi = Math.sin(ang);
+    for (i = 0; i < n; i += len) {
+      cwr = 1; cwi = 0;
+      for (k = 0; k < (len >> 1); k++) {
+        a = i + k; b = a + (len >> 1);
+        tr = re[b] * cwr - im[b] * cwi; ti = re[b] * cwi + im[b] * cwr;
+        re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti;
+        ncwr = cwr * wr - cwi * wi; cwi = cwr * wi + cwi * wr; cwr = ncwr;
+      }
+    }
+  }
+}
+
+// ---------- per-frame feature extraction (pure JS, no WASM churn) ----------
+function extractFeatures(pcm, sampleRate) {
+  var N = 2048, HOP = 512;
+  var frameCount = Math.max(0, Math.floor((pcm.length - N) / HOP) + 1);
+  var bins = N / 2;
+  // Hann window
+  var win = new Float32Array(N);
+  for (var i = 0; i < N; i++) win[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (N - 1)));
+  // band bin boundaries
+  var hzPerBin = sampleRate / N;
+  var loEnd = Math.max(1, Math.round(150 / hzPerBin));
+  var midEnd = Math.round(4000 / hzPerBin);
+  // bins-per-band differ hugely (linear FFT) -> compare flux as MEAN-per-bin, not sum,
+  // else the wide high band always dominates and every onset reads as a hi-hat.
+  var lowCount = Math.max(1, loEnd), midCount = Math.max(1, midEnd - loEnd), highCount = Math.max(1, (bins + 1) - midEnd);
+  // pitch peak search band: ~55 Hz (A1) up to ~2 kHz, ignoring sub-bass so kick fundamentals
+  // do not masquerade as melodic pitch. peakProm (peak/mean ratio, squashed) ~ tonality.
+  var peakLoBin = Math.max(1, Math.round(55 / hzPerBin));
+  var peakHiBin = Math.min(bins - 1, Math.round(2000 / hzPerBin));
+  // richness/partials band: 55 Hz .. 8 kHz (wider than the pitch band, captures overtones)
+  var richLoBin = peakLoBin, richHiBin = Math.min(bins - 1, Math.round(8000 / hzPerBin));
+  var NPART = 4;     // top-N partial peaks captured per frame
+  var loudness = new Float32Array(frameCount), centroid = new Float32Array(frameCount);
+  var bLow = new Float32Array(frameCount), bMid = new Float32Array(frameCount), bHigh = new Float32Array(frameCount);
+  var fTot = new Float32Array(frameCount), fLow = new Float32Array(frameCount), fMid = new Float32Array(frameCount), fHigh = new Float32Array(frameCount);
+  var peakHz = new Float32Array(frameCount), peakProm = new Float32Array(frameCount);
+  var spread = new Float32Array(frameCount), flatness = new Float32Array(frameCount), continuity = new Float32Array(frameCount);
+  var partHz = new Float32Array(frameCount * NPART), partMag = new Float32Array(frameCount * NPART);
+  var re = new Float64Array(N), im = new Float64Array(N);
+  var mag = new Float32Array(bins + 1), prev = new Float32Array(bins + 1);
+  // scratch for per-frame top-N partial selection
+  var pH = new Float64Array(NPART), pM = new Float64Array(NPART);
+  for (var f = 0; f < frameCount; f++) {
+    var off = f * HOP, rms = 0;
+    for (var n = 0; n < N; n++) { var s = pcm[off + n]; rms += s * s; re[n] = s * win[n]; im[n] = 0; }
+    loudness[f] = Math.sqrt(rms / N);
+    fft(re, im);
+    var sumMag = 0, sumFMag = 0, sumF2Mag = 0, lo = 0, md = 0, hi = 0, ftot = 0, flo = 0, fmd = 0, fhi = 0;
+    var peakMag = 0, peakBin = -1, bandSum = 0, bandCnt = 0;
+    var richSum = 0, richLogSum = 0, richCnt = 0;
+    for (var kb = 0; kb <= bins; kb++) {
+      var m = Math.sqrt(re[kb] * re[kb] + im[kb] * im[kb]);
+      var hz = kb * hzPerBin;
+      mag[kb] = m; sumMag += m; sumFMag += m * hz; sumF2Mag += m * hz * hz;
+      var d = m - prev[kb]; if (d < 0) d = 0;
+      ftot += d;
+      if (kb < loEnd) { lo += m; flo += d; } else if (kb < midEnd) { md += m; fmd += d; } else { hi += m; fhi += d; }
+      if (kb >= peakLoBin && kb <= peakHiBin) { bandSum += m; bandCnt++; if (m > peakMag) { peakMag = m; peakBin = kb; } }
+      if (kb >= richLoBin && kb <= richHiBin) { richSum += m; richLogSum += Math.log(m + 1e-6); richCnt++; }
+    }
+    var cen = sumMag > 1e-9 ? sumFMag / sumMag : 0;
+    centroid[f] = cen;
+    // spectral spread (sqrt variance of frequency) -> richness proxy
+    spread[f] = sumMag > 1e-9 ? Math.sqrt(Math.max(0, sumF2Mag / sumMag - cen * cen)) : 0;
+    // spectral flatness (geo/arith mean) -> noisiness; harmonicity = 1 - flatness downstream
+    if (richCnt > 0) { var geo = Math.exp(richLogSum / richCnt), ari = richSum / richCnt; flatness[f] = ari > 1e-9 ? Math.min(1, geo / ari) : 0; } else flatness[f] = 0;
+    bLow[f] = lo; bMid[f] = md; bHigh[f] = hi;
+    fTot[f] = ftot; fLow[f] = flo / lowCount; fMid[f] = fmd / midCount; fHigh[f] = fhi / highCount;
+    // dominant spectral peak -> frequency (parabolic interp) + prominence (tonality 0..1)
+    if (peakBin > 0 && peakBin < bins) {
+      var y0 = mag[peakBin - 1], y1 = mag[peakBin], y2 = mag[peakBin + 1];
+      var den = y0 - 2 * y1 + y2, del = den !== 0 ? 0.5 * (y0 - y2) / den : 0;
+      if (del > 1) del = 1; else if (del < -1) del = -1;
+      peakHz[f] = (peakBin + del) * hzPerBin;
+      var meanBand = bandCnt > 0 ? bandSum / bandCnt : 1e-9;
+      var ratio = peakMag / (meanBand + 1e-9);
+      var prom = (ratio - 3) / (20 - 3); if (prom < 0) prom = 0; else if (prom > 1) prom = 1;
+      peakProm[f] = prom;
+    } else { peakHz[f] = 0; peakProm[f] = 0; }
+    // top-N partial peaks (local maxima in the richness band) for partial-events
+    for (var pp = 0; pp < NPART; pp++) { pH[pp] = 0; pM[pp] = 0; }
+    for (var kp = richLoBin; kp <= richHiBin; kp++) {
+      var mm = mag[kp];
+      if (mm > mag[kp - 1] && mm >= mag[kp + 1] && mm > 1e-7) {
+        // insert into descending top-N by magnitude
+        for (var pj = 0; pj < NPART; pj++) {
+          if (mm > pM[pj]) { for (var pk = NPART - 1; pk > pj; pk--) { pM[pk] = pM[pk - 1]; pH[pk] = pH[pk - 1]; } pM[pj] = mm; var yy0 = mag[kp - 1], yy2 = mag[kp + 1], dn = yy0 - 2 * mm + yy2, dl = dn !== 0 ? 0.5 * (yy0 - yy2) / dn : 0; if (dl > 1) dl = 1; else if (dl < -1) dl = -1; pH[pj] = (kp + dl) * hzPerBin; break; }
+        }
+      }
+    }
+    for (var ps = 0; ps < NPART; ps++) { partHz[f * NPART + ps] = pH[ps]; partMag[f * NPART + ps] = pM[ps]; }
+    var tmp = prev; prev = mag; mag = tmp;
+    if ((f & 1023) === 0) self.postMessage({ type: 'progress', value: 0.05 + 0.55 * (f / Math.max(1, frameCount)), label: 'Computing spectra…' });
+  }
+  // continuity = smoothed inverse flux (high when the spectrum is stable/sustained)
+  var fluxMax = 0; for (var fi = 0; fi < frameCount; fi++) if (fTot[fi] > fluxMax) fluxMax = fTot[fi];
+  var fluxRef = fluxMax * 0.4 + 1e-9, cAcc = 0, cA = 0.85;
+  for (var fc = 0; fc < frameCount; fc++) { var inst = 1 - Math.min(1, fTot[fc] / fluxRef); cAcc = cA * cAcc + (1 - cA) * inst; continuity[fc] = cAcc; }
+  return {
+    sampleRate: sampleRate, hopSize: HOP, fftSize: N, frameCount: frameCount, hopSec: HOP / sampleRate,
+    durationSec: pcm.length / sampleRate, nPart: NPART,
+    loudness: loudness, centroid: centroid, bandLow: bLow, bandMid: bMid, bandHigh: bHigh,
+    fluxTotal: fTot, fluxLow: fLow, fluxMid: fMid, fluxHigh: fHigh,
+    peakHz: peakHz, peakProm: peakProm, spread: spread, flatness: flatness, continuity: continuity,
+    partHz: partHz, partMag: partMag
+  };
+}
+
+// ---------- JS fallbacks (when Essentia is unavailable / errors) ----------
+function pickOnsets(flux, hopSec, minGapSec) {
+  var onsets = [], w = Math.max(2, Math.round(0.08 / hopSec)), last = -1e9;
+  // robust scale of flux for thresholding
+  var mx = 0; for (var i = 0; i < flux.length; i++) if (flux[i] > mx) mx = flux[i];
+  var floor = mx * 0.04;
+  for (var i2 = 1; i2 < flux.length - 1; i2++) {
+    var s = 0, c = 0;
+    for (var j = Math.max(0, i2 - w); j <= Math.min(flux.length - 1, i2 + w); j++) { s += flux[j]; c++; }
+    var mean = s / c, t = i2 * hopSec;
+    if (flux[i2] > flux[i2 - 1] && flux[i2] >= flux[i2 + 1] && flux[i2] > mean * 1.4 + floor && (t - last) >= minGapSec) {
+      onsets.push(t); last = t;
+    }
+  }
+  return Float32Array.from(onsets);
+}
+function estimateTempo(flux, hopSec) {
+  var minBpm = 75, maxBpm = 175;
+  var minLag = Math.round(60 / maxBpm / hopSec), maxLag = Math.round(60 / minBpm / hopSec);
+  var best = -1, bestLag = minLag;
+  for (var lag = minLag; lag <= maxLag; lag++) {
+    var s = 0; for (var i = 0; i + lag < flux.length; i++) s += flux[i] * flux[i + lag];
+    if (s > best) { best = s; bestLag = lag; }
+  }
+  var period = bestLag * hopSec;
+  // phase: first strong onset
+  var mx = 0; for (var k = 0; k < flux.length; k++) if (flux[k] > mx) mx = flux[k];
+  var phaseT = 0; for (var k2 = 0; k2 < flux.length; k2++) { if (flux[k2] > mx * 0.3) { phaseT = k2 * hopSec; break; } }
+  return { bpm: 60 / period, periodSec: period, phaseSec: phaseT % period };
+}
+
+self.onmessage = function (e) {
+  var msg = e.data;
+  if (msg.type !== 'analyze') return;
+  var pcm = msg.pcm, sampleRate = msg.sampleRate;
+  self.postMessage({ type: 'progress', value: 0.04, label: 'Computing spectra…' });
+  var feat;
+  try { feat = extractFeatures(pcm, sampleRate); }
+  catch (err) { self.postMessage({ type: 'error', message: 'Feature extraction failed: ' + err }); return; }
+
+  getEssentia().then(function (ess) {
+    var ok = !!ess;
+    var events = { onsets: null, beats: null, bpm: 0, bpmConfidence: 0, key: null, scale: null, keyStrength: 0, essentiaUsed: false };
+    self.postMessage({ type: 'progress', value: 0.66, label: ok ? 'Detecting beats & onsets (Essentia)…' : 'Detecting beats & onsets…' });
+
+    if (ok && essentia) {
+      var sig = null;
+      try {
+        sig = essentia.arrayToVector(pcm);
+        try {
+          var rhythm = essentia.RhythmExtractor2013(sig, 208, 'multifeature', 40);
+          events.bpm = rhythm.bpm; events.bpmConfidence = rhythm.confidence;
+          events.beats = essentia.vectorToArray(rhythm.ticks);
+          if (rhythm.ticks && rhythm.ticks.delete) rhythm.ticks.delete();
+          if (rhythm.estimates && rhythm.estimates.delete) rhythm.estimates.delete();
+          if (rhythm.bpmIntervals && rhythm.bpmIntervals.delete) rhythm.bpmIntervals.delete();
+        } catch (e1) { events.beats = null; }
+        try {
+          var sf = essentia.SuperFluxExtractor(sig, 20, 2048, 256, 16, sampleRate, 0.05);
+          events.onsets = essentia.vectorToArray(sf.onsets);
+          if (sf.onsets && sf.onsets.delete) sf.onsets.delete();
+        } catch (e2) { events.onsets = null; }
+        try {
+          var key = essentia.KeyExtractor(sig);
+          events.key = key.key; events.scale = key.scale; events.keyStrength = key.strength;
+        } catch (e3) { events.key = null; }
+        events.essentiaUsed = true;
+      } catch (eAll) { events.essentiaUsed = false; }
+      finally { if (sig && sig.delete) try { sig.delete(); } catch (e) {} }
+    }
+
+    self.postMessage({ type: 'progress', value: 0.9, label: 'Finalising events…' });
+    // Fallbacks for anything Essentia did not provide
+    if (!events.onsets || events.onsets.length === 0) { events.onsets = pickOnsets(feat.fluxTotal, feat.hopSec, 0.045); }
+    if (!events.beats || events.beats.length === 0) {
+      var t = estimateTempo(feat.fluxTotal, feat.hopSec);
+      events.bpm = t.bpm; events.bpmConfidence = events.bpmConfidence || 0.2;
+      var beats = []; for (var bt = t.phaseSec; bt < feat.durationSec; bt += t.periodSec) beats.push(bt);
+      events.beats = Float32Array.from(beats);
+    }
+
+    var out = {
+      type: 'features',
+      featureSet: {
+        sampleRate: feat.sampleRate, hopSize: feat.hopSize, fftSize: feat.fftSize,
+        frameCount: feat.frameCount, hopSec: feat.hopSec, durationSec: feat.durationSec, nPart: feat.nPart,
+        loudness: feat.loudness, centroid: feat.centroid,
+        bandLow: feat.bandLow, bandMid: feat.bandMid, bandHigh: feat.bandHigh,
+        fluxTotal: feat.fluxTotal, fluxLow: feat.fluxLow, fluxMid: feat.fluxMid, fluxHigh: feat.fluxHigh,
+        peakHz: feat.peakHz, peakProm: feat.peakProm,
+        spread: feat.spread, flatness: feat.flatness, continuity: feat.continuity,
+        partHz: feat.partHz, partMag: feat.partMag,
+        onsets: events.onsets, beats: events.beats,
+        bpm: events.bpm, bpmConfidence: events.bpmConfidence,
+        key: events.key, scale: events.scale, keyStrength: events.keyStrength,
+        essentiaUsed: events.essentiaUsed
+      }
+    };
+    var transfer = [];
+    ['loudness','centroid','bandLow','bandMid','bandHigh','fluxTotal','fluxLow','fluxMid','fluxHigh','peakHz','peakProm','spread','flatness','continuity','partHz','partMag','onsets','beats']
+      .forEach(function (k) { var a = out.featureSet[k]; if (a && a.buffer) transfer.push(a.buffer); });
+    self.postMessage(out, transfer);
+  });
+};
+</script>
+
+<!-- ============================================================= -->
+<!--  Optional PixiJS v8 (WebGL) — loaded only when WebGL toggled   -->
+<!-- ============================================================= -->
+
+<script>
+'use strict';
+(function () {
+  // ---------------- DOM ----------------
+  var $ = function (id) { return document.getElementById(id); };
+  var stage = $('stage'), audio = $('audio');
+  var dropEl = $('drop'), dropzone = $('dropzone'), fileInput = $('fileInput');
+  var progress = $('progress'), progBar = $('progBar'), progLabel = $('progLabel');
+  var transport = $('transport'), playBtn = $('playBtn'), seek = $('seek'), curTime = $('curTime'), durTime = $('durTime');
+  var inspector = $('inspector'), metaGrid = $('metaGrid'), metaChips = $('metaChips'), tokenLog = $('tokenLog'), tokCount = $('tokCount');
+  var toastMsg = $('toastMsg');
+
+  // ---------------- state ----------------
+  var worker = null;
+  var featureSet = null;       // cached Stage-1 output (re-interpret without re-decode)
+  var tokenStream = null;      // { meta, tokens }
+  var cursor = 0, sections = [];
+  var renderer = null, rendererKind = 'canvas';
+  var seeking = false;
+  var currentAudioBlob = null, currentAudioName = '';   // kept so we can Save the project + re-analyse on demand
+  var audioObjUrl = null;
+  function setAudioSrc(blob) { if (audioObjUrl) { try { URL.revokeObjectURL(audioObjUrl); } catch (e) {} } audioObjUrl = URL.createObjectURL(blob); audio.src = audioObjUrl; }
+
+  var params = { gamma: 0.7, onsetMinIntensity: 0.08, meter: 4, k: 4, pitchTonality: 0.5, pxPerSemitone: 14, connect: true,
+    srcOnsets: true, srcSustain: true, srcPartials: false, gridSubdiv: 4, partialCount: 3,
+    axisX: 'bright', axisY: 'pitch', axisZ: 'rich', rotMode: 'orbit', rotSpeed: 0.18,
+    sizeScale: 1.0, fadeSec: 8, gravity: false, gravityAccel: 0.6, trails: true, wireframe: false, rotate: true,
+    palette: 'Spectral', persist: false, zoom: 1 };
+
+  // ---------------- utils ----------------
+  function toast(text, bad) {
+    toastMsg.textContent = text; toastMsg.className = 'msg show' + (bad ? ' bad' : '');
+    clearTimeout(toast._t); toast._t = setTimeout(function () { toastMsg.className = 'msg'; }, 4200);
+  }
+  function fmtTime(s) { if (!isFinite(s)) s = 0; var m = Math.floor(s / 60), ss = Math.floor(s % 60); return m + ':' + (ss < 10 ? '0' : '') + ss; }
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function percentile(arr, p) {
+    var c = Float32Array.from(arr).sort(); var idx = clamp(Math.floor(p / 100 * (c.length - 1)), 0, c.length - 1); return c[idx];
+  }
+  function lowerBound(tokens, t) { var lo = 0, hi = tokens.length; while (lo < hi) { var mid = (lo + hi) >> 1; if (tokens[mid].t < t) lo = mid + 1; else hi = mid; } return lo; }
+
+  var KEY_HUE = { 'C':0,'C#':30,'Db':30,'D':60,'D#':90,'Eb':90,'E':120,'F':150,'F#':180,'Gb':180,'G':210,'G#':240,'Ab':240,'A':270,'A#':300,'Bb':300,'B':330 };
+
+  // ---------------- pitch + event-space helpers (shared by both renderers) ----------------
+  var NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  function hzToMidi(hz) { return 69 + 12 * Math.log2(hz / 440); }
+  function midiToName(m) { var r = Math.round(m), pc = ((r % 12) + 12) % 12; return NOTE_NAMES[pc] + (Math.floor(r / 12) - 1); }
+  function wrap(v, w) { if (w <= 0) return 0; v = v % w; if (v < 0) v += w; return v; }
+
+  // ---------------- curated colour palettes (replace the garish full-saturation rainbow) ----------------
+  function hslRgb(h, s, l) { h = (((h % 360) + 360) % 360) / 360; var a = s * Math.min(l, 1 - l); var f = function (n) { var k = (n + h * 12) % 12; return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); }; return [f(0), f(8), f(4)]; }
+  function buildPalettes() {
+    var P = {}, pc, arr, cof;
+    var byCof = function (sat, lit) { var a = []; for (pc = 0; pc < 12; pc++) { cof = (pc * 7) % 12; a.push(hslRgb(cof / 12 * 360, sat, lit)); } return a; };
+    P['Spectral'] = byCof(0.62, 0.60);                 // controlled rainbow (default — covers the gamut, not garish)
+    P['Pastel'] = byCof(0.42, 0.74);                   // soft
+    P['Neon'] = byCof(0.92, 0.58);                     // the old vivid look, kept as an option
+    arr = []; for (pc = 0; pc < 12; pc++) arr.push(hslRgb(282 - (pc / 11) * 252, 0.66, 0.58)); P['Sunset'] = arr;           // purple -> orange
+    arr = []; for (pc = 0; pc < 12; pc++) arr.push(hslRgb(250 - (pc / 11) * 78, 0.55, 0.42 + (pc / 11) * 0.42)); P['Ice'] = arr;  // indigo -> cyan
+    arr = []; for (pc = 0; pc < 12; pc++) arr.push(hslRgb((pc / 11) * 46, 0.78, 0.40 + (pc / 11) * 0.34)); P['Ember'] = arr;       // red -> gold
+    arr = []; for (pc = 0; pc < 12; pc++) { cof = (pc * 7) % 12; arr.push(hslRgb(208, 0.52, 0.30 + cof / 11 * 0.55)); } P['Mono'] = arr;  // single hue, varied lightness
+    var vA = [[68, 1, 84], [59, 82, 139], [33, 144, 141], [93, 201, 99], [253, 231, 37]];   // Viridis (perceptual)
+    arr = []; for (pc = 0; pc < 12; pc++) { var t = pc / 11 * (vA.length - 1), i0 = Math.floor(t), fr = t - i0, c0 = vA[i0], c1 = vA[Math.min(i0 + 1, vA.length - 1)]; arr.push([Math.round(c0[0] + (c1[0] - c0[0]) * fr), Math.round(c0[1] + (c1[1] - c0[1]) * fr), Math.round(c0[2] + (c1[2] - c0[2]) * fr)]); } P['Viridis'] = arr;
+    return P;
+  }
+  var PALETTES = buildPalettes(), PALETTE_NAMES = Object.keys(PALETTES);
+  function tokenRgb(tok) {
+    var pal = PALETTES[params.palette] || PALETTES['Spectral'];
+    var idx = tok.pitchClass != null ? (tok.pitchClass % pal.length)
+      : (tok.type === 'kick' ? 0 : tok.type === 'snare' ? 5 : tok.type === 'hat' ? 9 : tok.type === 'downbeat' ? 7 : 3);   // drums -> spread across the palette
+    return pal[idx];
+  }
+  function rgbNum(c) { return (c[0] << 16) | (c[1] << 8) | c[2]; }
+  function rgba(c, a) { return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')'; }
+
+  // XYZ axis presets (the "8-matrix" of features mapped to X/Y/Z)
+  var CUBE_PRESETS = [
+    { name: 'Timbre · bright·pitch·rich', x: 'bright', y: 'pitch', z: 'rich' },
+    { name: 'Pitch-walk · walk·pitch·rich', x: 'walk', y: 'pitch', z: 'rich' },
+    { name: 'Harmonic · bright·pitch·harm', x: 'bright', y: 'pitch', z: 'harm' },
+    { name: 'Spectro-time · time·pitch·bright', x: 'time', y: 'pitch', z: 'bright' },
+    { name: 'Energy field · loud·pitch·cont', x: 'loud', y: 'pitch', z: 'cont' },
+    { name: 'Continuity · cont·pitch·rich', x: 'cont', y: 'pitch', z: 'rich' },
+    { name: 'Timbre plane · bright·loud·rich', x: 'bright', y: 'loud', z: 'rich' },
+    { name: 'Walk × time · walk·pitch·time', x: 'walk', y: 'pitch', z: 'time' },
+    { name: 'Loud × bright · loud·bright·harm', x: 'loud', y: 'bright', z: 'harm' },
+    { name: 'Full timbre · bright·rich·harm', x: 'bright', y: 'rich', z: 'harm' }
+  ];
+
+  // pure geometry of the event space: top = pitch field, bottom = rhythm lanes
+  function buildLayout(W, H) {
+    var fieldTop = Math.round(H * 0.06), fieldBottom = Math.round(H * 0.64);
+    var laneTop = Math.round(H * 0.68), laneArea = Math.max(1, H - laneTop - Math.round(H * 0.04));
+    // top→bottom mirrors pitch height: hi-hat highest, kick lowest
+    var defs = [['hat', 'hi-hat', 190], ['snare', 'snare', 320], ['beat', 'beat · downbeat', 210], ['kick', 'kick', 24]];
+    var laneH = laneArea / defs.length, lanes = {}, laneList = [];
+    defs.forEach(function (d, i) { var o = { type: d[0], label: d[1], hue: d[2], y: laneTop + laneH * (i + 0.5), h: laneH }; laneList.push(o); lanes[d[0]] = o; });
+    return { W: W, H: H, fieldTop: fieldTop, fieldBottom: fieldBottom, fieldH: fieldBottom - fieldTop, fieldW: W, laneTop: laneTop, laneH: laneH, lanes: lanes, laneList: laneList };
+  }
+  function laneForType(layout, type) {
+    if (type === 'kick') return layout.lanes.kick;
+    if (type === 'snare') return layout.lanes.snare;
+    if (type === 'hat') return layout.lanes.hat;
+    if (type === 'beat' || type === 'downbeat') return layout.lanes.beat;
+    return null;
+  }
+  function yForPitch(layout, range, midi) {
+    var lo = range ? range.minMidi : 48, hi = range ? range.maxMidi : 84;
+    var r = (midi - lo) / Math.max(1, hi - lo); r = r < 0 ? 0 : r > 1 ? 1 : r;
+    return layout.fieldBottom - r * layout.fieldH;   // high pitch -> small y (top)
+  }
+  // Map one token to a renderer-agnostic mark. Mutates `state` (the looped delta-pitch walk).
+  // Returns null for tokens with no mark (section_change handled by caller).
+  function placeToken(tok, layout, range, state, nowT, opts) {
+    if (tok.pitch != null) {   // pitched -> looped Δpitch walk; partials (overtones) plot but must NOT drive the lead walk
+      var advance = tok.type !== 'partial';
+      var delta = (advance && state.prevPitch != null) ? (tok.pitch - state.prevPitch) : 0;
+      var nx = advance ? wrap(state.walkX + delta * opts.pxPerSemi, layout.fieldW) : state.walkX;
+      var y = yForPitch(layout, range, tok.pitch);
+      var crossed = advance && state.hasPrevNote && Math.abs(nx - state.prevX) > layout.fieldW * 0.5; // wrapped → don't connect across screen
+      var col = tokenRgb(tok);
+      var mk = { kind: 0, x: nx, y: y, col: col, colNum: rgbNum(col), born: nowT, rate: 0.55 + Math.random() * 0.9,
+        intensity: clamp(tok.intensity, 0, 1), px: state.prevX, py: state.prevY, hasPrev: advance && state.hasPrevNote && !crossed };
+      if (advance) { state.prevPitch = tok.pitch; state.prevX = nx; state.prevY = y; state.hasPrevNote = true; state.walkX = nx; }
+      return mk;
+    }
+    var lane = laneForType(layout, tok.type);
+    if (!lane) return null;
+    var per = opts.lanePeriod || 6, lx = (per > 0 ? ((nowT % per) / per) : 0) * layout.W; // looped time sweep
+    var lcol = tokenRgb(tok);
+    return { kind: tok.type === 'downbeat' ? 2 : 1, x: lx, y: lane.y, col: lcol, colNum: rgbNum(lcol), born: nowT, rate: 0.55 + Math.random() * 0.9,
+      intensity: clamp(tok.intensity, 0, 1), laneH: lane.h };
+  }
+
+  // =============================================================
+  //  STAGE 1: ANALYZE (decode on main thread -> worker FFT/Essentia)
+  // =============================================================
+  var ESS_BASE = 'https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/';
+  var essentiaAssets = undefined;        // {glue,core,wasm} when loaded, null when unavailable
+  var essentiaAssetsPromise = null;
+  function loadEssentiaAssets() {
+    if (essentiaAssetsPromise) return essentiaAssetsPromise;
+    // Fetch the JS over CORS (reliable) and inline it; the glue then fetches its own .wasm over CORS
+    // via Module.locateFile. (importScripts' classic no-cors fetch proved flaky against the CDN.)
+    essentiaAssetsPromise = Promise.all([
+      fetch(ESS_BASE + 'essentia-wasm.umd.js').then(function (r) { if (!r.ok) throw 0; return r.text(); }),
+      fetch(ESS_BASE + 'essentia.js-core.umd.js').then(function (r) { if (!r.ok) throw 0; return r.text(); })
+    ]).then(function (a) { essentiaAssets = { glue: a[0], core: a[1] }; return essentiaAssets; })
+      .catch(function () { essentiaAssets = null; return null; });
+    return essentiaAssetsPromise;
+  }
+
+  async function ensureWorker() {
+    if (worker) return worker;
+    var assets = await loadEssentiaAssets();        // inline Essentia (if reachable) into the worker
+    var parts = [];
+    if (assets) {
+      // `var exports={}` satisfies the glue's unguarded trailing `exports.EssentiaWASM = Module`;
+      // `Module.locateFile` points the wasm fetch at the CDN (the worker has no document/base URL).
+      parts.push("var exports={};var Module={locateFile:function(p){return '" + ESS_BASE + "'+p;}};");
+      parts.push(assets.glue, assets.core);
+    }
+    parts.push($('analyze-worker').textContent);
+    var url = URL.createObjectURL(new Blob([parts.join('\n;\n')], { type: 'application/javascript' }));
+    worker = new Worker(url); URL.revokeObjectURL(url);
+    worker.onmessage = function (e) {
+      var m = e.data;
+      if (m.type === 'progress') { progBar.style.width = Math.round(m.value * 100) + '%'; progLabel.textContent = m.label || ''; }
+      else if (m.type === 'error') { showProgress(false); toast(m.message || 'Analysis error', true); }
+      else if (m.type === 'features') { onFeatures(m.featureSet); }
+    };
+    worker.onerror = function (err) { showProgress(false); toast('Analysis engine failed: ' + (err.message || err), true); };
+    return worker;
+  }
+
+  function showProgress(on) { progress.classList.toggle('show', on); if (on) { progBar.style.width = '0%'; } }
+
+  async function handleFile(file) {
+    if (!file) return;
+    currentAudioBlob = file; currentAudioName = file.name || currentAudioName || 'audio';
+    try {
+      // playback uses the native decoder on the original file
+      setAudioSrc(file);
+      dropEl.classList.add('hide');
+      showProgress(true); progLabel.textContent = 'Decoding…';
+
+      var arrayBuf = await file.arrayBuffer();
+      var actx = new (window.AudioContext || window.webkitAudioContext)();
+      var decoded;
+      try { decoded = await actx.decodeAudioData(arrayBuf); }
+      catch (err) { actx.close(); throw new Error('Could not decode this file. Try MP3, M4A, WAV or FLAC.'); }
+
+      progLabel.textContent = 'Resampling to mono 44.1 kHz…';
+      var SR = 44100;
+      var len = Math.max(1, Math.ceil(decoded.duration * SR));
+      var off = new OfflineAudioContext({ numberOfChannels: 1, length: len, sampleRate: SR });
+      var srcNode = off.createBufferSource(); srcNode.buffer = decoded; srcNode.connect(off.destination); srcNode.start();
+      var mono = await off.startRendering();
+      actx.close();
+      var pcm = mono.getChannelData(0);
+      var forWorker = pcm.slice();           // transfer detaches -> keep nothing else needs it
+
+      var w = await ensureWorker();
+      w.postMessage({ type: 'analyze', pcm: forWorker, sampleRate: SR }, [forWorker.buffer]);
+    } catch (err) {
+      showProgress(false); dropEl.classList.remove('hide');
+      toast(err.message || String(err), true);
+    }
+  }
+
+  function onFeatures(fs) {
+    featureSet = fs;
+    reinterpret();                 // STAGE 2
+    showProgress(false);
+    transport.classList.remove('hidden');
+    durTime.textContent = fmtTime(fs.durationSec);
+    $('saveBtn').disabled = false;
+    if (!fs.essentiaUsed) toast('Essentia unavailable — using built-in beat/onset detection.');
+    else toast('Analysis complete · ' + tokenStream.tokens.length + ' tokens');
+  }
+
+  // =============================================================
+  //  STAGE 2: INTERPRET (pure JS over cached FeatureSet -> tokens)
+  // =============================================================
+  function reinterpret() {
+    if (!featureSet) return;
+    tokenStream = interpret(featureSet, params);
+    cursor = 0;
+    sections = tokenStream.tokens.filter(function (t) { return t.type === 'section_change'; });
+    if (renderer) renderer.setStream(tokenStream);
+    renderMeta();
+    resetCursorTo(audio.currentTime || 0);
+  }
+
+  function interpret(fs, p) {
+    var hopSec = fs.hopSec, fc = fs.frameCount;
+    var frameAt = function (t) { return clamp(Math.round(t / hopSec), 0, fc - 1); };
+    // robust normalisation ranges
+    var fLo = percentile(fs.fluxTotal, 20), fHi = percentile(fs.fluxTotal, 97) || 1e-6;
+    var lLo = percentile(fs.loudness, 10), lHi = percentile(fs.loudness, 95) || 1e-6;
+    var cLo = percentile(fs.centroid, 5), cHi = percentile(fs.centroid, 95) || 1;
+    var norm = function (v, lo, hi) { return clamp((v - lo) / Math.max(1e-9, hi - lo), 0, 1); };
+    var shape = function (v) { return Math.pow(v, p.gamma); };
+
+    var tokens = [];
+    var NP = fs.nPart || 4;
+    var beats = fs.beats || [], bpm = fs.bpm || 120, period = 60 / Math.max(1, bpm), phase = beats.length ? beats[0] : 0;
+
+    // attach a rich descriptor vector to a token (raw values; cube renderer normalises via featureRanges)
+    var withFeat = function (tok, fr) {
+      tok.bright = +(fs.centroid[fr] || 0).toFixed(1);                       // spectral position
+      tok.rich = +((fs.spread ? fs.spread[fr] : 0) || 0).toFixed(1);         // spectral spread / richness
+      tok.harm = +((fs.flatness ? 1 - fs.flatness[fr] : 0) || 0).toFixed(3); // harmonicity (tonal↔noisy)
+      tok.cont = +((fs.continuity ? fs.continuity[fr] : 0) || 0).toFixed(3); // continuity / sustain
+      tok.loud = +((fs.loudness[fr]) || 0).toFixed(4);                       // loudness
+      return tok;
+    };
+    var part = function (fr, idx, which) { var a = which === 'h' ? fs.partHz : fs.partMag; return a ? a[fr * NP + idx] : 0; };
+    var emitPartials = function (fr, t, baseInten, baseFund) {
+      if (!p.srcPartials) return;
+      var n = Math.min(p.partialCount || 3, NP), m0 = part(fr, 0, 'm') + 1e-9;
+      for (var pi = 0; pi < n; pi++) {
+        var ph = part(fr, pi, 'h'), pm = part(fr, pi, 'm');
+        if (ph < 55 || ph > 8000 || pm <= 0) continue;
+        if (baseFund && Math.abs(ph - baseFund) < baseFund * 0.03) continue;   // skip the fundamental itself
+        var pmidi = hzToMidi(ph); if (pmidi < 12 || pmidi > 108) continue;
+        var pInt = clamp(baseInten * 0.5 * (0.4 + 0.6 * (pm / m0)), 0, 1);
+        tokens.push(withFeat({ t: +t.toFixed(4), type: 'partial', intensity: +pInt.toFixed(3), pitch: +pmidi.toFixed(2), pitchClass: ((Math.round(pmidi) % 12) + 12) % 12 }, fr));
+      }
+    };
+
+    // --- source 1: onsets -> pitched `note` (tonal) OR rhythmic kick/snare/hat (percussive) ---
+    if (p.srcOnsets !== false) {
+      var on = fs.onsets || [];
+      for (var i = 0; i < on.length; i++) {
+        var t = on[i], fr = frameAt(t);
+        var inten = shape(norm(fs.fluxTotal[fr], fLo, fHi));
+        if (inten < p.onsetMinIntensity) continue;
+        var prom = fs.peakProm ? fs.peakProm[fr] : 0, hz = fs.peakHz ? fs.peakHz[fr] : 0;
+        if (prom >= p.pitchTonality && hz >= 55 && hz <= 2000) {
+          var midi = hzToMidi(hz);
+          tokens.push(withFeat({ t: +t.toFixed(4), type: 'note', intensity: +inten.toFixed(3), pitch: +midi.toFixed(2), pitchClass: ((Math.round(midi) % 12) + 12) % 12 }, fr));
+          emitPartials(fr, t, inten, hz);
+        } else {
+          var lo = fs.fluxLow[fr], md = fs.fluxMid[fr], hi = fs.fluxHigh[fr];
+          var type = 'onset', band = null, mx = Math.max(lo, md, hi);
+          if (mx > 1e-9) { if (mx === lo) { type = 'kick'; band = 'low'; } else if (mx === md) { type = 'snare'; band = 'mid'; } else { type = 'hat'; band = 'high'; } }
+          var tok = withFeat({ t: +t.toFixed(4), type: type, intensity: +inten.toFixed(3) }, fr);
+          if (band) tok.band = band;
+          tokens.push(tok);
+        }
+      }
+    }
+
+    // --- source 2: sustain resampling on a fine grid (drives tens of events / bar) ---
+    if (p.srcSustain) {
+      var step = Math.max(0.04, period / Math.max(1, p.gridSubdiv || 4));
+      var loudFloor = lLo + (lHi - lLo) * 0.18, tonFloor = (p.pitchTonality || 0.5) * 0.5;
+      for (var gt = (phase % step); gt < fs.durationSec; gt += step) {
+        var gfr = frameAt(gt);
+        if (fs.loudness[gfr] < loudFloor) continue;
+        var gh = fs.peakHz ? fs.peakHz[gfr] : 0, gp = fs.peakProm ? fs.peakProm[gfr] : 0;
+        if (gh < 55 || gh > 2000 || gp < tonFloor) continue;
+        var gmidi = hzToMidi(gh), gInt = 0.22 + 0.5 * shape(norm(fs.loudness[gfr], lLo, lHi));
+        tokens.push(withFeat({ t: +gt.toFixed(4), type: 'sustain', intensity: +clamp(gInt, 0, 1).toFixed(3), pitch: +gmidi.toFixed(2), pitchClass: ((Math.round(gmidi) % 12) + 12) % 12 }, gfr));
+        emitPartials(gfr, gt, gInt, gh);
+      }
+    }
+
+    // --- beats / downbeats ---
+    for (var b = 0; b < beats.length; b++) {
+      var bt = beats[b], bfr = frameAt(bt);
+      var bInten = 0.35 + 0.6 * shape(norm(fs.loudness[bfr], lLo, lHi));
+      var beatIdx = Math.round((bt - phase) / period);
+      var isDown = ((beatIdx % p.meter) + p.meter) % p.meter === 0;
+      tokens.push({ t: +bt.toFixed(4), type: isDown ? 'downbeat' : 'beat', intensity: +clamp(bInten, 0, 1).toFixed(3) });
+    }
+
+    // --- sections (windowed k-means over energy/brightness/band-ratio) ---
+    var sec = segmentSections(fs, p, norm, lLo, lHi, cLo, cHi);
+    for (var s = 0; s < sec.list.length; s++) {
+      var sg = sec.list[s];
+      tokens.push({ t: +sg.t.toFixed(4), type: 'section_change', intensity: 0.85, dur: +sg.dur.toFixed(3),
+        profileId: sg.profileId, label: sg.label, summary: sg.summary });
+    }
+
+    tokens.sort(function (a, b) { return a.t - b.t || (a.type === 'section_change' ? -1 : 1); });
+
+    // vertical (pitch) axis range — from pitched leads (note/sustain), excluding overtone partials
+    var notePitches = [];
+    for (var ni = 0; ni < tokens.length; ni++) { var tt = tokens[ni]; if (tt.pitch != null && tt.type !== 'partial') notePitches.push(tt.pitch); }
+    var pitchRange;
+    if (notePitches.length >= 4) {
+      var minMidi = clamp(Math.floor(percentile(notePitches, 5)) - 2, 24, 100);
+      var maxMidi = clamp(Math.ceil(percentile(notePitches, 95)) + 2, 24, 100);
+      if (maxMidi - minMidi < 12) { var midp = (minMidi + maxMidi) / 2; minMidi = clamp(Math.round(midp - 6), 24, 100); maxMidi = clamp(Math.round(midp + 6), 24, 100); }
+      pitchRange = { minMidi: minMidi, maxMidi: maxMidi };
+    } else { pitchRange = { minMidi: 48, maxMidi: 84 }; }
+
+    // feature axis ranges (percentile lo/hi) so the cube renderer can map any field -> a cube axis
+    var rng = function (key) { var a = []; for (var z = 0; z < tokens.length; z++) if (tokens[z][key] != null) a.push(tokens[z][key]); if (a.length < 4) return { lo: 0, hi: 1 }; var lo = percentile(a, 5), hi = percentile(a, 95); if (hi - lo < 1e-6) hi = lo + 1e-6; return { lo: +lo.toFixed(4), hi: +hi.toFixed(4) }; };
+    var featureRanges = { bright: rng('bright'), rich: rng('rich'), harm: rng('harm'), cont: rng('cont'), loud: rng('loud') };
+
+    var meta = {
+      schemaVersion: 2, durationSec: +fs.durationSec.toFixed(3), sampleRate: fs.sampleRate, hopSize: fs.hopSize,
+      bpm: +(+bpm).toFixed(2), bpmConfidence: +(+fs.bpmConfidence).toFixed(3),
+      key: fs.key, scale: fs.scale, keyStrength: fs.keyStrength != null ? +(+fs.keyStrength).toFixed(3) : null,
+      beatGrid: { periodSec: +period.toFixed(4), phaseSec: +phase.toFixed(4), meter: p.meter },
+      pitchRange: pitchRange, featureRanges: featureRanges,
+      profiles: sec.profiles,
+      engine: fs.essentiaUsed ? 'essentia.js@0.1.3' : 'builtin-dsp',
+      analysisParams: { gamma: p.gamma, onsetMinIntensity: p.onsetMinIntensity, meter: p.meter, k: p.k, pitchTonality: p.pitchTonality, srcOnsets: p.srcOnsets !== false, srcSustain: !!p.srcSustain, srcPartials: !!p.srcPartials, gridSubdiv: p.gridSubdiv, partialCount: p.partialCount }
+    };
+    return { meta: meta, tokens: tokens };
+  }
+
+  function segmentSections(fs, p, norm, lLo, lHi, cLo, cHi) {
+    var hopSec = fs.hopSec, fc = fs.frameCount;
+    var framesPerWin = Math.max(1, Math.round(2.0 / hopSec));
+    var nWin = Math.max(1, Math.ceil(fc / framesPerWin));
+    var pts = [], meanLoud = [], meanBright = [], density = [];
+    for (var w = 0; w < nWin; w++) {
+      var a = w * framesPerWin, bnd = Math.min(fc, a + framesPerWin);
+      var sl = 0, sc = 0, lo = 0, md = 0, hi = 0, cnt = bnd - a;
+      for (var f = a; f < bnd; f++) { sl += fs.loudness[f]; sc += fs.centroid[f]; lo += fs.bandLow[f]; md += fs.bandMid[f]; hi += fs.bandHigh[f]; }
+      cnt = Math.max(1, cnt);
+      var tot = lo + md + hi + 1e-9;
+      var ld = norm(sl / cnt, lLo, lHi), br = norm(sc / cnt, cLo, cHi);
+      pts.push([ld, br, lo / tot, md / tot, hi / tot]);
+      meanLoud.push(ld); meanBright.push(br);
+    }
+    // density = onsets per window
+    var onsetsArr = fs.onsets || []; var dens = new Array(nWin).fill(0);
+    for (var oi = 0; oi < onsetsArr.length; oi++) { var wi = clamp(Math.floor(onsetsArr[oi] / (framesPerWin * hopSec)), 0, nWin - 1); dens[wi]++; }
+    var dmax = Math.max(1, Math.max.apply(null, dens));
+    // z-score columns
+    var D = pts[0].length;
+    for (var c = 0; c < D; c++) {
+      var m = 0; for (var r = 0; r < nWin; r++) m += pts[r][c]; m /= nWin;
+      var v = 0; for (var r2 = 0; r2 < nWin; r2++) { var dd = pts[r2][c] - m; v += dd * dd; } v = Math.sqrt(v / nWin) || 1;
+      for (var r3 = 0; r3 < nWin; r3++) pts[r3][c] = (pts[r3][c] - m) / v;
+    }
+    var k = Math.min(p.k, nWin);
+    var assign = kmeans(pts, k, 12);
+    // relabel by first appearance
+    var remap = {}, next = 0, labels = 'ABCDEFGH';
+    for (var i = 0; i < nWin; i++) { if (!(assign[i] in remap)) remap[assign[i]] = next++; }
+    // merge adjacent same-profile windows into segments
+    var list = [], profAgg = {};
+    var curP = remap[assign[0]], startW = 0;
+    var pushSeg = function (pid, sW, eW) {
+      var startT = sW * framesPerWin * hopSec, endT = Math.min(fs.durationSec, eW * framesPerWin * hopSec);
+      var sumL = 0, sumB = 0, sumD = 0, c2 = eW - sW;
+      for (var ww = sW; ww < eW; ww++) { sumL += meanLoud[ww]; sumB += meanBright[ww]; sumD += dens[ww] / dmax; }
+      c2 = Math.max(1, c2);
+      var summary = { energy: +(sumL / c2).toFixed(3), brightness: +(sumB / c2).toFixed(3), density: +(sumD / c2).toFixed(3) };
+      list.push({ t: startT, dur: endT - startT, profileId: pid, label: labels[pid] || ('P' + pid), summary: summary });
+      if (!profAgg[pid]) profAgg[pid] = { e: 0, b: 0, d: 0, n: 0 };
+      profAgg[pid].e += summary.energy; profAgg[pid].b += summary.brightness; profAgg[pid].d += summary.density; profAgg[pid].n++;
+    };
+    for (var i2 = 1; i2 < nWin; i2++) { var pr = remap[assign[i2]]; if (pr !== curP) { pushSeg(curP, startW, i2); curP = pr; startW = i2; } }
+    pushSeg(curP, startW, nWin);
+    var profiles = Object.keys(profAgg).map(function (pid) {
+      var ag = profAgg[pid];
+      return { profileId: +pid, label: labels[pid] || ('P' + pid),
+        summary: { energy: +(ag.e / ag.n).toFixed(3), brightness: +(ag.b / ag.n).toFixed(3), density: +(ag.d / ag.n).toFixed(3) } };
+    });
+    return { list: list, profiles: profiles };
+  }
+
+  function kmeans(points, k, iters) {
+    var n = points.length, d = points[0].length, cents = [], i, c, j;
+    for (i = 0; i < k; i++) cents.push(points[Math.floor(i * (n - 1) / Math.max(1, k - 1))].slice());
+    var assign = new Array(n).fill(0);
+    for (var it = 0; it < iters; it++) {
+      for (i = 0; i < n; i++) { var best = 0, bd = Infinity; for (c = 0; c < k; c++) { var s = 0; for (j = 0; j < d; j++) { var dv = points[i][j] - cents[c][j]; s += dv * dv; } if (s < bd) { bd = s; best = c; } } assign[i] = best; }
+      var sums = [], cnt = new Array(k).fill(0); for (c = 0; c < k; c++) sums.push(new Array(d).fill(0));
+      for (i = 0; i < n; i++) { cnt[assign[i]]++; for (j = 0; j < d; j++) sums[assign[i]][j] += points[i][j]; }
+      for (c = 0; c < k; c++) if (cnt[c] > 0) for (j = 0; j < d; j++) cents[c][j] = sums[c][j] / cnt[c];
+    }
+    return assign;
+  }
+
+  // =============================================================
+  //  STAGE 3: RENDER (consumes ONLY the token stream + audio clock)
+  // =============================================================
+  function profileHue(profileId) {
+    var base = tokenStream && tokenStream.meta.key != null ? (KEY_HUE[tokenStream.meta.key] || 0) : 200;
+    return (base + profileId * 67) % 360;
+  }
+  function paletteFor(profileId) {
+    var prof = tokenStream && tokenStream.meta.profiles[profileId];
+    var sum = prof ? prof.summary : { energy: 0.5, brightness: 0.5, density: 0.5 };
+    var minor = tokenStream && tokenStream.meta.scale === 'minor';
+    return { hue: profileHue(profileId), sat: minor ? 0.55 : 0.8, energy: sum.energy, brightness: sum.brightness, density: sum.density };
+  }
+
+  // ---- Canvas 2D renderer (default, zero-dependency) ----
+  function createCanvasRenderer(canvas) {
+    var ctx = canvas.getContext('2d', { alpha: false });
+    var W = 0, H = 0, dpr = 1, layout = buildLayout(1, 1);
+    var MAX = 5000, FLOOR = 0.13;     // accumulate-map: persist at FLOOR (or params.fadeSec), recent ones glow
+    var marks = [];
+    var state = { walkX: 0.5, prevPitch: null, prevX: 0.5, prevY: 0, hasPrevNote: false };
+    var palette = { hue: 200, energy: 0.5 }, tgt = null, lastNow = 0;
+
+    function rescaleMarks(ow, oh, nw, nh) {   // keep the accumulated map + walk aligned across a resize
+      if (!(ow > 0 && oh > 0) || (ow === nw && oh === nh)) return;
+      var sx = nw / ow, sy = nh / oh;
+      state.walkX *= sx; state.prevX *= sx; state.prevY *= sy;
+      for (var i = 0; i < marks.length; i++) { var m = marks[i]; m.x *= sx; m.y *= sy; if (m.px != null) m.px *= sx; if (m.py != null) m.py *= sy; }
+    }
+    function resize() {
+      var ow = W, oh = H;
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      W = canvas.clientWidth; H = canvas.clientHeight;
+      canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      layout = buildLayout(W, H);
+      rescaleMarks(ow, oh, W, H);
+      if (!state.hasPrevNote) { state.walkX = layout.fieldW / 2; state.prevX = state.walkX; state.prevY = layout.fieldBottom - layout.fieldH / 2; }
+    }
+    function range() { return tokenStream && tokenStream.meta.pitchRange; }
+    function opts() {
+      var m = tokenStream && tokenStream.meta, per = 6;
+      if (m && m.beatGrid && m.beatGrid.periodSec) per = Math.max(2, m.beatGrid.periodSec * (m.beatGrid.meter || 4) * 2);
+      return { pxPerSemi: params.pxPerSemitone || 14, lanePeriod: per };
+    }
+    function resetState() {
+      marks.length = 0;
+      state.walkX = layout.fieldW / 2; state.prevPitch = null;
+      state.prevX = state.walkX; state.prevY = layout.fieldBottom - layout.fieldH / 2; state.hasPrevNote = false;
+    }
+    function drawGuides() {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.lineWidth = 1; ctx.font = '10px ui-monospace, monospace';
+      var rg = range();
+      if (rg) {   // octave gridlines + C labels in the pitch field
+        ctx.strokeStyle = 'rgba(255,255,255,0.045)';
+        for (var oc = Math.ceil(rg.minMidi / 12) * 12; oc <= rg.maxMidi; oc += 12) {
+          var y = yForPitch(layout, rg, oc);
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+          ctx.fillStyle = 'rgba(255,255,255,0.16)'; ctx.fillText(midiToName(oc), 4, y - 2);
+        }
+      }
+      // divider + rhythm lane baselines/labels
+      ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+      ctx.beginPath(); ctx.moveTo(0, layout.laneTop - Math.round(H * 0.02)); ctx.lineTo(W, layout.laneTop - Math.round(H * 0.02)); ctx.stroke();
+      for (var i = 0; i < layout.laneList.length; i++) {
+        var ln = layout.laneList[i];
+        ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+        ctx.beginPath(); ctx.moveTo(0, ln.y); ctx.lineTo(W, ln.y); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.fillText(ln.label, 4, ln.y - 3);
+      }
+    }
+    return {
+      resize: resize,
+      setStream: function () { resetState(); },
+      dispatch: function (tok, nowT) {
+        if (nowT == null) nowT = lastNow;
+        if (tok.type === 'section_change') { tgt = paletteFor(tok.profileId); return; }
+        var mk = placeToken(tok, layout, range(), state, nowT, opts());
+        if (mk) marks.push(mk);
+      },
+      seekState: function (profileId) { palette = paletteFor(profileId); tgt = null; resetState(); },
+      update: function (dt, nowT) {
+        if (nowT != null) lastNow = nowT;
+        if (tgt) { var s = Math.min(1, dt * 1.8); palette.hue += ((tgt.hue - palette.hue + 540) % 360 - 180) * s; palette.hue = (palette.hue + 360) % 360; palette.energy += (tgt.energy - palette.energy) * s; }
+        // background (retained-mode: cleared each frame; translucent when gravity trails are on so falls streak)
+        ctx.globalCompositeOperation = 'source-over';
+        var bgL = 4 + palette.energy * 5, gravBg = !!params.gravity && params.trails !== false;
+        ctx.fillStyle = 'hsl' + (gravBg ? 'a' : '') + '(' + (palette.hue | 0) + ',30%,' + bgL + '%' + (gravBg ? ',0.30' : '') + ')';
+        ctx.fillRect(0, 0, W, H);
+        drawGuides();
+        if (marks.length > MAX) marks.splice(0, marks.length - MAX);
+        ctx.globalCompositeOperation = 'lighter';
+        var fadeSec = Math.max(0.3, params.fadeSec || 8), grav = !!params.gravity, gAcc = params.gravityAccel != null ? params.gravityAccel : 0.6, sz = params.sizeScale || 1;
+        for (var i = 0; i < marks.length; i++) {
+          var mk = marks[i], age = lastNow - mk.born; if (age < 0) age = 0;
+          var my = mk.y, a;
+          if (grav) {                                  // accelerate downward; vanish through the floor (rate varies per mark)
+            my = mk.y + 0.5 * gAcc * mk.rate * 120 * age * age;
+            if (my > H + 16) continue;
+            a = clamp((H + 8 - my) / (H * 0.35), 0, 1);
+          } else {
+            var rec = age < fadeSec ? 1 - age / fadeSec : 0; a = FLOOR + (1 - FLOOR) * rec;
+          }
+          if (mk.kind === 0) {   // pitch note: optional connector + dot
+            if (mk.hasPrev && params.connect !== false && !grav) {
+              ctx.strokeStyle = rgba(mk.col, a * 0.22);
+              ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(mk.px, mk.py); ctx.lineTo(mk.x, mk.y); ctx.stroke();
+            }
+            var r = (2.4 + mk.intensity * 6.2) * sz;
+            ctx.fillStyle = rgba(mk.col, a * 0.95);
+            ctx.beginPath(); ctx.arc(mk.x, my, r, 0, 7); ctx.fill();
+          } else {               // rhythm tick in its lane (downbeat = thicker + glow dot)
+            var halfH = (mk.laneH || layout.laneH) * 0.30 * (0.45 + mk.intensity * 0.8) * sz;
+            ctx.strokeStyle = rgba(mk.col, a);
+            ctx.lineWidth = (mk.kind === 2 ? 3 : 1.6) * sz;
+            ctx.beginPath(); ctx.moveTo(mk.x, my - halfH); ctx.lineTo(mk.x, my + halfH); ctx.stroke();
+            if (mk.kind === 2) { ctx.fillStyle = rgba(mk.col, a * 0.85); ctx.beginPath(); ctx.arc(mk.x, my, (2 + mk.intensity * 3) * sz, 0, 7); ctx.fill(); }
+          }
+        }
+      },
+      destroy: function () {}
+    };
+  }
+
+  // ---- PixiJS v8 renderer (WebGL, loaded on demand; auto-falls back) ----
+  function loadPixi() {
+    if (window.PIXI) return Promise.resolve(window.PIXI);
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/pixi.js@8.6.6/dist/pixi.min.js';
+      s.onload = function () { resolve(window.PIXI); }; s.onerror = function () { reject(new Error('PIXI load failed')); };
+      document.head.appendChild(s);
+    });
+  }
+  async function createPixiRenderer(canvas) {
+    var PIXI = await loadPixi();
+    var app = new PIXI.Application();
+    await app.init({ canvas: canvas, resizeTo: canvas.parentElement, backgroundColor: 0x07080d, antialias: true, resolution: Math.min(2, window.devicePixelRatio || 1), autoDensity: true, preference: 'webgl', powerPreference: 'high-performance' });
+    var bg = new PIXI.Graphics(); app.stage.addChild(bg);
+    var gfx = new PIXI.Graphics(); gfx.blendMode = 'add'; app.stage.addChild(gfx);   // additive glow for marks
+    var labelLayer = new PIXI.Container(); app.stage.addChild(labelLayer);            // octave + lane text (parity with Canvas)
+    var MAX = 3000, FLOOR = 0.13;   // lower cap than Canvas on purpose: Graphics re-tessellates every primitive each frame
+    function W() { return app.renderer.screen.width; } function H() { return app.renderer.screen.height; }   // logical px (HiDPI-safe)
+    var layout = buildLayout(W(), H());
+    var marks = [];
+    var state = { walkX: layout.fieldW / 2, prevPitch: null, prevX: layout.fieldW / 2, prevY: layout.fieldBottom - layout.fieldH / 2, hasPrevNote: false };
+    var palette = { hue: 200, energy: 0.5 }, tgt = null, lastNow = 0;
+    function hsl(h, s, l) { return new PIXI.Color({ h: ((h % 360) + 360) % 360, s: s * 100, l: l * 100 }).toNumber(); }
+    function rescaleMarks(ow, oh, nw, nh) {   // keep the accumulated map + walk aligned across a resize
+      if (!(ow > 0 && oh > 0) || (ow === nw && oh === nh)) return;
+      var sx = nw / ow, sy = nh / oh;
+      state.walkX *= sx; state.prevX *= sx; state.prevY *= sy;
+      for (var i = 0; i < marks.length; i++) { var m = marks[i]; m.x *= sx; m.y *= sy; if (m.px != null) m.px *= sx; if (m.py != null) m.py *= sy; }
+    }
+    function rebuildLabels() {
+      var old = labelLayer.removeChildren(); for (var k = 0; k < old.length; k++) old[k].destroy();
+      var addLabel = function (txt, x, y, alpha) { var t = new PIXI.Text({ text: txt, style: { fill: 0xffffff, fontSize: 10, fontFamily: 'ui-monospace, monospace' } }); t.alpha = alpha; t.x = x; t.y = y; labelLayer.addChild(t); };
+      var rg = range();
+      if (rg) { for (var oc = Math.ceil(rg.minMidi / 12) * 12; oc <= rg.maxMidi; oc += 12) addLabel(midiToName(oc), 4, yForPitch(layout, rg, oc) - 12, 0.16); }
+      for (var i = 0; i < layout.laneList.length; i++) { var ln = layout.laneList[i]; addLabel(ln.label, 4, ln.y - 13, 0.28); }
+    }
+    function range() { return tokenStream && tokenStream.meta.pitchRange; }
+    function opts() {
+      var m = tokenStream && tokenStream.meta, per = 6;
+      if (m && m.beatGrid && m.beatGrid.periodSec) per = Math.max(2, m.beatGrid.periodSec * (m.beatGrid.meter || 4) * 2);
+      return { pxPerSemi: params.pxPerSemitone || 14, lanePeriod: per };
+    }
+    function resetState() {
+      marks.length = 0; layout = buildLayout(W(), H());
+      state.walkX = layout.fieldW / 2; state.prevPitch = null;
+      state.prevX = state.walkX; state.prevY = layout.fieldBottom - layout.fieldH / 2; state.hasPrevNote = false;
+    }
+    return {
+      resize: function () {
+        var ow = layout.W, oh = layout.H;
+        app.renderer.resize(canvas.parentElement.clientWidth, canvas.parentElement.clientHeight);
+        layout = buildLayout(W(), H());
+        rescaleMarks(ow, oh, layout.W, layout.H);
+        if (!state.hasPrevNote) { state.walkX = layout.fieldW / 2; state.prevX = state.walkX; state.prevY = layout.fieldBottom - layout.fieldH / 2; }
+        rebuildLabels();
+      },
+      setStream: function () { resetState(); rebuildLabels(); },
+      dispatch: function (tok, nowT) {
+        if (nowT == null) nowT = lastNow;
+        if (tok.type === 'section_change') { tgt = paletteFor(tok.profileId); return; }
+        var mk = placeToken(tok, layout, range(), state, nowT, opts());
+        if (mk) marks.push(mk);
+      },
+      seekState: function (profileId) { var p = paletteFor(profileId); palette.hue = p.hue; palette.energy = p.energy; tgt = null; resetState(); },
+      update: function (dt, nowT) {
+        if (nowT != null) lastNow = nowT;
+        if (tgt) { var s = Math.min(1, dt * 1.8); palette.hue += ((tgt.hue - palette.hue + 540) % 360 - 180) * s; palette.hue = (palette.hue + 360) % 360; palette.energy += (tgt.energy - palette.energy) * s; }
+        if (marks.length > MAX) marks.splice(0, marks.length - MAX);
+        // background + guides
+        bg.clear();
+        bg.rect(0, 0, W(), H()).fill({ color: hsl(palette.hue, 0.3, 0.045 + palette.energy * 0.04), alpha: 1 });
+        var rg = range();
+        if (rg) { for (var oc = Math.ceil(rg.minMidi / 12) * 12; oc <= rg.maxMidi; oc += 12) { var gy = yForPitch(layout, rg, oc); bg.moveTo(0, gy).lineTo(W(), gy).stroke({ color: 0xffffff, alpha: 0.05, width: 1 }); } }
+        for (var li = 0; li < layout.laneList.length; li++) { var ln = layout.laneList[li]; bg.moveTo(0, ln.y).lineTo(W(), ln.y).stroke({ color: 0xffffff, alpha: 0.05, width: 1 }); }
+        var dvy = layout.laneTop - H() * 0.02; bg.moveTo(0, dvy).lineTo(W(), dvy).stroke({ color: 0xffffff, alpha: 0.10, width: 1 });   // field/lane divider (parity)
+        // marks (retained-mode redraw)
+        gfx.clear();
+        var fadeSec = Math.max(0.3, params.fadeSec || 8), grav = !!params.gravity, gAcc = params.gravityAccel != null ? params.gravityAccel : 0.6, sz = params.sizeScale || 1, HH = H();
+        for (var i = 0; i < marks.length; i++) {
+          var mk = marks[i], age = lastNow - mk.born; if (age < 0) age = 0;
+          var my = mk.y, a;
+          if (grav) {
+            my = mk.y + 0.5 * gAcc * mk.rate * 120 * age * age;
+            if (my > HH + 16) continue;
+            a = clamp((HH + 8 - my) / (HH * 0.35), 0, 1);
+          } else {
+            var rec = age < fadeSec ? 1 - age / fadeSec : 0; a = FLOOR + (1 - FLOOR) * rec;
+          }
+          if (mk.kind === 0) {
+            if (mk.hasPrev && params.connect !== false && !grav) gfx.moveTo(mk.px, mk.py).lineTo(mk.x, mk.y).stroke({ color: mk.colNum, alpha: a * 0.22, width: 1 });
+            gfx.circle(mk.x, my, (2.4 + mk.intensity * 6.2) * sz).fill({ color: mk.colNum, alpha: a * 0.95 });
+          } else {
+            var halfH = (mk.laneH || layout.laneH) * 0.30 * (0.45 + mk.intensity * 0.8) * sz;
+            gfx.moveTo(mk.x, my - halfH).lineTo(mk.x, my + halfH).stroke({ color: mk.colNum, alpha: a, width: (mk.kind === 2 ? 3 : 1.6) * sz });
+            if (mk.kind === 2) gfx.circle(mk.x, my, (2 + mk.intensity * 3) * sz).fill({ color: mk.colNum, alpha: a * 0.85 });
+          }
+        }
+      },
+      destroy: function () { try { app.destroy(true, { children: true }); } catch (e) {} }
+    };
+  }
+
+  // ---- Three.js 3D cube renderer (rotating point cloud, loaded on demand) ----
+  var CUBE_AXES = [
+    { key: 'pitch', label: 'Pitch' }, { key: 'bright', label: 'Brightness' }, { key: 'rich', label: 'Richness' },
+    { key: 'harm', label: 'Harmonicity' }, { key: 'cont', label: 'Continuity' }, { key: 'loud', label: 'Loudness' },
+    { key: 'walk', label: 'Δpitch walk' }, { key: 'time', label: 'Time' }
+  ];
+  var AXIS_KEYS = CUBE_AXES.map(function (a) { return a.key; });
+  function loadThree() {
+    if (window.THREE) return Promise.resolve(window.THREE);
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js';
+      s.onload = function () { resolve(window.THREE); }; s.onerror = function () { reject(new Error('THREE load failed')); };
+      document.head.appendChild(s);
+    });
+  }
+  async function createCubeRenderer(canvas) {
+    var THREE = await loadThree();
+    if (THREE.ColorManagement) THREE.ColorManagement.enabled = false;   // we feed raw sRGB palette colours straight to the shader
+    var ren = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
+    var pr = Math.min(2, window.devicePixelRatio || 1); ren.setPixelRatio(pr); ren.setClearColor(0x05060c, 1);
+    var scene = new THREE.Scene();
+    var camDist = 4.4, camera = new THREE.PerspectiveCamera(55, 1, 0.1, 100); camera.position.set(0, 0, camDist);
+    var group = new THREE.Group(); scene.add(group);     // holds the cloud; auto-rotates (no wireframe frame)
+
+    var HALF = 1.0, MAX = 20000;
+    var positions = new Float32Array(MAX * 3), aColor = new Float32Array(MAX * 3);
+    var aSize = new Float32Array(MAX), aAlpha = new Float32Array(MAX);
+    var pv = new Float32Array(MAX * 8), born = new Float32Array(MAX);   // per-point normalised feature vector + birth time
+    var geo = new THREE.BufferGeometry();
+    var posAt = new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage);
+    var colAt = new THREE.BufferAttribute(aColor, 3).setUsage(THREE.DynamicDrawUsage);
+    var sizeAt = new THREE.BufferAttribute(aSize, 1).setUsage(THREE.DynamicDrawUsage);
+    var alphaAt = new THREE.BufferAttribute(aAlpha, 1).setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('position', posAt); geo.setAttribute('aColor', colAt); geo.setAttribute('aSize', sizeAt); geo.setAttribute('aAlpha', alphaAt);
+    geo.setDrawRange(0, 0);
+    var mat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+      uniforms: { uScale: { value: pr } },
+      vertexShader: 'attribute vec3 aColor; attribute float aSize; attribute float aAlpha; varying vec3 vCol; varying float vA; uniform float uScale;\n' +
+        'void main(){ vCol = aColor; vA = aAlpha; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = aSize * uScale / max(0.1, -mv.z); gl_Position = projectionMatrix * mv; }',
+      fragmentShader: 'varying vec3 vCol; varying float vA;\n' +
+        'void main(){ vec2 d = gl_PointCoord - vec2(0.5); float r2 = dot(d,d); if(r2>0.25) discard; float a = smoothstep(0.25,0.0,r2) * vA; gl_FragColor = vec4(vCol, a); }'
+    });
+    var points = new THREE.Points(geo, mat); points.frustumCulled = false; group.add(points);   // cloud is dynamic + centered; skip auto-cull (boundingSphere would be stale)
+    var _col = new THREE.Color();
+
+    // optional wireframe cube frame (rotates with the cloud; off by default)
+    var wire = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(2 * HALF, 2 * HALF, 2 * HALF)),
+      new THREE.LineBasicMaterial({ color: 0x6ea8ff, transparent: true, opacity: 0.22 }));
+    wire.frustumCulled = false; wire.visible = false; group.add(wire);
+
+    // fade quad for fall-trails (motion persistence) — drawn over the prior frame, then the cloud on top
+    var fadeScene = new THREE.Scene(), fadeCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    var fadeMat = new THREE.MeshBasicMaterial({ color: 0x05060c, transparent: true, opacity: 0.12, depthTest: false, depthWrite: false, side: THREE.DoubleSide });   // lower opacity = longer fall-trails
+    var fadeQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), fadeMat); fadeQuad.position.z = -0.5; fadeQuad.frustumCulled = false; fadeScene.add(fadeQuad);   // inside the ortho frustum so it actually draws
+    var DEFAULT_Y = -0.5, DEFAULT_X = 0.28;   // static "default view" when rotation is off (gentle 3/4 angle)
+
+    var head = 0, count = 0, lastNow = 0, FLOOR = 0.10;
+    var baseY = new Float32Array(MAX), rate = new Float32Array(MAX), gravWas = false;   // gravity fall: base Y + per-point fall rate
+    var walkMidi = null, walkAcc = 0.5, autoAngle = 0, energy = 0.4;
+    var dragX = 0, dragY = 0, dragging = false, lx = 0, ly = 0, lastAxes = '';
+    var prevRotY = 1e9, prevRotX = 1e9, prevZ = 1e9, dirtied = true;   // motion tracking so persist-mode only accumulates when something moves
+    function metaOf() { return tokenStream && tokenStream.meta; }
+    function valsFor(tok, nowT) {
+      var m = metaOf(), out = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5];
+      var prg = m && m.pitchRange ? m.pitchRange : { minMidi: 48, maxMidi: 84 };
+      if (tok.pitch != null) out[0] = clamp((tok.pitch - prg.minMidi) / Math.max(1, prg.maxMidi - prg.minMidi), 0, 1);
+      else if (tok.type === 'kick') out[0] = 0.12; else if (tok.type === 'snare') out[0] = 0.5; else if (tok.type === 'hat') out[0] = 0.85;  // drums -> band pitch lanes (avoid collapsing to one plane)
+      var fr = m && m.featureRanges, fk = ['bright', 'rich', 'harm', 'cont', 'loud'];
+      for (var i = 0; i < 5; i++) { var r = fr && fr[fk[i]]; out[1 + i] = (r && tok[fk[i]] != null) ? clamp((tok[fk[i]] - r.lo) / Math.max(1e-9, r.hi - r.lo), 0, 1) : 0.5; }
+      if (tok.pitch != null && tok.type !== 'partial') { if (walkMidi == null) walkMidi = tok.pitch; walkAcc += (tok.pitch - walkMidi) * 0.03; walkAcc -= Math.floor(walkAcc); walkMidi = tok.pitch; }
+      out[6] = walkAcc;
+      out[7] = m ? clamp(nowT / Math.max(0.01, m.durationSec), 0, 1) : 0.5;
+      return out;
+    }
+    function axisIdx(k) { var i = AXIS_KEYS.indexOf(k); return i < 0 ? 0 : i; }
+    function writePos(slot) {
+      var ix = axisIdx(params.axisX), iy = axisIdx(params.axisY), iz = axisIdx(params.axisZ), b = slot * 8;
+      positions[slot * 3] = (pv[b + ix] * 2 - 1) * HALF; positions[slot * 3 + 1] = (pv[b + iy] * 2 - 1) * HALF; positions[slot * 3 + 2] = (pv[b + iz] * 2 - 1) * HALF;
+      baseY[slot] = positions[slot * 3 + 1];
+    }
+    function rewriteAll() { for (var s = 0; s < count; s++) writePos(s); posAt.needsUpdate = true; }
+    function onDown(e) { if (params.rotMode !== 'orbit') return; dragging = true; lx = e.clientX; ly = e.clientY; }
+    function onMove(e) { if (!dragging || params.rotMode !== 'orbit') { dragging = false; return; } dragY += (e.clientX - lx) * 0.01; dragX = clamp(dragX + (e.clientY - ly) * 0.01, -1.4, 1.4); lx = e.clientX; ly = e.clientY; }
+    function onUp() { dragging = false; }
+    function onWheel(e) { e.preventDefault(); params.zoom = clamp((params.zoom || 1) * (e.deltaY < 0 ? 1.12 : 0.89), 0.4, 3.0); var z = $('cZoom'); if (z) { z.value = params.zoom; var o = $('oZoom'); if (o) o.textContent = params.zoom.toFixed(2) + '×'; } dirtied = true; if (typeof persistLast === 'function') persistLast(); }
+    canvas.addEventListener('pointerdown', onDown); window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); canvas.addEventListener('wheel', onWheel, { passive: false });
+    function reset() { head = 0; count = 0; walkMidi = null; walkAcc = 0.5; geo.setDrawRange(0, 0); }
+
+    return {
+      resize: function () {
+        var w = canvas.clientWidth || (canvas.parentElement && canvas.parentElement.clientWidth) || 1;
+        var h = canvas.clientHeight || (canvas.parentElement && canvas.parentElement.clientHeight) || 1;
+        ren.setSize(w, h, false); camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
+        mat.uniforms.uScale.value = ren.getPixelRatio() * 110;
+      },
+      setStream: function () { reset(); },
+      seekState: function () { reset(); },
+      dispatch: function (tok, nowT) {
+        if (nowT == null) nowT = lastNow;
+        if (tok.type === 'section_change') { energy = Math.min(1.6, energy + 0.4); return; }
+        if (tok.type === 'beat' || tok.type === 'downbeat') { energy = Math.min(1.6, energy + (tok.type === 'downbeat' ? 0.25 : 0.1)); return; }
+        var slot = head % MAX; head++; if (count < MAX) count++;
+        var v = valsFor(tok, nowT); for (var k = 0; k < 8; k++) pv[slot * 8 + k] = v[k];
+        writePos(slot);
+        var rgb = tokenRgb(tok); _col.setRGB(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255);
+        if (tok.type === 'partial') _col.multiplyScalar(0.8);   // overtones slightly dimmer
+        aColor[slot * 3] = _col.r; aColor[slot * 3 + 1] = _col.g; aColor[slot * 3 + 2] = _col.b;
+        aSize[slot] = (0.06 + (tok.intensity || 0.3) * 0.16) * (tok.type === 'partial' ? 0.6 : 1);
+        aAlpha[slot] = 1; born[slot] = nowT; rate[slot] = 0.55 + Math.random() * 0.9;   // per-point fall rate -> events disappear at different rates
+        posAt.needsUpdate = colAt.needsUpdate = sizeAt.needsUpdate = alphaAt.needsUpdate = true;
+        geo.setDrawRange(0, count); dirtied = true;
+      },
+      update: function (dt, nowT) {
+        if (nowT != null) lastNow = nowT;
+        mat.uniforms.uScale.value = ren.getPixelRatio() * 110 * (params.sizeScale || 1);   // live object-size slider
+        var ak = params.axisX + '/' + params.axisY + '/' + params.axisZ;
+        var grav = !!params.gravity, gAcc = params.gravityAccel != null ? params.gravityAccel : 0.6;
+        if (ak !== lastAxes || (!grav && gravWas)) { lastAxes = ak; rewriteAll(); }   // restore base Y when gravity turns off
+        gravWas = grav;
+        var fadeSec = Math.max(0.3, params.fadeSec || 8);
+        for (var s = 0; s < count; s++) {
+          var age = lastNow - born[s]; if (age < 0) age = 0;
+          if (grav) {   // accelerate downward; fade out as it falls through the floor (rate varies per point)
+            var yy = baseY[s] - 0.5 * gAcc * rate[s] * age * age;
+            positions[s * 3 + 1] = yy;
+            aAlpha[s] = yy < -HALF ? 0 : clamp((yy + HALF) / 0.5, 0, 1);
+          } else {
+            var rec = age < fadeSec ? 1 - age / fadeSec : 0; aAlpha[s] = FLOOR + (1 - FLOOR) * rec;
+          }
+        }
+        if (count) { alphaAt.needsUpdate = true; if (grav) posAt.needsUpdate = true; }
+        energy *= Math.pow(0.5, dt);
+        wire.visible = !!params.wireframe;
+        var dr = params.rotMode === 'orbit';   // drag offset only applies in orbit mode
+        if (params.rotate === false) {         // rotation off -> snap to a static default 3/4 view (drag still allowed)
+          autoAngle = DEFAULT_Y;               // keep autoAngle synced so re-enabling rotate doesn't jump
+          group.rotation.y = DEFAULT_Y + (dr ? dragY : 0);
+          group.rotation.x = grav ? 0 : (DEFAULT_X + (dr ? dragX : 0));
+        } else {
+          var spd = params.rotSpeed || 0.18; if (params.rotMode === 'music') spd *= (0.25 + energy * 1.7);
+          autoAngle += dt * spd;
+          group.rotation.y = autoAngle + (dr ? dragY : 0);
+          group.rotation.x = grav ? 0 : (0.16 * Math.sin(autoAngle * 0.5) + (dr ? dragX : 0));   // keep vertical true while things fall
+        }
+        camera.position.z = camDist / (params.zoom || 1);   // zoom (slider + scroll wheel)
+        // motion check: when the scene is STATIC, crank the fade up so additive persist can't blow out to white
+        var moving = grav || dirtied || group.rotation.y !== prevRotY || group.rotation.x !== prevRotX || camera.position.z !== prevZ;
+        prevRotY = group.rotation.y; prevRotX = group.rotation.x; prevZ = camera.position.z; dirtied = false;
+        // persist = near-infinite accumulation; fall-trails = short fade; static -> strong fade (bounded); else clear each frame
+        var persist = !!params.persist, trail = persist || (grav && params.trails !== false);
+        if (trail) { fadeMat.opacity = moving ? (persist ? 0.015 : 0.06) : 0.85; ren.autoClear = false; ren.clearDepth(); ren.render(fadeScene, fadeCam); ren.render(scene, camera); }
+        else { ren.autoClear = true; ren.render(scene, camera); }
+      },
+      destroy: function () {
+        canvas.removeEventListener('pointerdown', onDown); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); canvas.removeEventListener('wheel', onWheel);
+        try { geo.dispose(); mat.dispose(); wire.geometry.dispose(); wire.material.dispose(); fadeQuad.geometry.dispose(); fadeMat.dispose(); ren.dispose(); } catch (e) {}
+      }
+    };
+  }
+
+  // ---- render loop + clock ----
+  var lastT = 0;
+  function loop(ts) {
+    requestAnimationFrame(loop);
+    var now = audio.currentTime || 0;
+    var dt = lastT ? Math.min(0.05, (ts - lastT) / 1000) : 0.016; lastT = ts;
+    if (renderer && tokenStream) {
+      if (!seeking && !audio.paused) {
+        var toks = tokenStream.tokens;
+        while (cursor < toks.length && toks[cursor].t <= now) {
+          var tok = toks[cursor++];
+          renderer.dispatch(tok, now); pushLog(tok);
+        }
+      }
+      renderer.update(dt, now);
+    }
+    // transport UI
+    if (!seeking && tokenStream) { seek.value = Math.round((now / Math.max(0.01, tokenStream.meta.durationSec)) * 1000); curTime.textContent = fmtTime(now); }
+  }
+
+  function resetCursorTo(t) {
+    if (!tokenStream) return;
+    cursor = lowerBound(tokenStream.tokens, t);
+    // latch the active section/profile for the jumped-to position so the palette is correct
+    var pid = 0; for (var i = 0; i < sections.length; i++) { if (sections[i].t <= t) pid = sections[i].profileId; else break; }
+    if (renderer && renderer.seekState) renderer.seekState(pid);
+  }
+
+  function freshCanvas() {
+    // a <canvas> can hold only one context type — swap in a clean element on renderer change
+    var c = document.createElement('canvas'); c.id = 'stage'; c.setAttribute('aria-label', 'Audio visualisation');
+    stage.parentNode.replaceChild(c, stage); stage = c; return c;
+  }
+  async function setRenderer(kind) {
+    if (kind === rendererKind && renderer) return;
+    var canvas = freshCanvas();
+    try {
+      var next = kind === 'pixi' ? await createPixiRenderer(canvas) : kind === 'cube' ? await createCubeRenderer(canvas) : createCanvasRenderer(canvas);
+      if (renderer && renderer.destroy) renderer.destroy();
+      renderer = next; rendererKind = kind;
+      renderer.resize();
+      if (tokenStream) { renderer.setStream(tokenStream); resetCursorTo(audio.currentTime || 0); }
+      $('rCanvas').setAttribute('aria-pressed', String(kind === 'canvas'));
+      $('rPixi').setAttribute('aria-pressed', String(kind === 'pixi'));
+      $('rCube').setAttribute('aria-pressed', String(kind === 'cube'));
+      document.body.classList.toggle('cube-on', kind === 'cube');
+      if (typeof persistLast === 'function') persistLast();   // remember the renderer choice across reloads
+    } catch (err) {
+      toast((kind === 'cube' ? '3D renderer' : 'WebGL renderer') + ' unavailable — staying on Canvas.', true);
+      if (kind === 'pixi' || kind === 'cube') { rendererKind = null; setRenderer('canvas'); }
+    }
+  }
+
+  // =============================================================
+  //  UI wiring
+  // =============================================================
+  function renderMeta() {
+    var m = tokenStream.meta, counts = {};
+    tokenStream.tokens.forEach(function (t) { counts[t.type] = (counts[t.type] || 0) + 1; });
+    metaGrid.innerHTML = '';
+    var rows = [
+      ['Duration', fmtTime(m.durationSec)], ['Tempo', m.bpm + ' BPM'],
+      ['Beat conf.', (m.bpmConfidence != null ? m.bpmConfidence : '—')],
+      ['Key', (m.key ? m.key + ' ' + (m.scale || '') : 'n/a')],
+      ['Pitch range', (m.pitchRange ? midiToName(m.pitchRange.minMidi) + '–' + midiToName(m.pitchRange.maxMidi) : '—')],
+      ['Sections', m.profiles.length + ' profiles'], ['Tokens', tokenStream.tokens.length],
+      ['Engine', m.engine]
+    ];
+    rows.forEach(function (r) { var dt = document.createElement('dt'); dt.textContent = r[0]; var dd = document.createElement('dd'); dd.textContent = r[1]; metaGrid.appendChild(dt); metaGrid.appendChild(dd); });
+    metaChips.innerHTML = '';
+    Object.keys(counts).forEach(function (k) { var c = document.createElement('span'); c.className = 'chip'; c.textContent = k + ' ×' + counts[k]; metaChips.appendChild(c); });
+    tokCount.textContent = '· ' + tokenStream.tokens.length + ' total';
+  }
+
+  // live token log (last N dispatched)
+  var logBuf = [];
+  function pushLog(tok) {
+    logBuf.push(tok); if (logBuf.length > 40) logBuf.shift();
+  }
+  setInterval(function () {
+    if (!inspector.classList.contains('open') || !logBuf.length) return;
+    var html = '';
+    for (var i = logBuf.length - 1; i >= 0; i--) {
+      var t = logBuf[i], info = (t.intensity != null ? t.intensity.toFixed(2) : '');
+      if (t.type === 'note' && t.pitch != null) info = midiToName(t.pitch) + ' · ' + info;
+      else if (t.band) info += ' ' + t.band;
+      html += '<div class="row"><span class="t">' + t.t.toFixed(2) + '</span><span class="tk ' + t.type + '">' + t.type + '</span><span class="t">' + info + '</span></div>';
+    }
+    tokenLog.innerHTML = html;
+  }, 120);
+
+  // file pick / drop
+  $('loadBtn').onclick = $('pickBtn').onclick = function () { fileInput.click(); };
+  fileInput.onchange = function (e) { if (e.target.files[0]) handleFile(e.target.files[0]); };
+  ['dragenter', 'dragover'].forEach(function (ev) { dropzone.addEventListener(ev, function (e) { e.preventDefault(); dropzone.classList.add('drag'); }); });
+  ['dragleave', 'drop'].forEach(function (ev) { dropzone.addEventListener(ev, function (e) { e.preventDefault(); dropzone.classList.remove('drag'); }); });
+  document.addEventListener('drop', function (e) { e.preventDefault(); if (e.dataTransfer && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+  document.addEventListener('dragover', function (e) { e.preventDefault(); });
+
+  // =============================================================
+  //  Projects: save/open the audio + tokens + settings (IndexedDB)
+  // =============================================================
+  function idb() {
+    return new Promise(function (res, rej) {
+      var r = indexedDB.open('fftviz', 1);
+      r.onupgradeneeded = function () { var db = r.result; if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'id' }); if (!db.objectStoreNames.contains('data')) db.createObjectStore('data', { keyPath: 'id' }); };
+      r.onsuccess = function () { res(r.result); }; r.onerror = function () { rej(r.error); };
+    });
+  }
+  function idbTx(store, mode, fn) { return idb().then(function (db) { return new Promise(function (res, rej) { var tx = db.transaction(store, mode), rq = fn(tx.objectStore(store)); tx.oncomplete = function () { res(rq && rq.result); }; tx.onerror = function () { rej(tx.error); }; tx.onabort = function () { rej(tx.error || new Error('Transaction aborted')); }; }); }); }
+  function projList() { return idbTx('meta', 'readonly', function (s) { return s.getAll(); }); }
+  function projGet(id) { return idbTx('data', 'readonly', function (s) { return s.get(id); }); }
+  // writes must surface quota/abort failures (large audio blobs) so the user gets a 'Save failed' toast rather than a silent hang
+  function projSave(meta, data) { return idb().then(function (db) { return new Promise(function (res, rej) { var tx = db.transaction(['meta', 'data'], 'readwrite'); var r1 = tx.objectStore('meta').put(meta); r1.onerror = function () { rej(r1.error); }; var r2 = tx.objectStore('data').put(data); r2.onerror = function () { rej(r2.error); }; tx.oncomplete = function () { res(); }; tx.onerror = function () { rej(tx.error); }; tx.onabort = function () { rej(tx.error || new Error('Transaction aborted (storage full?)')); }; }); }); }
+  function projDelete(id) { return idb().then(function (db) { return new Promise(function (res, rej) { var tx = db.transaction(['meta', 'data'], 'readwrite'); tx.objectStore('meta').delete(id); tx.objectStore('data').delete(id); tx.oncomplete = function () { res(); }; tx.onerror = function () { rej(tx.error); }; tx.onabort = function () { rej(tx.error || new Error('Transaction aborted')); }; }); }); }
+
+  function openModal(id) { $(id).classList.add('show'); }
+  function closeModal(id) { $(id).classList.remove('show'); if (id === 'help') { try { localStorage.setItem(SEEN_INTRO, '1'); } catch (e) {} } }   // any dismissal counts as seen
+
+  function restoreProject(rec) {   // rec from the 'data' store: { audioBlob, tokenStream, settings, name }
+    currentAudioBlob = rec.audioBlob; currentAudioName = rec.name || 'project';
+    featureSet = null;             // not stored — re-analyse the audio if interpret params change later
+    try { setAudioSrc(rec.audioBlob); } catch (e) {}
+    tokenStream = rec.tokenStream; cursor = 0;
+    sections = tokenStream.tokens.filter(function (t) { return t.type === 'section_change'; });
+    var wantKind = rec.settings && rec.settings.rendererKind;
+    if (rec.settings) applySettings(rec.settings);   // palette/axes/motion + interpret params (no reinterpret: featureSet is null)
+    dropEl.classList.add('hide'); transport.classList.remove('hidden');
+    durTime.textContent = fmtTime(tokenStream.meta.durationSec); $('saveBtn').disabled = false;
+    renderMeta();
+    if (wantKind && wantKind !== rendererKind) setRenderer(wantKind);   // recreates renderer + setStream
+    else { if (renderer) renderer.setStream(tokenStream); resetCursorTo(0); }
+  }
+
+  function openProjects() {
+    projList().then(function (list) {
+      list.sort(function (a, b) { return b.createdAt - a.createdAt; });
+      var el = $('projList'); el.innerHTML = ''; $('projEmpty').style.display = list.length ? 'none' : 'block';
+      list.forEach(function (m) {
+        var row = document.createElement('div'); row.className = 'proj-item';
+        var main = document.createElement('div'); main.className = 'pi-main';
+        var nm = document.createElement('div'); nm.className = 'pi-name'; nm.textContent = m.name;
+        var sub = document.createElement('div'); sub.className = 'pi-sub'; sub.textContent = fmtTime(m.durationSec || 0) + ' · ' + (m.tokenCount || 0) + ' tokens · ' + new Date(m.createdAt).toLocaleDateString();
+        main.appendChild(nm); main.appendChild(sub);
+        main.onclick = function () { projGet(m.id).then(function (d) { if (d) { closeModal('projects'); restoreProject(d); toast('Opened “' + m.name + '”'); } }); };
+        var del = document.createElement('button'); del.className = 'btn pi-del'; del.textContent = '✕'; del.setAttribute('aria-label', 'Delete');
+        del.onclick = function (e) { e.stopPropagation(); projDelete(m.id).then(openProjects); };
+        row.appendChild(main); row.appendChild(del); el.appendChild(row);
+      });
+      openModal('projects');
+    }).catch(function (e) { toast('Could not read projects: ' + (e && e.message || e), true); });
+  }
+
+  $('openDropBtn').onclick = $('openTopBtn').onclick = openProjects;
+  $('projClose').onclick = function () { closeModal('projects'); };
+  $('saveBtn').onclick = function () {
+    if (!tokenStream || !currentAudioBlob) { toast('Load a song first', true); return; }
+    $('saveName').value = (currentAudioName || 'Project').replace(/\.[a-z0-9]+$/i, '');
+    openModal('saveDlg'); setTimeout(function () { $('saveName').focus(); $('saveName').select(); }, 30);
+  };
+  $('saveCancel').onclick = function () { closeModal('saveDlg'); };
+  $('saveConfirm').onclick = function () {
+    if (!tokenStream || !currentAudioBlob) return;
+    var name = ($('saveName').value || '').trim() || 'Project', id = 'p' + Date.now();
+    var meta = { id: id, name: name, createdAt: Date.now(), durationSec: tokenStream.meta.durationSec, tokenCount: tokenStream.tokens.length };
+    var data = { id: id, name: name, audioBlob: currentAudioBlob, tokenStream: tokenStream, settings: collectSettings() };
+    projSave(meta, data).then(function () { closeModal('saveDlg'); toast('Saved “' + name + '” in this browser'); }).catch(function (e) { toast('Save failed: ' + (e && e.message || e), true); });
+  };
+
+  // first-run / help explainer
+  var SEEN_INTRO = 'fftviz.seenIntro.v1';
+  $('helpBtn').onclick = function () { openModal('help'); };
+  $('helpClose').onclick = function () { closeModal('help'); };   // closeModal records the seen-flag
+  // backdrop click + Esc close the topmost modal
+  ['help', 'projects', 'saveDlg'].forEach(function (id) { $(id).addEventListener('click', function (e) { if (e.target === this) closeModal(id); }); });
+  window.addEventListener('keydown', function (e) { if (e.key === 'Escape') ['saveDlg', 'projects', 'help'].some(function (id) { if ($(id).classList.contains('show')) { closeModal(id); return true; } return false; }); });
+
+  // transport
+  playBtn.onclick = function () {
+    if (audio.paused) { audio.play().then(function(){}).catch(function(){ toast('Tap again to start playback', true); }); }
+    else audio.pause();
+  };
+  audio.addEventListener('play', function () { playBtn.textContent = '❚❚'; playBtn.setAttribute('aria-label', 'Pause'); });
+  audio.addEventListener('pause', function () { playBtn.textContent = '▶'; playBtn.setAttribute('aria-label', 'Play'); });
+  audio.addEventListener('loadedmetadata', function () { durTime.textContent = fmtTime(audio.duration); });
+  seek.addEventListener('input', function () { seeking = true; if (tokenStream) curTime.textContent = fmtTime(seek.value / 1000 * tokenStream.meta.durationSec); });
+  seek.addEventListener('change', function () { if (tokenStream) { var t = seek.value / 1000 * tokenStream.meta.durationSec; audio.currentTime = t; } seeking = false; });
+  audio.addEventListener('seeked', function () { resetCursorTo(audio.currentTime); });
+
+  // renderer toggle
+  $('rCanvas').onclick = function () { setRenderer('canvas'); };
+  $('rPixi').onclick = function () { setRenderer('pixi'); };
+  $('rCube').onclick = function () { setRenderer('cube'); };
+
+  // inspector
+  function toggleInsp(open) { inspector.classList.toggle('open', open); $('inspBtn').setAttribute('aria-expanded', String(open)); }
+  $('inspBtn').onclick = function () { toggleInsp(!inspector.classList.contains('open')); };
+  $('inspClose').onclick = function () { toggleInsp(false); };
+
+  // params
+  function bindRange(id, outId, key, fmt) {
+    var el = $(id), out = $(outId);
+    el.addEventListener('input', function () { params[key] = parseFloat(el.value); out.textContent = fmt ? fmt(params[key]) : params[key]; });
+  }
+  bindRange('cGamma', 'oGamma', 'gamma', function (v) { return v.toFixed(2); });
+  bindRange('cSens', 'oSens', 'onsetMinIntensity', function (v) { return v.toFixed(2); });
+  bindRange('cTon', 'oTon', 'pitchTonality', function (v) { return v.toFixed(2); });
+  $('cMeter').addEventListener('change', function () { params.meter = parseInt(this.value, 10); });
+  $('cK').addEventListener('change', function () { params.k = parseInt(this.value, 10); });
+  // re-interpret; if features aren't loaded (e.g. just opened a saved project) re-analyse the stored audio first
+  function applyInterpret() {
+    if (featureSet) { reinterpret(); toast('Re-interpreted · ' + tokenStream.tokens.length + ' tokens'); }
+    else if (currentAudioBlob) { toast('Re-analysing audio to apply changes…'); handleFile(currentAudioBlob); }
+    else { toast('Load a song first', true); }
+  }
+  $('reBtn').onclick = applyInterpret;
+  // live render-only controls (no re-interpret needed)
+  bindRange('cPx', 'oPx', 'pxPerSemitone', function (v) { return (v | 0) + ' px'; });
+  $('cConn').addEventListener('change', function () { params.connect = this.checked; });
+
+  // event-source toggles -> re-interpret (these change the token stream)
+  function srcChange() { applyInterpret(); }
+  $('cSrcOn').addEventListener('change', function () { params.srcOnsets = this.checked; srcChange(); });
+  $('cSrcSus').addEventListener('change', function () { params.srcSustain = this.checked; srcChange(); });
+  $('cSrcPart').addEventListener('change', function () { params.srcPartials = this.checked; srcChange(); });
+  $('cGrid').addEventListener('change', function () { params.gridSubdiv = parseInt(this.value, 10); srcChange(); });
+  $('cPart').addEventListener('change', function () { params.partialCount = parseInt(this.value, 10); srcChange(); });
+
+  // ---- 3D cube axes, palette, motion (live — read by the renderers each frame) ----
+  function fillAxis(id, cur) { var sel = $(id); sel.innerHTML = ''; CUBE_AXES.forEach(function (a) { var o = document.createElement('option'); o.value = a.key; o.textContent = a.label; if (a.key === cur) o.selected = true; sel.appendChild(o); }); }
+  fillAxis('cAxX', params.axisX); fillAxis('cAxY', params.axisY); fillAxis('cAxZ', params.axisZ);
+  ['cAxX', 'cAxY', 'cAxZ'].forEach(function (id, i) { $(id).addEventListener('change', function () { params[['axisX', 'axisY', 'axisZ'][i]] = this.value; matchPreset(); }); });
+  // axis preset list (the "8-matrix")
+  (function () { var sel = $('cPreset'); var c = document.createElement('option'); c.value = 'custom'; c.textContent = 'Custom…'; sel.appendChild(c); CUBE_PRESETS.forEach(function (p, i) { var o = document.createElement('option'); o.value = String(i); o.textContent = p.name; sel.appendChild(o); }); })();
+  function matchPreset() { var sel = $('cPreset'), v = 'custom'; for (var i = 0; i < CUBE_PRESETS.length; i++) { var p = CUBE_PRESETS[i]; if (p.x === params.axisX && p.y === params.axisY && p.z === params.axisZ) { v = String(i); break; } } sel.value = v; }
+  $('cPreset').addEventListener('change', function () { if (this.value === 'custom') return; var p = CUBE_PRESETS[+this.value]; if (p) { params.axisX = p.x; params.axisY = p.y; params.axisZ = p.z; $('cAxX').value = p.x; $('cAxY').value = p.y; $('cAxZ').value = p.z; } });
+  // colour palette
+  (function () { var sel = $('cPalette'); PALETTE_NAMES.forEach(function (n) { var o = document.createElement('option'); o.value = n; o.textContent = n; if (n === params.palette) o.selected = true; sel.appendChild(o); }); })();
+  $('cPalette').addEventListener('change', function () { params.palette = this.value; });
+  $('cRot').addEventListener('change', function () { params.rotMode = this.value; });
+  bindRange('cRotSpd', 'oRotSpd', 'rotSpeed', function (v) { return v.toFixed(2); });
+  bindRange('cZoom', 'oZoom', 'zoom', function (v) { return v.toFixed(2) + '×'; });
+  bindRange('cSize', 'oSize', 'sizeScale', function (v) { return v.toFixed(1) + '×'; });
+  bindRange('cFade', 'oFade', 'fadeSec', function (v) { return v.toFixed(1) + ' s'; });
+  bindRange('cGravA', 'oGravA', 'gravityAccel', function (v) { return v.toFixed(2); });
+  [['cGrav', 'gravity'], ['cTrail', 'trails'], ['cWire', 'wireframe'], ['cRotOn', 'rotate'], ['cPersist', 'persist']].forEach(function (c) { $(c[0]).addEventListener('change', function () { params[c[1]] = this.checked; }); });
+  matchPreset();
+
+  // ---- settings sync + local save/load (user-defined presets) ----
+  var SETTING_KEYS = ['axisX', 'axisY', 'axisZ', 'palette', 'zoom', 'rotMode', 'rotSpeed', 'rotate', 'wireframe', 'persist', 'sizeScale', 'fadeSec', 'gravity', 'gravityAccel', 'trails', 'pxPerSemitone', 'connect', 'srcOnsets', 'srcSustain', 'srcPartials', 'gridSubdiv', 'partialCount', 'pitchTonality', 'gamma', 'onsetMinIntensity', 'meter', 'k'];
+  var REINTERP_KEYS = ['srcOnsets', 'srcSustain', 'srcPartials', 'gridSubdiv', 'partialCount', 'pitchTonality', 'gamma', 'onsetMinIntensity', 'meter', 'k'];
+  var RANGE_SYNC = [['cGamma', 'oGamma', 'gamma', 2, ''], ['cSens', 'oSens', 'onsetMinIntensity', 2, ''], ['cTon', 'oTon', 'pitchTonality', 2, ''], ['cPx', 'oPx', 'pxPerSemitone', 0, ' px'], ['cRotSpd', 'oRotSpd', 'rotSpeed', 2, ''], ['cZoom', 'oZoom', 'zoom', 2, '×'], ['cSize', 'oSize', 'sizeScale', 1, '×'], ['cFade', 'oFade', 'fadeSec', 1, ' s'], ['cGravA', 'oGravA', 'gravityAccel', 2, '']];
+  function syncControls() {
+    RANGE_SYNC.forEach(function (r) { var el = $(r[0]); if (!el || params[r[2]] == null) return; el.value = params[r[2]]; var o = $(r[1]); if (o) o.textContent = (+params[r[2]]).toFixed(r[3]) + r[4]; });
+    [['cGrav', 'gravity'], ['cTrail', 'trails'], ['cWire', 'wireframe'], ['cRotOn', 'rotate'], ['cPersist', 'persist'], ['cConn', 'connect'], ['cSrcOn', 'srcOnsets'], ['cSrcSus', 'srcSustain'], ['cSrcPart', 'srcPartials']].forEach(function (c) { var el = $(c[0]); if (el) el.checked = c[1] === 'srcOnsets' ? params.srcOnsets !== false : !!params[c[1]]; });
+    [['cRot', 'rotMode'], ['cPalette', 'palette'], ['cAxX', 'axisX'], ['cAxY', 'axisY'], ['cAxZ', 'axisZ'], ['cMeter', 'meter'], ['cK', 'k'], ['cGrid', 'gridSubdiv'], ['cPart', 'partialCount']].forEach(function (c) { var el = $(c[0]); if (el && params[c[1]] != null) el.value = params[c[1]]; });
+    matchPreset();
+  }
+  function collectSettings() { var o = {}; SETTING_KEYS.forEach(function (k) { o[k] = params[k]; }); o.rendererKind = rendererKind; return o; }
+  function applySettings(o) { if (!o) return; var needRe = false; SETTING_KEYS.forEach(function (k) { if (o[k] !== undefined) { if (REINTERP_KEYS.indexOf(k) >= 0 && o[k] !== params[k]) needRe = true; params[k] = o[k]; } }); syncControls(); if (needRe && featureSet) reinterpret(); }
+  var LS_KEY = 'fftviz.presets.v1', LS_LAST = 'fftviz.last.v1';
+  function lsGet(k, d) { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function userPresets() { return lsGet(LS_KEY, {}); }
+  function refreshUserList() { var sel = $('userPresets'); var d = userPresets(); sel.innerHTML = '<option value="">— saved —</option>'; Object.keys(d).forEach(function (n) { var o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); }); }
+  $('savePreset').onclick = function () { var n = ($('presetName').value || '').trim(); if (!n) { toast('Name your settings first', true); return; } var d = userPresets(); d[n] = collectSettings(); lsSet(LS_KEY, d); refreshUserList(); $('userPresets').value = n; $('presetName').value = ''; toast('Saved “' + n + '”'); };
+  $('userPresets').addEventListener('change', function () { var n = this.value; if (!n) return; var d = userPresets(); if (d[n]) { applySettings(d[n]); if (d[n].rendererKind && d[n].rendererKind !== rendererKind) setRenderer(d[n].rendererKind); toast('Loaded “' + n + '”'); } });
+  $('delPreset').onclick = function () { var n = $('userPresets').value; if (!n) { toast('Pick a saved set first', true); return; } var d = userPresets(); delete d[n]; lsSet(LS_KEY, d); refreshUserList(); toast('Deleted “' + n + '”'); };
+  // auto-remember last-used settings (debounced) + restore on boot
+  var lastSaveT; function persistLast() { clearTimeout(lastSaveT); lastSaveT = setTimeout(function () { lsSet(LS_LAST, collectSettings()); }, 400); }
+  inspector.addEventListener('input', persistLast); inspector.addEventListener('change', persistLast);
+  refreshUserList(); applySettings(lsGet(LS_LAST, null));
+
+  // download tokens.json
+  $('dlBtn').onclick = function () {
+    if (!tokenStream) { toast('No tokens yet', true); return; }
+    var blob = new Blob([JSON.stringify(tokenStream, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'tokens.json'; a.click(); URL.revokeObjectURL(a.href);
+  };
+
+  // resize
+  window.addEventListener('resize', function () { if (renderer) renderer.resize(); });
+
+  // boot — restore the last-used renderer (Canvas / WebGL / Cube) so a reload keeps your setup
+  var bootSaved = lsGet(LS_LAST, null);
+  setRenderer((bootSaved && bootSaved.rendererKind) || 'canvas').then(function () { requestAnimationFrame(loop); });
+  loadEssentiaAssets();   // warm the Essentia download while the user picks a file
+  try { if (!localStorage.getItem(SEEN_INTRO)) openModal('help'); } catch (e) {}   // first-run explainer
+
+  // EASTER EGG: type "fft" to spawn a celebratory burst from the tokens' own colours
+  var seq = '';
+  window.addEventListener('keydown', function (e) {
+    var t = e.target;   // don't hijack typing in form fields (e.g. the Save-project name)
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    seq = (seq + e.key).slice(-3).toLowerCase();
+    if (seq === 'fft' && renderer) { for (var i = 0; i < 24; i++) renderer.dispatch({ t: 0, type: 'note', intensity: 0.4 + Math.random() * 0.6, pitch: 40 + Math.random() * 36, pitchClass: (i * 5) % 12 }); toast('✨ fft'); }
+  });
+})();
+</script>
+</body>
+</html>
