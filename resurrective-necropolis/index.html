@@ -850,7 +850,17 @@ body {
         </div>
         <div class="info-content">
             <p>A memorial that generates names from across human cultures, representing
-            the vast diversity of our species through 24 language families.</p>
+            the vast diversity of our species through 22 language families. A new name
+            surfaces every few seconds — drawn from living languages, historical records,
+            and sign languages.</p>
+
+            <h3>How to Use It</h3>
+            <ul>
+                <li><strong>Just watch</strong> — names cycle on their own, with native scripts above each one.</li>
+                <li><strong>Initialize Voice</strong> to hear each name spoken, matched to its language where your device has a voice for it.</li>
+                <li><strong>Click a name</strong> to open an image search for it; switch on <strong>Details</strong> for origin, script, and meaning.</li>
+                <li><strong>Old Names</strong> / <strong>Mix</strong> reach back to royal, religious, and legendary names.</li>
+            </ul>
 
             <h3>Keyboard Shortcuts</h3>
             <ul>
@@ -865,8 +875,16 @@ body {
                 <li><kbd>Esc</kbd> Close modal</li>
             </ul>
 
+            <p style="margin-top:1rem;font-size:0.85rem;color:var(--ink-dim);">
+                Everything runs on your device: settings live in local browser storage and nothing is
+                collected or sent anywhere. Clicking a name opens a Google image search in a new tab.</p>
+
             <p style="margin-top:1rem;font-style:italic;color:var(--ink-faint);">
                 Each name represents a life, a story, a thread in the tapestry of human existence.</p>
+
+            <div style="margin-top:1.25rem;text-align:center;">
+                <button class="btn btn-primary" id="introBegin">Begin</button>
+            </div>
         </div>
     </div>
 </div>
@@ -1930,6 +1948,11 @@ const UI = {
         this.bindEvents();
         this.updateStats();
         this.start();
+
+        // First-run explainer — open the About panel once; dismissing it sets the flag
+        try {
+            if (!localStorage.getItem('rn_seen_intro')) this.openModal('info');
+        } catch(e) {}
     },
 
     start() {
@@ -2179,15 +2202,16 @@ const UI = {
         // Modal: info
         document.getElementById('helpBtn').addEventListener('click', () => this.openModal('info'));
         document.getElementById('infoClose').addEventListener('click', () => this.closeModal('info'));
+        document.getElementById('introBegin').addEventListener('click', () => this.closeModal('info'));
 
         // Modal: voice
         document.getElementById('voiceClose').addEventListener('click', () => this.closeModal('voice'));
 
-        // Modal overlay click to close
+        // Modal overlay click to close (via closeModal so the first-run flag is set)
         [this.el.infoModal, this.el.voiceModal].forEach(modal => {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
-                    modal.classList.remove('open');
+                    this.closeModal(modal === this.el.infoModal ? 'info' : 'voice');
                 }
             });
         });
@@ -2240,6 +2264,13 @@ const UI = {
         document.addEventListener('keydown', (e) => {
             // Ignore if typing in an input
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            // While the About panel is open, let its buttons behave natively
+            // (Space must activate Begin, not toggle Pause); only Esc acts here
+            if (this.el.infoModal.classList.contains('open')) {
+                if (e.key === 'Escape') this.closeModal('info');
+                return;
+            }
 
             keysDown[e.key.toLowerCase()] = true;
 
@@ -2333,7 +2364,15 @@ const UI = {
 
     openModal(which) {
         if (which === 'info') {
+            if (!this.el.infoModal.classList.contains('open')) this._infoReturnFocus = document.activeElement;
             this.el.infoModal.classList.add('open');
+            // Silence the name ticker's live region while the panel is open —
+            // aria-modal doesn't reliably suppress background live regions
+            this.el.romanizedName.setAttribute('aria-live', 'off');
+            const box = this.el.infoModal.querySelector('.modal-box');
+            if (box) box.scrollTop = 0;
+            const begin = document.getElementById('introBegin');
+            if (begin) begin.focus({ preventScroll: true });
         } else if (which === 'voice') {
             this.el.voiceModal.classList.add('open');
             this.populateVoiceList();
@@ -2346,7 +2385,15 @@ const UI = {
     },
 
     closeModal(which) {
-        if (which === 'info') this.el.infoModal.classList.remove('open');
+        if (which === 'info') {
+            this.el.infoModal.classList.remove('open');
+            this.el.romanizedName.setAttribute('aria-live', 'polite');
+            try { localStorage.setItem('rn_seen_intro', '1'); } catch(e) {}
+            if (this._infoReturnFocus && this._infoReturnFocus.focus) {
+                try { this._infoReturnFocus.focus(); } catch(x) {}
+                this._infoReturnFocus = null;
+            }
+        }
         else if (which === 'voice') this.el.voiceModal.classList.remove('open');
     },
 
@@ -2465,8 +2512,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         UI.init();
     } catch (e) {
         console.error(e);
-        document.getElementById('nameDisplay').textContent = 'Error loading name data';
-        document.getElementById('meaningDisplay').textContent = e.message;
+        document.getElementById('romanizedName').textContent = 'Error loading name data';
+        document.getElementById('nameMeaning').textContent = e.message;
     }
 });
 </script>
